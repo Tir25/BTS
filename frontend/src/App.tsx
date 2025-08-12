@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { apiService, HealthResponse } from './services/api';
 import DriverInterface from './components/DriverInterface';
+import StudentMap from './components/StudentMap';
 
 function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -86,8 +87,8 @@ function App() {
             )}
 
             <div className="text-center text-sm text-gray-500 mt-6">
-              <p>Phase 2: Real-time Location Tracking ✅</p>
-              <p className="mt-1">WebSocket server and driver interface implemented</p>
+              <p>Phase 3: Student Map with Real-time Tracking ✅</p>
+              <p className="mt-1">MapLibre integration and live bus tracking implemented</p>
             </div>
 
             {/* Navigation Links */}
@@ -103,7 +104,7 @@ function App() {
                 to="/student"
                 className="block w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-center"
               >
-                👨‍🎓 Student Map (Coming Soon)
+                👨‍🎓 Student Map (Live Tracking)
               </Link>
               
               <Link
@@ -120,24 +121,11 @@ function App() {
   );
 
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/driver" element={<DriverInterface />} />
-        <Route path="/student" element={
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <div className="text-center">
-              <h1 className="text-2xl font-bold text-gray-900 mb-4">👨‍🎓 Student Map</h1>
-              <p className="text-gray-600 mb-4">Coming in Phase 3</p>
-              <Link
-                to="/"
-                className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
-              >
-                Back to Home
-              </Link>
-            </div>
-          </div>
-        } />
+        <Route path="/student" element={<StudentMap />} />
         <Route path="/admin" element={
           <div className="min-h-screen bg-gray-50 flex items-center justify-center">
             <div className="text-center">

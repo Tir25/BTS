@@ -1,0 +1,144 @@
+/* Bus Marker Styles */
+.bus-marker {
+  background: #3b82f6;
+  border: 2px solid #1d4ed8;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.bus-marker-content {
+  background: white;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  min-width: 80px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.bus-number {
+  color: #1d4ed8;
+  font-weight: bold;
+}
+
+.bus-speed {
+  color: #059669;
+  font-size: 10px;
+}
+
+.bus-eta {
+  color: #dc2626;
+  font-size: 10px;
+}
+
+.bus-popup {
+  font-family: system-ui, sans-serif;
+}
+
+.bus-popup h3 {
+  margin: 0 0 8px 0;
+  color: #1d4ed8;
+  font-weight: bold;
+}
+
+.bus-popup p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+/* Map Container Styles */
+.map-container {
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+}
+
+/* Loading and Error States */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.error-overlay {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  right: 1rem;
+  z-index: 40;
+}
+
+/* Controls Panel */
+.controls-panel {
+  position: absolute;
+  top: 4rem;
+  left: 1rem;
+  z-index: 40;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  min-width: 16rem;
+}
+
+/* Bus List */
+.bus-list {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+  z-index: 40;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+/* Connection Status */
+.connection-status {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 40;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.connection-status.connected {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.connection-status.disconnected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Tile Status */
+.tile-status {
+  position: absolute;
+  top: 4rem;
+  right: 1rem;
+  z-index: 40;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: #dbeafe;
+  color: #1e40af;
+}

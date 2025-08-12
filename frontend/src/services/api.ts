@@ -10,6 +10,15 @@ export interface HealthResponse {
   environment: string;
 }
 
+export interface BusInfo {
+  bus_id: string;
+  bus_number: string;
+  route_id: string;
+  route_name: string;
+  driver_id: string;
+  driver_name: string;
+}
+
 class ApiService {
   private baseUrl: string;
 
@@ -37,6 +46,14 @@ class ApiService {
 
   async getHealth(): Promise<HealthResponse> {
     return this.request<HealthResponse>('/health');
+  }
+
+  async getAllBuses(): Promise<{ success: boolean; data: BusInfo[]; timestamp: string }> {
+    return this.request<{ success: boolean; data: BusInfo[]; timestamp: string }>('/buses');
+  }
+
+  async getBusInfo(busId: string): Promise<{ success: boolean; data: BusInfo; timestamp: string }> {
+    return this.request<{ success: boolean; data: BusInfo; timestamp: string }>(`/buses/${busId}`);
   }
 }
 

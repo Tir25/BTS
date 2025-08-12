@@ -149,3 +149,94 @@ export const getBusLocationHistory = async (
     return [];
   }
 };
+
+export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('driver_bus_assignments')
+      .select(`
+        bus_id,
+        driver_id,
+        buses!inner(
+          bus_number,
+          route_id
+        ),
+        routes!inner(
+          route_name
+        ),
+        drivers!inner(
+          driver_name
+        )
+      `)
+      .eq('bus_id', busId)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !data) {
+      console.error('❌ Error fetching bus info:', error);
+      return null;
+    }
+
+    // Handle the case where joined tables return arrays
+    const busData = Array.isArray(data.buses) ? data.buses[0] : data.buses;
+    const routeData = Array.isArray(data.routes) ? data.routes[0] : data.routes;
+    const driverData = Array.isArray(data.drivers) ? data.drivers[0] : data.drivers;
+
+    return {
+      bus_id: data.bus_id,
+      bus_number: busData?.bus_number || '',
+      route_id: busData?.route_id || '',
+      route_name: routeData?.route_name || '',
+      driver_id: data.driver_id || '',
+      driver_name: driverData?.driver_name || ''
+    };
+  } catch (error) {
+    console.error('❌ Error in getBusInfo:', error);
+    return null;
+  }
+};
+
+export const getAllBuses = async (): Promise<BusInfo[]> => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('driver_bus_assignments')
+      .select(`
+        bus_id,
+        driver_id,
+        buses!inner(
+          bus_number,
+          route_id
+        ),
+        routes!inner(
+          route_name
+        ),
+        drivers!inner(
+          driver_name
+        )
+      `)
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('❌ Error fetching all buses:', error);
+      return [];
+    }
+
+    return (data || []).map(item => {
+      const busData = Array.isArray(item.buses) ? item.buses[0] : item.buses;
+      const routeData = Array.isArray(item.routes) ? item.routes[0] : item.routes;
+      const driverData = Array.isArray(item.drivers) ? item.drivers[0] : item.drivers;
+
+      return {
+        bus_id: item.bus_id,
+        bus_number: busData?.bus_number || '',
+        route_id: busData?.route_id || '',
+        route_name: routeData?.route_name || '',
+        driver_id: item.driver_id || '',
+        driver_name: driverData?.driver_name || ''
+      };
+    });
+  } catch (error) {
+    console.error('❌ Error in getAllBuses:', error);
+    return [];
+  }
+};

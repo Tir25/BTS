@@ -5,6 +5,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { corsMiddleware } from './middleware/cors';
 import { rateLimitMiddleware } from './middleware/rateLimit';
 import healthRoutes from './routes/health';
+import busRoutes from './routes/buses';
 import { initializeDatabase, testDatabaseConnection } from './models/database';
 import { closeDatabaseConnection } from './config/database';
 import { initializeEnvironment, EnvironmentConfig } from './config/environment';
@@ -39,6 +40,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/health', healthRoutes);
+app.use('/buses', busRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
