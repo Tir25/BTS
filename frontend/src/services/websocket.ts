@@ -44,54 +44,53 @@ class WebSocketService {
       // Add a small delay to ensure backend is ready
       setTimeout(() => {
         try {
-        this.socket = io(backendUrl, {
-          transports: ['websocket', 'polling'],
-          timeout: 20000,
-          reconnection: true,
-          reconnectionAttempts: this.maxReconnectAttempts,
-          reconnectionDelay: this.reconnectDelay,
-        });
+          this.socket = io(backendUrl, {
+            transports: ['websocket', 'polling'],
+            timeout: 20000,
+            reconnection: true,
+            reconnectionAttempts: this.maxReconnectAttempts,
+            reconnectionDelay: this.reconnectDelay,
+          });
 
-        this.socket.on('connect', () => {
-          console.log('✅ WebSocket connected');
-          this.isConnected = true;
-          this.reconnectAttempts = 0;
-          this.reconnectDelay = 1000;
-          
-          // Join as student for viewing bus locations
-          this.socket?.emit('student:connect');
-          resolve();
-        });
+          this.socket.on('connect', () => {
+            console.log('✅ WebSocket connected');
+            this.isConnected = true;
+            this.reconnectAttempts = 0;
+            this.reconnectDelay = 1000;
 
-        this.socket.on('disconnect', (reason) => {
-          // Only log disconnection if it's not a normal transport close during page load
-          if (reason !== 'transport close' || this.isConnected) {
-            console.log('❌ WebSocket disconnected:', reason);
-          }
-          this.isConnected = false;
-        });
+            // Join as student for viewing bus locations
+            this.socket?.emit('student:connect');
+            resolve();
+          });
 
-        this.socket.on('connect_error', (error) => {
-          // Only log connection errors after the first attempt to reduce noise
-          if (this.reconnectAttempts > 0) {
-            console.error('❌ WebSocket connection error:', error);
-          }
-          this.reconnectAttempts++;
-          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            reject(new Error('Failed to connect to WebSocket server'));
-          }
-        });
+          this.socket.on('disconnect', reason => {
+            // Only log disconnection if it's not a normal transport close during page load
+            if (reason !== 'transport close' || this.isConnected) {
+              console.log('❌ WebSocket disconnected:', reason);
+            }
+            this.isConnected = false;
+          });
 
-        this.socket.on('error', (error) => {
-          console.error('❌ WebSocket error:', error);
-        });
+          this.socket.on('connect_error', error => {
+            // Only log connection errors after the first attempt to reduce noise
+            if (this.reconnectAttempts > 0) {
+              console.error('❌ WebSocket connection error:', error);
+            }
+            this.reconnectAttempts++;
+            if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+              reject(new Error('Failed to connect to WebSocket server'));
+            }
+          });
 
-              } catch (error) {
+          this.socket.on('error', error => {
+            console.error('❌ WebSocket error:', error);
+          });
+        } catch (error) {
           console.error('❌ Failed to create WebSocket connection:', error);
           reject(error);
         }
       }, 500); // 500ms delay
-      });
+    });
   }
 
   disconnect(): void {
@@ -108,13 +107,25 @@ class WebSocketService {
     }
   }
 
-  onDriverConnected(callback: (data: { driverId: string; busId: string; timestamp: string }) => void): void {
+  onDriverConnected(
+    callback: (data: {
+      driverId: string;
+      busId: string;
+      timestamp: string;
+    }) => void
+  ): void {
     if (this.socket) {
       this.socket.on('driver:connected', callback);
     }
   }
 
-  onDriverDisconnected(callback: (data: { driverId: string; busId: string; timestamp: string }) => void): void {
+  onDriverDisconnected(
+    callback: (data: {
+      driverId: string;
+      busId: string;
+      timestamp: string;
+    }) => void
+  ): void {
     if (this.socket) {
       this.socket.on('driver:disconnected', callback);
     }
@@ -126,7 +137,14 @@ class WebSocketService {
     }
   }
 
-  onBusArriving(callback: (data: { busId: string; routeId: string; location: [number, number]; timestamp: string }) => void): void {
+  onBusArriving(
+    callback: (data: {
+      busId: string;
+      routeId: string;
+      location: [number, number];
+      timestamp: string;
+    }) => void
+  ): void {
     if (this.socket) {
       this.socket.on('bus:arriving', callback);
     }

@@ -34,18 +34,20 @@ class BusService {
     const R = 6371; // Earth's radius in kilometers
     const dLat = this.toRadians(lat2 - lat1);
     const dLon = this.toRadians(lon2 - lon1);
-    
-    const a = 
+
+    const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    
+      Math.cos(this.toRadians(lat1)) *
+        Math.cos(this.toRadians(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance in kilometers
-    
+
     const timeDiffHours = timeDiffMs / (1000 * 60 * 60); // Convert to hours
     const speed = distance / timeDiffHours; // Speed in km/h
-    
+
     return Math.round(speed * 10) / 10; // Round to 1 decimal place
   }
 
@@ -56,13 +58,15 @@ class BusService {
   // Update bus location and calculate speed
   updateBusLocation(location: BusLocation): void {
     const { busId, latitude, longitude, timestamp } = location;
-    
+
     // Get previous location for speed calculation
     const previousLocation = this.previousLocations[busId];
-    
+
     let speed: number | undefined;
     if (previousLocation) {
-      const timeDiff = new Date(timestamp).getTime() - new Date(previousLocation.timestamp).getTime();
+      const timeDiff =
+        new Date(timestamp).getTime() -
+        new Date(previousLocation.timestamp).getTime();
       if (timeDiff > 0) {
         speed = this.calculateSpeed(
           previousLocation.latitude,
@@ -82,12 +86,12 @@ class BusService {
         routeName: 'Route TBD', // Default route, can be updated from API
         driverName: 'Driver TBD', // Default name, can be updated from API
         currentLocation: location,
-        eta: location.eta?.estimated_arrival_minutes
+        eta: location.eta?.estimated_arrival_minutes,
       };
     } else {
       this.buses[busId].currentLocation = {
         ...location,
-        speed: speed || location.speed
+        speed: speed || location.speed,
       };
       // Update ETA from location data
       this.buses[busId].eta = location.eta?.estimated_arrival_minutes;
@@ -97,7 +101,7 @@ class BusService {
     this.previousLocations[busId] = {
       latitude,
       longitude,
-      timestamp
+      timestamp,
     };
   }
 
@@ -113,13 +117,17 @@ class BusService {
 
   // Filter buses by route
   getBusesByRoute(routeName: string): BusInfo[] {
-    return Object.values(this.buses).filter(bus => 
+    return Object.values(this.buses).filter(bus =>
       bus.routeName.toLowerCase().includes(routeName.toLowerCase())
     );
   }
 
   // Filter buses by proximity to a location
-  getBusesNearLocation(lat: number, lon: number, radiusKm: number = 5): BusInfo[] {
+  getBusesNearLocation(
+    lat: number,
+    lon: number,
+    radiusKm: number = 5
+  ): BusInfo[] {
     return Object.values(this.buses).filter(bus => {
       const distance = this.calculateDistance(
         lat,
@@ -132,16 +140,23 @@ class BusService {
   }
 
   // Calculate distance between two points
-  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number {
     const R = 6371; // Earth's radius in kilometers
     const dLat = this.toRadians(lat2 - lat1);
     const dLon = this.toRadians(lon2 - lon1);
-    
-    const a = 
+
+    const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    
+      Math.cos(this.toRadians(lat1)) *
+        Math.cos(this.toRadians(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }

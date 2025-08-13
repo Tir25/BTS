@@ -26,9 +26,12 @@ class ApiService {
     this.baseUrl = baseUrl;
   }
 
-  private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  private async request<T>(
+    endpoint: string,
+    options?: RequestInit
+  ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    
+
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
@@ -38,7 +41,9 @@ class ApiService {
     });
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `API request failed: ${response.status} ${response.statusText}`
+      );
     }
 
     return response.json();
@@ -48,22 +53,43 @@ class ApiService {
     return this.request<HealthResponse>('/health');
   }
 
-  async getAllBuses(): Promise<{ success: boolean; data: BusInfo[]; timestamp: string }> {
-    return this.request<{ success: boolean; data: BusInfo[]; timestamp: string }>('/buses');
+  async getAllBuses(): Promise<{
+    success: boolean;
+    data: BusInfo[];
+    timestamp: string;
+  }> {
+    return this.request<{
+      success: boolean;
+      data: BusInfo[];
+      timestamp: string;
+    }>('/buses');
   }
 
-  async getBusInfo(busId: string): Promise<{ success: boolean; data: BusInfo; timestamp: string }> {
-    return this.request<{ success: boolean; data: BusInfo; timestamp: string }>(`/buses/${busId}`);
+  async getBusInfo(
+    busId: string
+  ): Promise<{ success: boolean; data: BusInfo; timestamp: string }> {
+    return this.request<{ success: boolean; data: BusInfo; timestamp: string }>(
+      `/buses/${busId}`
+    );
   }
 
-  async getRoutes(): Promise<{ success: boolean; data: any[]; timestamp: string }> {
-    return this.request<{ success: boolean; data: any[]; timestamp: string }>('/routes');
+  async getRoutes(): Promise<{
+    success: boolean;
+    data: any[];
+    timestamp: string;
+  }> {
+    return this.request<{ success: boolean; data: any[]; timestamp: string }>(
+      '/routes'
+    );
   }
 
-  async getRouteById(routeId: string): Promise<{ success: boolean; data: any; timestamp: string }> {
-    return this.request<{ success: boolean; data: any; timestamp: string }>(`/routes/${routeId}`);
+  async getRouteById(
+    routeId: string
+  ): Promise<{ success: boolean; data: any; timestamp: string }> {
+    return this.request<{ success: boolean; data: any; timestamp: string }>(
+      `/routes/${routeId}`
+    );
   }
 }
 
 export const apiService = new ApiService(API_BASE_URL);
-

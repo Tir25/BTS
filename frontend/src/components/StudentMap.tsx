@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+} from 'react';
 import maplibregl from 'maplibre-gl';
 import { websocketService, BusLocation } from '../services/websocket';
 import { busService, BusInfo } from '../services/busService';
@@ -25,30 +31,40 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<{ [busId: string]: maplibregl.Marker }>({});
   const isMapInitialized = useRef(false);
-  
+
   // State management
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [buses, setBuses] = useState<BusInfo[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>('all');
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [lastBusLocations, setLastBusLocations] = useState<{ [busId: string]: BusLocation }>({});
+  const [lastBusLocations, setLastBusLocations] = useState<{
+    [busId: string]: BusLocation;
+  }>({});
   const [isUserInteracting, setIsUserInteracting] = useState(false);
 
   // Utility function to calculate distance between coordinates (Haversine formula)
-  const calculateDistance = useCallback((lat1: number, lng1: number, lat2: number, lng2: number): number => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Distance in kilometers
-  }, []);
+  const calculateDistance = useCallback(
+    (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+      const R = 6371; // Earth's radius in kilometers
+      const dLat = ((lat2 - lat1) * Math.PI) / 180;
+      const dLng = ((lng2 - lng1) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+          Math.cos((lat2 * Math.PI) / 180) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c; // Distance in kilometers
+    },
+    []
+  );
 
   // Initialize map - runs only once
   useEffect(() => {
@@ -66,18 +82,18 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       style: {
         version: 8,
         sources: {
-          'osm': {
+          osm: {
             type: 'raster',
             tiles: [
               'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
               'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+              'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
             ],
             tileSize: 256,
             attribution: '© OpenStreetMap contributors',
-            maxzoom: 19
-          }
+            maxzoom: 19,
+          },
         },
         layers: [
           {
@@ -85,20 +101,20 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
             type: 'raster',
             source: 'osm',
             minzoom: 0,
-            maxzoom: 19
-          }
-        ]
+            maxzoom: 19,
+          },
+        ],
       },
       center: [72.571, 23.025], // Default center (Ahmedabad, India)
       zoom: 12,
       bearing: 0, // Explicitly set to 0 to prevent rotation
-      pitch: 0,   // Explicitly set to 0 to prevent 3D tilting
+      pitch: 0, // Explicitly set to 0 to prevent 3D tilting
       attributionControl: true,
       maxZoom: 19,
       minZoom: 1,
       preserveDrawingBuffer: false,
       antialias: true,
-      dragRotate: false // Disable drag rotation
+      dragRotate: false, // Disable drag rotation
     });
 
     // Add navigation controls
@@ -108,14 +124,14 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     map.current.once('load', () => {
       console.log('✅ Map loaded successfully');
       setIsLoading(false);
-      
+
       // Disable rotation features after map loads
       if (map.current) {
         map.current.dragRotate.disable();
         map.current.touchZoomRotate.disableRotation();
         console.log('🔄 Rotation features disabled');
       }
-      
+
       // Load routes after map is ready
       loadRoutes();
     });
@@ -159,7 +175,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         setConnectionError(null);
         await websocketService.connect();
         setIsConnected(true);
-        
+
         // Set up event listeners
         websocketService.onBusLocationUpdate(handleBusLocationUpdate);
         websocketService.onDriverConnected(handleDriverConnected);
@@ -168,12 +184,11 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
           console.log('✅ Student connected to WebSocket');
         });
         websocketService.onBusArriving(handleBusArriving);
-
       } catch (error) {
         console.error('❌ WebSocket connection failed:', error);
         setConnectionError('Failed to connect to real-time updates');
         setIsConnected(false);
-        
+
         // Retry connection after 5 seconds
         reconnectTimeout = setTimeout(() => {
           console.log('🔄 Retrying WebSocket connection...');
@@ -194,41 +209,46 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
   }, []);
 
   // Handle bus location updates with distance threshold
-  const handleBusLocationUpdate = useCallback((location: BusLocation) => {
-    const { busId, latitude, longitude } = location;
-    
-    // Check if location has changed significantly (more than 10 meters)
-    const lastLocation = lastBusLocations[busId];
-    const DISTANCE_THRESHOLD = 0.01; // 10 meters in kilometers
-    
-    if (lastLocation) {
-      const distance = calculateDistance(
-        lastLocation.latitude,
-        lastLocation.longitude,
-        latitude,
-        longitude
-      );
-      
-      // Skip update if distance is too small
-      if (distance < DISTANCE_THRESHOLD) {
-        console.log(`📍 Bus ${busId} location change too small (${(distance * 1000).toFixed(1)}m), skipping update`);
-        return;
+  const handleBusLocationUpdate = useCallback(
+    (location: BusLocation) => {
+      const { busId, latitude, longitude } = location;
+
+      // Check if location has changed significantly (more than 10 meters)
+      const lastLocation = lastBusLocations[busId];
+      const DISTANCE_THRESHOLD = 0.01; // 10 meters in kilometers
+
+      if (lastLocation) {
+        const distance = calculateDistance(
+          lastLocation.latitude,
+          lastLocation.longitude,
+          latitude,
+          longitude
+        );
+
+        // Skip update if distance is too small
+        if (distance < DISTANCE_THRESHOLD) {
+          console.log(
+            `📍 Bus ${busId} location change too small (${(distance * 1000).toFixed(1)}m), skipping update`
+          );
+          return;
+        }
       }
-    }
 
-    // Update bus service
-    busService.updateBusLocation(location);
-    setBuses(busService.getAllBuses());
-    
-    // Update last known location
-    setLastBusLocations(prev => ({
-      ...prev,
-      [busId]: location
-    }));
+      // Update bus service
+      busService.updateBusLocation(location);
+      setBuses(busService.getAllBuses());
 
-    // Update marker on map
-    updateBusMarker(location);
-  }, [lastBusLocations, calculateDistance]);
+      // Update last known location
+      setLastBusLocations(prev => ({
+        ...prev,
+        [busId]: location,
+      }));
+
+      // Update marker on map
+      updateBusMarker(location);
+    },
+    [lastBusLocations, calculateDistance]
+  );
 
   // Update bus marker on map
   const updateBusMarker = useCallback((location: BusLocation) => {
@@ -236,7 +256,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
 
     const { busId, latitude, longitude, speed } = location;
     const bus = busService.getBus(busId);
-    
+
     if (!bus) return;
 
     // Create or update marker
@@ -251,14 +271,14 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
           <div class="bus-eta">${location.eta ? `ETA: ${location.eta.estimated_arrival_minutes} min` : 'ETA: N/A'}</div>
         </div>
       `;
-      
+
       const marker = new maplibregl.Marker({
         element: el,
-        rotationAlignment: 'map'
+        rotationAlignment: 'map',
       })
         .setLngLat([longitude, latitude])
         .addTo(map.current);
-      
+
       // Add popup
       const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
         <div class="bus-popup">
@@ -270,15 +290,15 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
           <p><strong>Last Update:</strong> ${new Date(location.timestamp).toLocaleTimeString()}</p>
         </div>
       `);
-      
+
       marker.setPopup(popup);
       markers.current[busId] = marker;
-      
+
       console.log(`📍 Created marker for bus ${busId}`);
     } else {
       // Update existing marker position smoothly
       markers.current[busId].setLngLat([longitude, latitude]);
-      
+
       // Update popup content
       const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
         <div class="bus-popup">
@@ -291,40 +311,56 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
           <p><strong>Last Update:</strong> ${new Date(location.timestamp).toLocaleTimeString()}</p>
         </div>
       `);
-      
+
       markers.current[busId].setPopup(popup);
-      
+
       console.log(`📍 Updated marker for bus ${busId}`);
     }
   }, []);
 
   // Handle driver connection
-  const handleDriverConnected = useCallback((data: { driverId: string; busId: string; timestamp: string }) => {
-    console.log(`✅ Driver ${data.driverId} connected for bus ${data.busId}`);
-  }, []);
+  const handleDriverConnected = useCallback(
+    (data: { driverId: string; busId: string; timestamp: string }) => {
+      console.log(`✅ Driver ${data.driverId} connected for bus ${data.busId}`);
+    },
+    []
+  );
 
   // Handle driver disconnection
-  const handleDriverDisconnected = useCallback((data: { driverId: string; busId: string; timestamp: string }) => {
-    console.log(`❌ Driver ${data.driverId} disconnected from bus ${data.busId}`);
-    busService.removeBus(data.busId);
-    setBuses(busService.getAllBuses());
-    removeBusMarker(data.busId);
-  }, []);
+  const handleDriverDisconnected = useCallback(
+    (data: { driverId: string; busId: string; timestamp: string }) => {
+      console.log(
+        `❌ Driver ${data.driverId} disconnected from bus ${data.busId}`
+      );
+      busService.removeBus(data.busId);
+      setBuses(busService.getAllBuses());
+      removeBusMarker(data.busId);
+    },
+    []
+  );
 
   // Handle bus arriving at stop
-  const handleBusArriving = useCallback((data: { busId: string; routeId: string; location: [number, number]; timestamp: string }) => {
-    console.log(`🚌 Bus ${data.busId} is arriving at a stop!`);
-    
-    // Show notification to user
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('Bus Arriving!', {
-        body: `Bus ${data.busId} is approaching a stop`,
-        icon: '/bus-icon.png'
-      });
-    }
-    
-    // You can add more visual indicators here, like highlighting the bus marker
-  }, []);
+  const handleBusArriving = useCallback(
+    (data: {
+      busId: string;
+      routeId: string;
+      location: [number, number];
+      timestamp: string;
+    }) => {
+      console.log(`🚌 Bus ${data.busId} is arriving at a stop!`);
+
+      // Show notification to user
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Bus Arriving!', {
+          body: `Bus ${data.busId} is approaching a stop`,
+          icon: '/bus-icon.png',
+        });
+      }
+
+      // You can add more visual indicators here, like highlighting the bus marker
+    },
+    []
+  );
 
   // Remove bus marker
   const removeBusMarker = useCallback((busId: string) => {
@@ -343,27 +379,27 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     }
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      position => {
         const { latitude, longitude } = position.coords;
         setUserLocation({ lat: latitude, lng: longitude });
-        
+
         // Only move map if user is not interacting
         if (map.current && !isUserInteracting) {
           map.current.flyTo({
             center: [longitude, latitude],
             zoom: 15,
-            duration: 2000
+            duration: 2000,
           });
         }
       },
-      (error) => {
+      error => {
         console.error('❌ Geolocation error:', error);
         setConnectionError('Failed to get your location');
       },
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 30000
+        maximumAge: 30000,
       }
     );
   }, [isUserInteracting]);
@@ -374,7 +410,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       map.current.flyTo({
         center: [72.571, 23.025],
         zoom: 12,
-        duration: 1000
+        duration: 1000,
       });
     }
   }, []);
@@ -406,7 +442,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
 
     routes.forEach((route, index) => {
       const routeId = `route-${route.id}`;
-      
+
       // Add route source
       map.current!.addSource(routeId, {
         type: 'geojson',
@@ -416,10 +452,10 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
             name: route.name,
             description: route.description,
             distance: route.distance_km,
-            duration: route.estimated_duration_minutes
+            duration: route.estimated_duration_minutes,
           },
-          geometry: route.stops
-        }
+          geometry: route.stops,
+        },
       });
 
       // Add route line layer
@@ -429,13 +465,13 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         source: routeId,
         layout: {
           'line-join': 'round',
-          'line-cap': 'round'
+          'line-cap': 'round',
         },
         paint: {
           'line-color': `hsl(${(index * 137.5) % 360}, 70%, 50%)`,
           'line-width': 4,
-          'line-opacity': 0.8
-        }
+          'line-opacity': 0.8,
+        },
       });
 
       console.log(`🗺️ Added route ${route.name} to map`);
@@ -451,7 +487,11 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
   // Get buses near user location
   const busesNearUser = useMemo(() => {
     if (!userLocation) return [];
-    return busService.getBusesNearLocation(userLocation.lat, userLocation.lng, 5);
+    return busService.getBusesNearLocation(
+      userLocation.lat,
+      userLocation.lng,
+      5
+    );
   }, [userLocation, buses]);
 
   // Add routes to map when routes are loaded
@@ -479,12 +519,22 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                <svg
+                  className="h-5 w-5 text-red-400"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Connection Error</h3>
+                <h3 className="text-sm font-medium text-red-800">
+                  Connection Error
+                </h3>
                 <p className="text-sm text-red-700 mt-1">{connectionError}</p>
               </div>
             </div>
@@ -493,7 +543,9 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       )}
 
       {/* Connection status */}
-      <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
+      <div
+        className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}
+      >
         {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
       </div>
 
@@ -501,7 +553,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       <div className="controls-panel">
         <div className="space-y-4">
           <h3 className="font-semibold text-gray-900">Bus Controls</h3>
-          
+
           {/* Route filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -509,12 +561,14 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
             </label>
             <select
               value={selectedRoute}
-              onChange={(e) => setSelectedRoute(e.target.value)}
+              onChange={e => setSelectedRoute(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Routes</option>
               {availableRoutes.map((route: string) => (
-                <option key={route} value={route}>{route}</option>
+                <option key={route} value={route}>
+                  {route}
+                </option>
               ))}
             </select>
           </div>
@@ -538,9 +592,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
           {/* Bus count */}
           <div className="text-sm text-gray-600">
             <p>Active Buses: {filteredBuses.length}</p>
-            {userLocation && (
-              <p>Near You: {busesNearUser.length}</p>
-            )}
+            {userLocation && <p>Near You: {busesNearUser.length}</p>}
           </div>
         </div>
       </div>
@@ -549,18 +601,25 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       <div className="bus-list">
         <h3 className="font-semibold text-gray-900 mb-3">Active Buses</h3>
         {filteredBuses.length === 0 ? (
-          <p className="text-gray-500 text-center py-4">No buses currently active</p>
+          <p className="text-gray-500 text-center py-4">
+            No buses currently active
+          </p>
         ) : (
           <div className="space-y-2">
             {filteredBuses.map((bus: BusInfo) => (
-              <div key={bus.busId} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+              <div
+                key={bus.busId}
+                className="flex items-center justify-between p-2 bg-gray-50 rounded"
+              >
                 <div>
                   <p className="font-medium">{bus.busNumber}</p>
                   <p className="text-sm text-gray-600">{bus.routeName}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium">
-                    {bus.currentLocation.speed ? `${bus.currentLocation.speed} km/h` : 'N/A'}
+                    {bus.currentLocation.speed
+                      ? `${bus.currentLocation.speed} km/h`
+                      : 'N/A'}
                   </p>
                   <p className="text-xs text-gray-500">
                     {bus.eta ? `ETA: ${bus.eta} min` : 'ETA: N/A'}
@@ -573,10 +632,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       </div>
 
       {/* Map container */}
-      <div 
-        ref={mapContainer} 
-        className="map-container"
-      />
+      <div ref={mapContainer} className="map-container" />
     </div>
   );
 };
