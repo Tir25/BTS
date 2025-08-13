@@ -8,6 +8,19 @@ export interface BusLocation {
   timestamp: string;
   speed?: number;
   heading?: number;
+  eta?: {
+    bus_id: string;
+    route_id: string;
+    current_location: [number, number];
+    next_stop: string;
+    distance_remaining: number;
+    estimated_arrival_minutes: number;
+    is_near_stop: boolean;
+  };
+  nearStop?: {
+    is_near_stop: boolean;
+    distance_to_stop: number;
+  };
 }
 
 export interface BusInfo {
@@ -110,6 +123,12 @@ class WebSocketService {
   onStudentConnected(callback: (data: { timestamp: string }) => void): void {
     if (this.socket) {
       this.socket.on('student:connected', callback);
+    }
+  }
+
+  onBusArriving(callback: (data: { busId: string; routeId: string; location: [number, number]; timestamp: string }) => void): void {
+    if (this.socket) {
+      this.socket.on('bus:arriving', callback);
     }
   }
 

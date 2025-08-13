@@ -1,6 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { supabaseAdmin } from '../config/supabase';
 import { saveLocationUpdate, getDriverBusInfo } from '../services/locationService';
+import { RouteService } from '../services/routeService';
 import { validateLocationData } from '../utils/validation';
 
 interface LocationUpdate {
@@ -128,6 +129,29 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           return;
         }
 
+        // Get bus route information for ETA calculation
+        const busInfo = await getDriverBusInfo(data.driverId);
+        let etaInfo = null;
+        let nearStopInfo = null;
+
+        if (busInfo && busInfo.route_id) {
+          // Calculate ETA
+          etaInfo = await RouteService.calculateETA({
+            bus_id: socket.busId!,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            timestamp: data.timestamp
+          }, busInfo.route_id);
+
+          // Check if bus is near a stop
+          nearStopInfo = await RouteService.checkBusNearStop({
+            bus_id: socket.busId!,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            timestamp: data.timestamp
+          }, busInfo.route_id);
+        }
+
         // Broadcast location update to all connected clients
         const locationData = {
           busId: socket.busId,
@@ -136,11 +160,23 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           longitude: data.longitude,
           timestamp: data.timestamp,
           speed: data.speed,
-          heading: data.heading
+          heading: data.heading,
+          eta: etaInfo,
+          nearStop: nearStopInfo
         };
 
         // Broadcast to admin panel and student map
         io.emit('bus:locationUpdate', locationData);
+
+        // If bus is near a stop, emit special event
+        if (nearStopInfo && nearStopInfo.is_near_stop) {
+          io.emit('bus:arriving', {
+            busId: socket.busId,
+            routeId: busInfo?.route_id,
+            location: [data.longitude, data.latitude],
+            timestamp: data.timestamp
+          });
+        }
 
         // Send confirmation to driver
         socket.emit('driver:locationConfirmed', {

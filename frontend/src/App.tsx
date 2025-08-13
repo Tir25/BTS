@@ -87,8 +87,8 @@ function App() {
             )}
 
             <div className="text-center text-sm text-gray-500 mt-6">
-              <p>Phase 3: Student Map with Real-time Tracking ✅</p>
-              <p className="mt-1">MapLibre integration and live bus tracking implemented</p>
+              <p>Phase 4: Advanced Route Management & ETA Calculation ✅</p>
+              <p className="mt-1">PostGIS route-based ETA, route visualization, and bus arrival detection</p>
             </div>
 
             {/* Navigation Links */}
@@ -111,7 +111,7 @@ function App() {
                 to="/admin"
                 className="block w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-center"
               >
-                👨‍💼 Admin Panel (Coming Soon)
+                👨‍💼 Admin Panel (Phase 5)
               </Link>
             </div>
           </div>
@@ -130,7 +130,8 @@ function App() {
           <div className="min-h-screen bg-gray-50 flex items-center justify-center">
             <div className="text-center">
               <h1 className="text-2xl font-bold text-gray-900 mb-4">👨‍💼 Admin Panel</h1>
-              <p className="text-gray-600 mb-4">Coming in Phase 4</p>
+              <p className="text-gray-600 mb-4">Coming in Phase 5</p>
+              <p className="text-sm text-gray-500 mb-4">Phase 4: Route Management & ETA Complete ✅</p>
               <Link
                 to="/"
                 className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"

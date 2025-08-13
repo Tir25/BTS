@@ -2,7 +2,18 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import maplibregl from 'maplibre-gl';
 import { websocketService, BusLocation } from '../services/websocket';
 import { busService, BusInfo } from '../services/busService';
+import { apiService } from '../services/api';
 import './StudentMap.css';
+
+interface Route {
+  id: string;
+  name: string;
+  description: string;
+  stops: GeoJSON.LineString;
+  distance_km: number;
+  estimated_duration_minutes: number;
+  is_active: boolean;
+}
 
 interface StudentMapProps {
   className?: string;
@@ -19,6 +30,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [buses, setBuses] = useState<BusInfo[]>([]);
+  const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>('all');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +115,9 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         map.current.touchZoomRotate.disableRotation();
         console.log('🔄 Rotation features disabled');
       }
+      
+      // Load routes after map is ready
+      loadRoutes();
     });
 
     // Handle map errors
@@ -152,6 +167,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         websocketService.onStudentConnected(() => {
           console.log('✅ Student connected to WebSocket');
         });
+        websocketService.onBusArriving(handleBusArriving);
 
       } catch (error) {
         console.error('❌ WebSocket connection failed:', error);
@@ -232,7 +248,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         <div class="bus-marker-content">
           <div class="bus-number">${bus.busNumber}</div>
           <div class="bus-speed">${speed ? `${speed} km/h` : 'N/A'}</div>
-          <div class="bus-eta">${bus.eta ? `ETA: ${bus.eta} min` : 'ETA: N/A'}</div>
+          <div class="bus-eta">${location.eta ? `ETA: ${location.eta.estimated_arrival_minutes} min` : 'ETA: N/A'}</div>
         </div>
       `;
       
@@ -270,7 +286,8 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
           <p><strong>Route:</strong> ${bus.routeName}</p>
           <p><strong>Driver:</strong> ${bus.driverName}</p>
           <p><strong>Speed:</strong> ${speed ? `${speed} km/h` : 'N/A'}</p>
-          <p><strong>ETA:</strong> ${bus.eta ? `${bus.eta} minutes` : 'N/A'}</p>
+          <p><strong>ETA:</strong> ${location.eta ? `${location.eta.estimated_arrival_minutes} minutes` : 'N/A'}</p>
+          <p><strong>Distance Remaining:</strong> ${location.eta ? `${location.eta.distance_remaining.toFixed(1)} km` : 'N/A'}</p>
           <p><strong>Last Update:</strong> ${new Date(location.timestamp).toLocaleTimeString()}</p>
         </div>
       `);
@@ -292,6 +309,21 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     busService.removeBus(data.busId);
     setBuses(busService.getAllBuses());
     removeBusMarker(data.busId);
+  }, []);
+
+  // Handle bus arriving at stop
+  const handleBusArriving = useCallback((data: { busId: string; routeId: string; location: [number, number]; timestamp: string }) => {
+    console.log(`🚌 Bus ${data.busId} is arriving at a stop!`);
+    
+    // Show notification to user
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Bus Arriving!', {
+        body: `Bus ${data.busId} is approaching a stop`,
+        icon: '/bus-icon.png'
+      });
+    }
+    
+    // You can add more visual indicators here, like highlighting the bus marker
   }, []);
 
   // Remove bus marker
@@ -355,6 +387,61 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     return busService.getBusesByRoute(selectedRoute);
   }, [buses, selectedRoute]);
 
+  // Load routes from API
+  const loadRoutes = useCallback(async () => {
+    try {
+      const response = await apiService.getRoutes();
+      if (response.success && response.data) {
+        setRoutes(response.data);
+        console.log('✅ Routes loaded:', response.data.length);
+      }
+    } catch (error) {
+      console.error('❌ Error loading routes:', error);
+    }
+  }, []);
+
+  // Add routes to map
+  const addRoutesToMap = useCallback(() => {
+    if (!map.current || routes.length === 0) return;
+
+    routes.forEach((route, index) => {
+      const routeId = `route-${route.id}`;
+      
+      // Add route source
+      map.current!.addSource(routeId, {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {
+            name: route.name,
+            description: route.description,
+            distance: route.distance_km,
+            duration: route.estimated_duration_minutes
+          },
+          geometry: route.stops
+        }
+      });
+
+      // Add route line layer
+      map.current!.addLayer({
+        id: routeId,
+        type: 'line',
+        source: routeId,
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': `hsl(${(index * 137.5) % 360}, 70%, 50%)`,
+          'line-width': 4,
+          'line-opacity': 0.8
+        }
+      });
+
+      console.log(`🗺️ Added route ${route.name} to map`);
+    });
+  }, [routes]);
+
   // Get unique routes for filter
   const availableRoutes = useMemo(() => {
     const routes = [...new Set(buses.map((bus: BusInfo) => bus.routeName))];
@@ -366,6 +453,13 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     if (!userLocation) return [];
     return busService.getBusesNearLocation(userLocation.lat, userLocation.lng, 5);
   }, [userLocation, buses]);
+
+  // Add routes to map when routes are loaded
+  useEffect(() => {
+    if (routes.length > 0 && map.current && map.current.isStyleLoaded()) {
+      addRoutesToMap();
+    }
+  }, [routes, addRoutesToMap]);
 
   return (
     <div className={`relative ${className}`}>

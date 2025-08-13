@@ -27,23 +27,7 @@ export const initializeDatabase = async (): Promise<void> => {
     `);
     console.log('✅ Users table created');
 
-    // Create buses table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS buses (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        number_plate VARCHAR(20) UNIQUE NOT NULL,
-        capacity INTEGER NOT NULL,
-        model VARCHAR(100),
-        year INTEGER,
-        assigned_driver_id UUID REFERENCES users(id),
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    console.log('✅ Buses table created');
-
-    // Create routes table with PostGIS geometry
+    // Create routes table with PostGIS geometry (must be created before buses table)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS routes (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,6 +41,24 @@ export const initializeDatabase = async (): Promise<void> => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    console.log('✅ Routes table created');
+
+    // Create buses table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS buses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        number_plate VARCHAR(20) UNIQUE NOT NULL,
+        capacity INTEGER NOT NULL,
+        model VARCHAR(100),
+        year INTEGER,
+        assigned_driver_id UUID REFERENCES users(id),
+        route_id UUID REFERENCES routes(id),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('✅ Buses table created');
     console.log('✅ Routes table created');
 
     // Create live_locations table with PostGIS point geometry

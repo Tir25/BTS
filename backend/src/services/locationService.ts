@@ -29,30 +29,42 @@ interface SavedLocation {
   heading?: number;
 }
 
+import pool from '../config/database';
+
 export const saveLocationUpdate = async (data: LocationData): Promise<SavedLocation | null> => {
   try {
     // Convert coordinates to PostGIS Point format
     const point = `POINT(${data.longitude} ${data.latitude})`;
     
-    const { data: savedLocation, error } = await supabaseAdmin
-      .from('live_locations')
-      .insert({
-        driver_id: data.driverId,
-        bus_id: data.busId,
-        location: point,
-        timestamp: data.timestamp,
-        speed: data.speed,
-        heading: data.heading
-      })
-      .select()
-      .single();
+    const query = `
+      INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
+      VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
+      RETURNING id, bus_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
+    `;
 
-    if (error) {
-      console.error('❌ Error saving location:', error);
+    const result = await pool.query(query, [
+      data.busId,
+      point,
+      data.speed,
+      data.heading,
+      data.timestamp
+    ]);
+
+    if (result.rows.length === 0) {
+      console.error('❌ Error saving location: No rows returned');
       return null;
     }
 
-    return savedLocation;
+    const savedLocation = result.rows[0];
+    return {
+      id: savedLocation.id,
+      driver_id: data.driverId,
+      bus_id: savedLocation.bus_id,
+      location: savedLocation.location,
+      timestamp: savedLocation.recorded_at,
+      speed: savedLocation.speed_kmh,
+      heading: savedLocation.heading_degrees
+    };
   } catch (error) {
     console.error('❌ Error in saveLocationUpdate:', error);
     return null;
@@ -62,21 +74,20 @@ export const saveLocationUpdate = async (data: LocationData): Promise<SavedLocat
 export const getDriverBusInfo = async (driverId: string): Promise<BusInfo | null> => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('driver_bus_assignments')
+      .from('buses')
       .select(`
-        bus_id,
-        buses!inner(
-          bus_number,
-          route_id
-        ),
+        id,
+        number_plate,
+        route_id,
         routes!inner(
-          route_name
+          name
         ),
-        drivers!inner(
-          driver_name
+        users!inner(
+          first_name,
+          last_name
         )
       `)
-      .eq('driver_id', driverId)
+      .eq('assigned_driver_id', driverId)
       .eq('is_active', true)
       .single();
 
@@ -86,17 +97,16 @@ export const getDriverBusInfo = async (driverId: string): Promise<BusInfo | null
     }
 
     // Handle the case where joined tables return arrays
-    const busData = Array.isArray(data.buses) ? data.buses[0] : data.buses;
     const routeData = Array.isArray(data.routes) ? data.routes[0] : data.routes;
-    const driverData = Array.isArray(data.drivers) ? data.drivers[0] : data.drivers;
+    const userData = Array.isArray(data.users) ? data.users[0] : data.users;
 
     return {
-      bus_id: data.bus_id,
-      bus_number: busData?.bus_number || '',
-      route_id: busData?.route_id || '',
-      route_name: routeData?.route_name || '',
+      bus_id: data.id,
+      bus_number: data.number_plate || '',
+      route_id: data.route_id || '',
+      route_name: routeData?.name || '',
       driver_id: driverId,
-      driver_name: driverData?.driver_name || ''
+      driver_name: `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() || 'Unknown Driver'
     };
   } catch (error) {
     console.error('❌ Error in getDriverBusInfo:', error);
@@ -106,18 +116,29 @@ export const getDriverBusInfo = async (driverId: string): Promise<BusInfo | null
 
 export const getCurrentBusLocations = async (): Promise<SavedLocation[]> => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('live_locations')
-      .select('*')
-      .gte('timestamp', new Date(Date.now() - 5 * 60 * 1000).toISOString()) // Last 5 minutes
-      .order('timestamp', { ascending: false });
+    const query = `
+      SELECT 
+        id, 
+        bus_id, 
+        ST_AsText(location) as location, 
+        speed_kmh, 
+        heading_degrees, 
+        recorded_at
+      FROM live_locations 
+      WHERE recorded_at >= NOW() - INTERVAL '5 minutes'
+      ORDER BY recorded_at DESC;
+    `;
 
-    if (error) {
-      console.error('❌ Error fetching current locations:', error);
-      return [];
-    }
-
-    return data || [];
+    const result = await pool.query(query);
+    return result.rows.map(row => ({
+      id: row.id,
+      driver_id: '', // Not stored in live_locations table
+      bus_id: row.bus_id,
+      location: row.location,
+      timestamp: row.recorded_at,
+      speed: row.speed_kmh,
+      heading: row.heading_degrees
+    }));
   } catch (error) {
     console.error('❌ Error in getCurrentBusLocations:', error);
     return [];
@@ -130,20 +151,31 @@ export const getBusLocationHistory = async (
   endTime: string
 ): Promise<SavedLocation[]> => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('live_locations')
-      .select('*')
-      .eq('bus_id', busId)
-      .gte('timestamp', startTime)
-      .lte('timestamp', endTime)
-      .order('timestamp', { ascending: true });
+    const query = `
+      SELECT 
+        id, 
+        bus_id, 
+        ST_AsText(location) as location, 
+        speed_kmh, 
+        heading_degrees, 
+        recorded_at
+      FROM live_locations 
+      WHERE bus_id = $1 
+        AND recorded_at >= $2 
+        AND recorded_at <= $3
+      ORDER BY recorded_at ASC;
+    `;
 
-    if (error) {
-      console.error('❌ Error fetching bus location history:', error);
-      return [];
-    }
-
-    return data || [];
+    const result = await pool.query(query, [busId, startTime, endTime]);
+    return result.rows.map(row => ({
+      id: row.id,
+      driver_id: '', // Not stored in live_locations table
+      bus_id: row.bus_id,
+      location: row.location,
+      timestamp: row.recorded_at,
+      speed: row.speed_kmh,
+      heading: row.heading_degrees
+    }));
   } catch (error) {
     console.error('❌ Error in getBusLocationHistory:', error);
     return [];
@@ -153,22 +185,21 @@ export const getBusLocationHistory = async (
 export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('driver_bus_assignments')
+      .from('buses')
       .select(`
-        bus_id,
-        driver_id,
-        buses!inner(
-          bus_number,
-          route_id
-        ),
+        id,
+        number_plate,
+        route_id,
+        assigned_driver_id,
         routes!inner(
-          route_name
+          name
         ),
-        drivers!inner(
-          driver_name
+        users!inner(
+          first_name,
+          last_name
         )
       `)
-      .eq('bus_id', busId)
+      .eq('id', busId)
       .eq('is_active', true)
       .single();
 
@@ -178,17 +209,16 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
     }
 
     // Handle the case where joined tables return arrays
-    const busData = Array.isArray(data.buses) ? data.buses[0] : data.buses;
     const routeData = Array.isArray(data.routes) ? data.routes[0] : data.routes;
-    const driverData = Array.isArray(data.drivers) ? data.drivers[0] : data.drivers;
+    const userData = Array.isArray(data.users) ? data.users[0] : data.users;
 
     return {
-      bus_id: data.bus_id,
-      bus_number: busData?.bus_number || '',
-      route_id: busData?.route_id || '',
-      route_name: routeData?.route_name || '',
-      driver_id: data.driver_id || '',
-      driver_name: driverData?.driver_name || ''
+      bus_id: data.id,
+      bus_number: data.number_plate || '',
+      route_id: data.route_id || '',
+      route_name: routeData?.name || '',
+      driver_id: data.assigned_driver_id || '',
+      driver_name: `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() || 'Unknown Driver'
     };
   } catch (error) {
     console.error('❌ Error in getBusInfo:', error);
@@ -199,19 +229,18 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
 export const getAllBuses = async (): Promise<BusInfo[]> => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('driver_bus_assignments')
+      .from('buses')
       .select(`
-        bus_id,
-        driver_id,
-        buses!inner(
-          bus_number,
-          route_id
-        ),
+        id,
+        number_plate,
+        route_id,
+        assigned_driver_id,
         routes!inner(
-          route_name
+          name
         ),
-        drivers!inner(
-          driver_name
+        users!inner(
+          first_name,
+          last_name
         )
       `)
       .eq('is_active', true);
@@ -222,17 +251,16 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
     }
 
     return (data || []).map(item => {
-      const busData = Array.isArray(item.buses) ? item.buses[0] : item.buses;
       const routeData = Array.isArray(item.routes) ? item.routes[0] : item.routes;
-      const driverData = Array.isArray(item.drivers) ? item.drivers[0] : item.drivers;
+      const userData = Array.isArray(item.users) ? item.users[0] : item.users;
 
       return {
-        bus_id: item.bus_id,
-        bus_number: busData?.bus_number || '',
-        route_id: busData?.route_id || '',
-        route_name: routeData?.route_name || '',
-        driver_id: item.driver_id || '',
-        driver_name: driverData?.driver_name || ''
+        bus_id: item.id,
+        bus_number: item.number_plate || '',
+        route_id: item.route_id || '',
+        route_name: routeData?.name || '',
+        driver_id: item.assigned_driver_id || '',
+        driver_name: `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() || 'Unknown Driver'
       };
     });
   } catch (error) {

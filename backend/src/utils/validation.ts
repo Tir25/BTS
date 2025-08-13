@@ -138,3 +138,72 @@ export const validateRouteName = (routeName: string): string | null => {
 
   return null;
 };
+
+export const validateRouteData = (routeData: any): string | null => {
+  // Validate name
+  const nameError = validateRouteName(routeData.name);
+  if (nameError) return nameError;
+
+  // Validate description
+  if (!routeData.description || typeof routeData.description !== 'string') {
+    return 'Description is required and must be a string';
+  }
+
+  if (routeData.description.trim().length === 0) {
+    return 'Description cannot be empty';
+  }
+
+  // Validate coordinates
+  if (!routeData.coordinates || !Array.isArray(routeData.coordinates)) {
+    return 'Coordinates are required and must be an array';
+  }
+
+  if (routeData.coordinates.length < 2) {
+    return 'Route must have at least 2 coordinate points';
+  }
+
+  // Validate each coordinate
+  for (let i = 0; i < routeData.coordinates.length; i++) {
+    const coord = routeData.coordinates[i];
+    if (!Array.isArray(coord) || coord.length !== 2) {
+      return `Coordinate ${i + 1} must be an array with 2 elements [longitude, latitude]`;
+    }
+
+    const [lng, lat] = coord;
+    if (typeof lng !== 'number' || isNaN(lng)) {
+      return `Longitude at coordinate ${i + 1} must be a valid number`;
+    }
+
+    if (lng < -180 || lng > 180) {
+      return `Longitude at coordinate ${i + 1} must be between -180 and 180 degrees`;
+    }
+
+    if (typeof lat !== 'number' || isNaN(lat)) {
+      return `Latitude at coordinate ${i + 1} must be a valid number`;
+    }
+
+    if (lat < -90 || lat > 90) {
+      return `Latitude at coordinate ${i + 1} must be between -90 and 90 degrees`;
+    }
+  }
+
+  // Validate distance
+  if (typeof routeData.distance_km !== 'number' || isNaN(routeData.distance_km)) {
+    return 'Distance must be a valid number';
+  }
+
+  if (routeData.distance_km <= 0) {
+    return 'Distance must be greater than 0';
+  }
+
+  // Validate duration
+  if (typeof routeData.estimated_duration_minutes !== 'number' || isNaN(routeData.estimated_duration_minutes)) {
+    return 'Estimated duration must be a valid number';
+  }
+
+  if (routeData.estimated_duration_minutes <= 0) {
+    return 'Estimated duration must be greater than 0';
+  }
+
+  return null; // No validation errors
+};

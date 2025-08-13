@@ -82,13 +82,15 @@ class BusService {
         routeName: 'Route TBD', // Default route, can be updated from API
         driverName: 'Driver TBD', // Default name, can be updated from API
         currentLocation: location,
-        eta: undefined
+        eta: location.eta?.estimated_arrival_minutes
       };
     } else {
       this.buses[busId].currentLocation = {
         ...location,
         speed: speed || location.speed
       };
+      // Update ETA from location data
+      this.buses[busId].eta = location.eta?.estimated_arrival_minutes;
     }
 
     // Store current location as previous for next calculation

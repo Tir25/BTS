@@ -6,6 +6,7 @@ import { corsMiddleware } from './middleware/cors';
 import { rateLimitMiddleware } from './middleware/rateLimit';
 import healthRoutes from './routes/health';
 import busRoutes from './routes/buses';
+import routeRoutes from './routes/routes';
 import { initializeDatabase, testDatabaseConnection } from './models/database';
 import { closeDatabaseConnection } from './config/database';
 import { initializeEnvironment, EnvironmentConfig } from './config/environment';
@@ -41,6 +42,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/health', healthRoutes);
 app.use('/buses', busRoutes);
+app.use('/routes', routeRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -53,6 +55,8 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       healthDetailed: '/health/detailed',
+      buses: '/buses',
+      routes: '/routes',
     },
   });
 });
@@ -62,7 +66,7 @@ app.use('*', (req, res) => {
   res.status(404).json({
     error: 'Route not found',
     path: req.originalUrl,
-    availableEndpoints: ['/', '/health', '/health/detailed'],
+    availableEndpoints: ['/', '/health', '/health/detailed', '/buses', '/routes'],
   });
 });
 
