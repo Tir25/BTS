@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { apiService, HealthResponse } from './services/api';
+import { apiService } from './services/api';
+import { HealthResponse } from './types';
 import DriverInterface from './components/DriverInterface';
 import StudentMap from './components/StudentMap';
+import AdminPanel from './components/AdminPanel';
 
 function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -112,11 +114,11 @@ function App() {
                         <div className="mt-2 text-xs">
                           <p>
                             <strong>PostgreSQL:</strong>{' '}
-                            {health.database.details.postgresVersion}
+                            {health.database.details?.postgresVersion || 'Unknown'}
                           </p>
                           <p>
                             <strong>Pool Status:</strong>{' '}
-                            {JSON.stringify(health.database.details.poolStatus)}
+                            {JSON.stringify(health.database.details?.poolStatus || {})}
                           </p>
                         </div>
                       )}
@@ -127,10 +129,10 @@ function App() {
             )}
 
             <div className="text-center text-sm text-gray-500 mt-6">
-              <p>Phase 4: Advanced Route Management & ETA Calculation ✅</p>
+              <p>Phase 5: Admin Panel & Analytics Dashboard ✅</p>
               <p className="mt-1">
-                PostGIS route-based ETA, route visualization, and bus arrival
-                detection
+                Role-based access control, analytics charts, and system
+                management
               </p>
             </div>
 
@@ -169,28 +171,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/driver" element={<DriverInterface />} />
         <Route path="/student" element={<StudentMap />} />
-        <Route
-          path="/admin"
-          element={
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-              <div className="text-center">
-                <h1 className="text-2xl font-bold text-gray-900 mb-4">
-                  👨‍💼 Admin Panel
-                </h1>
-                <p className="text-gray-600 mb-4">Coming in Phase 5</p>
-                <p className="text-sm text-gray-500 mb-4">
-                  Phase 4: Route Management & ETA Complete ✅
-                </p>
-                <Link
-                  to="/"
-                  className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
-                >
-                  Back to Home
-                </Link>
-              </div>
-            </div>
-          }
-        />
+        <Route path="/admin" element={<AdminPanel />} />
       </Routes>
     </Router>
   );

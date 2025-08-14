@@ -1,0 +1,249 @@
+import { authService } from './authService';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  timestamp?: string;
+}
+
+interface BusData {
+  id?: string;
+  number_plate: string;
+  capacity: number;
+  model?: string;
+  year?: number;
+  assigned_driver_id?: string;
+  route_id?: string;
+  is_active?: boolean;
+}
+
+interface DriverData {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone?: string;
+  assigned_bus_id?: string;
+  assigned_bus_plate?: string;
+}
+
+interface RouteData {
+  id: string;
+  name: string;
+  description: string;
+  stops: GeoJSON.LineString;
+  distance_km: number;
+  estimated_duration_minutes: number;
+  is_active: boolean;
+}
+
+interface AnalyticsData {
+  totalBuses: number;
+  activeBuses: number;
+  totalRoutes: number;
+  activeRoutes: number;
+  totalDrivers: number;
+  activeDrivers: number;
+  averageDelay: number;
+  busUsageStats: {
+    date: string;
+    activeBuses: number;
+    totalTrips: number;
+  }[];
+}
+
+interface SystemHealth {
+  buses: number;
+  routes: number;
+  drivers: number;
+  recentLocations: number;
+  timestamp: string;
+}
+
+class AdminApiService {
+  private async makeRequest<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    try {
+      const token = authService.getAccessToken();
+
+      if (!token) {
+        throw new Error('No access token available');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/admin${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...options.headers,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Request failed');
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`❌ API request failed for ${endpoint}:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Request failed',
+      };
+    }
+  }
+
+  // ===== ANALYTICS ENDPOINTS =====
+
+  async getAnalytics(): Promise<ApiResponse<AnalyticsData>> {
+    return this.makeRequest<AnalyticsData>('/analytics');
+  }
+
+  async getSystemHealth(): Promise<ApiResponse<SystemHealth>> {
+    return this.makeRequest<SystemHealth>('/health');
+  }
+
+  // ===== BUS MANAGEMENT ENDPOINTS =====
+
+  async getAllBuses(): Promise<ApiResponse<BusData[]>> {
+    return this.makeRequest<BusData[]>('/buses');
+  }
+
+  async getBusById(busId: string): Promise<ApiResponse<BusData>> {
+    return this.makeRequest<BusData>(`/buses/${busId}`);
+  }
+
+  async createBus(busData: Omit<BusData, 'id'>): Promise<ApiResponse<BusData>> {
+    return this.makeRequest<BusData>('/buses', {
+      method: 'POST',
+      body: JSON.stringify(busData),
+    });
+  }
+
+  async updateBus(
+    busId: string,
+    busData: Partial<BusData>
+  ): Promise<ApiResponse<BusData>> {
+    return this.makeRequest<BusData>(`/buses/${busId}`, {
+      method: 'PUT',
+      body: JSON.stringify(busData),
+    });
+  }
+
+  async deleteBus(busId: string): Promise<ApiResponse<BusData>> {
+    return this.makeRequest<BusData>(`/buses/${busId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===== DRIVER MANAGEMENT ENDPOINTS =====
+
+  async getAllDrivers(): Promise<ApiResponse<DriverData[]>> {
+    return this.makeRequest<DriverData[]>('/drivers');
+  }
+
+  async getDriverById(driverId: string): Promise<ApiResponse<DriverData>> {
+    return this.makeRequest<DriverData>(`/drivers/${driverId}`);
+  }
+
+  async assignDriverToBus(
+    driverId: string,
+    busId: string
+  ): Promise<ApiResponse<BusData>> {
+    return this.makeRequest<BusData>(`/drivers/${driverId}/assign-bus`, {
+      method: 'POST',
+      body: JSON.stringify({ busId }),
+    });
+  }
+
+  async unassignDriverFromBus(
+    driverId: string
+  ): Promise<ApiResponse<BusData[]>> {
+    return this.makeRequest<BusData[]>(`/drivers/${driverId}/unassign-bus`, {
+      method: 'POST',
+    });
+  }
+
+  async createDriver(
+    driverData: Omit<DriverData, 'id'>
+  ): Promise<ApiResponse<DriverData>> {
+    return this.makeRequest<DriverData>('/drivers', {
+      method: 'POST',
+      body: JSON.stringify(driverData),
+    });
+  }
+
+  async updateDriver(
+    driverId: string,
+    driverData: Partial<DriverData>
+  ): Promise<ApiResponse<DriverData>> {
+    return this.makeRequest<DriverData>(`/drivers/${driverId}`, {
+      method: 'PUT',
+      body: JSON.stringify(driverData),
+    });
+  }
+
+  async deleteDriver(driverId: string): Promise<ApiResponse<DriverData>> {
+    return this.makeRequest<DriverData>(`/drivers/${driverId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ===== ROUTE MANAGEMENT ENDPOINTS =====
+
+  async getAllRoutes(): Promise<ApiResponse<RouteData[]>> {
+    return this.makeRequest<RouteData[]>('/routes');
+  }
+
+  async getRouteById(routeId: string): Promise<ApiResponse<RouteData>> {
+    return this.makeRequest<RouteData>(`/routes/${routeId}`);
+  }
+
+  async createRoute(routeData: {
+    name: string;
+    description: string;
+    coordinates: [number, number][];
+    distance_km: number;
+    estimated_duration_minutes: number;
+  }): Promise<ApiResponse<RouteData>> {
+    return this.makeRequest<RouteData>('/routes', {
+      method: 'POST',
+      body: JSON.stringify(routeData),
+    });
+  }
+
+  async updateRoute(
+    routeId: string,
+    routeData: Partial<{
+      name: string;
+      description: string;
+      coordinates: [number, number][];
+      distance_km: number;
+      estimated_duration_minutes: number;
+      is_active: boolean;
+    }>
+  ): Promise<ApiResponse<RouteData>> {
+    return this.makeRequest<RouteData>(`/routes/${routeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(routeData),
+    });
+  }
+
+  async deleteRoute(routeId: string): Promise<ApiResponse<RouteData>> {
+    return this.makeRequest<RouteData>(`/routes/${routeId}`, {
+      method: 'DELETE',
+    });
+  }
+}
+
+// Export singleton instance
+export const adminApiService = new AdminApiService();
+export default adminApiService;

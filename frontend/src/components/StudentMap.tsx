@@ -137,9 +137,10 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     });
 
     // Handle map errors
-    map.current.on('error', (e: any) => {
+    map.current.on('error', (e: unknown) => {
       console.error('❌ Map error:', e);
-      if (e.error && e.error.message && !e.error.message.includes('tile')) {
+      const error = e as { error?: { message?: string } };
+      if (error.error?.message && !error.error.message.includes('tile')) {
         setConnectionError('Failed to load map');
       }
     });
@@ -428,7 +429,9 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     try {
       const response = await apiService.getRoutes();
       if (response.success && response.data) {
-        setRoutes(response.data);
+        if (response.data) {
+          setRoutes(response.data as unknown as Route[]);
+        }
         console.log('✅ Routes loaded:', response.data.length);
       }
     } catch (error) {

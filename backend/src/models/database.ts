@@ -12,7 +12,7 @@ export const initializeDatabase = async (): Promise<void> => {
     await pool.query('CREATE EXTENSION IF NOT EXISTS postgis;');
     console.log('✅ PostGIS extension enabled');
 
-    // Create users table (linked to Supabase Auth)
+    // Create users table (linked to Supabase Auth) with profile photo support
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -21,6 +21,7 @@ export const initializeDatabase = async (): Promise<void> => {
         first_name VARCHAR(100),
         last_name VARCHAR(100),
         phone VARCHAR(20),
+        profile_photo_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -36,6 +37,7 @@ export const initializeDatabase = async (): Promise<void> => {
         stops GEOMETRY(LINESTRING, 4326) NOT NULL,
         distance_km DECIMAL(10,2) NOT NULL,
         estimated_duration_minutes INTEGER,
+        route_map_url TEXT,
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -43,7 +45,7 @@ export const initializeDatabase = async (): Promise<void> => {
     `);
     console.log('✅ Routes table created');
 
-    // Create buses table
+    // Create buses table with image support
     await pool.query(`
       CREATE TABLE IF NOT EXISTS buses (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -51,6 +53,7 @@ export const initializeDatabase = async (): Promise<void> => {
         capacity INTEGER NOT NULL,
         model VARCHAR(100),
         year INTEGER,
+        bus_image_url TEXT,
         assigned_driver_id UUID REFERENCES users(id),
         route_id UUID REFERENCES routes(id),
         is_active BOOLEAN DEFAULT true,
@@ -59,7 +62,6 @@ export const initializeDatabase = async (): Promise<void> => {
       );
     `);
     console.log('✅ Buses table created');
-    console.log('✅ Routes table created');
 
     // Create live_locations table with PostGIS point geometry
     await pool.query(`

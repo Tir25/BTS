@@ -235,6 +235,7 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
         number_plate,
         route_id,
         assigned_driver_id,
+        bus_image_url,
         routes!inner(
           name
         ),
@@ -260,7 +261,8 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
         route_id: item.route_id || '',
         route_name: routeData?.name || '',
         driver_id: item.assigned_driver_id || '',
-        driver_name: `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() || 'Unknown Driver'
+        driver_name: `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() || 'Unknown Driver',
+        bus_image_url: item.bus_image_url || null
       };
     });
   } catch (error) {

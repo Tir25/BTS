@@ -112,6 +112,7 @@ export class RouteService {
           id, name, description,
           ST_AsGeoJSON(stops)::json as stops,
           distance_km, estimated_duration_minutes,
+          route_map_url,
           is_active, created_at, updated_at
         FROM routes WHERE is_active = true ORDER BY name;
       `;
@@ -130,6 +131,7 @@ export class RouteService {
           id, name, description,
           ST_AsGeoJSON(stops)::json as stops,
           distance_km, estimated_duration_minutes,
+          route_map_url,
           is_active, created_at, updated_at
         FROM routes WHERE id = $1 AND is_active = true;
       `;
@@ -222,6 +224,76 @@ export class RouteService {
     } catch (error) {
       console.error('❌ Error checking bus near stop:', error);
       return { is_near_stop: false, distance_to_stop: 0 };
+    }
+  }
+
+  static async updateRoute(routeId: string, routeData: Partial<{
+    name: string;
+    description: string;
+    coordinates: [number, number][];
+    distance_km: number;
+    estimated_duration_minutes: number;
+    is_active: boolean;
+  }>): Promise<Route | null> {
+    try {
+      const updateFields = [];
+      const values = [];
+      let paramCount = 1;
+
+      // Build dynamic update query
+      if (routeData.name !== undefined) {
+        updateFields.push(`name = $${paramCount++}`);
+        values.push(routeData.name);
+      }
+      if (routeData.description !== undefined) {
+        updateFields.push(`description = $${paramCount++}`);
+        values.push(routeData.description);
+      }
+      if (routeData.coordinates !== undefined) {
+        const coordinates = routeData.coordinates.map(coord => `${coord[0]} ${coord[1]}`).join(',');
+        const lineString = `LINESTRING(${coordinates})`;
+        updateFields.push(`stops = ST_GeomFromText($${paramCount++}, 4326)`);
+        values.push(lineString);
+      }
+      if (routeData.distance_km !== undefined) {
+        updateFields.push(`distance_km = $${paramCount++}`);
+        values.push(routeData.distance_km);
+      }
+      if (routeData.estimated_duration_minutes !== undefined) {
+        updateFields.push(`estimated_duration_minutes = $${paramCount++}`);
+        values.push(routeData.estimated_duration_minutes);
+      }
+      if (routeData.is_active !== undefined) {
+        updateFields.push(`is_active = $${paramCount++}`);
+        values.push(routeData.is_active);
+      }
+
+      updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+      values.push(routeId);
+
+      const query = `
+        UPDATE routes 
+        SET ${updateFields.join(', ')}
+        WHERE id = $${paramCount}
+        RETURNING *;
+      `;
+      
+      const result = await pool.query(query, values);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('❌ Error updating route:', error);
+      return null;
+    }
+  }
+
+  static async deleteRoute(routeId: string): Promise<Route | null> {
+    try {
+      const query = 'DELETE FROM routes WHERE id = $1 RETURNING *';
+      const result = await pool.query(query, [routeId]);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('❌ Error deleting route:', error);
+      return null;
     }
   }
 }

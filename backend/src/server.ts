@@ -7,6 +7,8 @@ import { rateLimitMiddleware } from './middleware/rateLimit';
 import healthRoutes from './routes/health';
 import busRoutes from './routes/buses';
 import routeRoutes from './routes/routes';
+import adminRoutes from './routes/admin';
+import storageRoutes from './routes/storage';
 import { initializeDatabase, testDatabaseConnection } from './models/database';
 import { closeDatabaseConnection } from './config/database';
 import { initializeEnvironment, EnvironmentConfig } from './config/environment';
@@ -43,6 +45,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/health', healthRoutes);
 app.use('/buses', busRoutes);
 app.use('/routes', routeRoutes);
+app.use('/admin', adminRoutes);
+app.use('/storage', storageRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -57,6 +61,8 @@ app.get('/', (req, res) => {
       healthDetailed: '/health/detailed',
       buses: '/buses',
       routes: '/routes',
+      admin: '/admin',
+      storage: '/storage',
     },
   });
 });
@@ -66,7 +72,7 @@ app.use('*', (req, res) => {
   res.status(404).json({
     error: 'Route not found',
     path: req.originalUrl,
-    availableEndpoints: ['/', '/health', '/health/detailed', '/buses', '/routes'],
+    availableEndpoints: ['/', '/health', '/health/detailed', '/buses', '/routes', '/admin', '/storage'],
   });
 });
 
