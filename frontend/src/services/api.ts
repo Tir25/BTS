@@ -1,8 +1,9 @@
 import { authService } from './authService';
 import { supabase } from '../config/supabase';
 import { HealthResponse, Bus, Route, Driver } from '../types';
+import { environment } from '../config/environment';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = environment.api.url;
 
 class ApiService {
   private baseUrl: string;
@@ -18,19 +19,20 @@ class ApiService {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
-    // Get authorization token
-    const token = authService.getAccessToken();
-
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    // Add authorization header if token exists
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    // Try to get token, but don't fail if auth service is not available
+    try {
+      const token = authService.getAccessToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.log('🔓 Public access - no authentication token available');
     }
 
-    // Merge with any additional headers
     if (options?.headers) {
       Object.assign(headers, options.headers);
     }
@@ -61,36 +63,28 @@ class ApiService {
     timestamp: string;
   }> {
     try {
-      const { data, error } = await supabase
-        .from('buses')
-        .select(
-          `
-          *,
-          driver:users!buses_assigned_driver_id_fkey (
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          )
-        `
-        )
-        .order('created_at', { ascending: false });
+      // Use backend API instead of direct Supabase call
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: Bus[];
+        error?: string;
+        timestamp: string;
+      }>('/buses');
 
-      if (error) {
-        console.error('❌ Error fetching buses:', error);
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        console.error('❌ Error fetching buses from backend:', response.error);
         return {
           success: false,
           data: [],
           timestamp: new Date().toISOString(),
         };
       }
-
-      return {
-        success: true,
-        data: data || [],
-        timestamp: new Date().toISOString(),
-      };
     } catch (error) {
       console.error('❌ Error in getAllBuses:', error);
       return {
@@ -107,37 +101,31 @@ class ApiService {
     timestamp: string;
   }> {
     try {
-      const { data, error } = await supabase
-        .from('buses')
-        .select(
-          `
-          *,
-          driver:users!buses_assigned_driver_id_fkey (
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          )
-        `
-        )
-        .eq('id', busId)
-        .single();
+      // Use backend API instead of direct Supabase call
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: Bus;
+        error?: string;
+        timestamp: string;
+      }>(`/buses/${busId}`);
 
-      if (error) {
-        console.error('❌ Error fetching bus info:', error);
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        console.error(
+          '❌ Error fetching bus info from backend:',
+          response.error
+        );
         return {
           success: false,
           data: null,
           timestamp: new Date().toISOString(),
         };
       }
-
-      return {
-        success: true,
-        data: data,
-        timestamp: new Date().toISOString(),
-      };
     } catch (error) {
       console.error('❌ Error in getBusInfo:', error);
       return {

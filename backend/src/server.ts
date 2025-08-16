@@ -21,8 +21,24 @@ const app = express();
 const server = createServer(app);
 const io = new SocketIOServer(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
-    methods: ["GET", "POST"]
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174", 
+      "http://localhost:5175",
+      "http://localhost:3000",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:5174",
+      "http://127.0.0.1:5175",
+      "http://127.0.0.1:3000",
+      "http://192.168.1.2:5173",
+      "http://192.168.1.2:5174",
+      "http://192.168.1.2:5175",
+      "http://192.168.1.2:3000",
+      // Allow any 192.168.x.x IP addresses for cross-laptop testing
+      /^http:\/\/192\.168\.\d+\.\d+:\d+$/
+    ],
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -43,9 +59,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/health', healthRoutes);
+app.use('/admin', adminRoutes);
 app.use('/buses', busRoutes);
 app.use('/routes', routeRoutes);
-app.use('/admin', adminRoutes);
 app.use('/storage', storageRoutes);
 
 // Root endpoint
@@ -59,9 +75,9 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       healthDetailed: '/health/detailed',
+      admin: '/admin',
       buses: '/buses',
       routes: '/routes',
-      admin: '/admin',
       storage: '/storage',
     },
   });
@@ -98,7 +114,7 @@ const startServer = async () => {
     await initializeDatabase();
     
     // Test database connection
-    console.log('🔄 Testing database connection...');
+    // Testing database connection...
     await testDatabaseConnection();
     
     // Initialize WebSocket server
@@ -106,13 +122,15 @@ const startServer = async () => {
     initializeWebSocket(io);
     
     // Start server
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log('🎉 Server started successfully!');
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
       console.log(`📊 Detailed health: http://localhost:${PORT}/health/detailed`);
       console.log(`🌐 API base: http://localhost:${PORT}`);
+      console.log(`🌐 Network access: http://192.168.1.2:${PORT}`);
       console.log(`🔌 WebSocket server ready on ws://localhost:${PORT}`);
+      console.log(`🔌 WebSocket network: ws://192.168.1.2:${PORT}`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

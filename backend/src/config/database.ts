@@ -72,7 +72,7 @@ pool.on('error', (err: Error, client: PoolClient) => {
   console.error('❌ Database pool error:', err);
   // Attempt to recreate the pool on critical errors
   if (err.message.includes('connection') || err.message.includes('authentication')) {
-    console.log('🔄 Attempting to recreate database pool...');
+            // Attempting to recreate database pool...
     pool.end().then(() => {
       pool = createPool();
     }).catch(console.error);

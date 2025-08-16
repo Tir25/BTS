@@ -1,4 +1,16 @@
 // Unified Type Definitions for Bus Tracking System
+export interface User {
+  id: string;
+  email: string;
+  role: 'student' | 'driver' | 'admin';
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface UserProfile {
   id: string;
   email: string;

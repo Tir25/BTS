@@ -1,20 +1,46 @@
 import { createClient } from '@supabase/supabase-js';
+import { environment } from './environment';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Create Supabase client using environment configuration
+export const supabase = createClient(
+  environment.supabase.url,
+  environment.supabase.anonKey,
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'bus-tracking-admin',
+      },
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+  }
+);
 
-if (!supabaseUrl) {
-  throw new Error(
-    'VITE_SUPABASE_URL environment variable is required. Please check your .env file.'
-  );
-}
+// Test Supabase connection
+export const testSupabaseConnection = async () => {
+  try {
+    // Testing Supabase connection...
+    const { error } = await supabase.from('profiles').select('count').limit(1);
 
-if (!supabaseAnonKey) {
-  throw new Error(
-    'VITE_SUPABASE_ANON_KEY environment variable is required. Please check your .env file.'
-  );
-}
+    if (error) {
+      console.error('❌ Supabase connection test failed:', error);
+      return false;
+    }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    // Supabase connection test successful
+    return true;
+  } catch (error) {
+    console.error('❌ Supabase connection test error:', error);
+    return false;
+  }
+};
 
 export default supabase;

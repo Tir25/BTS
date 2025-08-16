@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { apiService } from './services/api';
-import { HealthResponse } from './types';
+import { authService } from './services/authService';
+import { HealthResponse, User } from './types';
 import DriverInterface from './components/DriverInterface';
 import StudentMap from './components/StudentMap';
 import AdminPanel from './components/AdminPanel';
@@ -10,6 +11,15 @@ function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authState, setAuthState] = useState<{
+    isAuthenticated: boolean;
+    user: User | null;
+    loading: boolean;
+  }>({
+    isAuthenticated: false,
+    user: null,
+    loading: true,
+  });
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -29,6 +39,30 @@ function App() {
     };
 
     checkHealth();
+  }, []);
+
+  // Global auth state listener
+  useEffect(() => {
+    const updateAuthState = () => {
+      const user = authService.getCurrentUser();
+      const profile = authService.getCurrentProfile();
+
+      setAuthState({
+        isAuthenticated: !!user,
+        user: profile || null,
+        loading: false,
+      });
+    };
+
+    // Set up auth state listener
+    authService.onAuthStateChange(updateAuthState);
+
+    // Initial auth state check
+    updateAuthState();
+
+    return () => {
+      authService.removeAuthStateChangeListener();
+    };
   }, []);
 
   const HomePage = () => (
@@ -114,11 +148,14 @@ function App() {
                         <div className="mt-2 text-xs">
                           <p>
                             <strong>PostgreSQL:</strong>{' '}
-                            {health.database.details?.postgresVersion || 'Unknown'}
+                            {health.database.details?.postgresVersion ||
+                              'Unknown'}
                           </p>
                           <p>
                             <strong>Pool Status:</strong>{' '}
-                            {JSON.stringify(health.database.details?.poolStatus || {})}
+                            {JSON.stringify(
+                              health.database.details?.poolStatus || {}
+                            )}
                           </p>
                         </div>
                       )}
@@ -134,6 +171,12 @@ function App() {
                 Role-based access control, analytics charts, and system
                 management
               </p>
+              {authState.isAuthenticated && (
+                <p className="mt-2 text-green-600">
+                  ✅ Authenticated as:{' '}
+                  {authState.user?.full_name || authState.user?.email}
+                </p>
+              )}
             </div>
 
             {/* Navigation Links */}
@@ -165,6 +208,29 @@ function App() {
     </div>
   );
 
+  // 404 Not Found Component
+  const NotFound = () => (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="max-w-md w-full mx-auto p-6 text-center">
+        <div className="bg-white rounded-lg shadow-md p-8">
+          <h1 className="text-6xl font-bold text-gray-300 mb-4">404</h1>
+          <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+            Page Not Found
+          </h2>
+          <p className="text-gray-600 mb-6">
+            The page you're looking for doesn't exist.
+          </p>
+          <Link
+            to="/"
+            className="inline-block bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Go Back Home
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
@@ -172,6 +238,7 @@ function App() {
         <Route path="/driver" element={<DriverInterface />} />
         <Route path="/student" element={<StudentMap />} />
         <Route path="/admin" element={<AdminPanel />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
   );

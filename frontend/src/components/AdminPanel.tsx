@@ -30,14 +30,34 @@ export default function AdminPanel() {
       setLoading(true);
       setError(null);
 
+      // Wait for auth service to be initialized
+      let attempts = 0;
+      while (!authService.isInitialized() && attempts < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+
       const authenticated = authService.isAuthenticated();
       const admin = authService.isAdmin();
+
+      console.log('🔍 Auth Status Check:', {
+        initialized: authService.isInitialized(),
+        authenticated,
+        admin,
+      });
+
+      // Debug: Log full auth state
+      console.log('🔍 Full Auth State:', authService.getAuthState());
 
       setIsAuthenticated(authenticated);
       setIsAdmin(admin);
 
+      // Only show access denied error if user is authenticated but not admin
       if (authenticated && !admin) {
         setError('Access denied. Admin privileges required.');
+      } else if (!authenticated) {
+        // Clear any previous errors when not authenticated
+        setError(null);
       }
     } catch (err) {
       console.error('❌ Auth status check error:', err);
@@ -57,15 +77,24 @@ export default function AdminPanel() {
 
   const handleSignOut = async () => {
     try {
-      await authService.signOut();
-      setIsAuthenticated(false);
-      setIsAdmin(false);
-      setError(null);
+      const result = await authService.signOut();
+      if (result.success) {
+        setIsAuthenticated(false);
+        setIsAdmin(false);
+        setError(null);
+      } else {
+        console.error('❌ Sign out failed:', result.error);
+        // Force clear state even if sign out fails
+        setIsAuthenticated(false);
+        setIsAdmin(false);
+        setError('Sign out failed, but you have been logged out locally.');
+      }
     } catch (err) {
       console.error('❌ Sign out error:', err);
       // Force clear state even if sign out fails
       setIsAuthenticated(false);
       setIsAdmin(false);
+      setError('Sign out failed, but you have been logged out locally.');
     }
   };
 
@@ -81,6 +110,35 @@ export default function AdminPanel() {
   }
 
   if (!isAuthenticated) {
+    // Check if there are configuration errors
+    if (error && error.includes('environment variables')) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md">
+              <h3 className="text-lg font-medium text-yellow-800 mb-2">
+                Configuration Error
+              </h3>
+              <p className="text-yellow-700 mb-4">
+                The application is not properly configured. Please check your
+                environment variables.
+              </p>
+              <p className="text-sm text-yellow-600 mb-4">
+                Make sure the .env file exists in the frontend directory with
+                the correct Supabase configuration.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition-colors"
+              >
+                Reload Page
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return <AdminLogin onLoginSuccess={handleLoginSuccess} />;
   }
 

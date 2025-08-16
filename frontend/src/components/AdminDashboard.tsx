@@ -2,10 +2,7 @@ import { useState, useEffect } from 'react';
 import { adminApiService } from '../services/adminApiService';
 import { authService } from '../services/authService';
 import MediaManagement from './MediaManagement';
-import BusManagement from './BusManagement';
-import DriverManagement from './DriverManagement';
-import RouteManagement from './RouteManagement';
-import LiveMap from './LiveMap';
+import StreamlinedManagement from './StreamlinedManagement';
 
 interface AnalyticsData {
   totalBuses: number;
@@ -36,14 +33,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    | 'overview'
-    | 'analytics'
-    | 'management'
-    | 'media'
-    | 'buses'
-    | 'drivers'
-    | 'routes'
-    | 'map'
+    'overview' | 'analytics' | 'management' | 'media'
   >('overview');
 
   useEffect(() => {
@@ -196,16 +186,6 @@ export default function AdminDashboard() {
               }`}
             >
               Media
-            </button>
-            <button
-              onClick={() => setActiveTab('map')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'map'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Live Map
             </button>
           </nav>
         </div>
@@ -528,164 +508,11 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {activeTab === 'management' && (
-          <div className="px-4 py-6 sm:px-0">
-            <div className="bg-white shadow rounded-lg p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                System Management
-              </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <button
-                  onClick={() => setActiveTab('buses')}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  <div className="flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 mr-2"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                      <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1V8a1 1 0 00-1-1h-3z" />
-                    </svg>
-                    Manage Buses
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('routes')}
-                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
-                >
-                  <div className="flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 mr-2"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    Manage Routes
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('drivers')}
-                  className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition-colors"
-                >
-                  <div className="flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 mr-2"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                    </svg>
-                    Manage Drivers
-                  </div>
-                </button>
-                <button
-                  onClick={() => setActiveTab('map')}
-                  className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
-                >
-                  <div className="flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 mr-2"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    View Live Map
-                  </div>
-                </button>
-                <button
-                  onClick={() => alert('System Settings - Coming in Phase 6')}
-                  className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
-                >
-                  <div className="flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 mr-2"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    System Settings
-                  </div>
-                </button>
-                <button
-                  onClick={() => alert('Reports - Coming in Phase 6')}
-                  className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
-                >
-                  <div className="flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 mr-2"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    Reports
-                  </div>
-                </button>
-              </div>
-
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                <h4 className="text-sm font-medium text-blue-900 mb-2">
-                  Quick Actions
-                </h4>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <button
-                    onClick={() => loadDashboardData()}
-                    className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition-colors"
-                  >
-                    Refresh Data
-                  </button>
-                  <button
-                    onClick={() => window.open('/admin/health', '_blank')}
-                    className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
-                  >
-                    System Health
-                  </button>
-                </div>
-              </div>
-
-              <p className="mt-4 text-sm text-gray-600">
-                Management features are now functional. Click on any button to
-                access the respective management interface.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Management Tab - All bus, driver, and route management */}
+        {activeTab === 'management' && <StreamlinedManagement />}
 
         {/* Media Management Tab */}
         {activeTab === 'media' && <MediaManagement />}
-
-        {/* Bus Management Tab */}
-        {activeTab === 'buses' && <BusManagement />}
-
-        {/* Driver Management Tab */}
-        {activeTab === 'drivers' && <DriverManagement />}
-
-        {/* Route Management Tab */}
-        {activeTab === 'routes' && <RouteManagement />}
-
-        {/* Live Map Tab */}
-        {activeTab === 'map' && <LiveMap />}
       </main>
     </div>
   );

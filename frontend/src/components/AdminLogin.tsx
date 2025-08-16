@@ -17,7 +17,18 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     setError(null);
 
     try {
-      const result = await authService.signIn(email, password);
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Login timeout')), 8000); // 8 seconds
+      });
+
+      const loginPromise = authService.signIn(email, password);
+
+      const result = (await Promise.race([loginPromise, timeoutPromise])) as {
+        success: boolean;
+        user?: { role: string };
+        error?: string;
+      };
 
       if (result.success && result.user) {
         if (result.user.role === 'admin') {
@@ -32,8 +43,17 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         );
       }
     } catch (err) {
-      setError('Network error. Please check your connection and try again.');
       console.error('❌ Login error:', err);
+      if (err instanceof Error && err.message === 'Login timeout') {
+        setError('Login timed out. Please try again.');
+      } else if (
+        err instanceof Error &&
+        err.message.includes('environment variables')
+      ) {
+        setError('Configuration error. Please check your environment setup.');
+      } else {
+        setError('Network error. Please check your connection and try again.');
+      }
     } finally {
       setLoading(false);
     }

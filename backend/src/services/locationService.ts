@@ -73,7 +73,8 @@ export const saveLocationUpdate = async (data: LocationData): Promise<SavedLocat
 
 export const getDriverBusInfo = async (driverId: string): Promise<BusInfo | null> => {
   try {
-    const { data, error } = await supabaseAdmin
+    // First, get the bus information
+    const { data: busData, error: busError } = await supabaseAdmin
       .from('buses')
       .select(`
         id,
@@ -81,32 +82,38 @@ export const getDriverBusInfo = async (driverId: string): Promise<BusInfo | null
         route_id,
         routes!inner(
           name
-        ),
-        users!inner(
-          first_name,
-          last_name
         )
       `)
       .eq('assigned_driver_id', driverId)
       .eq('is_active', true)
       .single();
 
-    if (error || !data) {
-      console.error('❌ Error fetching driver bus info:', error);
+    if (busError || !busData) {
+      console.error('❌ Error fetching driver bus info:', busError);
       return null;
     }
 
+    // Then, get the driver profile information
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', driverId)
+      .single();
+
+    if (profileError) {
+      console.error('❌ Error fetching driver profile:', profileError);
+    }
+
     // Handle the case where joined tables return arrays
-    const routeData = Array.isArray(data.routes) ? data.routes[0] : data.routes;
-    const userData = Array.isArray(data.users) ? data.users[0] : data.users;
+    const routeData = Array.isArray(busData.routes) ? busData.routes[0] : busData.routes;
 
     return {
-      bus_id: data.id,
-      bus_number: data.number_plate || '',
-      route_id: data.route_id || '',
+      bus_id: busData.id,
+      bus_number: busData.number_plate || '',
+      route_id: busData.route_id || '',
       route_name: routeData?.name || '',
       driver_id: driverId,
-      driver_name: `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() || 'Unknown Driver'
+      driver_name: profileData?.full_name || 'Unknown Driver'
     };
   } catch (error) {
     console.error('❌ Error in getDriverBusInfo:', error);

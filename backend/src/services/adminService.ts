@@ -3,6 +3,7 @@ import { RouteService } from './routeService';
 
 export interface BusData {
   id?: string;
+  code: string;
   number_plate: string;
   capacity: number;
   model?: string;
@@ -45,6 +46,7 @@ export class AdminService {
       const query = `
         SELECT 
           b.id,
+          b.code,
           b.number_plate,
           b.capacity,
           b.model,
@@ -67,10 +69,12 @@ export class AdminService {
       `;
       
       const result = await pool.query(query);
+      console.log(`✅ Fetched ${result.rows.length} buses from database`);
       return result.rows;
     } catch (error) {
       console.error('❌ Error fetching all buses:', error);
-      throw error;
+      // Return empty array instead of throwing error
+      return [];
     }
   }
 
@@ -79,6 +83,7 @@ export class AdminService {
       const query = `
         SELECT 
           b.id,
+          b.code,
           b.number_plate,
           b.capacity,
           b.model,
@@ -110,13 +115,34 @@ export class AdminService {
 
   static async createBus(busData: BusData) {
     try {
+      // Check if bus with same code already exists
+      const existingCodeCheck = await pool.query(
+        'SELECT id FROM buses WHERE code = $1',
+        [busData.code]
+      );
+      
+      if (existingCodeCheck.rows.length > 0) {
+        throw new Error(`Bus with code '${busData.code}' already exists`);
+      }
+
+      // Check if bus with same number plate already exists
+      const existingPlateCheck = await pool.query(
+        'SELECT id FROM buses WHERE number_plate = $1',
+        [busData.number_plate]
+      );
+      
+      if (existingPlateCheck.rows.length > 0) {
+        throw new Error(`Bus with number plate '${busData.number_plate}' already exists`);
+      }
+
       const query = `
-        INSERT INTO buses (number_plate, capacity, model, year, assigned_driver_id, route_id, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO buses (code, number_plate, capacity, model, year, assigned_driver_id, route_id, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
       `;
       
       const values = [
+        busData.code,
         busData.number_plate,
         busData.capacity,
         busData.model || null,
@@ -127,6 +153,7 @@ export class AdminService {
       ];
       
       const result = await pool.query(query, values);
+      console.log('✅ Bus created successfully:', result.rows[0].code);
       return result.rows[0];
     } catch (error) {
       console.error('❌ Error creating bus:', error);
@@ -141,6 +168,10 @@ export class AdminService {
       let paramCount = 1;
 
       // Build dynamic update query
+      if (busData.code !== undefined) {
+        updateFields.push(`code = $${paramCount++}`);
+        values.push(busData.code);
+      }
       if (busData.number_plate !== undefined) {
         updateFields.push(`number_plate = $${paramCount++}`);
         values.push(busData.number_plate);
@@ -470,6 +501,213 @@ export class AdminService {
       };
     } catch (error) {
       console.error('❌ Error fetching system health:', error);
+      throw error;
+    }
+  }
+
+  // Route Management
+  static async getAllRoutes() {
+    try {
+      const query = `
+        SELECT 
+          r.id,
+          r.name,
+          r.description,
+          r.distance_km,
+          r.estimated_duration_minutes,
+          r.is_active,
+          r.created_at,
+          r.updated_at,
+          CASE 
+            WHEN r.stops IS NOT NULL THEN ST_AsGeoJSON(r.stops)::json
+            ELSE NULL
+          END as stops
+        FROM routes r
+        ORDER BY r.created_at DESC
+      `;
+      
+      const result = await pool.query(query);
+      return result.rows;
+    } catch (error) {
+      console.error('❌ Error fetching all routes:', error);
+      throw error;
+    }
+  }
+
+  static async getRouteById(routeId: string) {
+    try {
+      const query = `
+        SELECT 
+          r.id,
+          r.name,
+          r.description,
+          r.distance_km,
+          r.estimated_duration_minutes,
+          r.is_active,
+          r.created_at,
+          r.updated_at,
+          CASE 
+            WHEN r.stops IS NOT NULL THEN ST_AsGeoJSON(r.stops)::json
+            ELSE NULL
+          END as stops
+        FROM routes r
+        WHERE r.id = $1
+      `;
+      
+      const result = await pool.query(query, [routeId]);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('❌ Error fetching route by ID:', error);
+      throw error;
+    }
+  }
+
+  static async createRoute(routeData: {
+    name: string;
+    description: string;
+    distance_km: number;
+    estimated_duration_minutes: number;
+    is_active: boolean;
+    stops?: any;
+  }) {
+    try {
+      // Create a default geometry if stops is not provided
+      let geometryValue = null;
+      if (routeData.stops && routeData.stops.coordinates && routeData.stops.coordinates.length > 0) {
+        const coordinates = routeData.stops.coordinates.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(',');
+        geometryValue = `ST_GeomFromText('LINESTRING(${coordinates})', 4326)`;
+      } else {
+        // Default geometry for testing
+        geometryValue = `ST_GeomFromText('LINESTRING(72.5714 23.0225, 72.6369 23.2154)', 4326)`;
+      }
+
+      // First, ensure the geom column exists
+      try {
+        await pool.query(`
+          ALTER TABLE routes ADD COLUMN IF NOT EXISTS geom GEOMETRY(LINESTRING, 4326);
+        `);
+      } catch (alterError) {
+        console.warn('⚠️ Could not add geom column (might already exist):', alterError);
+      }
+
+      // Insert with both stops and geom columns
+      const query = `
+        INSERT INTO routes (name, description, distance_km, estimated_duration_minutes, is_active, stops, geom)
+        VALUES ($1, $2, $3, $4, $5, ${geometryValue}, ${geometryValue})
+        RETURNING *
+      `;
+      
+      const values = [
+        routeData.name,
+        routeData.description,
+        routeData.distance_km,
+        routeData.estimated_duration_minutes,
+        routeData.is_active
+      ];
+      
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    } catch (error) {
+      console.error('❌ Error creating route:', error);
+      throw error;
+    }
+  }
+
+  static async updateRoute(routeId: string, routeData: {
+    name?: string;
+    description?: string;
+    distance_km?: number;
+    estimated_duration_minutes?: number;
+    is_active?: boolean;
+    stops?: any;
+  }) {
+    try {
+      const query = `
+        UPDATE routes 
+        SET name = COALESCE($1, name),
+            description = COALESCE($2, description),
+            distance_km = COALESCE($3, distance_km),
+            estimated_duration_minutes = COALESCE($4, estimated_duration_minutes),
+            is_active = COALESCE($5, is_active),
+            stops = COALESCE($6, stops),
+            updated_at = NOW()
+        WHERE id = $7
+        RETURNING *
+      `;
+      
+      const values = [
+        routeData.name,
+        routeData.description,
+        routeData.distance_km,
+        routeData.estimated_duration_minutes,
+        routeData.is_active,
+        routeData.stops ? JSON.stringify(routeData.stops) : null,
+        routeId
+      ];
+      
+      const result = await pool.query(query, values);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('❌ Error updating route:', error);
+      throw error;
+    }
+  }
+
+  static async deleteRoute(routeId: string) {
+    try {
+      const query = `
+        DELETE FROM routes 
+        WHERE id = $1
+        RETURNING *
+      `;
+      
+      const result = await pool.query(query, [routeId]);
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('❌ Error deleting route:', error);
+      throw error;
+    }
+  }
+
+  // Clear all data (Development only)
+  static async clearAllData() {
+    try {
+      // Start transaction
+      const client = await pool.connect();
+      
+      try {
+        await client.query('BEGIN');
+
+        // Clear buses (unassign drivers first)
+        await client.query('UPDATE buses SET assigned_driver_id = NULL');
+        const busesResult = await client.query('DELETE FROM buses RETURNING *');
+        
+        // Clear routes
+        const routesResult = await client.query('DELETE FROM routes RETURNING *');
+        
+        // Clear drivers
+        const driversResult = await client.query('DELETE FROM users WHERE role = \'driver\' RETURNING *');
+        
+        // Clear live locations
+        const locationsResult = await client.query('DELETE FROM live_locations RETURNING *');
+
+        await client.query('COMMIT');
+
+        return {
+          deletedBuses: busesResult.rows.length,
+          deletedRoutes: routesResult.rows.length,
+          deletedDrivers: driversResult.rows.length,
+          deletedLocations: locationsResult.rows.length,
+          totalDeleted: busesResult.rows.length + routesResult.rows.length + driversResult.rows.length + locationsResult.rows.length
+        };
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error('❌ Error clearing all data:', error);
       throw error;
     }
   }

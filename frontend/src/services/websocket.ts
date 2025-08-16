@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { environment } from '../config/environment';
 
 export interface BusLocation {
   busId: string;
@@ -29,19 +30,18 @@ export interface BusInfo {
   routeName: string;
   driverName: string;
   currentLocation: BusLocation;
-  eta?: number; // ETA to next stop in minutes
+  eta?: number;
 }
 
 class WebSocketService {
-  private socket: Socket | null = null;
+  public socket: Socket | null = null;
   private isConnected = false;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000; // Start with 1 second
+  private readonly maxReconnectAttempts = 5;
+  private reconnectDelay = 1000;
 
-  connect(backendUrl: string = 'http://localhost:3000'): Promise<void> {
+  connect(backendUrl: string = environment.api.websocketUrl): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Add a small delay to ensure backend is ready
       setTimeout(() => {
         try {
           this.socket = io(backendUrl, {
@@ -58,13 +58,13 @@ class WebSocketService {
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000;
 
-            // Join as student for viewing bus locations
+            // Emit student connection for public access
             this.socket?.emit('student:connect');
+
             resolve();
           });
 
           this.socket.on('disconnect', reason => {
-            // Only log disconnection if it's not a normal transport close during page load
             if (reason !== 'transport close' || this.isConnected) {
               console.log('❌ WebSocket disconnected:', reason);
             }
@@ -72,7 +72,6 @@ class WebSocketService {
           });
 
           this.socket.on('connect_error', error => {
-            // Only log connection errors after the first attempt to reduce noise
             if (this.reconnectAttempts > 0) {
               console.error('❌ WebSocket connection error:', error);
             }
@@ -89,7 +88,7 @@ class WebSocketService {
           console.error('❌ Failed to create WebSocket connection:', error);
           reject(error);
         }
-      }, 500); // 500ms delay
+      }, 500);
     });
   }
 
@@ -102,9 +101,7 @@ class WebSocketService {
   }
 
   onBusLocationUpdate(callback: (location: BusLocation) => void): void {
-    if (this.socket) {
-      this.socket.on('bus:locationUpdate', callback);
-    }
+    this.socket?.on('bus:locationUpdate', callback);
   }
 
   onDriverConnected(
@@ -114,9 +111,7 @@ class WebSocketService {
       timestamp: string;
     }) => void
   ): void {
-    if (this.socket) {
-      this.socket.on('driver:connected', callback);
-    }
+    this.socket?.on('driver:connected', callback);
   }
 
   onDriverDisconnected(
@@ -126,15 +121,11 @@ class WebSocketService {
       timestamp: string;
     }) => void
   ): void {
-    if (this.socket) {
-      this.socket.on('driver:disconnected', callback);
-    }
+    this.socket?.on('driver:disconnected', callback);
   }
 
   onStudentConnected(callback: (data: { timestamp: string }) => void): void {
-    if (this.socket) {
-      this.socket.on('student:connected', callback);
-    }
+    this.socket?.on('student:connected', callback);
   }
 
   onBusArriving(
@@ -145,22 +136,34 @@ class WebSocketService {
       timestamp: string;
     }) => void
   ): void {
-    if (this.socket) {
-      this.socket.on('bus:arriving', callback);
-    }
+    this.socket?.on('bus:arriving', callback);
   }
 
   getConnectionStatus(): boolean {
     return this.isConnected;
   }
 
-  // Remove event listeners
-  off(event: string): void {
-    if (this.socket) {
-      this.socket.off(event);
+  authenticateAsDriver(token: string): void {
+    if (this.socket && this.isConnected) {
+      console.log('🔐 Driver: Authenticating with token...');
+      this.socket.emit('driver:authenticate', { token });
+
+      // Add listener for driver authentication response
+      this.socket.once('driver:authenticated', data => {
+        console.log('✅ Driver: Authentication successful:', data);
+      });
+
+      this.socket.once('error', error => {
+        console.error('❌ Driver: Authentication failed:', error);
+      });
+    } else {
+      console.error('❌ Driver: Cannot authenticate - socket not connected');
     }
+  }
+
+  off(event: string): void {
+    this.socket?.off(event);
   }
 }
 
-// Export singleton instance
 export const websocketService = new WebSocketService();

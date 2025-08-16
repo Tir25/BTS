@@ -105,11 +105,11 @@ router.post('/buses', async (req, res) => {
     const busData = req.body;
     
     // Validate required fields
-    if (!busData.number_plate || !busData.capacity) {
+    if (!busData.code || !busData.number_plate || !busData.capacity) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields',
-        message: 'Number plate and capacity are required'
+        message: 'Code, number plate and capacity are required'
       });
     }
 
@@ -123,10 +123,27 @@ router.post('/buses', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error creating bus:', error);
-    return res.status(500).json({
+    
+    // Provide more specific error messages
+    let errorMessage = 'Unknown error occurred';
+    let statusCode = 500;
+    
+    if (error instanceof Error) {
+      if (error.message.includes('already exists')) {
+        statusCode = 409; // Conflict
+        errorMessage = error.message;
+      } else if (error.message.includes('violates')) {
+        statusCode = 400; // Bad Request
+        errorMessage = 'Invalid data provided';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    return res.status(statusCode).json({
       success: false,
       error: 'Failed to create bus',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      message: errorMessage
     });
   }
 });
@@ -404,7 +421,7 @@ router.delete('/drivers/:driverId', async (req, res) => {
 // Get all routes (admin view)
 router.get('/routes', async (req, res) => {
   try {
-    const routes = await RouteService.getAllRoutes();
+    const routes = await AdminService.getAllRoutes();
     res.json({
       success: true,
       data: routes,
@@ -453,7 +470,7 @@ router.get('/routes/:routeId', async (req, res) => {
 router.post('/routes', async (req, res) => {
   try {
     const routeData = req.body;
-    const newRoute = await RouteService.createRoute(routeData);
+    const newRoute = await AdminService.createRoute(routeData);
     
     if (!newRoute) {
       return res.status(500).json({
@@ -485,7 +502,7 @@ router.put('/routes/:routeId', async (req, res) => {
     const { routeId } = req.params;
     const routeData = req.body;
     
-    const updatedRoute = await RouteService.updateRoute(routeId, routeData);
+    const updatedRoute = await AdminService.updateRoute(routeId, routeData);
     
     if (!updatedRoute) {
       return res.status(404).json({
@@ -515,7 +532,7 @@ router.put('/routes/:routeId', async (req, res) => {
 router.delete('/routes/:routeId', async (req, res) => {
   try {
     const { routeId } = req.params;
-    const deletedRoute = await RouteService.deleteRoute(routeId);
+    const deletedRoute = await AdminService.deleteRoute(routeId);
     
     if (!deletedRoute) {
       return res.status(404).json({
@@ -536,6 +553,38 @@ router.delete('/routes/:routeId', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to delete route',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ===== SYSTEM MANAGEMENT ENDPOINTS =====
+
+// Clear all data (Development only)
+router.post('/clear-all-data', async (req, res) => {
+  try {
+    // Only allow in development
+    if (process.env.NODE_ENV !== 'development') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'This endpoint is only available in development mode'
+      });
+    }
+
+    const result = await AdminService.clearAllData();
+    
+    return res.json({
+      success: true,
+      data: result,
+      message: 'All data cleared successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error clearing all data:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to clear all data',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

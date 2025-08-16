@@ -82,10 +82,13 @@ class BusService {
     if (!this.buses[busId]) {
       this.buses[busId] = {
         busId,
-        busNumber: `Bus ${busId}`, // Default name, can be updated from API
-        routeName: 'Route TBD', // Default route, can be updated from API
-        driverName: 'Driver TBD', // Default name, can be updated from API
-        currentLocation: location,
+        busNumber: `Bus ${busId}`, // Default name, will be updated from API
+        routeName: 'Route TBD', // Default route, will be updated from API
+        driverName: 'Driver TBD', // Default name, will be updated from API
+        currentLocation: {
+          ...location,
+          speed: speed || location.speed,
+        },
         eta: location.eta?.estimated_arrival_minutes,
       };
     } else {
@@ -108,6 +111,62 @@ class BusService {
   // Get all buses
   getAllBuses(): BusInfo[] {
     return Object.values(this.buses);
+  }
+
+  // Update bus information from API data
+  updateBusInfo(busId: string, busInfo: Partial<BusInfo>): void {
+    if (this.buses[busId]) {
+      this.buses[busId] = {
+        ...this.buses[busId],
+        ...busInfo,
+      };
+    }
+  }
+
+  // Sync bus information from API data (for new buses)
+  syncBusFromAPI(
+    busId: string,
+    apiBusData: {
+      number_plate?: string;
+      bus_number?: string;
+      route_name?: string;
+      routes?: { name: string };
+      driver_name?: string;
+      driver?: { first_name?: string; last_name?: string };
+    }
+  ): void {
+    if (this.buses[busId]) {
+      // Update with real data from API
+      // Handle both frontend and backend data structures
+      const busNumber =
+        apiBusData.number_plate || apiBusData.bus_number || `Bus ${busId}`;
+      const routeName =
+        apiBusData.route_name || apiBusData.routes?.name || 'Route TBD';
+      const driverName =
+        apiBusData.driver_name ||
+        (apiBusData.driver
+          ? `${apiBusData.driver.first_name || ''} ${apiBusData.driver.last_name || ''}`.trim()
+          : 'Driver TBD');
+
+      this.buses[busId] = {
+        ...this.buses[busId],
+        busNumber,
+        routeName,
+        driverName,
+      };
+
+      console.log(`🔄 Synced bus ${busId}:`, {
+        busNumber,
+        routeName,
+        driverName,
+      });
+    }
+  }
+
+  // Clear all buses (useful for resetting)
+  clearBuses(): void {
+    this.buses = {};
+    this.previousLocations = {};
   }
 
   // Get specific bus
@@ -161,23 +220,10 @@ class BusService {
     return R * c;
   }
 
-  // Update bus information (name, route, driver)
-  updateBusInfo(busId: string, updates: Partial<BusInfo>): void {
-    if (this.buses[busId]) {
-      this.buses[busId] = { ...this.buses[busId], ...updates };
-    }
-  }
-
   // Remove bus (when driver disconnects)
   removeBus(busId: string): void {
     delete this.buses[busId];
     delete this.previousLocations[busId];
-  }
-
-  // Clear all buses
-  clearBuses(): void {
-    this.buses = {};
-    this.previousLocations = {};
   }
 
   // Get buses count

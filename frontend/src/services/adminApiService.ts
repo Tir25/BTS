@@ -1,6 +1,7 @@
 import { authService } from './authService';
+import { environment } from '../config/environment';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = environment.api.url;
 
 interface ApiResponse<T = unknown> {
   success: boolean;
@@ -12,13 +13,14 @@ interface ApiResponse<T = unknown> {
 
 interface BusData {
   id?: string;
+  code: string;
   number_plate: string;
   capacity: number;
   model?: string;
   year?: number;
+  is_active: boolean;
   assigned_driver_id?: string;
   route_id?: string;
-  is_active?: boolean;
 }
 
 interface DriverData {
@@ -27,6 +29,7 @@ interface DriverData {
   first_name: string;
   last_name: string;
   phone?: string;
+  role: string;
   assigned_bus_id?: string;
   assigned_bus_plate?: string;
 }
@@ -35,10 +38,10 @@ interface RouteData {
   id: string;
   name: string;
   description: string;
-  stops: GeoJSON.LineString;
   distance_km: number;
   estimated_duration_minutes: number;
   is_active: boolean;
+  stops: GeoJSON.LineString;
 }
 
 interface AnalyticsData {
@@ -88,7 +91,26 @@ class AdminApiService {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || data.error || 'Request failed');
+        // Handle specific error cases
+        if (response.status === 429) {
+          throw new Error(
+            'Rate limit exceeded. Please wait a moment and try again.'
+          );
+        } else if (response.status === 401) {
+          throw new Error('Authentication required. Please log in again.');
+        } else if (response.status === 403) {
+          throw new Error(
+            'Access denied. You do not have permission for this action.'
+          );
+        } else if (response.status === 404) {
+          throw new Error('Resource not found.');
+        } else if (response.status === 409) {
+          throw new Error(data.message || 'Resource already exists');
+        } else if (response.status >= 500) {
+          throw new Error('Server error. Please try again later.');
+        } else {
+          throw new Error(data.message || data.error || 'Request failed');
+        }
       }
 
       return data;
@@ -173,7 +195,10 @@ class AdminApiService {
   }
 
   async createDriver(
-    driverData: Omit<DriverData, 'id'>
+    driverData: Omit<
+      DriverData,
+      'id' | 'assigned_bus_id' | 'assigned_bus_plate'
+    >
   ): Promise<ApiResponse<DriverData>> {
     return this.makeRequest<DriverData>('/drivers', {
       method: 'POST',
@@ -210,9 +235,9 @@ class AdminApiService {
   async createRoute(routeData: {
     name: string;
     description: string;
-    coordinates: [number, number][];
     distance_km: number;
     estimated_duration_minutes: number;
+    stops?: GeoJSON.LineString;
   }): Promise<ApiResponse<RouteData>> {
     return this.makeRequest<RouteData>('/routes', {
       method: 'POST',
@@ -225,10 +250,10 @@ class AdminApiService {
     routeData: Partial<{
       name: string;
       description: string;
-      coordinates: [number, number][];
       distance_km: number;
       estimated_duration_minutes: number;
       is_active: boolean;
+      stops?: GeoJSON.LineString;
     }>
   ): Promise<ApiResponse<RouteData>> {
     return this.makeRequest<RouteData>(`/routes/${routeId}`, {
@@ -244,6 +269,5 @@ class AdminApiService {
   }
 }
 
-// Export singleton instance
 export const adminApiService = new AdminApiService();
 export default adminApiService;
