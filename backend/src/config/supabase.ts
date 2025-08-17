@@ -11,15 +11,21 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Check if environment variables are present
 if (!supabaseUrl) {
-  throw new Error('SUPABASE_URL environment variable is required. Please check your .env file.');
+  throw new Error(
+    'SUPABASE_URL environment variable is required. Please check your .env file.'
+  );
 }
 
 if (!supabaseAnonKey) {
-  throw new Error('SUPABASE_ANON_KEY environment variable is required. Please check your .env file.');
+  throw new Error(
+    'SUPABASE_ANON_KEY environment variable is required. Please check your .env file.'
+  );
 }
 
 if (!supabaseServiceRoleKey) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is required. Please check your .env file.');
+  throw new Error(
+    'SUPABASE_SERVICE_ROLE_KEY environment variable is required. Please check your .env file.'
+  );
 }
 
 // Client for public operations (frontend use)
@@ -29,4 +35,3 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 export default supabase;
-

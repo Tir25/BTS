@@ -18,13 +18,16 @@ const allowedOrigins = [
   'http://192.168.1.2:5173',
   'http://192.168.1.2:5174',
   'http://192.168.1.2:5175',
-  'http://192.168.1.2:3000'
+  'http://192.168.1.2:3000',
 ];
 
 const corsOptions = {
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+  origin: function (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void
+  ) {
     if (!origin) return callback(null, true);
-    
+
     // Check if origin matches any allowed origin (string or regex)
     const isAllowed = allowedOrigins.some(allowedOrigin => {
       if (typeof allowedOrigin === 'string') {
@@ -34,7 +37,7 @@ const corsOptions = {
       }
       return false;
     });
-    
+
     if (isAllowed) {
       callback(null, true);
     } else {
@@ -43,8 +46,7 @@ const corsOptions = {
     }
   },
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
 };
 
 export const corsMiddleware = cors(corsOptions);
-

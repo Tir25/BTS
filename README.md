@@ -1,111 +1,315 @@
 ﻿# University Bus Tracking System
 
-A comprehensive bus tracking system with real-time location tracking, admin dashboard, and role-based authentication.
+A real-time bus tracking system designed for university campuses, providing live location updates, route management, and comprehensive administrative controls.
 
-## Project Structure
+## 🚀 Features
 
-\\\
-â”œâ”€â”€ frontend/                 # React frontend application
-â”œâ”€â”€ backend/                  # Node.js backend API
-â”œâ”€â”€ docs/                     # Project documentation
-â”œâ”€â”€ sql/                      # Database scripts and migrations
-â”œâ”€â”€ scripts/                  # Utility scripts
-â””â”€â”€ temp/                     # Temporary files (to be deleted)
-\\\
+### For Students
+- **Real-time Bus Tracking**: Live location updates with interactive maps
+- **Route Information**: Detailed route information with stops and schedules
+- **ETA Predictions**: Accurate arrival time estimates
+- **Mobile-Friendly Interface**: Responsive design for all devices
 
-## Quick Start
+### For Drivers
+- **Location Sharing**: Automatic GPS location updates
+- **Route Navigation**: Turn-by-turn directions and route guidance
+- **Status Updates**: Easy status reporting and communication
 
-### Prerequisites
-- Node.js (v16 or higher)
+### For Administrators
+- **Fleet Management**: Complete bus and driver management
+- **Route Planning**: Visual route editor with stop management
+- **Analytics Dashboard**: Real-time statistics and performance metrics
+- **User Management**: Driver and admin account management
+- **Media Management**: File upload and storage system
+
+## 🏗️ Architecture
+
+### Frontend
+- **React 18** with TypeScript
+- **Vite** for fast development and building
+- **Tailwind CSS** for styling
+- **Leaflet** for interactive maps
+- **Socket.IO Client** for real-time updates
+- **Supabase** for authentication and real-time data
+
+### Backend
+- **Node.js** with TypeScript
+- **Express.js** for REST API
+- **Socket.IO** for real-time communication
+- **PostgreSQL** with PostGIS for spatial data
+- **Supabase** for database and storage
+- **JWT** for authentication
+
+### Database
+- **PostgreSQL** with PostGIS extension
+- **Real-time subscriptions** via Supabase
+- **Spatial queries** for location-based operations
+- **Row Level Security** for data protection
+
+## 📋 Prerequisites
+
+- Node.js 18+ 
+- PostgreSQL 14+ with PostGIS
 - Supabase account
 - Git
 
-### Installation
-1. Clone the repository
-2. Install dependencies:
-   \\\ash
-   npm install
-   cd frontend && npm install
-   cd ../backend && npm install
-   \\\
+## 🛠️ Installation
 
-3. Set up environment variables (see docs/PRODUCTION_DEPLOYMENT_GUIDE.md)
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd university-bus-tracking-system
+```
 
-4. Run the development servers:
-   \\\ash
-   # Terminal 1 - Backend
-   cd backend && npm run dev
-   
-   # Terminal 2 - Frontend
-   cd frontend && npm run dev
-   \\\
+### 2. Install Dependencies
+```bash
+# Install root dependencies
+npm install
 
-## Authentication
+# Install backend dependencies
+cd backend && npm install
 
-The system uses Supabase Authentication with role-based access:
-- **Admin**: Full system access
-- **Driver**: Location updates and route management
-- **Student**: View-only access to bus locations
+# Install frontend dependencies
+cd ../frontend && npm install
+```
 
-### Default Admin Credentials
-- Email: tirthraval27@gmail.com
-- Password: Tirth Raval27
+### 3. Environment Setup
 
-## Documentation
+#### Backend Environment
+Create `backend/env.local`:
+```env
+# Database
+DATABASE_URL=your_postgresql_connection_string
+DB_POOL_MAX=20
+DB_POOL_IDLE_TIMEOUT=30000
+DB_POOL_CONNECTION_TIMEOUT=10000
+DB_RETRY_DELAY=5000
+DB_MAX_RETRIES=5
 
-- [Production Deployment Guide](docs/PRODUCTION_DEPLOYMENT_GUIDE.md)
-- [Supabase Authentication Implementation](docs/SUPABASE_AUTH_IMPLEMENTATION.md)
-- [Live Map Integration Guide](docs/LIVE_MAP_INTEGRATION_GUIDE.md)
-- [Management System Implementation](docs/COMPLETE_MANAGEMENT_SYSTEM_IMPLEMENTATION.md)
+# Supabase
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-## Database
+# JWT
+JWT_SECRET=your_jwt_secret_key
 
-The system uses Supabase (PostgreSQL) with the following main tables:
-- \profiles\ - User profiles and roles
-- \uses\ - Bus information
-- \outes\ - Bus routes
-- \live_locations\ - Real-time bus locations
-- \users\ - User management
+# Server
+PORT=3001
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173
 
-## Features
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+```
 
+#### Frontend Environment
+Create `frontend/env.local`:
+```env
+VITE_API_URL=http://localhost:3001
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_WEBSOCKET_URL=ws://localhost:3001
+```
+
+### 4. Database Setup
+
+#### Initialize Database Schema
+```bash
+# Run the database initialization script
+cd sql
+psql -d your_database -f init-database-supabase.sql
+```
+
+#### Create Admin User
+```bash
+# Run the admin user creation script
+cd scripts
+node add-admin-user.js
+```
+
+### 5. Start Development Servers
+
+#### Start Both Frontend and Backend
+```bash
+# From root directory
+npm run dev
+```
+
+#### Start Individual Services
+```bash
+# Backend only
+npm run dev:backend
+
+# Frontend only
+npm run dev:frontend
+```
+
+## 🚀 Production Deployment
+
+### Build the Application
+```bash
+# Build both frontend and backend
+npm run build
+
+# Build individual services
+npm run build:backend
+npm run build:frontend
+```
+
+### Environment Configuration
+Set up production environment variables:
+- `NODE_ENV=production`
+- Configure production database URLs
+- Set up SSL certificates
+- Configure CORS for production domain
+
+### Deployment Options
+- **Docker**: Use provided Dockerfile
+- **Vercel**: Deploy frontend to Vercel
+- **Railway/Heroku**: Deploy backend to cloud platforms
+- **Self-hosted**: Deploy on your own servers
+
+## 📁 Project Structure
+
+```
+university-bus-tracking-system/
+├── backend/                 # Backend API server
+│   ├── src/
+│   │   ├── config/         # Configuration files
+│   │   ├── middleware/     # Express middleware
+│   │   ├── models/         # Database models
+│   │   ├── routes/         # API routes
+│   │   ├── services/       # Business logic
+│   │   ├── sockets/        # WebSocket handlers
+│   │   └── utils/          # Utility functions
+│   ├── scripts/            # Database scripts
+│   └── dist/               # Compiled JavaScript
+├── frontend/               # React frontend
+│   ├── src/
+│   │   ├── components/     # React components
+│   │   ├── config/         # Configuration
+│   │   ├── services/       # API services
+│   │   ├── types/          # TypeScript types
+│   │   └── utils/          # Utility functions
+│   └── dist/               # Built frontend
+├── docs/                   # Documentation
+├── sql/                    # Database scripts
+└── scripts/                # Utility scripts
+```
+
+## 🔧 Development
+
+### Code Quality
+```bash
+# Lint code
+npm run lint
+
+# Fix linting issues
+npm run lint:fix
+
+# Format code
+npm run format
+```
+
+### Database Management
+```bash
+# Run database migrations
+cd sql
+psql -d your_database -f migration-file.sql
+
+# Add sample data
+cd backend
+node add-sample-buses.js
+```
+
+### Testing
+```bash
+# Run tests (when implemented)
+npm test
+
+# Run specific test suites
+npm run test:backend
+npm run test:frontend
+```
+
+## 🔐 Security Features
+
+- **JWT Authentication**: Secure token-based authentication
+- **Row Level Security**: Database-level access control
+- **CORS Protection**: Cross-origin request protection
+- **Rate Limiting**: API request rate limiting
+- **Input Validation**: Comprehensive input sanitization
+- **HTTPS Enforcement**: Secure communication in production
+
+## 📊 API Documentation
+
+### Authentication Endpoints
+- `POST /auth/login` - User login
+- `POST /auth/logout` - User logout
+- `GET /auth/me` - Get current user
+
+### Bus Management
+- `GET /buses` - Get all buses
+- `POST /buses` - Create new bus
+- `PUT /buses/:id` - Update bus
+- `DELETE /buses/:id` - Delete bus
+
+### Route Management
+- `GET /routes` - Get all routes
+- `POST /routes` - Create new route
+- `PUT /routes/:id` - Update route
+- `DELETE /routes/:id` - Delete route
+
+### Location Updates
+- `POST /location/update` - Update bus location
+- `GET /location/bus/:id` - Get bus location
+- `GET /location/route/:id` - Get route locations
+
+### WebSocket Events
+- `location_update` - Real-time location updates
+- `bus_status_change` - Bus status changes
+- `route_update` - Route information updates
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Follow TypeScript best practices
+- Write meaningful commit messages
+- Add tests for new features
+- Update documentation as needed
+- Follow the existing code style
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+For support and questions:
+- Check the [documentation](docs/)
+- Review the [setup guide](SETUP_GUIDE.md)
+- Open an issue on GitHub
+
+## 🔄 Version History
+
+- **v1.0.0** - Initial release with core functionality
 - Real-time bus tracking
 - Admin dashboard
-- Role-based authentication
-- Media upload and management
-- Live map integration
-- CRUD operations for buses, routes, and drivers
-- Production-ready deployment
+- Driver interface
+- Route management
+- User authentication
 
-## Monitoring
+## 🙏 Acknowledgments
 
-- Supabase Dashboard for database monitoring
-- Real-time authentication logs
-- Performance monitoring
-- Error tracking
-
-## Development
-
-### Frontend
-- React with TypeScript
-- Vite for build tooling
-- Leaflet for maps
-- Supabase client for authentication
-
-### Backend
-- Node.js with Express
-- TypeScript
-- Supabase integration
-- WebSocket for real-time updates
-
-## Deployment
-
-See [Production Deployment Guide](docs/PRODUCTION_DEPLOYMENT_GUIDE.md) for detailed deployment instructions.
-
-## License
-
-This project is part of a university assignment.
-
-## Contributing
-
-This is a university project. For questions or issues, contact the development team.
+- Built with React, Node.js, and PostgreSQL
+- Maps powered by Leaflet
+- Real-time features by Socket.IO
+- Database and authentication by Supabase

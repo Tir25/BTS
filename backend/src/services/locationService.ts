@@ -31,11 +31,13 @@ interface SavedLocation {
 
 import pool from '../config/database';
 
-export const saveLocationUpdate = async (data: LocationData): Promise<SavedLocation | null> => {
+export const saveLocationUpdate = async (
+  data: LocationData
+): Promise<SavedLocation | null> => {
   try {
     // Convert coordinates to PostGIS Point format
     const point = `POINT(${data.longitude} ${data.latitude})`;
-    
+
     const query = `
       INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
       VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
@@ -47,7 +49,7 @@ export const saveLocationUpdate = async (data: LocationData): Promise<SavedLocat
       point,
       data.speed,
       data.heading,
-      data.timestamp
+      data.timestamp,
     ]);
 
     if (result.rows.length === 0) {
@@ -63,7 +65,7 @@ export const saveLocationUpdate = async (data: LocationData): Promise<SavedLocat
       location: savedLocation.location,
       timestamp: savedLocation.recorded_at,
       speed: savedLocation.speed_kmh,
-      heading: savedLocation.heading_degrees
+      heading: savedLocation.heading_degrees,
     };
   } catch (error) {
     console.error('❌ Error in saveLocationUpdate:', error);
@@ -71,19 +73,23 @@ export const saveLocationUpdate = async (data: LocationData): Promise<SavedLocat
   }
 };
 
-export const getDriverBusInfo = async (driverId: string): Promise<BusInfo | null> => {
+export const getDriverBusInfo = async (
+  driverId: string
+): Promise<BusInfo | null> => {
   try {
     // First, get the bus information
     const { data: busData, error: busError } = await supabaseAdmin
       .from('buses')
-      .select(`
+      .select(
+        `
         id,
         number_plate,
         route_id,
         routes!inner(
           name
         )
-      `)
+      `
+      )
       .eq('assigned_driver_id', driverId)
       .eq('is_active', true)
       .single();
@@ -105,7 +111,9 @@ export const getDriverBusInfo = async (driverId: string): Promise<BusInfo | null
     }
 
     // Handle the case where joined tables return arrays
-    const routeData = Array.isArray(busData.routes) ? busData.routes[0] : busData.routes;
+    const routeData = Array.isArray(busData.routes)
+      ? busData.routes[0]
+      : busData.routes;
 
     return {
       bus_id: busData.id,
@@ -113,7 +121,7 @@ export const getDriverBusInfo = async (driverId: string): Promise<BusInfo | null
       route_id: busData.route_id || '',
       route_name: routeData?.name || '',
       driver_id: driverId,
-      driver_name: profileData?.full_name || 'Unknown Driver'
+      driver_name: profileData?.full_name || 'Unknown Driver',
     };
   } catch (error) {
     console.error('❌ Error in getDriverBusInfo:', error);
@@ -144,7 +152,7 @@ export const getCurrentBusLocations = async (): Promise<SavedLocation[]> => {
       location: row.location,
       timestamp: row.recorded_at,
       speed: row.speed_kmh,
-      heading: row.heading_degrees
+      heading: row.heading_degrees,
     }));
   } catch (error) {
     console.error('❌ Error in getCurrentBusLocations:', error);
@@ -153,8 +161,8 @@ export const getCurrentBusLocations = async (): Promise<SavedLocation[]> => {
 };
 
 export const getBusLocationHistory = async (
-  busId: string, 
-  startTime: string, 
+  busId: string,
+  startTime: string,
   endTime: string
 ): Promise<SavedLocation[]> => {
   try {
@@ -181,7 +189,7 @@ export const getBusLocationHistory = async (
       location: row.location,
       timestamp: row.recorded_at,
       speed: row.speed_kmh,
-      heading: row.heading_degrees
+      heading: row.heading_degrees,
     }));
   } catch (error) {
     console.error('❌ Error in getBusLocationHistory:', error);
@@ -193,7 +201,8 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
   try {
     const { data, error } = await supabaseAdmin
       .from('buses')
-      .select(`
+      .select(
+        `
         id,
         number_plate,
         route_id,
@@ -205,7 +214,8 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
           first_name,
           last_name
         )
-      `)
+      `
+      )
       .eq('id', busId)
       .eq('is_active', true)
       .single();
@@ -225,7 +235,9 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
       route_id: data.route_id || '',
       route_name: routeData?.name || '',
       driver_id: data.assigned_driver_id || '',
-      driver_name: `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() || 'Unknown Driver'
+      driver_name:
+        `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() ||
+        'Unknown Driver',
     };
   } catch (error) {
     console.error('❌ Error in getBusInfo:', error);
@@ -237,7 +249,8 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
   try {
     const { data, error } = await supabaseAdmin
       .from('buses')
-      .select(`
+      .select(
+        `
         id,
         number_plate,
         route_id,
@@ -250,7 +263,8 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
           first_name,
           last_name
         )
-      `)
+      `
+      )
       .eq('is_active', true);
 
     if (error) {
@@ -259,7 +273,9 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
     }
 
     return (data || []).map(item => {
-      const routeData = Array.isArray(item.routes) ? item.routes[0] : item.routes;
+      const routeData = Array.isArray(item.routes)
+        ? item.routes[0]
+        : item.routes;
       const userData = Array.isArray(item.users) ? item.users[0] : item.users;
 
       return {
@@ -268,8 +284,10 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
         route_id: item.route_id || '',
         route_name: routeData?.name || '',
         driver_id: item.assigned_driver_id || '',
-        driver_name: `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() || 'Unknown Driver',
-        bus_image_url: item.bus_image_url || null
+        driver_name:
+          `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() ||
+          'Unknown Driver',
+        bus_image_url: item.bus_image_url || null,
       };
     });
   } catch (error) {

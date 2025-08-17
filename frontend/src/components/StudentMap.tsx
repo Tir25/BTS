@@ -9,6 +9,7 @@ import maplibregl from 'maplibre-gl';
 import { websocketService, BusLocation } from '../services/websocket';
 import { busService, BusInfo } from '../services/busService';
 import { apiService } from '../services/api';
+import { authService } from '../services/authService';
 import './StudentMap.css';
 
 interface Route {
@@ -447,6 +448,13 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         // Load initial bus data after WebSocket connection
         const loadBuses = async () => {
           try {
+            // Wait for auth service to be initialized before making API calls
+            let attempts = 0;
+            while (!authService.isInitialized() && attempts < 50) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              attempts++;
+            }
+            
             const response = await apiService.getAllBuses();
             if (response.success && response.data) {
               console.log('📊 Initial bus data from API:', response.data);
@@ -548,7 +556,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
   }, [routes, addRoutesToMap]);
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative h-screen ${className}`}>
       {/* Loading overlay */}
       {isLoading && (
         <div className="loading-overlay">
@@ -589,10 +597,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       )}
 
       {/* Map container */}
-      <div
-        ref={mapContainer}
-        className="w-full h-full min-h-[500px] rounded-lg"
-      />
+      <div ref={mapContainer} className="map-container rounded-lg" />
 
       {/* Controls overlay */}
       <div className="absolute top-4 left-4 z-10 space-y-2">

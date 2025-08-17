@@ -1,19 +1,25 @@
-import pool, { initializeDatabaseConnection, checkDatabaseHealth } from '../config/database';
+import pool, {
+  initializeDatabaseConnection,
+  checkDatabaseHealth,
+} from '../config/database';
 
 // Database schema initialization with enhanced error handling
 export const initializeDatabase = async (): Promise<void> => {
   try {
     console.log('🔄 Initializing database schema...');
-    
+
     // First, ensure database connection is established
     await initializeDatabaseConnection();
-    
+
     // Enable PostGIS extension
     try {
       await pool.query('CREATE EXTENSION IF NOT EXISTS postgis;');
       console.log('✅ PostGIS extension enabled');
     } catch (error) {
-      console.warn('⚠️ PostGIS extension may already be enabled or not available:', error);
+      console.warn(
+        '⚠️ PostGIS extension may already be enabled or not available:',
+        error
+      );
     }
 
     // Create users table (linked to Supabase Auth) with profile photo support
@@ -85,7 +91,7 @@ export const initializeDatabase = async (): Promise<void> => {
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       `);
-      
+
       // Migrate routes table
       await pool.query(`
         ALTER TABLE routes 
@@ -98,7 +104,7 @@ export const initializeDatabase = async (): Promise<void> => {
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       `);
-      
+
       // Migrate users table
       await pool.query(`
         ALTER TABLE users 
@@ -110,7 +116,7 @@ export const initializeDatabase = async (): Promise<void> => {
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       `);
-      
+
       console.log('✅ Database migration completed');
     } catch (migrationError) {
       console.warn('⚠️ Migration warning:', migrationError);
@@ -138,14 +144,16 @@ export const initializeDatabase = async (): Promise<void> => {
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
         CREATE INDEX IF NOT EXISTS idx_buses_number_plate ON buses(number_plate);
       `);
-      
+
       // Create routes stops index separately to handle potential issues
       try {
-        await pool.query(`CREATE INDEX IF NOT EXISTS idx_routes_stops ON routes USING GIST(stops);`);
+        await pool.query(
+          `CREATE INDEX IF NOT EXISTS idx_routes_stops ON routes USING GIST(stops);`
+        );
       } catch (indexError) {
         console.warn('⚠️ Could not create routes stops index:', indexError);
       }
-      
+
       console.log('✅ Database indexes created');
     } catch (indexError) {
       console.warn('⚠️ Some indexes could not be created:', indexError);
@@ -158,7 +166,7 @@ export const initializeDatabase = async (): Promise<void> => {
     } catch (sampleDataError) {
       console.warn('⚠️ Sample data insertion failed:', sampleDataError);
     }
-    
+
     console.log('🎉 Database initialization completed successfully');
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
@@ -208,7 +216,6 @@ const insertSampleData = async (): Promise<void> => {
       ON CONFLICT DO NOTHING;
     `);
     console.log('✅ Sample live location inserted');
-
   } catch (error) {
     console.error('❌ Sample data insertion failed:', error);
     // Don't throw error for sample data insertion
@@ -219,7 +226,7 @@ const insertSampleData = async (): Promise<void> => {
 export const testDatabaseConnection = async (): Promise<void> => {
   try {
     const health = await checkDatabaseHealth();
-    
+
     if (health.healthy) {
       // Database connection test successful
       console.log('📅 Current time:', health.details.currentTime);
@@ -227,10 +234,15 @@ export const testDatabaseConnection = async (): Promise<void> => {
       console.log('📊 Pool status:', {
         total: health.details.poolSize,
         idle: health.details.idleCount,
-        waiting: health.details.waitingCount
+        waiting: health.details.waitingCount,
       });
     } else {
-      throw new Error(health.details.error);
+      const errorMessage = health.details.error;
+      throw new Error(
+        typeof errorMessage === 'string'
+          ? errorMessage
+          : 'Database health check failed'
+      );
     }
   } catch (error) {
     console.error('❌ Database connection test failed:', error);
@@ -242,4 +254,3 @@ export const testDatabaseConnection = async (): Promise<void> => {
 export const getDatabaseHealth = async (): Promise<any> => {
   return await checkDatabaseHealth();
 };
-

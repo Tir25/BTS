@@ -16,15 +16,19 @@ declare global {
 }
 
 // Authentication middleware
-export const authenticateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const authenticateUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({
         success: false,
         error: 'Authentication required',
-        message: 'Bearer token is required'
+        message: 'Bearer token is required',
       });
       return;
     }
@@ -32,13 +36,16 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
     // Verify token with Supabase
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabaseAdmin.auth.getUser(token);
 
     if (error || !user) {
       res.status(401).json({
         success: false,
         error: 'Invalid token',
-        message: 'Authentication failed'
+        message: 'Authentication failed',
       });
       return;
     }
@@ -51,8 +58,11 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
       .single();
 
     if (profileError || !profile) {
-      console.log('⚠️ User profile not found, creating default admin profile for:', user.email);
-      
+      console.log(
+        '⚠️ User profile not found, creating default admin profile for:',
+        user.email
+      );
+
       try {
         // Create a default admin profile for testing
         const { data: newProfile, error: createError } = await supabaseAdmin
@@ -60,10 +70,13 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
           .insert({
             id: user.id,
             email: user.email,
-            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin User',
+            full_name:
+              user.user_metadata?.full_name ||
+              user.email?.split('@')[0] ||
+              'Admin User',
             role: 'admin',
             created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
           .select('id, full_name, role')
           .single();
@@ -75,7 +88,10 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
             id: user.id,
             email: user.email || '',
             role: 'admin',
-            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin User'
+            full_name:
+              user.user_metadata?.full_name ||
+              user.email?.split('@')[0] ||
+              'Admin User',
           };
         } else {
           // Use the newly created profile
@@ -83,7 +99,7 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
             id: newProfile.id,
             email: user.email || '',
             role: newProfile.role,
-            full_name: newProfile.full_name
+            full_name: newProfile.full_name,
           };
         }
       } catch (error) {
@@ -93,7 +109,10 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
           id: user.id,
           email: user.email || '',
           role: 'admin',
-          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin User'
+          full_name:
+            user.user_metadata?.full_name ||
+            user.email?.split('@')[0] ||
+            'Admin User',
         };
       }
     } else {
@@ -102,7 +121,7 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
         id: profile.id,
         email: user.email || '',
         role: profile.role,
-        full_name: profile.full_name
+        full_name: profile.full_name,
       };
     }
 
@@ -112,7 +131,7 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
     res.status(500).json({
       success: false,
       error: 'Authentication failed',
-      message: 'Internal server error during authentication'
+      message: 'Internal server error during authentication',
     });
     return;
   }
@@ -125,7 +144,7 @@ export const requireRole = (allowedRoles: string[]) => {
       res.status(401).json({
         success: false,
         error: 'Authentication required',
-        message: 'User must be authenticated'
+        message: 'User must be authenticated',
       });
       return;
     }
@@ -134,7 +153,7 @@ export const requireRole = (allowedRoles: string[]) => {
       res.status(403).json({
         success: false,
         error: 'Access denied',
-        message: `Role '${req.user.role}' is not authorized for this operation`
+        message: `Role '${req.user.role}' is not authorized for this operation`,
       });
       return;
     }

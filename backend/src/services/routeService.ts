@@ -1,17 +1,18 @@
 import pool from '../config/database';
+import type { LineString } from 'geojson';
 
 interface Route {
   id: string;
   name: string;
   description: string;
-  stops: any;
+  stops: LineString;
   distance_km: number;
   estimated_duration_minutes: number;
   is_active: boolean;
 }
 
 interface RouteWithGeoJSON extends Omit<Route, 'stops'> {
-  stops: GeoJSON.LineString;
+  stops: LineString;
 }
 
 interface BusLocation {
@@ -32,7 +33,10 @@ interface ETAInfo {
 }
 
 export class RouteService {
-  static async calculateETA(busLocation: BusLocation, routeId: string): Promise<ETAInfo | null> {
+  static async calculateETA(
+    busLocation: BusLocation,
+    routeId: string
+  ): Promise<ETAInfo | null> {
     try {
       const query = `
         WITH route_geometry AS (
@@ -84,7 +88,7 @@ export class RouteService {
         routeId,
         busLocation.longitude,
         busLocation.latitude,
-        busLocation.bus_id
+        busLocation.bus_id,
       ]);
 
       if (result.rows.length === 0) return null;
@@ -97,7 +101,7 @@ export class RouteService {
         next_stop: 'Next Stop',
         distance_remaining: parseFloat(row.remaining_distance_km),
         estimated_arrival_minutes: parseInt(row.estimated_arrival_minutes),
-        is_near_stop: row.is_near_stop
+        is_near_stop: row.is_near_stop,
       };
     } catch (error) {
       console.error('❌ Error calculating ETA:', error);
@@ -151,7 +155,9 @@ export class RouteService {
     estimated_duration_minutes: number;
   }): Promise<Route | null> {
     try {
-      const coordinates = routeData.coordinates.map(coord => `${coord[0]} ${coord[1]}`).join(',');
+      const coordinates = routeData.coordinates
+        .map(coord => `${coord[0]} ${coord[1]}`)
+        .join(',');
       const lineString = `LINESTRING(${coordinates})`;
 
       const query = `
@@ -164,7 +170,7 @@ export class RouteService {
         routeData.description,
         lineString,
         routeData.distance_km,
-        routeData.estimated_duration_minutes
+        routeData.estimated_duration_minutes,
       ]);
 
       return result.rows[0];
@@ -174,7 +180,10 @@ export class RouteService {
     }
   }
 
-  static async assignBusToRoute(busId: string, routeId: string): Promise<boolean> {
+  static async assignBusToRoute(
+    busId: string,
+    routeId: string
+  ): Promise<boolean> {
     try {
       const query = `UPDATE buses SET route_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;`;
       const result = await pool.query(query, [busId, routeId]);
@@ -185,7 +194,10 @@ export class RouteService {
     }
   }
 
-  static async checkBusNearStop(busLocation: BusLocation, routeId: string): Promise<{
+  static async checkBusNearStop(
+    busLocation: BusLocation,
+    routeId: string
+  ): Promise<{
     is_near_stop: boolean;
     distance_to_stop: number;
   }> {
@@ -209,7 +221,7 @@ export class RouteService {
       const result = await pool.query(query, [
         routeId,
         busLocation.longitude,
-        busLocation.latitude
+        busLocation.latitude,
       ]);
 
       if (result.rows.length === 0) {
@@ -219,7 +231,7 @@ export class RouteService {
       const row = result.rows[0];
       return {
         is_near_stop: row.is_near_stop,
-        distance_to_stop: parseFloat(row.distance_to_route_km)
+        distance_to_stop: parseFloat(row.distance_to_route_km),
       };
     } catch (error) {
       console.error('❌ Error checking bus near stop:', error);
@@ -227,14 +239,17 @@ export class RouteService {
     }
   }
 
-  static async updateRoute(routeId: string, routeData: Partial<{
-    name: string;
-    description: string;
-    coordinates: [number, number][];
-    distance_km: number;
-    estimated_duration_minutes: number;
-    is_active: boolean;
-  }>): Promise<Route | null> {
+  static async updateRoute(
+    routeId: string,
+    routeData: Partial<{
+      name: string;
+      description: string;
+      coordinates: [number, number][];
+      distance_km: number;
+      estimated_duration_minutes: number;
+      is_active: boolean;
+    }>
+  ): Promise<Route | null> {
     try {
       const updateFields = [];
       const values = [];
@@ -250,7 +265,9 @@ export class RouteService {
         values.push(routeData.description);
       }
       if (routeData.coordinates !== undefined) {
-        const coordinates = routeData.coordinates.map(coord => `${coord[0]} ${coord[1]}`).join(',');
+        const coordinates = routeData.coordinates
+          .map(coord => `${coord[0]} ${coord[1]}`)
+          .join(',');
         const lineString = `LINESTRING(${coordinates})`;
         updateFields.push(`stops = ST_GeomFromText($${paramCount++}, 4326)`);
         values.push(lineString);
@@ -277,7 +294,7 @@ export class RouteService {
         WHERE id = $${paramCount}
         RETURNING *;
       `;
-      
+
       const result = await pool.query(query, values);
       return result.rows[0] || null;
     } catch (error) {

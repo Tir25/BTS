@@ -116,11 +116,14 @@ export default function UnifiedManagement() {
 
     // Check for duplicates before submitting
     const existingBus = buses.find(
-      bus => bus.code === busForm.code || bus.number_plate === busForm.number_plate
+      bus =>
+        bus.code === busForm.code || bus.number_plate === busForm.number_plate
     );
-    
+
     if (existingBus) {
-      setError(`Bus with code '${busForm.code}' or number plate '${busForm.number_plate}' already exists`);
+      setError(
+        `Bus with code '${busForm.code}' or number plate '${busForm.number_plate}' already exists`
+      );
       setLoading(false);
       return;
     }

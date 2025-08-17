@@ -1,5 +1,4 @@
 import pool from '../config/database';
-import { RouteService } from './routeService';
 
 export interface BusData {
   id?: string;
@@ -67,7 +66,7 @@ export class AdminService {
         LEFT JOIN routes r ON b.route_id = r.id
         ORDER BY b.created_at DESC
       `;
-      
+
       const result = await pool.query(query);
       console.log(`✅ Fetched ${result.rows.length} buses from database`);
       return result.rows;
@@ -104,7 +103,7 @@ export class AdminService {
         LEFT JOIN routes r ON b.route_id = r.id
         WHERE b.id = $1
       `;
-      
+
       const result = await pool.query(query, [busId]);
       return result.rows[0] || null;
     } catch (error) {
@@ -120,7 +119,7 @@ export class AdminService {
         'SELECT id FROM buses WHERE code = $1',
         [busData.code]
       );
-      
+
       if (existingCodeCheck.rows.length > 0) {
         throw new Error(`Bus with code '${busData.code}' already exists`);
       }
@@ -130,9 +129,11 @@ export class AdminService {
         'SELECT id FROM buses WHERE number_plate = $1',
         [busData.number_plate]
       );
-      
+
       if (existingPlateCheck.rows.length > 0) {
-        throw new Error(`Bus with number plate '${busData.number_plate}' already exists`);
+        throw new Error(
+          `Bus with number plate '${busData.number_plate}' already exists`
+        );
       }
 
       const query = `
@@ -140,7 +141,7 @@ export class AdminService {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
       `;
-      
+
       const values = [
         busData.code,
         busData.number_plate,
@@ -149,9 +150,9 @@ export class AdminService {
         busData.year || null,
         busData.assigned_driver_id || null,
         busData.route_id || null,
-        busData.is_active !== false
+        busData.is_active !== false,
       ];
-      
+
       const result = await pool.query(query, values);
       console.log('✅ Bus created successfully:', result.rows[0].code);
       return result.rows[0];
@@ -210,7 +211,7 @@ export class AdminService {
         WHERE id = $${paramCount}
         RETURNING *
       `;
-      
+
       const result = await pool.query(query, values);
       return result.rows[0] || null;
     } catch (error) {
@@ -250,7 +251,7 @@ export class AdminService {
         WHERE u.role = 'driver'
         ORDER BY u.created_at DESC
       `;
-      
+
       const result = await pool.query(query);
       return result.rows;
     } catch (error) {
@@ -277,7 +278,7 @@ export class AdminService {
         LEFT JOIN buses b ON u.id = b.assigned_driver_id
         WHERE u.id = $1 AND u.role = 'driver'
       `;
-      
+
       const result = await pool.query(query, [driverId]);
       return result.rows[0] || null;
     } catch (error) {
@@ -301,7 +302,7 @@ export class AdminService {
         WHERE id = $2
         RETURNING *
       `;
-      
+
       const result = await pool.query(query, [driverId, busId]);
       return result.rows[0] || null;
     } catch (error) {
@@ -318,7 +319,7 @@ export class AdminService {
         WHERE assigned_driver_id = $1
         RETURNING *
       `;
-      
+
       const result = await pool.query(query, [driverId]);
       return result.rows;
     } catch (error) {
@@ -334,16 +335,16 @@ export class AdminService {
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING *
       `;
-      
+
       const values = [
         driverData.email,
         driverData.first_name,
         driverData.last_name,
         driverData.phone || null,
         'driver',
-        driverData.profile_photo_url || null
+        driverData.profile_photo_url || null,
       ];
-      
+
       const result = await pool.query(query, values);
       return result.rows[0];
     } catch (error) {
@@ -389,7 +390,7 @@ export class AdminService {
         WHERE id = $${paramCount} AND role = 'driver'
         RETURNING *
       `;
-      
+
       const result = await pool.query(query, values);
       return result.rows[0] || null;
     } catch (error) {
@@ -407,7 +408,8 @@ export class AdminService {
       );
 
       // Then delete the driver
-      const query = 'DELETE FROM users WHERE id = $1 AND role = \'driver\' RETURNING *';
+      const query =
+        "DELETE FROM users WHERE id = $1 AND role = 'driver' RETURNING *";
       const result = await pool.query(query, [driverId]);
       return result.rows[0] || null;
     } catch (error) {
@@ -420,14 +422,17 @@ export class AdminService {
   static async getAnalytics(): Promise<AnalyticsData> {
     try {
       // Get basic counts
-      const busCountQuery = 'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM buses';
-      const routeCountQuery = 'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM routes';
-      const driverCountQuery = 'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE id IN (SELECT assigned_driver_id FROM buses WHERE assigned_driver_id IS NOT NULL)) as active FROM users WHERE role = \'driver\'';
+      const busCountQuery =
+        'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM buses';
+      const routeCountQuery =
+        'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM routes';
+      const driverCountQuery =
+        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE id IN (SELECT assigned_driver_id FROM buses WHERE assigned_driver_id IS NOT NULL)) as active FROM users WHERE role = 'driver'";
 
       const [busResult, routeResult, driverResult] = await Promise.all([
         pool.query(busCountQuery),
         pool.query(routeCountQuery),
-        pool.query(driverCountQuery)
+        pool.query(driverCountQuery),
       ]);
 
       // Calculate average delay (simplified - based on estimated vs actual duration)
@@ -473,8 +478,8 @@ export class AdminService {
         busUsageStats: usageResult.rows.map(row => ({
           date: row.date,
           activeBuses: parseInt(row.active_buses),
-          totalTrips: parseInt(row.total_trips)
-        }))
+          totalTrips: parseInt(row.total_trips),
+        })),
       };
     } catch (error) {
       console.error('❌ Error fetching analytics:', error);
@@ -488,8 +493,10 @@ export class AdminService {
       const healthChecks = await Promise.all([
         pool.query('SELECT COUNT(*) as count FROM buses'),
         pool.query('SELECT COUNT(*) as count FROM routes'),
-        pool.query('SELECT COUNT(*) as count FROM users WHERE role = \'driver\''),
-        pool.query('SELECT COUNT(*) as count FROM live_locations WHERE recorded_at >= CURRENT_TIMESTAMP - INTERVAL \'1 hour\'')
+        pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'driver'"),
+        pool.query(
+          "SELECT COUNT(*) as count FROM live_locations WHERE recorded_at >= CURRENT_TIMESTAMP - INTERVAL '1 hour'"
+        ),
       ]);
 
       return {
@@ -497,7 +504,7 @@ export class AdminService {
         routes: parseInt(healthChecks[1].rows[0].count),
         drivers: parseInt(healthChecks[2].rows[0].count),
         recentLocations: parseInt(healthChecks[3].rows[0].count),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
       console.error('❌ Error fetching system health:', error);
@@ -525,7 +532,7 @@ export class AdminService {
         FROM routes r
         ORDER BY r.created_at DESC
       `;
-      
+
       const result = await pool.query(query);
       return result.rows;
     } catch (error) {
@@ -553,7 +560,7 @@ export class AdminService {
         FROM routes r
         WHERE r.id = $1
       `;
-      
+
       const result = await pool.query(query, [routeId]);
       return result.rows[0] || null;
     } catch (error) {
@@ -573,8 +580,14 @@ export class AdminService {
     try {
       // Create a default geometry if stops is not provided
       let geometryValue = null;
-      if (routeData.stops && routeData.stops.coordinates && routeData.stops.coordinates.length > 0) {
-        const coordinates = routeData.stops.coordinates.map((coord: number[]) => `${coord[0]} ${coord[1]}`).join(',');
+      if (
+        routeData.stops &&
+        routeData.stops.coordinates &&
+        routeData.stops.coordinates.length > 0
+      ) {
+        const coordinates = routeData.stops.coordinates
+          .map((coord: number[]) => `${coord[0]} ${coord[1]}`)
+          .join(',');
         geometryValue = `ST_GeomFromText('LINESTRING(${coordinates})', 4326)`;
       } else {
         // Default geometry for testing
@@ -587,7 +600,10 @@ export class AdminService {
           ALTER TABLE routes ADD COLUMN IF NOT EXISTS geom GEOMETRY(LINESTRING, 4326);
         `);
       } catch (alterError) {
-        console.warn('⚠️ Could not add geom column (might already exist):', alterError);
+        console.warn(
+          '⚠️ Could not add geom column (might already exist):',
+          alterError
+        );
       }
 
       // Insert with both stops and geom columns
@@ -596,15 +612,15 @@ export class AdminService {
         VALUES ($1, $2, $3, $4, $5, ${geometryValue}, ${geometryValue})
         RETURNING *
       `;
-      
+
       const values = [
         routeData.name,
         routeData.description,
         routeData.distance_km,
         routeData.estimated_duration_minutes,
-        routeData.is_active
+        routeData.is_active,
       ];
-      
+
       const result = await pool.query(query, values);
       return result.rows[0];
     } catch (error) {
@@ -613,14 +629,17 @@ export class AdminService {
     }
   }
 
-  static async updateRoute(routeId: string, routeData: {
-    name?: string;
-    description?: string;
-    distance_km?: number;
-    estimated_duration_minutes?: number;
-    is_active?: boolean;
-    stops?: any;
-  }) {
+  static async updateRoute(
+    routeId: string,
+    routeData: {
+      name?: string;
+      description?: string;
+      distance_km?: number;
+      estimated_duration_minutes?: number;
+      is_active?: boolean;
+      stops?: any;
+    }
+  ) {
     try {
       const query = `
         UPDATE routes 
@@ -634,7 +653,7 @@ export class AdminService {
         WHERE id = $7
         RETURNING *
       `;
-      
+
       const values = [
         routeData.name,
         routeData.description,
@@ -642,9 +661,9 @@ export class AdminService {
         routeData.estimated_duration_minutes,
         routeData.is_active,
         routeData.stops ? JSON.stringify(routeData.stops) : null,
-        routeId
+        routeId,
       ];
-      
+
       const result = await pool.query(query, values);
       return result.rows[0] || null;
     } catch (error) {
@@ -660,7 +679,7 @@ export class AdminService {
         WHERE id = $1
         RETURNING *
       `;
-      
+
       const result = await pool.query(query, [routeId]);
       return result.rows[0] || null;
     } catch (error) {
@@ -674,22 +693,28 @@ export class AdminService {
     try {
       // Start transaction
       const client = await pool.connect();
-      
+
       try {
         await client.query('BEGIN');
 
         // Clear buses (unassign drivers first)
         await client.query('UPDATE buses SET assigned_driver_id = NULL');
         const busesResult = await client.query('DELETE FROM buses RETURNING *');
-        
+
         // Clear routes
-        const routesResult = await client.query('DELETE FROM routes RETURNING *');
-        
+        const routesResult = await client.query(
+          'DELETE FROM routes RETURNING *'
+        );
+
         // Clear drivers
-        const driversResult = await client.query('DELETE FROM users WHERE role = \'driver\' RETURNING *');
-        
+        const driversResult = await client.query(
+          "DELETE FROM users WHERE role = 'driver' RETURNING *"
+        );
+
         // Clear live locations
-        const locationsResult = await client.query('DELETE FROM live_locations RETURNING *');
+        const locationsResult = await client.query(
+          'DELETE FROM live_locations RETURNING *'
+        );
 
         await client.query('COMMIT');
 
@@ -698,7 +723,11 @@ export class AdminService {
           deletedRoutes: routesResult.rows.length,
           deletedDrivers: driversResult.rows.length,
           deletedLocations: locationsResult.rows.length,
-          totalDeleted: busesResult.rows.length + routesResult.rows.length + driversResult.rows.length + locationsResult.rows.length
+          totalDeleted:
+            busesResult.rows.length +
+            routesResult.rows.length +
+            driversResult.rows.length +
+            locationsResult.rows.length,
         };
       } catch (error) {
         await client.query('ROLLBACK');

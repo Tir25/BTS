@@ -25,6 +25,14 @@ function App() {
     const checkHealth = async () => {
       try {
         setLoading(true);
+        
+        // Wait for auth service to be initialized before making API calls
+        let attempts = 0;
+        while (!authService.isInitialized() && attempts < 50) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
         const healthData = await apiService.getHealth();
         setHealth(healthData);
         setError(null);

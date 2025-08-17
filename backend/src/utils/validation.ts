@@ -48,12 +48,14 @@ export const validateLocationData = (data: LocationData): string | null => {
   // Check if timestamp is not too far in the future (more than 1 minute)
   const now = new Date();
   const timeDiff = timestamp.getTime() - now.getTime();
-  if (timeDiff > 60000) { // 1 minute in milliseconds
+  if (timeDiff > 60000) {
+    // 1 minute in milliseconds
     return 'Timestamp cannot be more than 1 minute in the future';
   }
 
   // Check if timestamp is not too old (more than 5 minutes)
-  if (timeDiff < -300000) { // 5 minutes in milliseconds
+  if (timeDiff < -300000) {
+    // 5 minutes in milliseconds
     return 'Timestamp cannot be more than 5 minutes in the past';
   }
 
@@ -63,7 +65,8 @@ export const validateLocationData = (data: LocationData): string | null => {
       return 'Speed must be a valid number';
     }
 
-    if (data.speed < 0 || data.speed > 200) { // 200 km/h max reasonable speed
+    if (data.speed < 0 || data.speed > 200) {
+      // 200 km/h max reasonable speed
       return 'Speed must be between 0 and 200 km/h';
     }
   }
@@ -139,9 +142,15 @@ export const validateRouteName = (routeName: string): string | null => {
   return null;
 };
 
-export const validateRouteData = (routeData: any): string | null => {
+export const validateRouteData = (
+  routeData: Record<string, unknown>
+): string | null => {
   // Validate name
-  const nameError = validateRouteName(routeData.name);
+  const name = routeData.name;
+  if (typeof name !== 'string') {
+    return 'Route name is required and must be a string';
+  }
+  const nameError = validateRouteName(name);
   if (nameError) return nameError;
 
   // Validate description
@@ -188,7 +197,10 @@ export const validateRouteData = (routeData: any): string | null => {
   }
 
   // Validate distance
-  if (typeof routeData.distance_km !== 'number' || isNaN(routeData.distance_km)) {
+  if (
+    typeof routeData.distance_km !== 'number' ||
+    isNaN(routeData.distance_km)
+  ) {
     return 'Distance must be a valid number';
   }
 
@@ -197,7 +209,10 @@ export const validateRouteData = (routeData: any): string | null => {
   }
 
   // Validate duration
-  if (typeof routeData.estimated_duration_minutes !== 'number' || isNaN(routeData.estimated_duration_minutes)) {
+  if (
+    typeof routeData.estimated_duration_minutes !== 'number' ||
+    isNaN(routeData.estimated_duration_minutes)
+  ) {
     return 'Estimated duration must be a valid number';
   }
 

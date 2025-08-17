@@ -8,7 +8,7 @@ router.get('/', async (req, res) => {
   try {
     // Get comprehensive database health information
     const dbHealth = await getDatabaseHealth();
-    
+
     const response = {
       status: dbHealth.healthy ? 'healthy' : 'unhealthy',
       timestamp: new Date().toISOString(),
@@ -27,7 +27,6 @@ router.get('/', async (req, res) => {
 
     const statusCode = dbHealth.healthy ? 200 : 503;
     res.status(statusCode).json(response);
-    
   } catch (error) {
     console.error('Health check failed:', error);
     res.status(503).json({
@@ -52,7 +51,7 @@ router.get('/', async (req, res) => {
 router.get('/detailed', async (req, res) => {
   try {
     const dbHealth = await getDatabaseHealth();
-    
+
     res.status(200).json({
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
@@ -75,4 +74,3 @@ router.get('/detailed', async (req, res) => {
 });
 
 export default router;
-

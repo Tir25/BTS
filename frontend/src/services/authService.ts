@@ -368,9 +368,20 @@ class AuthService {
   // Refresh session
   async refreshSession(): Promise<{ success: boolean; error?: string }> {
     try {
+      // Check if we have a current session before attempting refresh
+      if (!this.currentSession) {
+        console.log('🔄 No current session to refresh');
+        return { success: false, error: 'No session to refresh' };
+      }
+
       const { data, error } = await supabase.auth.refreshSession();
 
       if (error) {
+        // Don't log AuthSessionMissingError as an error since it's expected when no session exists
+        if (error.message.includes('Auth session missing')) {
+          console.log('🔄 No session to refresh (expected for unauthenticated users)');
+          return { success: false, error: 'No session to refresh' };
+        }
         console.error('❌ Session refresh error:', error);
         return { success: false, error: error.message };
       }

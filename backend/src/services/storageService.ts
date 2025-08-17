@@ -1,9 +1,18 @@
 import { supabaseAdmin } from '../config/supabase';
-import { Request } from 'express';
 
 // File type validation
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-const ALLOWED_DOCUMENT_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+];
+const ALLOWED_DOCUMENT_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+];
 
 // File size limits (in bytes)
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -31,22 +40,26 @@ export interface SignedUrlResult {
 
 export class StorageService {
   // Validate file type and size
-  static validateFile(file: Express.Multer.File, allowedTypes: string[], maxSize: number): FileValidationResult {
+  static validateFile(
+    file: any,
+    allowedTypes: string[],
+    maxSize: number
+  ): FileValidationResult {
     if (!file) {
       return { isValid: false, error: 'No file provided' };
     }
 
     if (!allowedTypes.includes(file.mimetype)) {
-      return { 
-        isValid: false, 
-        error: `Invalid file type. Allowed types: ${allowedTypes.join(', ')}` 
+      return {
+        isValid: false,
+        error: `Invalid file type. Allowed types: ${allowedTypes.join(', ')}`,
       };
     }
 
     if (file.size > maxSize) {
-      return { 
-        isValid: false, 
-        error: `File too large. Maximum size: ${maxSize / (1024 * 1024)}MB` 
+      return {
+        isValid: false,
+        error: `File too large. Maximum size: ${maxSize / (1024 * 1024)}MB`,
       };
     }
 
@@ -63,25 +76,33 @@ export class StorageService {
   // Convert file path to public URL if needed
   static convertToPublicUrl(filePathOrUrl: string): string {
     if (!filePathOrUrl) return '';
-    
+
     // If it's already a full URL, return as is
     if (filePathOrUrl.startsWith('http')) {
       return filePathOrUrl;
     }
-    
+
     // If it's a file path, convert to public URL
     if (filePathOrUrl.includes('/')) {
       return this.generatePublicUrl(filePathOrUrl);
     }
-    
+
     return filePathOrUrl;
   }
 
   // Upload image file
-  static async uploadImage(file: Express.Multer.File, folder: string, fileName?: string): Promise<UploadResult> {
+  static async uploadImage(
+    file: any,
+    folder: string,
+    fileName?: string
+  ): Promise<UploadResult> {
     try {
       // Validate file
-      const validation = this.validateFile(file, ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE);
+      const validation = this.validateFile(
+        file,
+        ALLOWED_IMAGE_TYPES,
+        MAX_IMAGE_SIZE
+      );
       if (!validation.isValid) {
         return { success: false, error: validation.error };
       }
@@ -89,22 +110,27 @@ export class StorageService {
       // Generate unique filename with timestamp to avoid conflicts
       const timestamp = Date.now();
       const fileExtension = file.originalname.split('.').pop();
-      const baseFileName = fileName ? fileName.replace(/\.[^/.]+$/, '') : `${folder}_${timestamp}`;
+      const baseFileName = fileName
+        ? fileName.replace(/\.[^/.]+$/, '')
+        : `${folder}_${timestamp}`;
       const uniqueFileName = `${baseFileName}_${timestamp}.${fileExtension}`;
       const filePath = `${folder}/${uniqueFileName}`;
 
       // Upload to Supabase Storage with upsert to handle conflicts
-      const { data, error } = await supabaseAdmin.storage
+      const { error } = await supabaseAdmin.storage
         .from('bus-tracking-media')
         .upload(filePath, file.buffer, {
           contentType: file.mimetype,
           cacheControl: '3600',
-          upsert: true // Allow overwriting existing files
+          upsert: true, // Allow overwriting existing files
         });
 
       if (error) {
         console.error('Storage upload error:', error);
-        return { success: false, error: `Failed to upload file to storage: ${error.message}` };
+        return {
+          success: false,
+          error: `Failed to upload file to storage: ${error.message}`,
+        };
       }
 
       // Generate public URL for the uploaded file
@@ -114,9 +140,8 @@ export class StorageService {
         success: true,
         url: publicUrl, // Return public URL instead of file path
         fileName: uniqueFileName,
-        filePath: filePath
+        filePath: filePath,
       };
-
     } catch (error) {
       console.error('Upload error:', error);
       return { success: false, error: 'Internal server error during upload' };
@@ -124,10 +149,18 @@ export class StorageService {
   }
 
   // Upload document file
-  static async uploadDocument(file: Express.Multer.File, folder: string, fileName?: string): Promise<UploadResult> {
+  static async uploadDocument(
+    file: any,
+    folder: string,
+    fileName?: string
+  ): Promise<UploadResult> {
     try {
       // Validate file
-      const validation = this.validateFile(file, ALLOWED_DOCUMENT_TYPES, MAX_DOCUMENT_SIZE);
+      const validation = this.validateFile(
+        file,
+        ALLOWED_DOCUMENT_TYPES,
+        MAX_DOCUMENT_SIZE
+      );
       if (!validation.isValid) {
         return { success: false, error: validation.error };
       }
@@ -135,22 +168,27 @@ export class StorageService {
       // Generate unique filename with timestamp to avoid conflicts
       const timestamp = Date.now();
       const fileExtension = file.originalname.split('.').pop();
-      const baseFileName = fileName ? fileName.replace(/\.[^/.]+$/, '') : `${folder}_${timestamp}`;
+      const baseFileName = fileName
+        ? fileName.replace(/\.[^/.]+$/, '')
+        : `${folder}_${timestamp}`;
       const uniqueFileName = `${baseFileName}_${timestamp}.${fileExtension}`;
       const filePath = `${folder}/${uniqueFileName}`;
 
       // Upload to Supabase Storage with upsert to handle conflicts
-      const { data, error } = await supabaseAdmin.storage
+      const { error } = await supabaseAdmin.storage
         .from('bus-tracking-media')
         .upload(filePath, file.buffer, {
           contentType: file.mimetype,
           cacheControl: '3600',
-          upsert: true // Allow overwriting existing files
+          upsert: true, // Allow overwriting existing files
         });
 
       if (error) {
         console.error('Storage upload error:', error);
-        return { success: false, error: `Failed to upload file to storage: ${error.message}` };
+        return {
+          success: false,
+          error: `Failed to upload file to storage: ${error.message}`,
+        };
       }
 
       // Generate public URL for the uploaded file
@@ -160,9 +198,8 @@ export class StorageService {
         success: true,
         url: publicUrl, // Return public URL instead of file path
         fileName: uniqueFileName,
-        filePath: filePath
+        filePath: filePath,
       };
-
     } catch (error) {
       console.error('Upload error:', error);
       return { success: false, error: 'Internal server error during upload' };
@@ -170,7 +207,10 @@ export class StorageService {
   }
 
   // Generate signed URL for private bucket access
-  static async createSignedUrl(filePath: string, expiresIn: number = 3600): Promise<SignedUrlResult> {
+  static async createSignedUrl(
+    filePath: string,
+    expiresIn: number = 3600
+  ): Promise<SignedUrlResult> {
     try {
       const { data, error } = await supabaseAdmin.storage
         .from('bus-tracking-media')
@@ -184,9 +224,8 @@ export class StorageService {
       return {
         success: true,
         url: data.signedUrl,
-        expiresIn: expiresIn
+        expiresIn: expiresIn,
       };
-
     } catch (error) {
       console.error('Signed URL error:', error);
       return { success: false, error: 'Internal server error' };
@@ -194,7 +233,9 @@ export class StorageService {
   }
 
   // Delete file from storage
-  static async deleteFile(filePath: string): Promise<{ success: boolean; error?: string }> {
+  static async deleteFile(
+    filePath: string
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       const { error } = await supabaseAdmin.storage
         .from('bus-tracking-media')
@@ -206,7 +247,6 @@ export class StorageService {
       }
 
       return { success: true };
-
     } catch (error) {
       console.error('Delete file error:', error);
       return { success: false, error: 'Internal server error' };
@@ -214,12 +254,14 @@ export class StorageService {
   }
 
   // Get file info
-  static async getFileInfo(filePath: string): Promise<{ success: boolean; info?: any; error?: string }> {
+  static async getFileInfo(
+    filePath: string
+  ): Promise<{ success: boolean; info?: any; error?: string }> {
     try {
       const { data, error } = await supabaseAdmin.storage
         .from('bus-tracking-media')
         .list(filePath.split('/').slice(0, -1).join('/'), {
-          search: filePath.split('/').pop()
+          search: filePath.split('/').pop(),
         });
 
       if (error) {
@@ -229,9 +271,8 @@ export class StorageService {
 
       return {
         success: true,
-        info: data
+        info: data,
       };
-
     } catch (error) {
       console.error('Get file info error:', error);
       return { success: false, error: 'Internal server error' };
@@ -239,7 +280,9 @@ export class StorageService {
   }
 
   // List files in a folder
-  static async listFiles(folder: string): Promise<{ success: boolean; data?: any[]; error?: string }> {
+  static async listFiles(
+    folder: string
+  ): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
       const { data, error } = await supabaseAdmin.storage
         .from('bus-tracking-media')
@@ -251,7 +294,6 @@ export class StorageService {
       }
 
       return { success: true, data };
-
     } catch (error) {
       console.error('List files error:', error);
       return { success: false, error: 'Internal server error' };
@@ -268,8 +310,10 @@ export class StorageService {
 
       const urlObj = new URL(url);
       const pathParts = urlObj.pathname.split('/');
-      const storageIndex = pathParts.findIndex(part => part === 'bus-tracking-media');
-      
+      const storageIndex = pathParts.findIndex(
+        part => part === 'bus-tracking-media'
+      );
+
       if (storageIndex === -1) {
         return null;
       }
