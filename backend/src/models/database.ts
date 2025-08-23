@@ -48,6 +48,8 @@ export const initializeDatabase = async (): Promise<void> => {
         distance_km DECIMAL(10,2) NOT NULL,
         estimated_duration_minutes INTEGER,
         route_map_url TEXT,
+        city VARCHAR(100),
+        geom GEOMETRY(LINESTRING, 4326) DEFAULT ST_GeomFromText('LINESTRING(72.5714 23.0225, 72.4563 23.5295)', 4326),
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -100,6 +102,7 @@ export const initializeDatabase = async (): Promise<void> => {
         ADD COLUMN IF NOT EXISTS distance_km DECIMAL(10,2),
         ADD COLUMN IF NOT EXISTS estimated_duration_minutes INTEGER,
         ADD COLUMN IF NOT EXISTS route_map_url TEXT,
+        ADD COLUMN IF NOT EXISTS city VARCHAR(100),
         ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
@@ -174,51 +177,18 @@ export const initializeDatabase = async (): Promise<void> => {
   }
 };
 
-// Insert sample data for testing
+// Sample data insertion removed - Use Supabase Auth and real data instead
 const insertSampleData = async (): Promise<void> => {
   try {
-    // Insert sample users
-    await pool.query(`
-      INSERT INTO users (email, role, first_name, last_name) VALUES
-      ('admin@university.edu', 'admin', 'Admin', 'User'),
-      ('driver1@university.edu', 'driver', 'John', 'Driver'),
-      ('student1@university.edu', 'student', 'Alice', 'Student')
-      ON CONFLICT (email) DO NOTHING;
-    `);
-    console.log('✅ Sample users inserted');
-
-    // Insert sample buses (matching the actual schema)
-    await pool.query(`
-      INSERT INTO buses (code, number_plate, capacity, model, year, is_active) VALUES
-      ('BUS001', 'UNI001', 50, 'Mercedes-Benz O500', 2020, true),
-      ('BUS002', 'UNI002', 45, 'Volvo B7R', 2019, true),
-      ('BUS003', 'UNI003', 55, 'Scania K250', 2021, true)
-      ON CONFLICT (code) DO NOTHING;
-    `);
-    console.log('✅ Sample buses inserted');
-
-    // Insert sample route
-    await pool.query(`
-      INSERT INTO routes (name, description, stops, geom, distance_km, estimated_duration_minutes, is_active) VALUES
-      ('Route 1: Ahmedabad to Gandhinagar', 'Main campus route', 
-       ST_GeomFromText('LINESTRING(72.5714 23.0225, 72.6369 23.2154)', 4326),
-       ST_GeomFromText('LINESTRING(72.5714 23.0225, 72.6369 23.2154)', 4326),
-       25.5, 45, true)
-      ON CONFLICT DO NOTHING;
-    `);
-    console.log('✅ Sample route inserted');
-
-    // Insert sample live location
-    await pool.query(`
-      INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees) VALUES
-      ((SELECT id FROM buses WHERE number_plate = 'UNI001' LIMIT 1),
-       ST_GeomFromText('POINT(72.5714 23.0225)', 4326), 35.5, 45.0)
-      ON CONFLICT DO NOTHING;
-    `);
-    console.log('✅ Sample live location inserted');
+    console.log(
+      'ℹ️ Sample data insertion skipped - Use Supabase Auth for real users'
+    );
+    console.log(
+      'ℹ️ Buses and routes should be created through the admin interface'
+    );
+    console.log('ℹ️ Live locations are managed by the driver interface');
   } catch (error) {
     console.error('❌ Sample data insertion failed:', error);
-    // Don't throw error for sample data insertion
   }
 };
 
@@ -251,6 +221,6 @@ export const testDatabaseConnection = async (): Promise<void> => {
 };
 
 // Database health check endpoint
-export const getDatabaseHealth = async (): Promise<any> => {
+export const getDatabaseHealth = async (): Promise<unknown> => {
   return await checkDatabaseHealth();
 };

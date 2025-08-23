@@ -25,10 +25,15 @@ export const authenticateUser = async (
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log(
+        '❌ Missing or invalid Authorization header:',
+        authHeader ? 'Header exists but not Bearer' : 'No header'
+      );
       res.status(401).json({
         success: false,
         error: 'Authentication required',
-        message: 'Bearer token is required',
+        message: 'Bearer token is required. Please log in again.',
+        code: 'MISSING_TOKEN',
       });
       return;
     }
@@ -42,10 +47,15 @@ export const authenticateUser = async (
     } = await supabaseAdmin.auth.getUser(token);
 
     if (error || !user) {
+      console.log(
+        '❌ Token validation failed:',
+        error?.message || 'No user found'
+      );
       res.status(401).json({
         success: false,
         error: 'Invalid token',
-        message: 'Authentication failed',
+        message: 'Authentication failed. Please log in again.',
+        code: 'INVALID_TOKEN',
       });
       return;
     }
@@ -58,63 +68,16 @@ export const authenticateUser = async (
       .single();
 
     if (profileError || !profile) {
-      console.log(
-        '⚠️ User profile not found, creating default admin profile for:',
-        user.email
-      );
+      console.log('⚠️ User profile not found for:', user.email);
 
-      try {
-        // Create a default admin profile for testing
-        const { data: newProfile, error: createError } = await supabaseAdmin
-          .from('profiles')
-          .insert({
-            id: user.id,
-            email: user.email,
-            full_name:
-              user.user_metadata?.full_name ||
-              user.email?.split('@')[0] ||
-              'Admin User',
-            role: 'admin',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .select('id, full_name, role')
-          .single();
-
-        if (createError) {
-          console.error('❌ Failed to create default profile:', createError);
-          // Continue with temporary profile instead of failing
-          req.user = {
-            id: user.id,
-            email: user.email || '',
-            role: 'admin',
-            full_name:
-              user.user_metadata?.full_name ||
-              user.email?.split('@')[0] ||
-              'Admin User',
-          };
-        } else {
-          // Use the newly created profile
-          req.user = {
-            id: newProfile.id,
-            email: user.email || '',
-            role: newProfile.role,
-            full_name: newProfile.full_name,
-          };
-        }
-      } catch (error) {
-        console.error('❌ Error creating profile:', error);
-        // Continue with temporary profile instead of failing
-        req.user = {
-          id: user.id,
-          email: user.email || '',
-          role: 'admin',
-          full_name:
-            user.user_metadata?.full_name ||
-            user.email?.split('@')[0] ||
-            'Admin User',
-        };
-      }
+      // SECURITY FIX: Don't automatically assign admin role
+      // Users without profiles should be denied access
+      res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'User profile not found. Please contact administrator.',
+      });
+      return;
     } else {
       // Attach user data to request
       req.user = {

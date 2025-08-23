@@ -11,35 +11,16 @@ import adminRoutes from './routes/admin';
 import storageRoutes from './routes/storage';
 import { initializeDatabase, testDatabaseConnection } from './models/database';
 import { closeDatabaseConnection } from './config/database';
-import { initializeEnvironment, EnvironmentConfig } from './config/environment';
+import { initializeEnvironment } from './config/environment';
 import { initializeWebSocket } from './sockets/websocket';
 
 // Initialize environment configuration
-const config: EnvironmentConfig = initializeEnvironment();
+const config = initializeEnvironment();
 
 const app = express();
 const server = createServer(app);
 const io = new SocketIOServer(server, {
-  cors: {
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:5174',
-      'http://127.0.0.1:5175',
-      'http://127.0.0.1:3000',
-      'http://192.168.1.2:5173',
-      'http://192.168.1.2:5174',
-      'http://192.168.1.2:5175',
-      'http://192.168.1.2:3000',
-      // Allow any 192.168.x.x IP addresses for cross-laptop testing
-      /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
-    ],
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
+  cors: config.websocket.cors,
 });
 
 const PORT = config.port;
@@ -188,7 +169,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught exceptions
-process.on('uncaughtException', error => {
+process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
   gracefulShutdown('Uncaught Exception');
 });

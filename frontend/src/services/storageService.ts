@@ -34,7 +34,9 @@ export class StorageService {
 
     // If no token, only try to refresh if user is authenticated
     if (!token && authService.isAuthenticated()) {
-      console.log('🔄 No token found but user is authenticated, attempting to refresh session...');
+      console.log(
+        '🔄 No token found but user is authenticated, attempting to refresh session...'
+      );
       const refreshResult = await authService.refreshSession();
       if (refreshResult.success) {
         token = authService.getAccessToken();

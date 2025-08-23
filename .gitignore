@@ -11,6 +11,8 @@ pnpm-debug.log*
 .env.development.local
 .env.test.local
 .env.production.local
+*.local
+DATABASE_CREDENTIALS_BACKUP.md
 
 # Build outputs
 dist/

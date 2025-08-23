@@ -1,48 +1,41 @@
-import { Router } from 'express';
-import { getDatabaseHealth } from '../models/database';
+import express from 'express';
+import { checkDatabaseHealth } from '../config/database';
 
-const router = Router();
+const router = express.Router();
 
-// Health check endpoint with enhanced database health monitoring
+// Health check endpoint
 router.get('/', async (req, res) => {
   try {
-    // Get comprehensive database health information
-    const dbHealth = await getDatabaseHealth();
-
-    const response = {
-      status: dbHealth.healthy ? 'healthy' : 'unhealthy',
+    const dbHealth = await checkDatabaseHealth();
+    
+    const healthData = {
+      status: 'healthy',
       timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
       environment: process.env.NODE_ENV || 'development',
-      database: {
-        status: dbHealth.healthy ? 'connected' : 'disconnected',
-        details: dbHealth.details,
-      },
       services: {
-        database: dbHealth.healthy ? 'operational' : 'down',
-        supabase: 'configured', // Will be tested in future
-        websocket: 'ready', // Will be tested in future
+        database: {
+          status: dbHealth.healthy ? 'healthy' : 'unhealthy',
+          details: {
+            status: dbHealth.healthy ? 'connected' : 'disconnected',
+            details: dbHealth.details,
+          },
+        },
+        api: {
+          status: 'operational',
+          database: dbHealth.healthy ? 'operational' : 'down',
+        },
       },
-      version: '1.0.0',
     };
 
     const statusCode = dbHealth.healthy ? 200 : 503;
-    res.status(statusCode).json(response);
+    res.status(statusCode).json(healthData);
   } catch (error) {
-    console.error('Health check failed:', error);
+    console.error('Health check error:', error);
     res.status(503).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development',
-      database: {
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
-      services: {
-        database: 'error',
-        supabase: 'unknown',
-        websocket: 'unknown',
-      },
-      version: '1.0.0',
+      error: 'Health check failed',
     });
   }
 });
@@ -50,7 +43,7 @@ router.get('/', async (req, res) => {
 // Detailed health check endpoint
 router.get('/detailed', async (req, res) => {
   try {
-    const dbHealth = await getDatabaseHealth();
+    const dbHealth = await checkDatabaseHealth();
 
     res.status(200).json({
       timestamp: new Date().toISOString(),

@@ -279,7 +279,7 @@ export default function MediaManagement() {
                   { id: 'bus', name: 'Bus Images' },
                   { id: 'driver', name: 'Driver Photos' },
                   { id: 'route', name: 'Route Maps' },
-                ].map(tab => (
+                ].map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() =>
@@ -339,11 +339,11 @@ export default function MediaManagement() {
                   </label>
                   <select
                     value={selectedItem}
-                    onChange={e => setSelectedItem(e.target.value)}
+                    onChange={(e) => setSelectedItem(e.target.value)}
                     className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
                   >
                     <option value="">Choose...</option>
-                    {getCurrentItems().map(item => (
+                    {getCurrentItems().map((item) => (
                       <option key={item.id || 'temp'} value={item.id || ''}>
                         {getDisplayName(item)}
                       </option>
@@ -376,7 +376,7 @@ export default function MediaManagement() {
                 </p>
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {getCurrentItems().map(item => {
+                  {getCurrentItems().map((item) => {
                     const fileUrl = getFileUrl(item);
                     const displayName = getDisplayName(item);
                     return (
@@ -396,7 +396,7 @@ export default function MediaManagement() {
                                   src={fileUrl}
                                   alt={displayName}
                                   className="w-full h-32 object-cover rounded-md"
-                                  onError={e => {
+                                  onError={(e) => {
                                     e.currentTarget.src =
                                       'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZSBVbmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=';
                                   }}

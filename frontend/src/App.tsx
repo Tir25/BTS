@@ -5,9 +5,14 @@ import { authService } from './services/authService';
 import { HealthResponse, User } from './types';
 import DriverInterface from './components/DriverInterface';
 import StudentMap from './components/StudentMap';
+
 import AdminPanel from './components/AdminPanel';
 
+
+
 function App() {
+  console.log('🚀 App component is rendering...');
+
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,14 +30,12 @@ function App() {
     const checkHealth = async () => {
       try {
         setLoading(true);
-        
+
         // Wait for auth service to be initialized before making API calls
-        let attempts = 0;
-        while (!authService.isInitialized() && attempts < 50) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          attempts++;
+        while (!authService.isInitialized()) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        
+
         const healthData = await apiService.getHealth();
         setHealth(healthData);
         setError(null);
@@ -143,7 +146,7 @@ function App() {
                       </p>
                       <p>
                         <strong>Database:</strong>{' '}
-                        {health.database?.status || 'Unknown'}
+                        {health.services?.database?.status || 'Unknown'}
                       </p>
                       <p>
                         <strong>Environment:</strong> {health.environment}
@@ -152,18 +155,16 @@ function App() {
                         <strong>Timestamp:</strong>{' '}
                         {new Date(health.timestamp).toLocaleString()}
                       </p>
-                      {health.database?.details && (
+                      {health.services?.database?.details && (
                         <div className="mt-2 text-xs">
                           <p>
                             <strong>PostgreSQL:</strong>{' '}
-                            {health.database.details?.postgresVersion ||
+                            {health.services.database.details.details?.postgresVersion ||
                               'Unknown'}
                           </p>
                           <p>
                             <strong>Pool Status:</strong>{' '}
-                            {JSON.stringify(
-                              health.database.details?.poolStatus || {}
-                            )}
+                            {`Total: ${health.services.database.details.details?.poolSize || 0}, Idle: ${health.services.database.details.details?.idleCount || 0}, Waiting: ${health.services.database.details.details?.waitingCount || 0}`}
                           </p>
                         </div>
                       )}
@@ -209,6 +210,8 @@ function App() {
               >
                 👨‍💼 Admin Panel (Phase 5)
               </Link>
+
+
             </div>
           </div>
         </div>
@@ -246,6 +249,7 @@ function App() {
         <Route path="/driver" element={<DriverInterface />} />
         <Route path="/student" element={<StudentMap />} />
         <Route path="/admin" element={<AdminPanel />} />
+
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>

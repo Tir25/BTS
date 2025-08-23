@@ -99,6 +99,218 @@ The University Bus Tracking System is a modern, scalable web application built w
 - **Maps**: Leaflet with React-Leaflet
 - **Real-time**: Socket.IO Client
 
+## Frontend Component Architecture
+
+```mermaid
+graph TB
+    subgraph "Frontend Application"
+        subgraph "App.tsx (Root Component)"
+            A[App Component]
+        end
+        
+        subgraph "Authentication Components"
+            B[AdminLogin.tsx]
+            C[LoginForm.tsx]
+        end
+        
+        subgraph "Student Interface"
+            D[StudentMap.tsx]
+            E[BusTracker.tsx]
+            F[RouteViewer.tsx]
+        end
+        
+        subgraph "Driver Interface"
+            G[DriverInterface.tsx]
+            H[LocationSharer.tsx]
+            I[NavigationPanel.tsx]
+        end
+        
+        subgraph "Admin Interface"
+            J[AdminDashboard.tsx]
+            K[AdminPanel.tsx]
+            L[StreamlinedManagement.tsx]
+            M[UnifiedManagement.tsx]
+        end
+        
+        subgraph "Shared Components"
+            N[FileUpload.tsx]
+            O[MediaManagement.tsx]
+            P[MapComponent.tsx]
+            Q[LoadingSpinner.tsx]
+            R[ErrorBoundary.tsx]
+        end
+        
+        subgraph "Services Layer"
+            S[api.ts]
+            T[authService.ts]
+            U[busService.ts]
+            V[storageService.ts]
+            W[websocket.ts]
+        end
+        
+        subgraph "Configuration"
+            X[environment.ts]
+            Y[supabase.ts]
+        end
+    end
+    
+    A --> B
+    A --> C
+    A --> D
+    A --> G
+    A --> J
+    
+    D --> E
+    D --> F
+    D --> P
+    
+    G --> H
+    G --> I
+    G --> P
+    
+    J --> K
+    J --> L
+    J --> M
+    J --> N
+    J --> O
+    
+    B --> S
+    C --> T
+    D --> U
+    G --> U
+    J --> U
+    N --> V
+    D --> W
+    G --> W
+    J --> W
+    
+    S --> X
+    T --> Y
+    U --> X
+    V --> Y
+    W --> X
+```
+
+## Deployment Architecture
+
+### Development Environment
+
+```mermaid
+graph TB
+    subgraph "Developer Machine"
+        subgraph "Frontend Development"
+            A[Vite Dev Server<br/>Port 5173]
+            B[React App]
+            C[Hot Reload]
+        end
+        
+        subgraph "Backend Development"
+            D[Node.js Dev Server<br/>Port 3001]
+            E[TypeScript Compiler]
+            F[ts-node-dev]
+        end
+        
+        subgraph "Local Database"
+            G[PostgreSQL<br/>Port 5432]
+            H[PostGIS Extension]
+        end
+        
+        subgraph "Development Tools"
+            I[ESLint]
+            J[Prettier]
+            K[TypeScript]
+        end
+    end
+    
+    subgraph "External Services"
+        L[Supabase Project<br/>Development]
+        M[Supabase Auth]
+        N[Supabase Storage]
+        O[Supabase Realtime]
+    end
+    
+    A --> B
+    B --> C
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    
+    B --> L
+    D --> L
+    L --> M
+    L --> N
+    L --> O
+    
+    I --> B
+    J --> B
+    K --> B
+    I --> D
+    J --> D
+    K --> D
+```
+
+### Production Environment
+
+```mermaid
+graph TB
+    subgraph "Production Server"
+        subgraph "Load Balancer"
+            A[Nginx<br/>Port 80/443]
+        end
+        
+        subgraph "Application Layer"
+            B[PM2 Process Manager]
+            C[Node.js Backend<br/>Port 3001]
+            D[React Frontend<br/>Built Files]
+        end
+        
+        subgraph "Database"
+            E[PostgreSQL<br/>Port 5432]
+            F[PostGIS Extension]
+        end
+        
+        subgraph "Monitoring"
+            G[PM2 Monitoring]
+            H[Application Logs]
+            I[Error Tracking]
+        end
+    end
+    
+    subgraph "External Services"
+        J[Supabase Project<br/>Production]
+        K[Supabase Auth]
+        L[Supabase Storage]
+        M[Supabase Realtime]
+    end
+    
+    subgraph "CI/CD Pipeline"
+        N[GitHub Actions]
+        O[Build Process]
+        P[Deployment]
+    end
+    
+    A --> B
+    B --> C
+    B --> D
+    C --> E
+    E --> F
+    
+    C --> J
+    D --> J
+    J --> K
+    J --> L
+    J --> M
+    
+    N --> O
+    O --> P
+    P --> A
+    
+    G --> C
+    H --> C
+    I --> C
+```
+
 **Key Features:**
 - Responsive design for all devices
 - Real-time bus tracking

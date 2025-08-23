@@ -8,6 +8,7 @@ interface Route {
   stops: LineString;
   distance_km: number;
   estimated_duration_minutes: number;
+  city?: string;
   is_active: boolean;
 }
 
@@ -116,7 +117,7 @@ export class RouteService {
           id, name, description,
           ST_AsGeoJSON(stops)::json as stops,
           distance_km, estimated_duration_minutes,
-          route_map_url,
+          route_map_url, city,
           is_active, created_at, updated_at
         FROM routes WHERE is_active = true ORDER BY name;
       `;
@@ -135,7 +136,7 @@ export class RouteService {
           id, name, description,
           ST_AsGeoJSON(stops)::json as stops,
           distance_km, estimated_duration_minutes,
-          route_map_url,
+          route_map_url, city,
           is_active, created_at, updated_at
         FROM routes WHERE id = $1 AND is_active = true;
       `;
@@ -153,16 +154,17 @@ export class RouteService {
     coordinates: [number, number][];
     distance_km: number;
     estimated_duration_minutes: number;
+    city?: string;
   }): Promise<Route | null> {
     try {
       const coordinates = routeData.coordinates
-        .map(coord => `${coord[0]} ${coord[1]}`)
+        .map((coord) => `${coord[0]} ${coord[1]}`)
         .join(',');
       const lineString = `LINESTRING(${coordinates})`;
 
       const query = `
-        INSERT INTO routes (name, description, stops, distance_km, estimated_duration_minutes)
-        VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5) RETURNING *;
+        INSERT INTO routes (name, description, stops, distance_km, estimated_duration_minutes, city)
+        VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6) RETURNING *;
       `;
 
       const result = await pool.query(query, [
@@ -171,6 +173,7 @@ export class RouteService {
         lineString,
         routeData.distance_km,
         routeData.estimated_duration_minutes,
+        routeData.city || null,
       ]);
 
       return result.rows[0];
@@ -266,7 +269,7 @@ export class RouteService {
       }
       if (routeData.coordinates !== undefined) {
         const coordinates = routeData.coordinates
-          .map(coord => `${coord[0]} ${coord[1]}`)
+          .map((coord) => `${coord[0]} ${coord[1]}`)
           .join(',');
         const lineString = `LINESTRING(${coordinates})`;
         updateFields.push(`stops = ST_GeomFromText($${paramCount++}, 4326)`);

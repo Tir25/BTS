@@ -61,7 +61,7 @@ const retryConnection = async (retryCount = 0): Promise<Pool> => {
       console.log(
         `🔄 Retrying database connection in ${config.retryDelay / 1000} seconds...`
       );
-      await new Promise(resolve => setTimeout(resolve, config.retryDelay));
+      await new Promise((resolve) => setTimeout(resolve, config.retryDelay));
       return retryConnection(retryCount + 1);
     } else {
       console.error('❌ Maximum database connection retries exceeded');

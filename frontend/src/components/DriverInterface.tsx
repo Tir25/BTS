@@ -80,7 +80,7 @@ const DriverInterface: React.FC = () => {
       if ('permissions' in navigator) {
         navigator.permissions
           .query({ name: 'geolocation' })
-          .then(permission => {
+          .then((permission) => {
             console.log('📍 Initial permission state:', permission.state);
 
             // If permission is granted, we can proceed
@@ -325,7 +325,7 @@ const DriverInterface: React.FC = () => {
         setSocketError('Disconnected from server');
       });
 
-      websocketService.socket?.on('error', error => {
+      websocketService.socket?.on('error', (error) => {
         console.error('❌ Driver: Socket error:', error);
         setSocketError(error.message || 'Socket error occurred');
       });
@@ -340,10 +340,10 @@ const DriverInterface: React.FC = () => {
         }
       );
 
-      websocketService.socket?.on('driver:locationConfirmed', data => {
+      websocketService.socket?.on('driver:locationConfirmed', (data) => {
         console.log('📍 Driver: Location confirmed:', data);
         setLastUpdateTime(new Date().toLocaleTimeString());
-        setUpdateCount(prev => prev + 1);
+        setUpdateCount((prev) => prev + 1);
       });
 
       // Store the socket reference
@@ -424,7 +424,7 @@ const DriverInterface: React.FC = () => {
 
     // Get initial position with enhanced error handling
     navigator.geolocation.getCurrentPosition(
-      position => {
+      (position) => {
         console.log('✅ Initial position obtained:', {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -439,7 +439,7 @@ const DriverInterface: React.FC = () => {
 
         sendLocationUpdate(position);
       },
-      error => {
+      (error) => {
         console.error('❌ Geolocation error:', error);
         let errorMessage = 'Location error: ';
 
@@ -483,7 +483,7 @@ const DriverInterface: React.FC = () => {
 
     // Start watching position with same options
     watchIdRef.current = navigator.geolocation.watchPosition(
-      position => {
+      (position) => {
         console.log('📍 Location update received:', {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -498,7 +498,7 @@ const DriverInterface: React.FC = () => {
 
         sendLocationUpdate(position);
       },
-      error => {
+      (error) => {
         console.error('❌ Geolocation watch error:', error);
         let errorMessage = 'Location tracking error: ';
 
@@ -631,8 +631,8 @@ const DriverInterface: React.FC = () => {
                   type="email"
                   required
                   value={loginForm.email}
-                  onChange={e =>
-                    setLoginForm(prev => ({ ...prev, email: e.target.value }))
+                  onChange={(e) =>
+                    setLoginForm((prev) => ({ ...prev, email: e.target.value }))
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter your email"
@@ -651,8 +651,8 @@ const DriverInterface: React.FC = () => {
                   type="password"
                   required
                   value={loginForm.password}
-                  onChange={e =>
-                    setLoginForm(prev => ({
+                  onChange={(e) =>
+                    setLoginForm((prev) => ({
                       ...prev,
                       password: e.target.value,
                     }))
@@ -673,7 +673,7 @@ const DriverInterface: React.FC = () => {
 
             <div className="mt-4 text-center">
               <p className="text-sm text-gray-600">
-                Demo Credentials: tirthraval27@gmail.com / Tirth Raval27
+                Please contact your administrator for login credentials
               </p>
             </div>
           </div>
@@ -767,7 +767,7 @@ const DriverInterface: React.FC = () => {
                       // Force location permission request
                       if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
-                          position => {
+                          (position) => {
                             console.log(
                               '✅ Manual location permission granted:',
                               position
@@ -775,7 +775,7 @@ const DriverInterface: React.FC = () => {
                             setLocationError(null);
                             startLocationTracking();
                           },
-                          error => {
+                          (error) => {
                             console.error(
                               '❌ Manual location permission denied:',
                               error
@@ -915,7 +915,7 @@ const DriverInterface: React.FC = () => {
 
                       if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
-                          position => {
+                          (position) => {
                             const successMsg =
                               `✅ Location Test Successful!\n\n` +
                               `Latitude: ${position.coords.latitude}\n` +
@@ -926,7 +926,7 @@ const DriverInterface: React.FC = () => {
                             alert(successMsg);
                             setLocationError(null);
                           },
-                          error => {
+                          (error) => {
                             const errorMsg =
                               `❌ Location Test Failed\n\n` +
                               `Error Code: ${error.code}\n` +
@@ -950,77 +950,7 @@ const DriverInterface: React.FC = () => {
                     🧪 Test Location
                   </button>
 
-                  <button
-                    onClick={() => {
-                      // Enhanced mobile debugging
-                      const isMobile =
-                        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-                          navigator.userAgent
-                        );
-                      const browser = navigator.userAgent.includes('Chrome')
-                        ? 'Chrome'
-                        : navigator.userAgent.includes('Firefox')
-                          ? 'Firefox'
-                          : navigator.userAgent.includes('Safari')
-                            ? 'Safari'
-                            : 'Other';
 
-                      // Debug Info:
-                      console.log({
-                        isMobile,
-                        browser,
-                        userAgent: navigator.userAgent,
-                        geolocation: !!navigator.geolocation,
-                        permissions: !!navigator.permissions,
-                      });
-
-                      if ('permissions' in navigator) {
-                        navigator.permissions
-                          .query({ name: 'geolocation' })
-                          .then(permission => {
-                            console.log(
-                              'Current permission state:',
-                              permission.state
-                            );
-
-                            if (isMobile) {
-                              const mobileInstructions =
-                                `📱 Mobile Debug Info:\n\n` +
-                                `Device: ${isMobile ? 'Mobile' : 'Desktop'}\n` +
-                                `Browser: ${browser}\n` +
-                                `Permission: ${permission.state}\n\n` +
-                                `If permission is denied:\n` +
-                                `1. Go to Phone Settings\n` +
-                                `2. Find ${browser} app\n` +
-                                `3. Enable Location permission\n` +
-                                `4. Return and refresh page`;
-
-                              alert(mobileInstructions);
-                            } else {
-                              if (permission.state === 'denied') {
-                                alert(
-                                  'Location permission is denied. Please:\n1. Click the lock icon in address bar\n2. Set location to "Allow"\n3. Refresh the page'
-                                );
-                              } else {
-                                alert(
-                                  'Location permission state: ' +
-                                    permission.state +
-                                    '\nTry clicking "Request Location Permission" button.'
-                                );
-                              }
-                            }
-                          });
-                      } else {
-                        const message = isMobile
-                          ? 'Permission API not available on mobile. Please check your phone settings for location permissions.'
-                          : 'Permission API not available. Try refreshing the page.';
-                        alert(message);
-                      }
-                    }}
-                    className="mt-2 bg-yellow-500 text-white px-3 py-1 rounded text-xs hover:bg-yellow-600"
-                  >
-                    🔍 Check Permission Status
-                  </button>
                 </div>
               </div>
             )}

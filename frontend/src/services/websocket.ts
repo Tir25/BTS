@@ -1,62 +1,53 @@
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../config/environment';
 
-export interface BusLocation {
-  busId: string;
-  driverId: string;
-  latitude: number;
-  longitude: number;
-  timestamp: string;
-  speed?: number;
-  heading?: number;
-  eta?: {
-    bus_id: string;
-    route_id: string;
-    current_location: [number, number];
-    next_stop: string;
-    distance_remaining: number;
-    estimated_arrival_minutes: number;
-    is_near_stop: boolean;
-  };
-  nearStop?: {
-    is_near_stop: boolean;
-    distance_to_stop: number;
-  };
-}
+import { IWebSocketService, BusLocation } from './interfaces/IWebSocketService';
 
-export interface BusInfo {
-  busId: string;
-  busNumber: string;
-  routeName: string;
-  driverName: string;
-  currentLocation: BusLocation;
-  eta?: number;
-}
-
-class WebSocketService {
+class WebSocketService implements IWebSocketService {
   public socket: Socket | null = null;
-  private isConnected = false;
+  private _isConnected = false;
   private reconnectAttempts = 0;
-  private readonly maxReconnectAttempts = 5;
+  private readonly maxReconnectAttempts = 10; // Increased for mobile
   private reconnectDelay = 1000;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private isReconnecting = false;
 
   connect(backendUrl: string = environment.api.websocketUrl): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (this.isReconnecting) {
+        console.log('🔄 Already attempting to reconnect...');
+        return;
+      }
+
+      this.isReconnecting = true;
+
       setTimeout(() => {
         try {
           this.socket = io(backendUrl, {
             transports: ['websocket', 'polling'],
-            timeout: 20000,
+            timeout: 30000, // Increased timeout for mobile
             reconnection: true,
             reconnectionAttempts: this.maxReconnectAttempts,
             reconnectionDelay: this.reconnectDelay,
+            reconnectionDelayMax: 5000,
+            forceNew: true,
+            // Mobile-specific optimizations
+            upgrade: true,
+            rememberUpgrade: true,
+            // Better error handling
+            autoConnect: true,
           });
 
           this.socket.on('connect', () => {
             console.log('✅ WebSocket connected');
-            this.isConnected = true;
+            this._isConnected = true;
+            this.isReconnecting = false;
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000;
+
+            // Start heartbeat
+            this.startHeartbeat();
 
             // Emit student connection for public access
             this.socket?.emit('student:connect');
@@ -64,28 +55,60 @@ class WebSocketService {
             resolve();
           });
 
-          this.socket.on('disconnect', reason => {
-            if (reason !== 'transport close' || this.isConnected) {
-              console.log('❌ WebSocket disconnected:', reason);
+          this.socket.on('disconnect', (reason) => {
+            console.log('❌ WebSocket disconnected:', reason);
+            this._isConnected = false;
+            this.stopHeartbeat();
+
+            // Handle reconnection for mobile
+            if (
+              reason === 'io server disconnect' ||
+              reason === 'transport close'
+            ) {
+              this.handleReconnection();
             }
-            this.isConnected = false;
           });
 
-          this.socket.on('connect_error', error => {
-            if (this.reconnectAttempts > 0) {
-              console.error('❌ WebSocket connection error:', error);
-            }
+          this.socket.on('connect_error', (error) => {
+            console.error('❌ WebSocket connection error:', error);
+            this.isReconnecting = false;
             this.reconnectAttempts++;
+
             if (this.reconnectAttempts >= this.maxReconnectAttempts) {
               reject(new Error('Failed to connect to WebSocket server'));
+            } else {
+              this.handleReconnection();
             }
           });
 
-          this.socket.on('error', error => {
+          this.socket.on('error', (error) => {
             console.error('❌ WebSocket error:', error);
+          });
+
+          this.socket.on('reconnect', (attemptNumber) => {
+            console.log(
+              `🔄 WebSocket reconnected after ${attemptNumber} attempts`
+            );
+            this._isConnected = true;
+            this.isReconnecting = false;
+            this.reconnectAttempts = 0;
+
+            // Re-emit student connection after reconnect
+            this.socket?.emit('student:connect');
+          });
+
+          this.socket.on('reconnect_error', (error) => {
+            console.error('❌ WebSocket reconnection error:', error);
+          });
+
+          this.socket.on('reconnect_failed', () => {
+            console.error('❌ WebSocket reconnection failed');
+            this.isReconnecting = false;
+            reject(new Error('Failed to reconnect to WebSocket server'));
           });
         } catch (error) {
           console.error('❌ Failed to create WebSocket connection:', error);
+          this.isReconnecting = false;
           reject(error);
         }
       }, 500);
@@ -96,8 +119,52 @@ class WebSocketService {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
-      this.isConnected = false;
+      this._isConnected = false;
     }
+    this.stopHeartbeat();
+    this.isReconnecting = false;
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat(); // Clear any existing heartbeat
+
+    this.heartbeatTimer = setInterval(() => {
+      if (this.socket && this._isConnected) {
+        this.socket.emit('ping');
+        console.log('💓 Heartbeat sent');
+      }
+    }, 30000); // Send heartbeat every 30 seconds
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  private handleReconnection(): void {
+    if (this.isReconnecting) {
+      return;
+    }
+
+    this.isReconnecting = true;
+    console.log('🔄 Attempting to reconnect...');
+
+    // Clear any existing reconnect timer
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+
+    // Exponential backoff for reconnection
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
+
+    this.reconnectTimer = setTimeout(() => {
+      this.connect().catch((error) => {
+        console.error('❌ Reconnection failed:', error);
+        this.isReconnecting = false;
+      });
+    }, delay);
   }
 
   onBusLocationUpdate(callback: (location: BusLocation) => void): void {
@@ -139,27 +206,30 @@ class WebSocketService {
     this.socket?.on('bus:arriving', callback);
   }
 
+  isConnected(): boolean {
+    return this._isConnected;
+  }
+
   getConnectionStatus(): boolean {
-    return this.isConnected;
+    return this._isConnected;
   }
 
-  authenticateAsDriver(token: string): void {
-    if (this.socket && this.isConnected) {
-      console.log('🔐 Driver: Authenticating with token...');
-      this.socket.emit('driver:authenticate', { token });
+              authenticateAsDriver(token: string): void {
+              if (this.socket && this.isConnected()) {
+                this.socket.emit('driver:authenticate', { token });
 
-      // Add listener for driver authentication response
-      this.socket.once('driver:authenticated', data => {
-        console.log('✅ Driver: Authentication successful:', data);
-      });
+                // Add listener for driver authentication response
+                this.socket.once('driver:authenticated', (data) => {
+                  console.log('✅ Driver: Authentication successful:', data);
+                });
 
-      this.socket.once('error', error => {
-        console.error('❌ Driver: Authentication failed:', error);
-      });
-    } else {
-      console.error('❌ Driver: Cannot authenticate - socket not connected');
-    }
-  }
+                this.socket.once('error', (error) => {
+                  console.error('❌ Driver: Authentication failed:', error);
+                });
+              } else {
+                console.error('❌ Driver: Cannot authenticate - socket not connected');
+              }
+            }
 
   off(event: string): void {
     this.socket?.off(event);
@@ -167,3 +237,4 @@ class WebSocketService {
 }
 
 export const websocketService = new WebSocketService();
+export type { BusLocation } from './interfaces/IWebSocketService';

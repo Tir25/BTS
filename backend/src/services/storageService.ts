@@ -311,7 +311,7 @@ export class StorageService {
       const urlObj = new URL(url);
       const pathParts = urlObj.pathname.split('/');
       const storageIndex = pathParts.findIndex(
-        part => part === 'bus-tracking-media'
+        (part) => part === 'bus-tracking-media'
       );
 
       if (storageIndex === -1) {

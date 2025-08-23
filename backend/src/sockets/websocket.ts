@@ -24,40 +24,67 @@ interface AuthenticatedSocket extends Socket {
 export const initializeWebSocket = (io: SocketIOServer) => {
   console.log('🔌 WebSocket server initialized');
 
+  // Configure Socket.IO for better mobile support
+  io.engine.opts.pingTimeout = 60000; // 60 seconds
+  io.engine.opts.pingInterval = 25000; // 25 seconds
+  io.engine.opts.upgradeTimeout = 10000; // 10 seconds
+  io.engine.opts.maxHttpBufferSize = 1e6; // 1MB
+
   io.on('connection', async (socket: AuthenticatedSocket) => {
     console.log(`🔌 New client connected: ${socket.id}`);
 
-    socket.on('driver:authenticate', async (data: { token: string }) => {
-      try {
-        const { token } = data;
+    // Set socket options for better mobile support
+    socket.conn.on('packet', ({ type }) => {
+      if (type === 'pong') {
+        console.log(`💓 Pong received from ${socket.id}`);
+      }
+    });
 
-        if (!token) {
-          socket.emit('error', { message: 'Authentication token required' });
-          return;
-        }
+    // Handle ping/pong for connection health
+    socket.on('ping', () => {
+      socket.emit('pong');
+      console.log(`💓 Ping received from ${socket.id}`);
+    });
 
-        const {
-          data: { user },
-          error,
-        } = await supabaseAdmin.auth.getUser(token);
+                socket.on('driver:authenticate', async (data: { token: string }) => {
+                  try {
+                    const { token } = data;
 
-        if (error || !user) {
-          socket.emit('error', { message: 'Invalid authentication token' });
-          return;
-        }
+                    if (!token) {
+                      socket.emit('error', { message: 'Authentication token required' });
+                      return;
+                    }
 
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
+                    const {
+                      data: { user },
+                      error,
+                    } = await supabaseAdmin.auth.getUser(token);
 
-        if (!profile || profile.role !== 'driver') {
-          socket.emit('error', {
-            message: 'Access denied. Driver role required.',
-          });
-          return;
-        }
+                    if (error || !user) {
+                      socket.emit('error', { message: 'Invalid authentication token' });
+                      return;
+                    }
+
+                    // Check for dual-role users in auth metadata
+                    const authRoles = user.user_metadata?.roles;
+                    const isDualRoleUser = authRoles && Array.isArray(authRoles) && authRoles.includes('driver');
+                    
+                    // Check profiles table for role
+                    const { data: profile } = await supabaseAdmin
+                      .from('profiles')
+                      .select('role')
+                      .eq('id', user.id)
+                      .single();
+
+                    // Allow access if user has driver role in auth metadata OR profiles table
+                    const hasDriverRole = isDualRoleUser || (profile && profile.role === 'driver');
+                    
+                    if (!hasDriverRole) {
+                      socket.emit('error', {
+                        message: 'Access denied. Driver role required.',
+                      });
+                      return;
+                    }
 
         const busInfo = await getDriverBusInfo(user.id);
         if (!busInfo) {
@@ -193,11 +220,16 @@ export const initializeWebSocket = (io: SocketIOServer) => {
       socket.emit('student:connected', { timestamp: new Date().toISOString() });
     });
 
-    socket.on('disconnect', () => {
-      console.log(`🔌 Client disconnected: ${socket.id}`);
+    socket.on('disconnect', (reason) => {
+      console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason}`);
+
+      // Log additional info for debugging mobile disconnections
+      if (reason === 'transport close') {
+        console.log(`📱 Mobile client likely disconnected: ${socket.id}`);
+      }
     });
 
-    socket.on('error', error => {
+    socket.on('error', (error) => {
       console.error('❌ Socket error:', error);
     });
   });

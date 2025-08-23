@@ -5,7 +5,9 @@ import { environment } from '../config/environment';
 
 const API_BASE_URL = environment.api.url;
 
-class ApiService {
+import { IApiService } from './interfaces/IApiService';
+
+class ApiService implements IApiService {
   private baseUrl: string;
 
   constructor(baseUrl: string) {

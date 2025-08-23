@@ -11,15 +11,39 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Try to recover session on component mount
+  useState(() => {
+    const attemptSessionRecovery = async () => {
+      try {
+        console.log('🔄 Attempting automatic session recovery...');
+        const result = await authService.recoverSession();
+        if (result.success && authService.isAdmin()) {
+          console.log('✅ Session recovered, redirecting to admin panel');
+          onLoginSuccess();
+        } else {
+          console.log(
+            '📝 Session recovery failed or user is not admin:',
+            result.error
+          );
+        }
+      } catch (error) {
+        console.log('📝 No valid session to recover:', error);
+      }
+    };
+
+    // Delay the recovery attempt to ensure auth service is fully initialized
+    setTimeout(attemptSessionRecovery, 1000);
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      // Add timeout to prevent infinite loading
+      // Add timeout to prevent infinite loading - increased to match backend timeout
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Login timeout')), 8000); // 8 seconds
+        setTimeout(() => reject(new Error('Login timeout')), 15000); // 15 seconds to allow for profile loading
       });
 
       const loginPromise = authService.signIn(email, password);
@@ -45,12 +69,21 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     } catch (err) {
       console.error('❌ Login error:', err);
       if (err instanceof Error && err.message === 'Login timeout') {
-        setError('Login timed out. Please try again.');
+        setError(
+          'Login timed out. This might be due to slow network or profile loading. Please try again.'
+        );
       } else if (
         err instanceof Error &&
         err.message.includes('environment variables')
       ) {
         setError('Configuration error. Please check your environment setup.');
+      } else if (
+        err instanceof Error &&
+        err.message.includes('Profile loading timeout')
+      ) {
+        setError(
+          'Profile loading is taking longer than expected. Please try again.'
+        );
       } else {
         setError('Network error. Please check your connection and try again.');
       }
@@ -87,6 +120,33 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {loading && (
+            <div className="text-center">
+              <div className="inline-flex items-center px-4 py-2 text-sm text-blue-700 bg-blue-100 rounded-lg">
+                <svg
+                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Signing in and loading profile...
+              </div>
+            </div>
+          )}
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email" className="sr-only">
@@ -99,7 +159,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                 autoComplete="email"
                 required
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
                 placeholder="Email address"
                 disabled={loading}
@@ -116,7 +176,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                 autoComplete="current-password"
                 required
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
                 placeholder="Password"
                 disabled={loading}
@@ -193,6 +253,57 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
             <p className="text-xs text-gray-400 mt-1">
               Using Supabase Authentication
             </p>
+            <button
+              type="button"
+              onClick={async () => {
+                setLoading(true);
+                setError(null);
+                try {
+                  const result = await authService.recoverSession();
+                  if (result.success && authService.isAdmin()) {
+                    onLoginSuccess();
+                  } else {
+                    setError('No valid session found. Please log in again.');
+                  }
+                } catch (error) {
+                  setError('Session recovery failed. Please log in again.');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="mt-2 text-xs text-purple-600 hover:text-purple-500 underline"
+            >
+              Recover Session
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+
+              }}
+              className="mt-1 text-xs text-gray-500 hover:text-gray-400 underline"
+            >
+              
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setLoading(true);
+                setError(null);
+                try {
+                  await authService.forceFreshLogin();
+                  setError(
+                    'Session cleared. Please log in again with your credentials.'
+                  );
+                } catch (error) {
+                  setError('Failed to clear session.');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="mt-1 text-xs text-red-500 hover:text-red-400 underline"
+            >
+              Force Fresh Login
+            </button>
           </div>
         </form>
       </div>

@@ -54,14 +54,31 @@ export class AdminService {
           b.is_active,
           b.created_at,
           b.updated_at,
-          u.id as driver_id,
-          u.first_name as driver_first_name,
-          u.last_name as driver_last_name,
-          u.email as driver_email,
-          u.profile_photo_url as driver_photo_url,
+          COALESCE(p.id, u.id) as driver_id,
+          COALESCE(p.full_name, CONCAT(u.first_name, ' ', u.last_name)) as driver_full_name,
+          COALESCE(p.email, u.email) as driver_email,
+          CASE 
+            WHEN p.full_name IS NOT NULL THEN 
+              SPLIT_PART(p.full_name, ' ', 1)
+            WHEN u.first_name IS NOT NULL THEN 
+              u.first_name
+            ELSE NULL 
+          END as driver_first_name,
+          CASE 
+            WHEN p.full_name IS NOT NULL THEN 
+              CASE 
+                WHEN POSITION(' ' IN p.full_name) > 0 THEN 
+                  SUBSTRING(p.full_name FROM POSITION(' ' IN p.full_name) + 1)
+                ELSE NULL 
+              END
+            WHEN u.last_name IS NOT NULL THEN 
+              u.last_name
+            ELSE NULL 
+          END as driver_last_name,
           r.id as route_id,
           r.name as route_name
         FROM buses b
+        LEFT JOIN profiles p ON b.assigned_driver_id = p.id
         LEFT JOIN users u ON b.assigned_driver_id = u.id
         LEFT JOIN routes r ON b.route_id = r.id
         ORDER BY b.created_at DESC
@@ -91,14 +108,31 @@ export class AdminService {
           b.is_active,
           b.created_at,
           b.updated_at,
-          u.id as driver_id,
-          u.first_name as driver_first_name,
-          u.last_name as driver_last_name,
-          u.email as driver_email,
-          u.profile_photo_url as driver_photo_url,
+          COALESCE(p.id, u.id) as driver_id,
+          COALESCE(p.full_name, CONCAT(u.first_name, ' ', u.last_name)) as driver_full_name,
+          COALESCE(p.email, u.email) as driver_email,
+          CASE 
+            WHEN p.full_name IS NOT NULL THEN 
+              SPLIT_PART(p.full_name, ' ', 1)
+            WHEN u.first_name IS NOT NULL THEN 
+              u.first_name
+            ELSE NULL 
+          END as driver_first_name,
+          CASE 
+            WHEN p.full_name IS NOT NULL THEN 
+              CASE 
+                WHEN POSITION(' ' IN p.full_name) > 0 THEN 
+                  SUBSTRING(p.full_name FROM POSITION(' ' IN p.full_name) + 1)
+                ELSE NULL 
+              END
+            WHEN u.last_name IS NOT NULL THEN 
+              u.last_name
+            ELSE NULL 
+          END as driver_last_name,
           r.id as route_id,
           r.name as route_name
         FROM buses b
+        LEFT JOIN profiles p ON b.assigned_driver_id = p.id
         LEFT JOIN users u ON b.assigned_driver_id = u.id
         LEFT JOIN routes r ON b.route_id = r.id
         WHERE b.id = $1
@@ -234,14 +268,29 @@ export class AdminService {
   // Driver Management
   static async getAllDrivers() {
     try {
-      const query = `
+      // Get drivers from profiles table
+      const profilesQuery = `
+        SELECT 
+          p.id,
+          p.email,
+          p.full_name,
+          p.role,
+          p.created_at,
+          p.updated_at,
+          b.id as assigned_bus_id,
+          b.number_plate as assigned_bus_plate
+        FROM profiles p
+        LEFT JOIN buses b ON p.id = b.assigned_driver_id
+        WHERE p.role = 'driver'
+      `;
+
+      // Get drivers from users table (for dual-role users)
+      const usersQuery = `
         SELECT 
           u.id,
           u.email,
-          u.first_name,
-          u.last_name,
-          u.phone,
-          u.profile_photo_url,
+          CONCAT(u.first_name, ' ', u.last_name) as full_name,
+          u.role,
           u.created_at,
           u.updated_at,
           b.id as assigned_bus_id,
@@ -249,13 +298,84 @@ export class AdminService {
         FROM users u
         LEFT JOIN buses b ON u.id = b.assigned_driver_id
         WHERE u.role = 'driver'
-        ORDER BY u.created_at DESC
       `;
 
-      const result = await pool.query(query);
-      return result.rows;
+      const [profilesResult, usersResult] = await Promise.all([
+        pool.query(profilesQuery),
+        pool.query(usersQuery)
+      ]);
+
+      // Combine results and remove duplicates based on email
+      const allDrivers = [...profilesResult.rows, ...usersResult.rows];
+      const uniqueDrivers = allDrivers.filter((driver, index, self) => 
+        index === self.findIndex(d => d.email === driver.email)
+      );
+
+      // Sort by creation date
+      uniqueDrivers.sort((a, b) => {
+        const dateA = new Date(a.created_at || 0);
+        const dateB = new Date(b.created_at || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+
+      return uniqueDrivers;
     } catch (error) {
       console.error('❌ Error fetching all drivers:', error);
+      throw error;
+    }
+  }
+
+  static async getAssignedDrivers() {
+    try {
+      // Query assigned drivers from profiles table
+      const profilesQuery = `
+        SELECT 
+          p.id as driver_id,
+          p.full_name as driver_name,
+          p.email as driver_email,
+          b.id as bus_id,
+          b.code as bus_code,
+          b.number_plate,
+          r.name as route_name
+        FROM profiles p
+        INNER JOIN buses b ON p.id = b.assigned_driver_id
+        LEFT JOIN routes r ON b.route_id = r.id
+        WHERE p.role = 'driver'
+      `;
+
+      // Query assigned drivers from users table
+      const usersQuery = `
+        SELECT 
+          u.id as driver_id,
+          CONCAT(u.first_name, ' ', u.last_name) as driver_name,
+          u.email as driver_email,
+          b.id as bus_id,
+          b.code as bus_code,
+          b.number_plate,
+          r.name as route_name
+        FROM users u
+        INNER JOIN buses b ON u.id = b.assigned_driver_id
+        LEFT JOIN routes r ON b.route_id = r.id
+        WHERE u.role = 'driver'
+      `;
+
+      const [profilesResult, usersResult] = await Promise.all([
+        pool.query(profilesQuery),
+        pool.query(usersQuery)
+      ]);
+
+      // Combine results and remove duplicates based on email
+      const allAssignedDrivers = [...profilesResult.rows, ...usersResult.rows];
+      const uniqueAssignedDrivers = allAssignedDrivers.filter((driver, index, self) =>
+        index === self.findIndex(d => d.driver_email === driver.driver_email)
+      );
+
+      // Sort by driver name
+      uniqueAssignedDrivers.sort((a, b) => a.driver_name.localeCompare(b.driver_name));
+
+      return uniqueAssignedDrivers;
+    } catch (error) {
+      console.error('❌ Error fetching assigned drivers:', error);
       throw error;
     }
   }
@@ -264,19 +384,17 @@ export class AdminService {
     try {
       const query = `
         SELECT 
-          u.id,
-          u.email,
-          u.first_name,
-          u.last_name,
-          u.phone,
-          u.profile_photo_url,
-          u.created_at,
-          u.updated_at,
+          p.id,
+          p.email,
+          p.full_name,
+          p.role,
+          p.created_at,
+          p.updated_at,
           b.id as assigned_bus_id,
           b.number_plate as assigned_bus_plate
-        FROM users u
-        LEFT JOIN buses b ON u.id = b.assigned_driver_id
-        WHERE u.id = $1 AND u.role = 'driver'
+        FROM profiles p
+        LEFT JOIN buses b ON p.id = b.assigned_driver_id
+        WHERE p.id = $1 AND p.role = 'driver'
       `;
 
       const result = await pool.query(query, [driverId]);
@@ -407,10 +525,17 @@ export class AdminService {
         [driverId]
       );
 
-      // Then delete the driver
+      // Only delete from users table (not from profiles table which contains Supabase Auth users)
       const query =
         "DELETE FROM users WHERE id = $1 AND role = 'driver' RETURNING *";
       const result = await pool.query(query, [driverId]);
+
+      if (result.rows.length === 0) {
+        throw new Error(
+          'Driver not found in users table. Supabase Auth users cannot be deleted from this interface.'
+        );
+      }
+
       return result.rows[0] || null;
     } catch (error) {
       console.error('❌ Error deleting driver:', error);
@@ -426,8 +551,17 @@ export class AdminService {
         'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM buses';
       const routeCountQuery =
         'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM routes';
-      const driverCountQuery =
-        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE id IN (SELECT assigned_driver_id FROM buses WHERE assigned_driver_id IS NOT NULL)) as active FROM users WHERE role = 'driver'";
+      // Count drivers from both tables
+      const driverCountQuery = `
+        SELECT 
+          COUNT(DISTINCT all_drivers.id) as total,
+          COUNT(DISTINCT CASE WHEN all_drivers.id IN (SELECT assigned_driver_id FROM buses WHERE assigned_driver_id IS NOT NULL) THEN all_drivers.id END) as active
+        FROM (
+          SELECT id, email FROM profiles WHERE role = 'driver'
+          UNION
+          SELECT id, email FROM users WHERE role = 'driver'
+        ) as all_drivers
+      `;
 
       const [busResult, routeResult, driverResult] = await Promise.all([
         pool.query(busCountQuery),
@@ -475,7 +609,7 @@ export class AdminService {
         totalDrivers: parseInt(driverResult.rows[0].total),
         activeDrivers: parseInt(driverResult.rows[0].active),
         averageDelay: parseFloat(delayResult.rows[0]?.avg_delay || '0'),
-        busUsageStats: usageResult.rows.map(row => ({
+        busUsageStats: usageResult.rows.map((row) => ({
           date: row.date,
           activeBuses: parseInt(row.active_buses),
           totalTrips: parseInt(row.total_trips),
@@ -493,17 +627,35 @@ export class AdminService {
       const healthChecks = await Promise.all([
         pool.query('SELECT COUNT(*) as count FROM buses'),
         pool.query('SELECT COUNT(*) as count FROM routes'),
+        pool.query("SELECT COUNT(*) as count FROM profiles WHERE role = 'driver'"),
         pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'driver'"),
         pool.query(
           "SELECT COUNT(*) as count FROM live_locations WHERE recorded_at >= CURRENT_TIMESTAMP - INTERVAL '1 hour'"
         ),
       ]);
 
+      // Count unique drivers from both tables
+      const profilesDrivers = parseInt(healthChecks[2].rows[0].count);
+      const usersDrivers = parseInt(healthChecks[3].rows[0].count);
+      
+      // Get unique driver count by querying both tables and counting distinct emails
+      const uniqueDriversQuery = `
+        SELECT COUNT(DISTINCT email) as unique_count
+        FROM (
+          SELECT email FROM profiles WHERE role = 'driver'
+          UNION
+          SELECT email FROM users WHERE role = 'driver'
+        ) as all_drivers
+      `;
+      
+      const uniqueDriversResult = await pool.query(uniqueDriversQuery);
+      const totalDrivers = parseInt(uniqueDriversResult.rows[0].unique_count);
+
       return {
         buses: parseInt(healthChecks[0].rows[0].count),
         routes: parseInt(healthChecks[1].rows[0].count),
-        drivers: parseInt(healthChecks[2].rows[0].count),
-        recentLocations: parseInt(healthChecks[3].rows[0].count),
+        drivers: totalDrivers,
+        recentLocations: parseInt(healthChecks[4].rows[0].count),
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -525,6 +677,9 @@ export class AdminService {
           r.is_active,
           r.created_at,
           r.updated_at,
+          r.origin,
+          r.destination,
+          r.city,
           CASE 
             WHEN r.stops IS NOT NULL THEN ST_AsGeoJSON(r.stops)::json
             ELSE NULL
@@ -534,6 +689,9 @@ export class AdminService {
       `;
 
       const result = await pool.query(query);
+
+
+
       return result.rows;
     } catch (error) {
       console.error('❌ Error fetching all routes:', error);
@@ -553,6 +711,9 @@ export class AdminService {
           r.is_active,
           r.created_at,
           r.updated_at,
+          r.origin,
+          r.destination,
+          r.city,
           CASE 
             WHEN r.stops IS NOT NULL THEN ST_AsGeoJSON(r.stops)::json
             ELSE NULL
@@ -575,41 +736,42 @@ export class AdminService {
     distance_km: number;
     estimated_duration_minutes: number;
     is_active: boolean;
+    city: string;
+    custom_destination?: string;
+    custom_destination_coordinates?: [number, number];
+    custom_origin?: string;
+    custom_origin_coordinates?: [number, number];
+    bus_stops?: any[];
     stops?: any;
   }) {
     try {
-      // Create a default geometry if stops is not provided
-      let geometryValue = null;
-      if (
-        routeData.stops &&
-        routeData.stops.coordinates &&
-        routeData.stops.coordinates.length > 0
-      ) {
-        const coordinates = routeData.stops.coordinates
-          .map((coord: number[]) => `${coord[0]} ${coord[1]}`)
-          .join(',');
-        geometryValue = `ST_GeomFromText('LINESTRING(${coordinates})', 4326)`;
-      } else {
-        // Default geometry for testing
-        geometryValue = `ST_GeomFromText('LINESTRING(72.5714 23.0225, 72.6369 23.2154)', 4326)`;
+
+
+      // Validate required fields
+      if (!routeData.name || !routeData.name.trim()) {
+        throw new Error('Route name is required');
       }
 
-      // First, ensure the geom column exists
-      try {
-        await pool.query(`
-          ALTER TABLE routes ADD COLUMN IF NOT EXISTS geom GEOMETRY(LINESTRING, 4326);
-        `);
-      } catch (alterError) {
-        console.warn(
-          '⚠️ Could not add geom column (might already exist):',
-          alterError
-        );
+      if (!routeData.city || !routeData.city.trim()) {
+        throw new Error('City is required');
       }
 
-      // Insert with both stops and geom columns
+      if (!routeData.description || !routeData.description.trim()) {
+        throw new Error('Route description is required');
+      }
+
+      // Route creation with city and geometry
       const query = `
-        INSERT INTO routes (name, description, distance_km, estimated_duration_minutes, is_active, stops, geom)
-        VALUES ($1, $2, $3, $4, $5, ${geometryValue}, ${geometryValue})
+        INSERT INTO routes (
+          name, 
+          description, 
+          distance_km, 
+          estimated_duration_minutes, 
+          is_active,
+          city,
+          geom
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromText('LINESTRING(72.5714 23.0225, 72.4563 23.5295)', 4326))
         RETURNING *
       `;
 
@@ -619,7 +781,10 @@ export class AdminService {
         routeData.distance_km,
         routeData.estimated_duration_minutes,
         routeData.is_active,
+        routeData.city.trim(), // Use trimmed city value
       ];
+
+
 
       const result = await pool.query(query, values);
       return result.rows[0];
@@ -637,32 +802,96 @@ export class AdminService {
       distance_km?: number;
       estimated_duration_minutes?: number;
       is_active?: boolean;
+      city?: string;
+      custom_destination?: string;
+      custom_destination_coordinates?: [number, number];
+      custom_origin?: string;
+      custom_origin_coordinates?: [number, number];
+      bus_stops?: any[];
       stops?: any;
     }
   ) {
     try {
+      // Build dynamic update query
+      const updateFields = [];
+      const values = [];
+      let paramCount = 1;
+
+      // Basic fields
+      if (routeData.name !== undefined) {
+        updateFields.push(`name = $${paramCount++}`);
+        values.push(routeData.name);
+      }
+      if (routeData.description !== undefined) {
+        updateFields.push(`description = $${paramCount++}`);
+        values.push(routeData.description);
+      }
+      if (routeData.distance_km !== undefined) {
+        updateFields.push(`distance_km = $${paramCount++}`);
+        values.push(routeData.distance_km);
+      }
+      if (routeData.estimated_duration_minutes !== undefined) {
+        updateFields.push(`estimated_duration_minutes = $${paramCount++}`);
+        values.push(routeData.estimated_duration_minutes);
+      }
+      if (routeData.is_active !== undefined) {
+        updateFields.push(`is_active = $${paramCount++}`);
+        values.push(routeData.is_active);
+      }
+      if (routeData.city !== undefined) {
+        updateFields.push(`city = $${paramCount++}`);
+        values.push(routeData.city);
+      }
+
+      // Custom destination
+      if (routeData.custom_destination !== undefined) {
+        updateFields.push(`custom_destination = $${paramCount++}`);
+        values.push(routeData.custom_destination);
+      }
+      if (routeData.custom_destination_coordinates !== undefined) {
+        updateFields.push(
+          `custom_destination_coordinates = ST_GeomFromText('POINT($${paramCount} $${paramCount + 1})', 4326)`
+        );
+        values.push(routeData.custom_destination_coordinates[0]);
+        values.push(routeData.custom_destination_coordinates[1]);
+        paramCount += 2;
+      }
+
+      // Custom origin
+      if (routeData.custom_origin !== undefined) {
+        updateFields.push(`custom_origin = $${paramCount++}`);
+        values.push(routeData.custom_origin);
+      }
+      if (routeData.custom_origin_coordinates !== undefined) {
+        updateFields.push(
+          `custom_origin_coordinates = ST_GeomFromText('POINT($${paramCount} $${paramCount + 1})', 4326)`
+        );
+        values.push(routeData.custom_origin_coordinates[0]);
+        values.push(routeData.custom_origin_coordinates[1]);
+        paramCount += 2;
+      }
+
+      // Bus stops
+      if (routeData.bus_stops !== undefined) {
+        updateFields.push(`bus_stops = $${paramCount++}`);
+        values.push(JSON.stringify(routeData.bus_stops));
+      }
+
+      // Stops (legacy field)
+      if (routeData.stops !== undefined) {
+        updateFields.push(`stops = $${paramCount++}`);
+        values.push(routeData.stops ? JSON.stringify(routeData.stops) : null);
+      }
+
+      updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+      values.push(routeId);
+
       const query = `
         UPDATE routes 
-        SET name = COALESCE($1, name),
-            description = COALESCE($2, description),
-            distance_km = COALESCE($3, distance_km),
-            estimated_duration_minutes = COALESCE($4, estimated_duration_minutes),
-            is_active = COALESCE($5, is_active),
-            stops = COALESCE($6, stops),
-            updated_at = NOW()
-        WHERE id = $7
+        SET ${updateFields.join(', ')}
+        WHERE id = $${paramCount}
         RETURNING *
       `;
-
-      const values = [
-        routeData.name,
-        routeData.description,
-        routeData.distance_km,
-        routeData.estimated_duration_minutes,
-        routeData.is_active,
-        routeData.stops ? JSON.stringify(routeData.stops) : null,
-        routeId,
-      ];
 
       const result = await pool.query(query, values);
       return result.rows[0] || null;
@@ -674,6 +903,12 @@ export class AdminService {
 
   static async deleteRoute(routeId: string) {
     try {
+      // First, unassign this route from any buses
+      await pool.query('UPDATE buses SET route_id = NULL WHERE route_id = $1', [
+        routeId,
+      ]);
+
+      // Then delete the route
       const query = `
         DELETE FROM routes 
         WHERE id = $1
@@ -685,6 +920,97 @@ export class AdminService {
     } catch (error) {
       console.error('❌ Error deleting route:', error);
       throw error;
+    }
+  }
+
+  // New method to calculate ETA for a route
+  static async calculateRouteETA(
+    routeId: string,
+    currentLocation: [number, number]
+  ) {
+    try {
+      // Get route details
+      const route = await this.getRouteById(routeId);
+      if (!route) {
+        throw new Error('Route not found');
+      }
+
+      // Get destination coordinates
+      let destinationCoords = [72.4563, 23.5295] as [number, number]; // Default Ganpat University
+      if (route.destination_coordinates) {
+        destinationCoords = route.destination_coordinates.coordinates;
+      }
+
+      // Calculate distance (simplified - in real app, use proper routing)
+      const distance = this.calculateDistance(
+        currentLocation,
+        destinationCoords
+      );
+
+      // Estimate time (assuming average speed of 40 km/h)
+      const estimatedMinutes = Math.round((distance / 40) * 60);
+
+      // Update route with ETA
+      await pool.query(
+        `UPDATE routes 
+         SET current_eta_minutes = $1, last_eta_calculation = CURRENT_TIMESTAMP 
+         WHERE id = $2`,
+        [estimatedMinutes, routeId]
+      );
+
+      return estimatedMinutes;
+    } catch (error) {
+      console.error('❌ Error calculating route ETA:', error);
+      throw error;
+    }
+  }
+
+  // Helper method to calculate distance between two points
+  private static calculateDistance(
+    point1: [number, number],
+    point2: [number, number]
+  ): number {
+    const R = 6371; // Earth's radius in km
+    const dLat = ((point2[1] - point1[1]) * Math.PI) / 180;
+    const dLon = ((point2[0] - point1[0]) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((point1[1] * Math.PI) / 180) *
+        Math.cos((point2[1] * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  // Get default destination from system constants
+  static async getDefaultDestination() {
+    try {
+      const query = `
+        SELECT constant_value 
+        FROM system_constants 
+        WHERE constant_name = 'default_destination'
+      `;
+      const result = await pool.query(query);
+      return (
+        result.rows[0]?.constant_value || {
+          name: 'Ganpat University',
+          address:
+            'Ganpat Vidyanagar, Mehsana-Gozaria Highway, Kherva, Gujarat 384012',
+          coordinates: [72.4563, 23.5295] as [number, number], // Correct Ganpat University coordinates
+          city: 'Mehsana',
+        }
+      );
+    } catch (error) {
+      console.error('❌ Error fetching default destination:', error);
+      // Return default values if table doesn't exist
+      return {
+        name: 'Ganpat University',
+        address:
+          'Ganpat Vidyanagar, Mehsana-Gozaria Highway, Kherva, Gujarat 384012',
+        coordinates: [72.4563, 23.5295] as [number, number], // Correct Ganpat University coordinates
+        city: 'Mehsana',
+      };
     }
   }
 

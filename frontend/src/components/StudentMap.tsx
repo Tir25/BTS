@@ -32,10 +32,14 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<{ [busId: string]: maplibregl.Marker }>({});
   const isMapInitialized = useRef(false);
+  const addedRoutes = useRef<Set<string>>(new Set());
 
   // State management
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<
+    'connected' | 'connecting' | 'disconnected' | 'reconnecting'
+  >('disconnected');
   const [buses, setBuses] = useState<BusInfo[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>('all');
@@ -75,6 +79,32 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     }
   }, []);
 
+  // Remove routes from map
+  const removeRoutesFromMap = useCallback(() => {
+    if (!map.current) return;
+
+    routes.forEach((route) => {
+      const routeId = `route-${route.id}`;
+      
+      try {
+        // Remove layer if it exists
+        if (map.current!.getLayer(routeId)) {
+          map.current!.removeLayer(routeId);
+        }
+        
+        // Remove source if it exists
+        if (map.current!.getSource(routeId)) {
+          map.current!.removeSource(routeId);
+        }
+        
+        // Remove from tracking set
+        addedRoutes.current.delete(routeId);
+      } catch (error) {
+        console.warn(`⚠️ Error removing route ${route.name}:`, error);
+      }
+    });
+  }, [routes]);
+
   // Add routes to map
   const addRoutesToMap = useCallback(() => {
     if (!map.current || routes.length === 0) return;
@@ -82,38 +112,50 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     routes.forEach((route, index) => {
       const routeId = `route-${route.id}`;
 
-      // Add route source
-      map.current!.addSource(routeId, {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {
-            name: route.name,
-            description: route.description,
-            distance: route.distance_km,
-            duration: route.estimated_duration_minutes,
+      // Check if route has already been added to prevent duplicates
+      if (addedRoutes.current.has(routeId) || map.current!.getSource(routeId)) {
+        console.log(`🗺️ Route ${routeId} already exists, skipping...`);
+        return;
+      }
+
+      try {
+        // Add route source
+        map.current!.addSource(routeId, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {
+              name: route.name,
+              description: route.description,
+              distance: route.distance_km,
+              duration: route.estimated_duration_minutes,
+            },
+            geometry: route.stops,
           },
-          geometry: route.stops,
-        },
-      });
+        });
 
-      // Add route line layer
-      map.current!.addLayer({
-        id: routeId,
-        type: 'line',
-        source: routeId,
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': `hsl(${(index * 137.5) % 360}, 70%, 50%)`,
-          'line-width': 4,
-          'line-opacity': 0.8,
-        },
-      });
+        // Add route line layer
+        map.current!.addLayer({
+          id: routeId,
+          type: 'line',
+          source: routeId,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+          },
+          paint: {
+            'line-color': `hsl(${(index * 137.5) % 360}, 70%, 50%)`,
+            'line-width': 4,
+            'line-opacity': 0.8,
+          },
+        });
 
-      console.log(`🗺️ Added route ${route.name} to map`);
+        console.log(`🗺️ Added route ${route.name} to map`);
+        // Add to tracking set
+        addedRoutes.current.add(routeId);
+      } catch (error) {
+        console.warn(`⚠️ Error adding route ${route.name}:`, error);
+      }
     });
   }, [routes]);
 
@@ -150,20 +192,41 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         .setLngLat([longitude, latitude])
         .addTo(map.current);
 
-      // Add enhanced popup with location details
+      // Add enhanced popup with user-friendly information
       const popup = new maplibregl.Popup({
         offset: 25,
         className: 'bus-popup-container',
       }).setHTML(`
         <div class="bus-popup">
-          <h3>🚌 ${bus.busNumber}</h3>
-          <p><strong>Route:</strong> ${bus.routeName}</p>
-          <p><strong>Driver:</strong> ${bus.driverName}</p>
-          <p><strong>Speed:</strong> ${speed ? `${speed} km/h` : 'N/A'}</p>
-          <p><strong>ETA:</strong> ${bus.eta ? `${bus.eta} minutes` : 'N/A'}</p>
-          <p><strong>Status:</strong> <span style="color: #059669;">Active</span></p>
-          <p><strong>Last Update:</strong> ${new Date(location.timestamp).toLocaleTimeString()}</p>
-          <p><strong>Coordinates:</strong> ${latitude.toFixed(6)}, ${longitude.toFixed(6)}</p>
+          <div class="bus-popup-header">
+            <h3>🚌 ${bus.busNumber}</h3>
+            <span class="status-badge active">● Live</span>
+          </div>
+          <div class="bus-popup-content">
+            <div class="info-row">
+              <span class="label">📍 Route:</span>
+              <span class="value">${bus.routeName}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">👨‍💼 Driver:</span>
+              <span class="value">${bus.driverName}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">⚡ Speed:</span>
+              <span class="value">${speed ? `${speed} km/h` : 'N/A'}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">⏰ ETA:</span>
+              <span class="value">${bus.eta ? `${bus.eta} minutes` : 'N/A'}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">🕐 Updated:</span>
+              <span class="value">${new Date(location.timestamp).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}</span>
+            </div>
+          </div>
         </div>
       `);
 
@@ -182,14 +245,35 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       if (popup) {
         popup.setHTML(`
           <div class="bus-popup">
-            <h3>🚌 ${bus.busNumber}</h3>
-            <p><strong>Route:</strong> ${bus.routeName}</p>
-            <p><strong>Driver:</strong> ${bus.driverName}</p>
-            <p><strong>Speed:</strong> ${speed ? `${speed} km/h` : 'N/A'}</p>
-            <p><strong>ETA:</strong> ${bus.eta ? `${bus.eta} minutes` : 'N/A'}</p>
-            <p><strong>Status:</strong> <span style="color: #059669;">Active</span></p>
-            <p><strong>Last Update:</strong> ${new Date(location.timestamp).toLocaleTimeString()}</p>
-            <p><strong>Coordinates:</strong> ${latitude.toFixed(6)}, ${longitude.toFixed(6)}</p>
+            <div class="bus-popup-header">
+              <h3>🚌 ${bus.busNumber}</h3>
+              <span class="status-badge active">● Live</span>
+            </div>
+            <div class="bus-popup-content">
+              <div class="info-row">
+                <span class="label">📍 Route:</span>
+                <span class="value">${bus.routeName}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">👨‍💼 Driver:</span>
+                <span class="value">${bus.driverName}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">⚡ Speed:</span>
+                <span class="value">${speed ? `${speed} km/h` : 'N/A'}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">⏰ ETA:</span>
+                <span class="value">${bus.eta ? `${bus.eta} minutes` : 'N/A'}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">🕐 Updated:</span>
+                <span class="value">${new Date(location.timestamp).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</span>
+              </div>
+            </div>
           </div>
         `);
       }
@@ -233,7 +317,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     } else if (locations.length > 1) {
       // Multiple buses - fit all in view
       const bounds = new maplibregl.LngLatBounds();
-      locations.forEach(location => {
+      locations.forEach((location) => {
         bounds.extend([location.longitude, location.latitude]);
       });
 
@@ -269,7 +353,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         // Fetch bus details from API
         apiService
           .getBusInfo(busId)
-          .then(response => {
+          .then((response) => {
             if (response.success && response.data) {
               busService.syncBusFromAPI(busId, response.data);
               console.log(
@@ -282,7 +366,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
               setBuses(updatedBuses);
             }
           })
-          .catch(error => {
+          .catch((error) => {
             console.error(`❌ Failed to sync bus ${busId} data:`, error);
           });
       }
@@ -292,7 +376,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       setBuses(updatedBuses);
 
       // Update last known location
-      setLastBusLocations(prev => ({
+      setLastBusLocations((prev) => ({
         ...prev,
         [busId]: location,
       }));
@@ -412,7 +496,7 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     });
 
     // Handle map errors
-    map.current.on('error', e => {
+    map.current.on('error', (e) => {
       console.error('❌ Map error:', e);
     });
 
@@ -422,6 +506,9 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         map.current.remove();
         map.current = null;
         isMapInitialized.current = false;
+        // Clear tracking sets
+        addedRoutes.current.clear();
+        markers.current = {};
       }
     };
   }, [loadRoutes]);
@@ -429,12 +516,15 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
   // Connect to WebSocket for real-time updates
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout;
+    let statusInterval: NodeJS.Timeout;
 
     const connectWebSocket = async () => {
       try {
         setConnectionError(null);
+        setConnectionStatus('connecting');
         await websocketService.connect();
         setIsConnected(true);
+        setConnectionStatus('connected');
 
         // Set up event listeners
         websocketService.onBusLocationUpdate(handleBusLocationUpdate);
@@ -445,19 +535,29 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         });
         websocketService.onBusArriving(handleBusArriving);
 
+        // Monitor connection status
+        const checkConnectionStatus = () => {
+          const status = websocketService.getConnectionStatus();
+          if (!status && connectionStatus === 'connected') {
+            setConnectionStatus('disconnected');
+            setIsConnected(false);
+          }
+        };
+
+        // Check connection status every 10 seconds
+        statusInterval = setInterval(checkConnectionStatus, 10000);
+
         // Load initial bus data after WebSocket connection
         const loadBuses = async () => {
           try {
             // Wait for auth service to be initialized before making API calls
-            let attempts = 0;
-            while (!authService.isInitialized() && attempts < 50) {
-              await new Promise(resolve => setTimeout(resolve, 100));
-              attempts++;
+            while (!authService.isInitialized()) {
+              await new Promise((resolve) => setTimeout(resolve, 100));
             }
-            
+
             const response = await apiService.getAllBuses();
             if (response.success && response.data) {
-              console.log('📊 Initial bus data from API:', response.data);
+              console.log('📊 Initial bus data from API:', response.data.length, 'buses');
 
               // Sync each bus with the bus service
               response.data.forEach(
@@ -468,26 +568,15 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
                   number_plate?: string;
                   bus_number?: string;
                   route_name?: string;
+                  route_city?: string;
                   routes?: { name: string };
                   driver_name?: string;
                   driver?: { first_name?: string; last_name?: string };
                 }) => {
                   const busId = apiBus.bus_id || apiBus.id; // Handle both backend and frontend data structures
                   if (busId) {
-                    const existingBus = busService.getBus(busId);
-                    if (existingBus) {
-                      busService.syncBusFromAPI(busId, apiBus);
-                    } else {
-                      // Create new bus entry if it doesn't exist
-                      busService.updateBusLocation({
-                        busId,
-                        driverId: apiBus.driver_id || '',
-                        latitude: 0,
-                        longitude: 0,
-                        timestamp: new Date().toISOString(),
-                      });
-                      busService.syncBusFromAPI(busId, apiBus);
-                    }
+                    // Always sync bus data from API - this will create or update the bus
+                    busService.syncBusFromAPI(busId, apiBus);
                   }
                 }
               );
@@ -509,10 +598,12 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
         console.error('❌ WebSocket connection failed:', error);
         setConnectionError('Failed to connect to real-time updates');
         setIsConnected(false);
+        setConnectionStatus('disconnected');
 
         // Retry connection after 5 seconds
         reconnectTimeout = setTimeout(() => {
           console.log('🔄 Retrying WebSocket connection...');
+          setConnectionStatus('reconnecting');
           connectWebSocket();
         }, 5000);
       }
@@ -524,6 +615,9 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     return () => {
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
+      }
+      if (statusInterval) {
+        clearInterval(statusInterval);
       }
       websocketService.disconnect();
     };
@@ -539,21 +633,40 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
     if (selectedRoute === 'all') {
       return buses;
     }
-    return busService.getBusesByRoute(selectedRoute);
-  }, [buses, selectedRoute]);
+    // Filter buses by route ID instead of route name
+    return buses.filter((bus) => {
+      // Find the route for this bus
+      const busRoute = routes.find((route) => route.name === bus.routeName);
+      return busRoute && busRoute.id === selectedRoute;
+    });
+  }, [buses, selectedRoute, routes]);
 
-  // Get unique routes for filter
+  // Get unique routes for filter - use actual routes from admin panel
   const availableRoutes = useMemo(() => {
-    const routes = [...new Set(buses.map((bus: BusInfo) => bus.routeName))];
-    return routes.filter((route: string) => route !== 'Route TBD');
-  }, [buses]);
+    // Use routes from the routes state (loaded from admin panel) instead of bus route names
+    return routes.map((route: Route) => ({
+      id: route.id,
+      name: route.name,
+      description: route.description
+    }));
+  }, [routes]);
 
   // Add routes to map when routes are loaded
   useEffect(() => {
     if (routes.length > 0 && map.current && map.current.isStyleLoaded()) {
+      // Remove existing routes first to prevent duplicates
+      removeRoutesFromMap();
+      // Add new routes
       addRoutesToMap();
     }
-  }, [routes, addRoutesToMap]);
+
+    // Cleanup function to remove routes when component unmounts
+    return () => {
+      if (map.current) {
+        removeRoutesFromMap();
+      }
+    };
+  }, [routes, addRoutesToMap, removeRoutesFromMap]);
 
   return (
     <div className={`relative h-screen ${className}`}>
@@ -599,180 +712,157 @@ const StudentMap: React.FC<StudentMapProps> = ({ className = '' }) => {
       {/* Map container */}
       <div ref={mapContainer} className="map-container rounded-lg" />
 
-      {/* Controls overlay */}
-      <div className="absolute top-4 left-4 z-10 space-y-2">
-        {/* Route filter */}
-        <div className="bg-white rounded-lg shadow-lg p-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Filter by Route
-          </label>
-          <select
-            value={selectedRoute}
-            onChange={e => setSelectedRoute(e.target.value)}
-            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-          >
-            <option value="all">All Routes</option>
-            {availableRoutes.map(route => (
-              <option key={route} value={route}>
-                {route}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Main Controls Panel - Top Left */}
+      <div className="absolute top-4 left-4 z-20 w-64">
+        <div className="controls-panel bg-white/95 backdrop-blur-sm rounded-lg shadow-xl border border-gray-200/50 panel-enter">
+          {/* Header with connection status */}
+          <div className="flex items-center justify-between p-3 border-b border-gray-100">
+            <div className="flex items-center space-x-2">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                }`}
+              ></div>
+              <span className="text-xs font-medium text-gray-700">
+                {isConnected ? 'Live' : 'Offline'}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">
+              {filteredBuses.length} buses
+            </div>
+          </div>
 
-        {/* Connection status */}
-        <div className="bg-white rounded-lg shadow-lg p-3">
-          <div className="flex items-center space-x-2">
-            <div
-              className={`w-3 h-3 rounded-full ${
-                isConnected ? 'bg-green-500' : 'bg-red-500'
-              }`}
-            ></div>
-            <span className="text-sm text-gray-700">
-              {isConnected ? 'Real-time Connected' : 'Real-time Disconnected'}
+          {/* Route Filter */}
+          <div className="p-3 border-b border-gray-100">
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Route Filter
+            </label>
+            <select
+              value={selectedRoute}
+              onChange={(e) => setSelectedRoute(e.target.value)}
+              className="block w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            >
+              <option value="all">All Routes</option>
+              {availableRoutes.map((route) => (
+                <option key={route.id} value={route.id}>
+                  {route.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="p-3 space-y-2">
+            {filteredBuses.length > 0 && (
+              <button
+                onClick={() => {
+                  console.log('🗺️ Center on Buses button clicked');
+                  setTimeout(() => {
+                    centerMapOnBuses();
+                  }, 50);
+                }}
+                className="btn-primary w-full px-3 py-2 text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 shadow-sm"
+              >
+                📍 Center on Buses ({Object.keys(lastBusLocations).length})
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Bus Information Panel - Bottom Right */}
+      <div className="absolute bottom-4 right-4 z-20 w-72">
+        <div className="bus-info-panel bg-white/95 backdrop-blur-sm rounded-lg shadow-xl border border-gray-200/50 max-h-80 panel-enter">
+          {/* Header */}
+          <div className="flex items-center justify-between p-3 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-800">
+              🚌 Active Buses
+            </h3>
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+              {filteredBuses.length}
             </span>
           </div>
-          {connectionError && (
-            <div className="mt-1 text-xs text-red-600">{connectionError}</div>
-          )}
-        </div>
 
-        {/* Bus count */}
-        <div className="bg-white rounded-lg shadow-lg p-3">
-          <div className="text-sm text-gray-700">
-            <span className="font-medium">Active Buses:</span>{' '}
-            {filteredBuses.length}
-          </div>
-          <div className="text-xs text-gray-500 mt-1">
-            Last update: {new Date().toLocaleTimeString()}
-          </div>
-        </div>
-
-        {/* Center on buses button */}
-        {filteredBuses.length > 0 && (
-          <div className="bg-white rounded-lg shadow-lg p-3">
-            <button
-              onClick={() => {
-                console.log('🗺️ Center on Buses button clicked');
-                console.log('📍 Current bus locations:', lastBusLocations);
-                console.log('🚌 Filtered buses:', filteredBuses);
-
-                // Force a small delay to ensure state is updated
-                setTimeout(() => {
-                  centerMapOnBuses();
-                }, 50);
-              }}
-              className="w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-            >
-              🗺️ Center on Buses ({Object.keys(lastBusLocations).length})
-            </button>
-            {Object.keys(lastBusLocations).length > 0 && (
-              <div className="mt-2 text-xs text-gray-600">
-                <div className="font-medium">📍 Current Locations:</div>
-                {Object.entries(lastBusLocations)
-                  .slice(0, 2)
-                  .map(([busId, location]) => {
-                    const bus = busService.getBus(busId);
-                    return (
-                      <div key={busId} className="mt-1">
-                        {bus?.busNumber || `Bus ${busId}`}:{' '}
-                        {location.latitude.toFixed(4)},{' '}
-                        {location.longitude.toFixed(4)}
+          {/* Bus List */}
+          <div className="bus-list-container overflow-y-auto max-h-64">
+            {filteredBuses.length === 0 ? (
+              <div className="p-4 text-center">
+                <div className="text-gray-400 text-2xl mb-2">🚌</div>
+                <p className="text-gray-500 text-sm">No buses tracking</p>
+                <p className="text-gray-400 text-xs mt-1">Check connection status</p>
+              </div>
+            ) : (
+              <div className="p-2 space-y-1">
+                {filteredBuses.map((bus) => {
+                  const location = lastBusLocations[bus.busId];
+                  return (
+                    <div
+                      key={bus.busId}
+                      className="bus-card p-3 bg-white rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50/50 cursor-pointer transition-all duration-200"
+                      title="Click to center map and view details"
+                      onClick={() => {
+                        // Center map on this bus
+                        const location = lastBusLocations[bus.busId];
+                        if (location && map.current) {
+                          map.current.flyTo({
+                            center: [location.longitude, location.latitude],
+                            zoom: 16,
+                            duration: 1000,
+                          });
+                          // Open the popup for this bus
+                          const marker = markers.current[bus.busId];
+                          if (marker) {
+                            marker.getPopup().addTo(map.current);
+                          }
+                        }
+                      }}
+                    >
+                      {/* Bus Header */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <span className="font-medium text-sm text-gray-800">
+                            {bus.busNumber}
+                          </span>
+                          <span className="text-xs text-blue-600 opacity-75">👆</span>
+                        </div>
+                        <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                          {bus.eta ? `${bus.eta} min` : 'ETA: --'}
+                        </div>
                       </div>
-                    );
-                  })}
-                {Object.keys(lastBusLocations).length > 2 && (
-                  <div className="text-gray-500">
-                    ... and {Object.keys(lastBusLocations).length - 2} more
-                  </div>
-                )}
+
+                      {/* Bus Details */}
+                      <div className="space-y-1">
+                        <div className="text-xs text-gray-600">
+                          📍 Route: {bus.routeName}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          👨‍💼 Driver: {bus.driverName}
+                        </div>
+                        {location && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-green-600">
+                              🕐 {new Date(location.timestamp).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                            <span className="text-blue-600">
+                              {location.speed ? `${location.speed} km/h` : 'Speed: --'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
-        )}
-      </div>
-
-      {/* Bus list overlay */}
-      <div className="absolute bottom-4 right-4 z-10">
-        <div className="bg-white rounded-lg shadow-lg p-4 max-w-sm max-h-64 overflow-y-auto">
-          <h3 className="text-lg font-medium text-gray-900 mb-3">
-            🚌 Active Buses ({filteredBuses.length})
-          </h3>
-          {filteredBuses.length === 0 ? (
-            <p className="text-gray-500 text-sm">No buses available</p>
-          ) : (
-            <div className="space-y-2">
-              {filteredBuses.map(bus => {
-                const location = lastBusLocations[bus.busId];
-                return (
-                  <div
-                    key={bus.busId}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <div className="font-medium text-sm text-blue-600">
-                        {bus.busNumber}
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        {bus.routeName}
-                      </div>
-                      {location && (
-                        <div className="text-xs text-green-600 mt-1">
-                          📍 {location.latitude.toFixed(4)},{' '}
-                          {location.longitude.toFixed(4)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-gray-500">
-                        {bus.eta ? `${bus.eta} min` : 'N/A'}
-                      </div>
-                      {location && (
-                        <div className="text-xs text-gray-400">
-                          {new Date(location.timestamp).toLocaleTimeString()}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Location indicator panel */}
-      {Object.keys(lastBusLocations).length > 0 && (
-        <div className="absolute top-4 right-4 z-10">
-          <div className="bg-white rounded-lg shadow-lg p-4 max-w-xs">
-            <h3 className="text-lg font-medium text-gray-900 mb-3">
-              📍 Live Locations
-            </h3>
-            <div className="space-y-2">
-              {Object.entries(lastBusLocations).map(([busId, location]) => {
-                const bus = busService.getBus(busId);
-                return (
-                  <div
-                    key={busId}
-                    className="p-2 bg-blue-50 rounded border border-blue-200"
-                  >
-                    <div className="font-medium text-sm text-blue-800">
-                      {bus?.busNumber || `Bus ${busId}`}
-                    </div>
-                    <div className="text-xs text-blue-600">
-                      📍 {location.latitude.toFixed(6)},{' '}
-                      {location.longitude.toFixed(6)}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      🕒 {new Date(location.timestamp).toLocaleTimeString()}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

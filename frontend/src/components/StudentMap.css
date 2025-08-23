@@ -83,22 +83,73 @@
 
 .bus-popup {
   font-family: system-ui, sans-serif;
-  min-width: 250px;
+  min-width: 280px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
 }
 
-.bus-popup h3 {
-  margin: 0 0 12px 0;
-  color: #1d4ed8;
+.bus-popup-header {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bus-popup-header h3 {
+  margin: 0;
   font-weight: bold;
   font-size: 18px;
-  border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 8px;
+  color: white;
 }
 
-.bus-popup p {
-  margin: 6px 0;
-  font-size: 14px;
-  line-height: 1.4;
+.status-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.status-badge.active {
+  color: #10b981;
+}
+
+.bus-popup-content {
+  padding: 16px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 4px 0;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-row .label {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.info-row .value {
+  font-weight: 500;
+  color: #1f2937;
+  font-size: 13px;
+  text-align: right;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bus-popup-container {
@@ -197,4 +248,162 @@
   font-weight: 500;
   background: #dbeafe;
   color: #1e40af;
+}
+
+/* Enhanced UI Improvements */
+
+/* Enhanced panel styles with better backdrop blur */
+.controls-panel {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.bus-info-panel {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* Smooth transitions for all interactive elements */
+.bus-card {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bus-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Custom scrollbar for bus list */
+.bus-list-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.bus-list-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bus-list-container::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 2px;
+}
+
+.bus-list-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
+}
+
+/* Responsive design adjustments */
+@media (max-width: 768px) {
+  .controls-panel {
+    width: calc(100vw - 2rem) !important;
+    max-width: 300px;
+  }
+  
+  .bus-info-panel {
+    width: calc(100vw - 2rem) !important;
+    max-width: 300px;
+    bottom: 80px !important;
+  }
+  
+  /* Stack panels vertically on mobile */
+  .bus-info-panel {
+    position: fixed !important;
+    bottom: 4px !important;
+    right: 4px !important;
+    left: 4px !important;
+    width: auto !important;
+    max-height: 40vh;
+  }
+}
+
+/* Status indicator animations */
+.status-pulse {
+  animation: status-pulse 2s infinite;
+}
+
+@keyframes status-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Enhanced loading overlay */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+}
+
+/* Error overlay improvements */
+.error-overlay {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: 90%;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Focus styles for accessibility */
+.focus-ring:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Improved button styles */
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+/* Panel entrance animations */
+.panel-enter {
+  animation: panelEnter 0.3s ease-out;
+}
+
+@keyframes panelEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }

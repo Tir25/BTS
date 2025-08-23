@@ -52,6 +52,9 @@ export interface Route {
   distance_km: number;
   estimated_duration_minutes: number;
   route_map_url?: string;
+  city?: string;
+  origin?: string;
+  destination?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -72,18 +75,27 @@ export interface Driver {
 export interface HealthResponse {
   status: string;
   timestamp: string;
-  database: {
-    status: string;
-    details?: {
-      postgresVersion?: string;
-      poolStatus?: {
-        totalCount?: number;
-        idleCount?: number;
-        waitingCount?: number;
+  uptime: number;
+  environment: string;
+  services: {
+    database: {
+      status: string;
+      details: {
+        status: string;
+        details: {
+          currentTime: string;
+          postgresVersion: string;
+          poolSize: number;
+          idleCount: number;
+          waitingCount: number;
+        };
       };
     };
+    api: {
+      status: string;
+      database: string;
+    };
   };
-  environment: string;
 }
 
 export interface ApiResponse<T> {

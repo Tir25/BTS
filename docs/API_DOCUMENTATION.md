@@ -50,7 +50,7 @@ Authenticate a user and return JWT token.
 ```json
 {
   "email": "user@example.com",
-  "password": "password123"
+  "password": "your_secure_password"
 }
 ```
 
@@ -321,7 +321,7 @@ Create a new user (admin only).
 ```json
 {
   "email": "newuser@example.com",
-  "password": "password123",
+  "password": "your_secure_password",
   "first_name": "John",
   "last_name": "Doe",
   "role": "driver",

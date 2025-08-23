@@ -30,12 +30,10 @@ export default function AdminPanel() {
       setLoading(true);
       setError(null);
 
-      // Wait for auth service to be initialized
-      let attempts = 0;
-      while (!authService.isInitialized() && attempts < 50) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-      }
+          // Wait for auth service to be initialized
+    while (!authService.isInitialized()) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
 
       const authenticated = authService.isAuthenticated();
       const admin = authService.isAdmin();
@@ -46,8 +44,7 @@ export default function AdminPanel() {
         admin,
       });
 
-      // Debug: Log full auth state
-      console.log('🔍 Full Auth State:', authService.getAuthState());
+
 
       setIsAuthenticated(authenticated);
       setIsAdmin(admin);

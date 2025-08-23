@@ -1,13 +1,5 @@
-import { BusLocation } from './websocket';
-
-export interface BusInfo {
-  busId: string;
-  busNumber: string;
-  routeName: string;
-  driverName: string;
-  currentLocation: BusLocation;
-  eta?: number; // ETA to next stop in minutes
-}
+import { BusLocation } from './interfaces/IWebSocketService';
+import { IBusService, BusInfo } from './interfaces/IBusService';
 
 interface BusData {
   [busId: string]: BusInfo;
@@ -19,7 +11,7 @@ interface PreviousLocation {
   timestamp: string;
 }
 
-class BusService {
+class BusService implements IBusService {
   private buses: BusData = {};
   private previousLocations: { [busId: string]: PreviousLocation } = {};
 
@@ -130,37 +122,51 @@ class BusService {
       number_plate?: string;
       bus_number?: string;
       route_name?: string;
+      route_city?: string;
       routes?: { name: string };
       driver_name?: string;
       driver?: { first_name?: string; last_name?: string };
     }
   ): void {
-    if (this.buses[busId]) {
-      // Update with real data from API
-      // Handle both frontend and backend data structures
-      const busNumber =
-        apiBusData.number_plate || apiBusData.bus_number || `Bus ${busId}`;
-      const routeName =
-        apiBusData.route_name || apiBusData.routes?.name || 'Route TBD';
-      const driverName =
-        apiBusData.driver_name ||
-        (apiBusData.driver
-          ? `${apiBusData.driver.first_name || ''} ${apiBusData.driver.last_name || ''}`.trim()
-          : 'Driver TBD');
+    // Handle both frontend and backend data structures
+    const busNumber =
+      apiBusData.bus_number || apiBusData.number_plate || `Bus ${busId}`;
+    const routeName =
+      apiBusData.route_name || apiBusData.routes?.name || 'Route TBD';
+    const driverName =
+      apiBusData.driver_name ||
+      (apiBusData.driver
+        ? `${apiBusData.driver.first_name || ''} ${apiBusData.driver.last_name || ''}`.trim()
+        : 'Driver TBD');
 
+    if (this.buses[busId]) {
+      // Update existing bus with real data from API
       this.buses[busId] = {
         ...this.buses[busId],
         busNumber,
         routeName,
         driverName,
       };
-
-      console.log(`🔄 Synced bus ${busId}:`, {
+    } else {
+      // Create new bus entry with API data
+      this.buses[busId] = {
+        busId,
         busNumber,
         routeName,
         driverName,
-      });
+        currentLocation: {
+          busId,
+          driverId: '',
+          latitude: 0,
+          longitude: 0,
+          timestamp: new Date().toISOString(),
+          speed: 0,
+        },
+        eta: undefined,
+      };
     }
+
+    console.log(`🔄 Synced bus ${busId}: ${busNumber} - ${routeName} - ${driverName}`);
   }
 
   // Clear all buses (useful for resetting)
@@ -176,7 +182,7 @@ class BusService {
 
   // Filter buses by route
   getBusesByRoute(routeName: string): BusInfo[] {
-    return Object.values(this.buses).filter(bus =>
+    return Object.values(this.buses).filter((bus) =>
       bus.routeName.toLowerCase().includes(routeName.toLowerCase())
     );
   }
@@ -187,7 +193,7 @@ class BusService {
     lon: number,
     radiusKm: number = 5
   ): BusInfo[] {
-    return Object.values(this.buses).filter(bus => {
+    return Object.values(this.buses).filter((bus) => {
       const distance = this.calculateDistance(
         lat,
         lon,
@@ -234,3 +240,4 @@ class BusService {
 
 // Export singleton instance
 export const busService = new BusService();
+export type { BusInfo } from './interfaces/IBusService';

@@ -41,7 +41,19 @@ interface RouteData {
   distance_km: number;
   estimated_duration_minutes: number;
   is_active: boolean;
-  stops: GeoJSON.LineString;
+  city: string;
+  custom_destination?: string;
+  custom_origin?: string;
+  destination_coordinates?: {
+    coordinates: [number, number];
+  };
+  origin_coordinates?: {
+    coordinates: [number, number];
+  };
+  bus_stops?: any[];
+  current_eta_minutes?: number;
+  last_eta_calculation?: string;
+  stops?: GeoJSON.LineString;
 }
 
 interface AnalyticsData {
@@ -72,15 +84,28 @@ class AdminApiService {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
+    let timeoutId: NodeJS.Timeout | undefined;
+
     try {
       const token = authService.getAccessToken();
+      console.log(
+        '🔑 Token check for',
+        endpoint,
+        ':',
+        token ? 'Token exists' : 'No token'
+      );
 
       if (!token) {
+        console.error('❌ No access token available for', endpoint);
         throw new Error('No access token available');
       }
 
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
       const response = await fetch(`${API_BASE_URL}/admin${endpoint}`, {
         ...options,
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -89,6 +114,7 @@ class AdminApiService {
       });
 
       const data = await response.json();
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (!response.ok) {
         // Handle specific error cases
@@ -115,6 +141,7 @@ class AdminApiService {
 
       return data;
     } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
       console.error(`❌ API request failed for ${endpoint}:`, error);
       return {
         success: false,
@@ -136,7 +163,13 @@ class AdminApiService {
   // ===== BUS MANAGEMENT ENDPOINTS =====
 
   async getAllBuses(): Promise<ApiResponse<BusData[]>> {
-    return this.makeRequest<BusData[]>('/buses');
+    console.log('🚌 Fetching all buses...');
+    const result = await this.makeRequest<BusData[]>('/buses');
+    console.log(
+      '🚌 Buses result:',
+      result.success ? `${result.data?.length || 0} buses` : result.error
+    );
+    return result;
   }
 
   async getBusById(busId: string): Promise<ApiResponse<BusData>> {
@@ -169,7 +202,25 @@ class AdminApiService {
   // ===== DRIVER MANAGEMENT ENDPOINTS =====
 
   async getAllDrivers(): Promise<ApiResponse<DriverData[]>> {
-    return this.makeRequest<DriverData[]>('/drivers');
+    console.log('👨‍💼 Fetching all drivers...');
+    const result = await this.makeRequest<DriverData[]>('/drivers');
+    console.log(
+      '👨‍💼 Drivers result:',
+      result.success ? `${result.data?.length || 0} drivers` : result.error
+    );
+    return result;
+  }
+
+  async getAssignedDrivers(): Promise<ApiResponse<any[]>> {
+    console.log('🚌 Fetching assigned drivers...');
+    const result = await this.makeRequest<any[]>('/assigned-drivers');
+    console.log(
+      '🚌 Assigned drivers result:',
+      result.success
+        ? `${result.data?.length || 0} assigned drivers`
+        : result.error
+    );
+    return result;
   }
 
   async getDriverById(driverId: string): Promise<ApiResponse<DriverData>> {
@@ -225,7 +276,13 @@ class AdminApiService {
   // ===== ROUTE MANAGEMENT ENDPOINTS =====
 
   async getAllRoutes(): Promise<ApiResponse<RouteData[]>> {
-    return this.makeRequest<RouteData[]>('/routes');
+    console.log('🛣️ Fetching all routes...');
+    const result = await this.makeRequest<RouteData[]>('/routes');
+    console.log(
+      '🛣️ Routes result:',
+      result.success ? `${result.data?.length || 0} routes` : result.error
+    );
+    return result;
   }
 
   async getRouteById(routeId: string): Promise<ApiResponse<RouteData>> {
@@ -237,7 +294,8 @@ class AdminApiService {
     description: string;
     distance_km: number;
     estimated_duration_minutes: number;
-    stops?: GeoJSON.LineString;
+    is_active: boolean;
+    city: string;
   }): Promise<ApiResponse<RouteData>> {
     return this.makeRequest<RouteData>('/routes', {
       method: 'POST',
@@ -253,6 +311,12 @@ class AdminApiService {
       distance_km: number;
       estimated_duration_minutes: number;
       is_active: boolean;
+      city: string;
+      custom_destination?: string;
+      custom_destination_coordinates?: [number, number];
+      custom_origin?: string;
+      custom_origin_coordinates?: [number, number];
+      bus_stops?: any[];
       stops?: GeoJSON.LineString;
     }>
   ): Promise<ApiResponse<RouteData>> {

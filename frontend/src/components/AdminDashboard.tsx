@@ -133,6 +133,13 @@ export default function AdminDashboard() {
                   currentUser?.email}
               </span>
               <button
+                onClick={loadDashboardData}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm"
+                disabled={loading}
+              >
+                {loading ? 'Refreshing...' : '🔄 Refresh'}
+              </button>
+              <button
                 onClick={handleSignOut}
                 className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 text-sm"
               >

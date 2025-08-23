@@ -77,22 +77,14 @@ export const getDriverBusInfo = async (
   driverId: string
 ): Promise<BusInfo | null> => {
   try {
-    // First, get the bus information
+    // First, get the bus information without route join
     const { data: busData, error: busError } = await supabaseAdmin
       .from('buses')
-      .select(
-        `
-        id,
-        number_plate,
-        route_id,
-        routes!inner(
-          name
-        )
-      `
-      )
+      .select('id, number_plate, route_id')
       .eq('assigned_driver_id', driverId)
       .eq('is_active', true)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (busError || !busData) {
       console.error('❌ Error fetching driver bus info:', busError);
@@ -104,22 +96,31 @@ export const getDriverBusInfo = async (
       .from('profiles')
       .select('full_name')
       .eq('id', driverId)
-      .single();
+      .maybeSingle();
 
     if (profileError) {
       console.error('❌ Error fetching driver profile:', profileError);
     }
 
-    // Handle the case where joined tables return arrays
-    const routeData = Array.isArray(busData.routes)
-      ? busData.routes[0]
-      : busData.routes;
+    // Get route information only if route_id exists
+    let routeName = '';
+    if (busData.route_id) {
+      const { data: routeData, error: routeError } = await supabaseAdmin
+        .from('routes')
+        .select('name')
+        .eq('id', busData.route_id)
+        .maybeSingle();
+
+      if (!routeError && routeData) {
+        routeName = routeData.name || '';
+      }
+    }
 
     return {
       bus_id: busData.id,
       bus_number: busData.number_plate || '',
       route_id: busData.route_id || '',
-      route_name: routeData?.name || '',
+      route_name: routeName,
       driver_id: driverId,
       driver_name: profileData?.full_name || 'Unknown Driver',
     };
@@ -145,7 +146,7 @@ export const getCurrentBusLocations = async (): Promise<SavedLocation[]> => {
     `;
 
     const result = await pool.query(query);
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       id: row.id,
       driver_id: '', // Not stored in live_locations table
       bus_id: row.bus_id,
@@ -182,7 +183,7 @@ export const getBusLocationHistory = async (
     `;
 
     const result = await pool.query(query, [busId, startTime, endTime]);
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       id: row.id,
       driver_id: '', // Not stored in live_locations table
       bus_id: row.bus_id,
@@ -210,9 +211,8 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
         routes!inner(
           name
         ),
-        users!inner(
-          first_name,
-          last_name
+        profiles!inner(
+          full_name
         )
       `
       )
@@ -227,7 +227,7 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
 
     // Handle the case where joined tables return arrays
     const routeData = Array.isArray(data.routes) ? data.routes[0] : data.routes;
-    const userData = Array.isArray(data.users) ? data.users[0] : data.users;
+    const profileData = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
 
     return {
       bus_id: data.id,
@@ -235,9 +235,7 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
       route_id: data.route_id || '',
       route_name: routeData?.name || '',
       driver_id: data.assigned_driver_id || '',
-      driver_name:
-        `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() ||
-        'Unknown Driver',
+      driver_name: profileData?.full_name || 'Unknown Driver',
     };
   } catch (error) {
     console.error('❌ Error in getBusInfo:', error);
@@ -257,11 +255,11 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
         assigned_driver_id,
         bus_image_url,
         routes!inner(
-          name
+          name,
+          city
         ),
-        users!inner(
-          first_name,
-          last_name
+        profiles!inner(
+          full_name
         )
       `
       )
@@ -272,21 +270,20 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
       return [];
     }
 
-    return (data || []).map(item => {
+    return (data || []).map((item) => {
       const routeData = Array.isArray(item.routes)
         ? item.routes[0]
         : item.routes;
-      const userData = Array.isArray(item.users) ? item.users[0] : item.users;
+      const profileData = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
 
       return {
         bus_id: item.id,
         bus_number: item.number_plate || '',
         route_id: item.route_id || '',
         route_name: routeData?.name || '',
+        route_city: routeData?.city || '',
         driver_id: item.assigned_driver_id || '',
-        driver_name:
-          `${userData?.first_name || ''} ${userData?.last_name || ''}`.trim() ||
-          'Unknown Driver',
+        driver_name: profileData?.full_name || 'Unknown Driver',
         bus_image_url: item.bus_image_url || null,
       };
     });

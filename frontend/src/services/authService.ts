@@ -35,8 +35,13 @@ class AuthService {
       }
 
       if (session) {
+        console.log('🔑 Setting initial session for user:', session.user.email);
         this.currentSession = session;
         this.currentUser = session.user;
+        console.log(
+          '🔑 Session access token:',
+          session.access_token ? 'Exists' : 'Missing'
+        );
         await this.loadUserProfile(session.user.id);
       }
 
@@ -48,6 +53,13 @@ class AuthService {
 
         this.currentSession = session;
         this.currentUser = session?.user || null;
+
+        if (session) {
+          console.log(
+            '🔑 Auth state change - Session access token:',
+            session.access_token ? 'Exists' : 'Missing'
+          );
+        }
 
         if (session?.user) {
           await this.loadUserProfile(session.user.id);
@@ -74,9 +86,60 @@ class AuthService {
 
   private async loadUserProfile(userId: string): Promise<void> {
     try {
-      console.log('🔍 Attempting to load profile for user:', userId);
 
-      // Simple profile loading without connection test
+      // Check if user has dual roles in auth metadata
+      const authRoles = this.currentUser?.user_metadata?.roles;
+      const isDualRoleUser = authRoles && Array.isArray(authRoles) && authRoles.length > 1;
+      
+      if (isDualRoleUser) {
+        
+        
+        // For dual-role users, determine role based on current interface
+        const currentPath = window.location.pathname;
+        let role: 'admin' | 'driver' | 'student' = 'admin'; // Default to admin
+        
+        if (currentPath.includes('/driver')) {
+          role = 'driver';
+        } else if (currentPath.includes('/admin')) {
+          role = 'admin';
+        } else {
+          // If not on a specific interface, check if admin email
+          const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map((email: string) => email.trim().toLowerCase()) || [
+            'siddharthmali.211@gmail.com',
+          ];
+          role = adminEmails.includes(this.currentUser?.email?.toLowerCase() || '') ? 'admin' : 'driver';
+        }
+        
+        
+        
+        // Load profile from database but override role
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          console.error('❌ Error loading user profile:', error);
+          this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
+          return;
+        }
+
+        
+        this.currentProfile = {
+          id: profile.id,
+          email: this.currentUser?.email || '',
+          role: role, // Use determined role instead of database role
+          full_name: profile.full_name,
+          first_name: profile.full_name?.split(' ')[0] || '',
+          last_name: profile.full_name?.split(' ').slice(1).join(' ') || '',
+          created_at: profile.created_at,
+          updated_at: profile.updated_at,
+        };
+        return;
+      }
+
+      // Regular single-role user handling
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -85,12 +148,12 @@ class AuthService {
 
       if (error) {
         console.error('❌ Error loading user profile:', error);
-        // Set temporary profile immediately
-        this.setTemporaryProfile(userId);
+        // Set temporary profile with role check
+        this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
         return;
       }
 
-      console.log('✅ Profile loaded successfully:', profile.role);
+      
       this.currentProfile = {
         id: profile.id,
         email: this.currentUser?.email || '',
@@ -103,30 +166,38 @@ class AuthService {
       };
     } catch (error) {
       console.error('❌ Error in loadUserProfile:', error);
-      // Set temporary profile on any error
-      this.setTemporaryProfile(userId);
+      // Set temporary profile with role check on any error
+      this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
     }
   }
 
-  private setTemporaryProfile(userId: string): void {
-    console.log('🔄 Setting temporary profile for admin login');
+  // Removed unused setTemporaryProfile function
+
+  private setTemporaryProfileWithRoleCheck(userId: string, user: any): void {
+    console.log('🔄 Setting temporary profile with role check for user login');
+
+    // Check if this is a known admin user - use environment variable
+    const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map((email: string) => email.trim().toLowerCase()) || [
+      'siddharthmali.211@gmail.com', // Keep this as fallback for development
+    ];
+
+    const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
+    const role = isAdmin ? 'admin' : 'student';
+
+    console.log(`🔍 User ${user.email} assigned role: ${role}`);
+
     this.currentProfile = {
       id: userId,
-      email: this.currentUser?.email || '',
-      role: 'admin', // Assume admin for login purposes
+      email: user.email || '',
+      role: role,
       full_name:
-        this.currentUser?.user_metadata?.full_name ||
-        this.currentUser?.email?.split('@')[0] ||
-        'Admin User',
+        user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
       first_name:
-        this.currentUser?.user_metadata?.full_name?.split(' ')[0] ||
-        this.currentUser?.email?.split('@')[0] ||
-        'Admin',
+        user.user_metadata?.full_name?.split(' ')[0] ||
+        user.email?.split('@')[0] ||
+        'User',
       last_name:
-        this.currentUser?.user_metadata?.full_name
-          ?.split(' ')
-          .slice(1)
-          .join(' ') || 'User',
+        user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -193,12 +264,12 @@ class AuthService {
 
         console.log('📋 Loading user profile...');
         try {
-          // Add timeout to profile loading
+          // Add timeout to profile loading with longer timeout
           const profilePromise = this.loadUserProfile(data.user.id);
           const profileTimeout = new Promise((_, reject) => {
             setTimeout(
               () => reject(new Error('Profile loading timeout')),
-              3000
+              10000 // Increased from 3s to 10s
             );
           });
 
@@ -209,7 +280,22 @@ class AuthService {
             '⚠️ Profile loading failed, using temporary profile:',
             profileError
           );
-          this.setTemporaryProfile(data.user.id);
+
+          // Try one more time after a short delay
+          try {
+            console.log('🔄 Retrying profile loading...');
+            await this.loadUserProfile(data.user.id);
+            console.log(
+              '✅ Profile loaded on retry:',
+              this.currentProfile?.role
+            );
+          } catch (retryError) {
+            console.warn(
+              '⚠️ Profile retry also failed, using temporary profile'
+            );
+            // Check if this is an admin user before setting temporary profile
+            this.setTemporaryProfileWithRoleCheck(data.user.id, data.user);
+          }
         }
 
         // Notify listeners immediately after successful sign in
@@ -362,7 +448,49 @@ class AuthService {
 
   // Get access token for API calls
   getAccessToken(): string | null {
-    return this.currentSession?.access_token || null;
+    // First try to get from current session
+    let token = this.currentSession?.access_token || null;
+
+    // If no token in current session, try to get from localStorage as fallback
+    if (!token) {
+      try {
+        // Try multiple localStorage keys that Supabase might use
+        const possibleKeys = [
+          'supabase.auth.token',
+          'sb-gthwmwfwvhyriygpcdlr-auth-token', // Supabase project-specific key
+          'supabase.auth.session',
+        ];
+
+        for (const key of possibleKeys) {
+          const storedSession = localStorage.getItem(key);
+          if (storedSession) {
+            const parsedSession = JSON.parse(storedSession);
+            token =
+              parsedSession?.currentSession?.access_token ||
+              parsedSession?.access_token ||
+              parsedSession?.session?.access_token ||
+              null;
+
+            if (token) {
+              console.log(
+                `🔑 Retrieved token from localStorage fallback (${key})`
+              );
+              break;
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Error reading token from localStorage:', error);
+      }
+    }
+
+    console.log(
+      '🔑 getAccessToken called:',
+      token ? 'Token exists' : 'No token',
+      'Session:',
+      !!this.currentSession
+    );
+    return token;
   }
 
   // Refresh session
@@ -379,7 +507,9 @@ class AuthService {
       if (error) {
         // Don't log AuthSessionMissingError as an error since it's expected when no session exists
         if (error.message.includes('Auth session missing')) {
-          console.log('🔄 No session to refresh (expected for unauthenticated users)');
+          console.log(
+            '🔄 No session to refresh (expected for unauthenticated users)'
+          );
           return { success: false, error: 'No session to refresh' };
         }
         console.error('❌ Session refresh error:', error);
@@ -447,6 +577,139 @@ class AuthService {
       isAuthenticated: this.isAuthenticated(),
       isAdmin: this.isAdmin(),
     };
+  }
+
+
+
+  // Method to force a fresh login and clear any stale sessions
+  async forceFreshLogin(): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🔄 Forcing fresh login...');
+
+      // Clear all localStorage auth data
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (
+          key &&
+          (key.includes('supabase') ||
+            key.includes('auth') ||
+            key.includes('sb-'))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+
+      keysToRemove.forEach((key) => {
+        localStorage.removeItem(key);
+        console.log(`🗑️ Removed localStorage key: ${key}`);
+      });
+
+      // Clear current session
+      this.currentSession = null;
+      this.currentUser = null;
+      this.currentProfile = null;
+
+      console.log('✅ Fresh login state prepared');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error forcing fresh login:', error);
+      return { success: false, error: 'Failed to force fresh login' };
+    }
+  }
+
+  // Method to recover session from localStorage for cross-device scenarios
+  async recoverSession(): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🔄 Attempting to recover session from localStorage...');
+
+      // Try multiple localStorage keys that Supabase might use
+      const possibleKeys = [
+        'supabase.auth.token',
+        'sb-gthwmwfwvhyriygpcdlr-auth-token', // Supabase project-specific key
+        'supabase.auth.session',
+      ];
+
+      let storedSession = null;
+      let usedKey = null;
+
+      for (const key of possibleKeys) {
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          storedSession = stored;
+          usedKey = key;
+          console.log(`📝 Found session in localStorage key: ${key}`);
+          break;
+        }
+      }
+
+      if (!storedSession) {
+        console.log('📝 No stored session found in any localStorage key');
+        return { success: false, error: 'No stored session' };
+      }
+
+      let parsedSession;
+      try {
+        parsedSession = JSON.parse(storedSession);
+      } catch (parseError) {
+        console.log('❌ Failed to parse stored session:', parseError);
+        return { success: false, error: 'Invalid session format' };
+      }
+
+      // Try different session structures
+      const accessToken =
+        parsedSession?.currentSession?.access_token ||
+        parsedSession?.access_token ||
+        parsedSession?.session?.access_token;
+
+      if (!accessToken) {
+        console.log(
+          '🔑 No access token found in stored session structure:',
+          parsedSession
+        );
+        return { success: false, error: 'No access token in stored session' };
+      }
+
+      console.log('🔑 Found access token, validating...');
+
+      // Verify the token is still valid
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser(accessToken);
+
+      if (error || !user) {
+        console.log('❌ Stored token is invalid:', error?.message);
+        if (usedKey) {
+          localStorage.removeItem(usedKey);
+        }
+        return { success: false, error: 'Stored token is invalid' };
+      }
+
+      // Set the recovered session
+      this.currentSession = {
+        access_token: accessToken,
+        refresh_token:
+          parsedSession?.currentSession?.refresh_token ||
+          parsedSession?.refresh_token,
+        expires_in:
+          parsedSession?.currentSession?.expires_in ||
+          parsedSession?.expires_in,
+        token_type: 'bearer',
+        user: user,
+      } as Session;
+
+      this.currentUser = user;
+
+      // Load user profile
+      await this.loadUserProfile(user.id);
+
+      console.log('✅ Session recovered successfully for user:', user.email);
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error recovering session:', error);
+      return { success: false, error: 'Failed to recover session' };
+    }
   }
 }
 

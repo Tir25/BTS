@@ -231,6 +231,25 @@ router.get('/drivers', async (req, res) => {
   }
 });
 
+// Get assigned drivers (MUST be before /drivers/:driverId to avoid route conflict)
+router.get('/assigned-drivers', async (req, res) => {
+  try {
+    const assignedDrivers = await AdminService.getAssignedDrivers();
+    res.json({
+      success: true,
+      data: assignedDrivers,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('❌ Error fetching assigned drivers:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch assigned drivers',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Get specific driver
 router.get('/drivers/:driverId', async (req, res) => {
   try {
@@ -470,6 +489,34 @@ router.get('/routes/:routeId', async (req, res) => {
 router.post('/routes', async (req, res) => {
   try {
     const routeData = req.body;
+
+
+
+    // Validate required fields
+    if (!routeData.name || !routeData.name.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Route name is required',
+        message: 'Route name cannot be empty',
+      });
+    }
+
+    if (!routeData.city || !routeData.city.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'City is required',
+        message: 'City cannot be empty',
+      });
+    }
+
+    if (!routeData.description || !routeData.description.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Route description is required',
+        message: 'Route description cannot be empty',
+      });
+    }
+
     const newRoute = await AdminService.createRoute(routeData);
 
     if (!newRoute) {

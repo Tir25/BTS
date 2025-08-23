@@ -220,5 +220,20 @@ export const validateRouteData = (
     return 'Estimated duration must be greater than 0';
   }
 
+  // Validate city (optional but recommended)
+  if (routeData.city !== undefined && routeData.city !== null) {
+    if (typeof routeData.city !== 'string') {
+      return 'City must be a string';
+    }
+
+    if (routeData.city.trim().length === 0) {
+      return 'City cannot be empty if provided';
+    }
+
+    if (routeData.city.length > 100) {
+      return 'City name cannot be longer than 100 characters';
+    }
+  }
+
   return null; // No validation errors
 };
