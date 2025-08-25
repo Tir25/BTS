@@ -11,7 +11,6 @@ const PremiumHomepage: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isVideoError, setIsVideoError] = useState(false);
-  const [videoLoadingTimeout, setVideoLoadingTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Check if device is mobile
@@ -27,55 +26,49 @@ const PremiumHomepage: React.FC = () => {
 
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.playbackRate = 0.8; // Slow down the video slightly
+      // Set video properties
+      videoRef.current.playbackRate = 0.8;
+      videoRef.current.muted = true;
+      videoRef.current.playsInline = true;
 
       // Handle video loading
       const handleVideoLoad = () => {
         console.log('Video loaded successfully');
         setIsVideoLoaded(true);
-        if (videoLoadingTimeout) {
-          clearTimeout(videoLoadingTimeout);
-        }
       };
       
       const handleVideoError = (e: Event) => {
         console.error('Video loading error:', e);
         setIsVideoError(true);
-        setIsVideoLoaded(true); // Remove loading state even on error
-        if (videoLoadingTimeout) {
-          clearTimeout(videoLoadingTimeout);
-        }
+        setIsVideoLoaded(true);
       };
 
       const handleVideoCanPlay = () => {
         console.log('Video can play');
         setIsVideoLoaded(true);
-        if (videoLoadingTimeout) {
-          clearTimeout(videoLoadingTimeout);
-        }
       };
-      
+
+      // Add event listeners
       videoRef.current.addEventListener('loadeddata', handleVideoLoad);
       videoRef.current.addEventListener('error', handleVideoError);
       videoRef.current.addEventListener('canplay', handleVideoCanPlay);
 
-      // Set a timeout to remove loading state if video takes too long
-      const timeout = setTimeout(() => {
-        console.log('Video loading timeout - removing loading state');
-        setIsVideoLoaded(true);
-        setIsVideoError(true); // Treat timeout as error
-      }, 5000); // 5 second timeout
+      // Try to play the video
+      const playVideo = async () => {
+        try {
+          await videoRef.current?.play();
+        } catch (error) {
+          console.log('Autoplay failed, but video will play on user interaction');
+        }
+      };
 
-      setVideoLoadingTimeout(timeout);
+      playVideo();
 
       return () => {
         if (videoRef.current) {
           videoRef.current.removeEventListener('loadeddata', handleVideoLoad);
           videoRef.current.removeEventListener('error', handleVideoError);
           videoRef.current.removeEventListener('canplay', handleVideoCanPlay);
-        }
-        if (videoLoadingTimeout) {
-          clearTimeout(videoLoadingTimeout);
         }
       };
     }
@@ -112,6 +105,7 @@ const PremiumHomepage: React.FC = () => {
             playsInline
             className="video-background video-autoplay"
             preload="auto"
+            poster="/videos/background-video.mp4"
           >
             <source src="/videos/background-video.mp4" type="video/mp4" />
             <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4" />
@@ -172,9 +166,11 @@ const PremiumHomepage: React.FC = () => {
                 className="w-full sm:w-72 md:w-80 h-40 sm:h-48 flex flex-col items-center justify-center cursor-pointer relative z-10"
                 onClick={() => handleNavigation('/driver-login')}
               >
-                <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
-                    🚌
+                <div className="text-center px-2 flex flex-col items-center justify-center h-full">
+                  <div className="card-icon-wrapper mb-2 sm:mb-4">
+                    <span className="text-4xl sm:text-6xl animate-pulse flex items-center justify-center">
+                      🚌
+                    </span>
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Driver Interface
@@ -210,9 +206,11 @@ const PremiumHomepage: React.FC = () => {
                 className="w-full sm:w-72 md:w-80 h-40 sm:h-48 flex flex-col items-center justify-center cursor-pointer relative z-10"
                 onClick={() => handleNavigation('/student-map')}
               >
-                <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
-                    🗺️
+                <div className="text-center px-2 flex flex-col items-center justify-center h-full">
+                  <div className="card-icon-wrapper mb-2 sm:mb-4">
+                    <span className="text-4xl sm:text-6xl animate-pulse flex items-center justify-center">
+                      🗺️
+                    </span>
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Student Map
@@ -248,9 +246,11 @@ const PremiumHomepage: React.FC = () => {
                 className="w-full sm:w-72 md:w-80 h-40 sm:h-48 flex flex-col items-center justify-center cursor-pointer relative z-10"
                 onClick={() => handleNavigation('/admin-login')}
               >
-                <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
-                    ⚙️
+                <div className="text-center px-2 flex flex-col items-center justify-center h-full">
+                  <div className="card-icon-wrapper mb-2 sm:mb-4">
+                    <span className="text-4xl sm:text-6xl animate-pulse flex items-center justify-center">
+                      ⚙️
+                    </span>
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Admin Panel

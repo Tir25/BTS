@@ -241,9 +241,16 @@ input[type="number"]::placeholder {
 
   /* Fix for video autoplay issues */
   .video-autoplay {
-    autoplay: true;
-    muted: true;
-    playsinline: true;
+    /* Remove incorrect CSS properties */
+  }
+
+  /* Enhanced video background styles */
+  .video-background {
+    @apply w-full h-full object-cover;
+    will-change: transform;
+    transform: translateZ(0);
+    /* Ensure video plays properly */
+    object-position: center;
   }
 
   /* Fix for icon alignment issues */
@@ -264,16 +271,29 @@ input[type="number"]::placeholder {
     flex-shrink: 0;
   }
 
-  /* Fix for card icon alignment */
+  /* Enhanced card icon wrapper for better alignment */
   .card-icon-wrapper {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 64px;
-    height: 64px;
+    width: 80px;
+    height: 80px;
     margin: 0 auto 1rem auto;
     border-radius: 1rem;
     flex-shrink: 0;
+    /* Ensure proper centering */
+    position: relative;
+  }
+
+  /* Ensure emoji icons are properly centered */
+  .card-icon-wrapper span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    line-height: 1;
+    text-align: center;
   }
 
   /* Fix for video loading timeout */
@@ -286,11 +306,13 @@ input[type="number"]::placeholder {
     to { opacity: 1; }
   }
 
-  /* Fix for Netlify video loading issues */
+  /* Enhanced video styles for Netlify */
   video {
     object-fit: cover;
     width: 100%;
     height: 100%;
+    /* Ensure video plays on Netlify */
+    display: block;
   }
 
   /* Ensure video poster is visible */
