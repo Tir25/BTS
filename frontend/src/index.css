@@ -13,7 +13,7 @@
     font-family: 'Inter', system-ui, sans-serif;
     scroll-behavior: smooth;
     /* Prevent zoom on input focus on iOS */
-    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   
   body {
@@ -299,6 +299,17 @@ input[type="number"]::placeholder {
     backdrop-filter: blur(10px);
   }
 
+  /* Enhanced icon container for perfect alignment */
+  .icon-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    /* Ensure perfect centering */
+    position: relative;
+  }
+
   /* Ensure emoji icons are properly centered */
   .card-icon-wrapper span {
     display: flex;
@@ -311,6 +322,11 @@ input[type="number"]::placeholder {
     /* Ensure emoji renders properly */
     font-size: inherit;
     font-family: inherit;
+    /* Perfect centering */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
   }
 
   /* Additional fix for emoji alignment */
@@ -323,6 +339,11 @@ input[type="number"]::placeholder {
     height: 100%;
     margin: 0;
     padding: 0;
+    /* Perfect centering */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
   }
 
   /* Fix for video loading timeout */

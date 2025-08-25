@@ -182,10 +182,10 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/driver-login')}
               >
                 <div className="text-center px-2 flex flex-col items-center justify-center h-full">
-                  <div className="card-icon-wrapper mb-2 sm:mb-4">
-                    <span className="text-4xl sm:text-6xl animate-pulse flex items-center justify-center">
-                      🚌
-                    </span>
+                  <div className="card-icon-wrapper mb-2 sm:mb-4 flex items-center justify-center">
+                    <div className="icon-container">
+                      <span className="text-4xl sm:text-6xl animate-pulse">🚌</span>
+                    </div>
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Driver Interface
@@ -222,10 +222,10 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/student-map')}
               >
                 <div className="text-center px-2 flex flex-col items-center justify-center h-full">
-                  <div className="card-icon-wrapper mb-2 sm:mb-4">
-                    <span className="text-4xl sm:text-6xl animate-pulse flex items-center justify-center">
-                      🗺️
-                    </span>
+                  <div className="card-icon-wrapper mb-2 sm:mb-4 flex items-center justify-center">
+                    <div className="icon-container">
+                      <span className="text-4xl sm:text-6xl animate-pulse">🗺️</span>
+                    </div>
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Student Map
@@ -262,10 +262,10 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/admin-login')}
               >
                 <div className="text-center px-2 flex flex-col items-center justify-center h-full">
-                  <div className="card-icon-wrapper mb-2 sm:mb-4">
-                    <span className="text-4xl sm:text-6xl animate-pulse flex items-center justify-center">
-                      ⚙️
-                    </span>
+                  <div className="card-icon-wrapper mb-2 sm:mb-4 flex items-center justify-center">
+                    <div className="icon-container">
+                      <span className="text-4xl sm:text-6xl animate-pulse">⚙️</span>
+                    </div>
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Admin Panel
