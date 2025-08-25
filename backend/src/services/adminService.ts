@@ -554,8 +554,8 @@ export class AdminService {
       // Check Supabase Auth
       const { data: authUsers, error: authCheckError } =
         await supabaseAdmin.auth.admin.listUsers();
-      const existingAuthUser = authUsers.users.find(
-        (user) => user.email?.toLowerCase() === driverData.email.toLowerCase()
+      const existingAuthUser = authUsers?.users?.find(
+        (user: any) => user?.email?.toLowerCase() === driverData.email.toLowerCase()
       );
 
       if (profilesCheckError || usersCheckError || authCheckError) {
