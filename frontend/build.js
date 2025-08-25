@@ -26,6 +26,11 @@ if (!fs.existsSync('dist')) {
   fs.mkdirSync('dist', { recursive: true });
 }
 
+// Ensure assets directory exists
+if (!fs.existsSync('dist/assets')) {
+  fs.mkdirSync('dist/assets', { recursive: true });
+}
+
 // Copy static assets
 if (fs.existsSync('public')) {
   fs.cpSync('public', 'dist', { recursive: true });
