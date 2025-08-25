@@ -51,8 +51,6 @@ const PremiumHomepage: React.FC = () => {
       setTransition('default');
     }
     
-    // setIsTransitioning(true); // This line was removed as per the new_code
-    
     // Add a small delay for smooth transition
     setTimeout(() => {
       navigate(path);
@@ -74,8 +72,10 @@ const PremiumHomepage: React.FC = () => {
           playsInline
           className="w-full h-full object-cover"
           preload="auto"
+          aria-hidden="true"
         >
           <source src="/videos/background-video.mp4" type="video/mp4" />
+          <source src="/videos/background-video.webm" type="video/webm" />
           Your browser does not support the video tag.
         </video>
 
@@ -131,7 +131,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/driver-login')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
+                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse" role="img" aria-label="Bus emoji">
                     🚌
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -169,7 +169,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/student-map')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
+                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse" role="img" aria-label="Map emoji">
                     🗺️
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -207,7 +207,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/admin-login')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
+                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse" role="img" aria-label="Settings emoji">
                     ⚙️
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -241,7 +241,7 @@ const PremiumHomepage: React.FC = () => {
         </motion.div>
 
         {/* Floating Particles Effect - Optimized for mobile */}
-        <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
           {[...Array(particleCount)].map((_, i) => (
             <motion.div
               key={i}
