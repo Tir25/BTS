@@ -25,10 +25,10 @@ const getApiUrl = () => {
 
   // Check if we're accessing from Netlify or other production domains - PRIORITY 3
   if (currentHost.includes('netlify.app') || currentHost.includes('vercel.app') || currentHost.includes('.com')) {
-    // For production deployments, use the Render backend URL
-    const productionUrl = 'https://bus-tracking-backend.onrender.com';
-    console.log('🔧 Production deployment detected:', { currentHost, productionUrl });
-    return productionUrl;
+    // For now, use local backend even in production (temporary for development)
+    const localBackendUrl = 'http://localhost:3000';
+    console.log('🔧 Production deployment detected, but using local backend for development:', { currentHost, localBackendUrl });
+    return localBackendUrl;
   }
 
   // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 4
@@ -65,10 +65,10 @@ const getWebSocketUrl = () => {
 
   // Check if we're accessing from Netlify or other production domains - PRIORITY 3
   if (currentHost.includes('netlify.app') || currentHost.includes('vercel.app') || currentHost.includes('.com')) {
-    // For production deployments, use the Render backend WebSocket URL
-    const productionWsUrl = 'wss://bus-tracking-backend.onrender.com';
-    console.log('🔧 Production WebSocket URL detected:', { currentHost, productionWsUrl });
-    return productionWsUrl;
+    // For now, use local backend WebSocket even in production (temporary for development)
+    const localWsUrl = 'ws://localhost:3000';
+    console.log('🔧 Production WebSocket detected, but using local backend for development:', { currentHost, localWsUrl });
+    return localWsUrl;
   }
 
   // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 4
