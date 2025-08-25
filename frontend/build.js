@@ -2,6 +2,20 @@ import * as esbuild from 'esbuild';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Load environment variables
+const envPath = path.resolve(process.cwd(), '..', 'env.local');
+let envVars = {};
+
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  envContent.split('\n').forEach(line => {
+    const [key, value] = line.split('=');
+    if (key && value) {
+      envVars[key.trim()] = value.trim();
+    }
+  });
+}
+
 // Ensure dist directory exists
 if (!fs.existsSync('dist')) {
   fs.mkdirSync('dist', { recursive: true });
@@ -41,6 +55,10 @@ esbuild.build({
     },
     define: {
       'process.env.NODE_ENV': '"production"',
+      'import.meta.env.VITE_SUPABASE_URL': `"${envVars.VITE_SUPABASE_URL || ''}"`,
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': `"${envVars.VITE_SUPABASE_ANON_KEY || ''}"`,
+      'import.meta.env.VITE_ADMIN_EMAILS': `"${envVars.VITE_ADMIN_EMAILS || ''}"`,
+      'import.meta.env.VITE_API_URL': `"${envVars.VITE_API_URL || ''}"`,
     },
   });
 }).then(() => {
