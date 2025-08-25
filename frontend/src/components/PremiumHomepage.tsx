@@ -40,7 +40,7 @@ const PremiumHomepage: React.FC = () => {
       const handleVideoError = (e: Event) => {
         console.error('Video loading error:', e);
         setIsVideoError(true);
-        setIsVideoLoaded(true);
+        setIsVideoLoaded(true); // Remove loading state immediately on error
       };
 
       const handleVideoCanPlay = () => {
@@ -52,6 +52,13 @@ const PremiumHomepage: React.FC = () => {
       videoRef.current.addEventListener('loadeddata', handleVideoLoad);
       videoRef.current.addEventListener('error', handleVideoError);
       videoRef.current.addEventListener('canplay', handleVideoCanPlay);
+
+      // Set a timeout to remove loading state if video takes too long
+      const timeout = setTimeout(() => {
+        console.log('Video loading timeout - removing loading state');
+        setIsVideoLoaded(true);
+        setIsVideoError(true); // Treat timeout as error
+      }, 2000); // 2 second timeout - reduced for faster fallback
 
       // Try to play the video
       const playVideo = async () => {
@@ -70,7 +77,12 @@ const PremiumHomepage: React.FC = () => {
           videoRef.current.removeEventListener('error', handleVideoError);
           videoRef.current.removeEventListener('canplay', handleVideoCanPlay);
         }
+        clearTimeout(timeout);
       };
+    } else {
+      // If no video ref, remove loading state immediately
+      setIsVideoLoaded(true);
+      setIsVideoError(true);
     }
   }, []);
 
@@ -105,7 +117,6 @@ const PremiumHomepage: React.FC = () => {
             playsInline
             className="video-background video-autoplay"
             preload="auto"
-            poster="/videos/background-video.mp4"
           >
             <source src="/videos/background-video.mp4" type="video/mp4" />
             <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4" />

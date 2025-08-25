@@ -14,8 +14,6 @@
     scroll-behavior: smooth;
     /* Prevent zoom on input focus on iOS */
     -webkit-text-size-adjust: 100%;
-    /* Ensure proper font loading */
-    font-display: swap;
   }
   
   body {
@@ -26,7 +24,6 @@
     overflow-x: hidden;
     /* Ensure proper font rendering */
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     /* Fix for Netlify case sensitivity issues */
     text-rendering: optimizeLegibility;
   }
@@ -59,7 +56,6 @@
     /* Optimize text rendering */
     * {
       -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
     }
     
     /* Reduce motion for better performance */
@@ -125,7 +121,6 @@ input[type="number"]::placeholder {
   /* Ensure proper font loading */
   .font-inter {
     font-family: 'Inter', system-ui, sans-serif;
-    font-display: swap;
   }
 
   /* Fix for video background issues */
@@ -283,6 +278,9 @@ input[type="number"]::placeholder {
     flex-shrink: 0;
     /* Ensure proper centering */
     position: relative;
+    /* Add background for better visibility */
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
   }
 
   /* Ensure emoji icons are properly centered */
@@ -294,6 +292,21 @@ input[type="number"]::placeholder {
     height: 100%;
     line-height: 1;
     text-align: center;
+    /* Ensure emoji renders properly */
+    font-size: inherit;
+    font-family: inherit;
+  }
+
+  /* Additional fix for emoji alignment */
+  .card-icon-wrapper .text-4xl,
+  .card-icon-wrapper .text-6xl {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
   }
 
   /* Fix for video loading timeout */

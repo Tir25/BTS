@@ -79,3 +79,21 @@
   for = "*.eot"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.mp4"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "video/mp4"
+
+[[headers]]
+  for = "*.webm"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "video/webm"
+
+[[headers]]
+  for = "*.ogg"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "video/ogg"
