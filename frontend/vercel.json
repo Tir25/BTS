@@ -61,11 +61,5 @@
         }
       ]
     }
-  ],
-  "env": {
-    "VITE_SUPABASE_URL": "@vite_supabase_url",
-    "VITE_SUPABASE_ANON_KEY": "@vite_supabase_anon_key",
-    "VITE_ADMIN_EMAILS": "@vite_admin_emails",
-    "VITE_API_URL": "@vite_api_url"
-  }
+  ]
 }
