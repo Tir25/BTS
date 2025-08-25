@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --skipLibCheck && vite build",
+    "build": "node build.js",
+    "build:vite": "tsc --skipLibCheck && vite build",
     "start": "vite preview --port 5173",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
@@ -44,6 +45,7 @@
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.4",
+    "esbuild": "^0.19.0",
     "postcss": "^8.4.31",
     "prettier": "^3.1.0",
     "tailwindcss": "^3.3.5",
