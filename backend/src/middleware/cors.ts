@@ -24,6 +24,10 @@ const allowedOrigins = [
   // Netlify and Vercel domains - allow all subdomains
   /^https:\/\/[a-zA-Z0-9-]+\.netlify\.app$/,
   /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/,
+  
+  // Render domains - allow all Render subdomains
+  /^https:\/\/[a-zA-Z0-9-]+\.onrender\.com$/,
+  /^wss:\/\/[a-zA-Z0-9-]+\.onrender\.com$/,
 ];
 
 const corsOptions = {
