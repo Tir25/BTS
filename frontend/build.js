@@ -48,6 +48,19 @@ try {
   console.log('⚠️ Created empty CSS file as fallback');
 }
 
+// Copy MapLibre CSS if it exists
+try {
+  const maplibreCssPath = 'node_modules/maplibre-gl/dist/maplibre-gl.css';
+  if (fs.existsSync(maplibreCssPath)) {
+    fs.copyFileSync(maplibreCssPath, 'dist/assets/maplibre-gl.css');
+    console.log('✅ MapLibre CSS copied successfully!');
+  } else {
+    console.log('⚠️ MapLibre CSS not found, skipping...');
+  }
+} catch (error) {
+  console.log('⚠️ MapLibre CSS copy failed, skipping...');
+}
+
 // Build JavaScript
 esbuild.build({
   entryPoints: ['src/main.tsx'],
@@ -91,6 +104,7 @@ esbuild.build({
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/index.css">
+    <link rel="stylesheet" href="/assets/maplibre-gl.css">
   </head>
   <body>
     <div id="root"></div>
