@@ -61,7 +61,7 @@ git push origin main
 4. **Connect to GitHub**
 5. **Select your repository:** `Tir25/BTS`
 6. **Configure build settings:**
-   - **Base directory:** `frontend`
+   - **Base directory:** `frontend` ⭐ **IMPORTANT**
    - **Build command:** `npm run build`
    - **Publish directory:** `dist`
 7. **Click "Deploy site"**
@@ -124,6 +124,26 @@ In your Netlify site dashboard:
 
 ---
 
+## 🚨 **CRITICAL FIX FOR BUILD ISSUE**
+
+### **The Problem:**
+Netlify was looking for the `dist` directory in the wrong location because the frontend is in a subdirectory.
+
+### **The Solution:**
+When configuring Netlify, you **MUST** set the **Base directory** to `frontend`.
+
+### **Correct Netlify Settings:**
+- **Base directory:** `frontend` ⭐ **CRITICAL**
+- **Build command:** `npm run build`
+- **Publish directory:** `dist`
+
+### **Why This Works:**
+- Netlify will run the build command from the `frontend` directory
+- The `dist` folder will be created inside the `frontend` directory
+- Netlify will serve files from `frontend/dist`
+
+---
+
 ## 🧪 **TESTING DEPLOYMENT**
 
 ### **1. Local Testing**
@@ -183,6 +203,7 @@ cors: {
 
 ### **Deployment** 🔄
 - [ ] Connect repository to Netlify
+- [ ] **Set Base directory to `frontend`** ⭐ **CRITICAL**
 - [ ] Configure build settings
 - [ ] Set environment variables
 - [ ] Deploy site
@@ -200,12 +221,8 @@ cors: {
 
 ### **Common Issues:**
 
-#### **1. Build Failures**
-```bash
-# Check build locally first
-cd frontend
-npm run build
-```
+#### **1. Build Failures - "dist directory does not exist"**
+**Solution:** Set Base directory to `frontend` in Netlify settings
 
 #### **2. API Connection Issues**
 - Ensure backend is running on port 3000
