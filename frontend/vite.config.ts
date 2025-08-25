@@ -15,6 +15,11 @@ export default defineConfig({
     sourcemap: false,
     target: 'esnext',
     minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
   },
   optimizeDeps: {
     force: true,
