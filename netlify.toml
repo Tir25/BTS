@@ -1,8 +1,8 @@
 [build]
-  # Build command for Vite
-  command = "npm run build"
+  # Build command for Vite from frontend directory
+  command = "cd frontend && npm run build"
   # Output directory for the built files
-  publish = "dist"
+  publish = "frontend/dist"
 
 [build.environment]
   # Node.js version

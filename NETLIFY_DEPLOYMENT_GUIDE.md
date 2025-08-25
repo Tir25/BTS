@@ -61,9 +61,9 @@ git push origin main
 4. **Connect to GitHub**
 5. **Select your repository:** `Tir25/BTS`
 6. **Configure build settings:**
-   - **Base directory:** `frontend` ⭐ **IMPORTANT**
-   - **Build command:** `npm run build`
-   - **Publish directory:** `dist`
+   - **Base directory:** Leave empty (use root)
+   - **Build command:** `cd frontend && npm run build` (auto-detected from netlify.toml)
+   - **Publish directory:** `frontend/dist` (auto-detected from netlify.toml)
 7. **Click "Deploy site"**
 
 #### **Option B: Deploy via Netlify CLI**
@@ -74,20 +74,20 @@ npm install -g netlify-cli
 # Login to Netlify
 netlify login
 
-# Deploy from frontend directory
-cd frontend
-netlify deploy --prod --dir=dist
+# Deploy from root directory
+cd ..
+netlify deploy --prod
 ```
 
 ---
 
 ## ⚙️ **NETLIFY CONFIGURATION**
 
-### **netlify.toml** ✅ **Already Created**
+### **netlify.toml** ✅ **Created in Root Directory**
 ```toml
 [build]
-  command = "npm run build"
-  publish = "dist"
+  command = "cd frontend && npm run build"
+  publish = "frontend/dist"
 
 [[redirects]]
   from = "/*"
@@ -100,6 +100,9 @@ netlify deploy --prod --dir=dist
 ```
 
 ### **Key Features:**
+- ✅ **Root Configuration:** netlify.toml in repository root
+- ✅ **Correct Build Path:** Builds from frontend directory
+- ✅ **Correct Publish Path:** Serves from frontend/dist
 - ✅ **SPA Routing:** All routes redirect to index.html
 - ✅ **Security Headers:** XSS protection, frame options
 - ✅ **Caching:** Optimized for static assets
@@ -130,17 +133,18 @@ In your Netlify site dashboard:
 Netlify was looking for the `dist` directory in the wrong location because the frontend is in a subdirectory.
 
 ### **The Solution:**
-When configuring Netlify, you **MUST** set the **Base directory** to `frontend`.
+Created `netlify.toml` in the **root directory** with the correct paths.
 
-### **Correct Netlify Settings:**
-- **Base directory:** `frontend` ⭐ **CRITICAL**
-- **Build command:** `npm run build`
-- **Publish directory:** `dist`
+### **Correct Configuration:**
+- **Build command:** `cd frontend && npm run build`
+- **Publish directory:** `frontend/dist`
+- **Configuration file:** `netlify.toml` in repository root
 
 ### **Why This Works:**
-- Netlify will run the build command from the `frontend` directory
-- The `dist` folder will be created inside the `frontend` directory
-- Netlify will serve files from `frontend/dist`
+- Netlify reads the configuration from the root
+- Build command changes to frontend directory first
+- Publish path points to the correct dist location
+- No need to set base directory in Netlify UI
 
 ---
 
@@ -198,13 +202,12 @@ cors: {
 - [x] Backend runs on localhost:3000
 - [x] Frontend builds successfully
 - [x] Environment variables configured
-- [x] netlify.toml created
+- [x] netlify.toml created in root
 - [x] All changes committed to Git
 
 ### **Deployment** 🔄
 - [ ] Connect repository to Netlify
-- [ ] **Set Base directory to `frontend`** ⭐ **CRITICAL**
-- [ ] Configure build settings
+- [ ] **Use default settings (no base directory needed)**
 - [ ] Set environment variables
 - [ ] Deploy site
 
@@ -222,7 +225,7 @@ cors: {
 ### **Common Issues:**
 
 #### **1. Build Failures - "dist directory does not exist"**
-**Solution:** Set Base directory to `frontend` in Netlify settings
+**Solution:** ✅ **FIXED** - Using root netlify.toml with correct paths
 
 #### **2. API Connection Issues**
 - Ensure backend is running on port 3000
