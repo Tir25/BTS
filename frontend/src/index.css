@@ -318,6 +318,24 @@ input[type="number"]::placeholder {
     display: grid;
     place-items: center;
   }
+
+  /* Original glass card transition styles */
+  .glass-card-transition {
+    backdrop-filter: blur(20px);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 1rem;
+  }
+
+  .video-zoom-transition {
+    transform-origin: center;
+    transition: transform 0.6s ease-in-out;
+  }
+
+  .map-zoom-transition {
+    transform-origin: center;
+    transition: transform 0.8s ease-out;
+  }
 }
 
 @layer components {
