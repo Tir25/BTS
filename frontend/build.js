@@ -28,6 +28,7 @@ if (!fs.existsSync('dist')) {
 // Copy static assets
 if (fs.existsSync('public')) {
   fs.cpSync('public', 'dist', { recursive: true });
+  console.log('✅ Static assets copied successfully!');
 }
 
 // Build CSS first
