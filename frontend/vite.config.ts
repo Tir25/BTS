@@ -12,19 +12,6 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false,
-    target: 'esnext',
-    minify: 'esbuild',
-    rollupOptions: {
-      output: {
-        manualChunks: undefined,
-      },
-    },
-  },
-  optimizeDeps: {
-    force: true,
-  },
-  define: {
-    global: 'globalThis',
+    sourcemap: true,
   },
 });

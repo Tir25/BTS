@@ -24,18 +24,10 @@ const getApiUrl = () => {
 
   // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 2
   if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
-    // We're on a network IP or production domain, use HTTPS for production
-    if (currentProtocol === 'https:') {
-      // For production (HTTPS), use the Render backend URL
-      const productionUrl = 'https://bus-tracking-backend-1u04.onrender.com';
-      console.log('🔧 Production HTTPS detected:', { currentHost, productionUrl });
-      return productionUrl;
-    } else {
-      // For local network testing, use HTTP
-      const networkUrl = `http://${currentHost}:3000`;
-      console.log('🔧 Network IP detected:', { currentHost, networkUrl });
-      return networkUrl;
-    }
+    // We're on a network IP, use the same IP for backend
+    const networkUrl = `http://${currentHost}:3000`;
+    console.log('🔧 Network IP detected:', { currentHost, networkUrl });
+    return networkUrl;
   }
 
   // Default to localhost for local development
@@ -63,18 +55,10 @@ const getWebSocketUrl = () => {
 
   // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 2
   if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
-    // We're on a network IP or production domain, use WSS for production
-    if (currentProtocol === 'https:') {
-      // For production (HTTPS), use WSS
-      const wssUrl = 'wss://bus-tracking-backend-1u04.onrender.com';
-      console.log('🔧 WebSocket production WSS URL:', wssUrl);
-      return wssUrl;
-    } else {
-      // For local network testing, use WS
-      const wsUrl = `ws://${currentHost}:3000`;
-      console.log('🔧 WebSocket network URL:', wsUrl);
-      return wsUrl;
-    }
+    // We're on a network IP, use the same IP for WebSocket
+    const wsUrl = `ws://${currentHost}:3000`;
+    console.log('🔧 WebSocket network URL:', wsUrl);
+    return wsUrl;
   }
 
   // Default to localhost for local development

@@ -3,7 +3,7 @@ import { Socket } from 'socket.io-client';
 import { supabase } from '../config/supabase';
 import { websocketService } from '../services/websocket';
 import maplibregl from 'maplibre-gl';
-// MapLibre CSS is loaded in HTML head
+import 'maplibre-gl/dist/maplibre-gl.css';
 import './DriverInterface.css';
 
 interface BusInfo {

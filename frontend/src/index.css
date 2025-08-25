@@ -1,7 +1,8 @@
 /* Import Inter font for premium typography */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
-/* MapLibre GL CSS - Loaded in HTML head to avoid path conflicts */
+/* MapLibre GL CSS */
+@import 'maplibre-gl/dist/maplibre-gl.css';
 
 @tailwind base;
 @tailwind components;
