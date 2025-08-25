@@ -179,6 +179,42 @@ try {
         case 'z-50':
           cssRules.push('z-index: 50;');
           break;
+        case 'bg-gradient-to-br':
+          cssRules.push('background: linear-gradient(to bottom right, var(--tw-gradient-stops));');
+          break;
+        case 'from-blue-900':
+          cssRules.push('--tw-gradient-from: #1e3a8a; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(30, 58, 138, 0));');
+          break;
+        case 'via-purple-900':
+          cssRules.push('--tw-gradient-stops: var(--tw-gradient-from), #581c87, var(--tw-gradient-to, rgba(88, 28, 135, 0));');
+          break;
+        case 'to-indigo-900':
+          cssRules.push('--tw-gradient-to: #312e81;');
+          break;
+        case 'animate-pulse':
+          cssRules.push('animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;');
+          break;
+        case 'bg-slate-900':
+          cssRules.push('background-color: #0f172a;');
+          break;
+        case 'text-white':
+          cssRules.push('color: white;');
+          break;
+        case 'bg-black/40':
+          cssRules.push('background-color: rgba(0, 0, 0, 0.4);');
+          break;
+        case 'bg-black/20':
+          cssRules.push('background-color: rgba(0, 0, 0, 0.2);');
+          break;
+        case 'bg-black/60':
+          cssRules.push('background-color: rgba(0, 0, 0, 0.6);');
+          break;
+        case 'bg-slate-900':
+          cssRules.push('background-color: #0f172a;');
+          break;
+        case 'inset-0':
+          cssRules.push('top: 0; right: 0; bottom: 0; left: 0;');
+          break;
         default:
           // For unknown classes, add a comment
           cssRules.push(`/* @apply ${cls} - class not processed */`);
@@ -305,11 +341,61 @@ try {
 .font-medium { font-weight: 500; }
 .font-semibold { font-weight: 600; }
 
-/* Basic text alignment */
-.text-left { text-align: left; }
-.text-center { text-align: center; }
-.text-right { text-align: right; }
-.text-justify { text-align: justify; }
+ /* Basic text alignment */
+ .text-left { text-align: left; }
+ .text-center { text-align: center; }
+ .text-right { text-align: right; }
+ .text-justify { text-align: justify; }
+ 
+ /* Animation utilities */
+ @keyframes pulse {
+   0%, 100% { opacity: 1; }
+   50% { opacity: .5; }
+ }
+ 
+ .animate-pulse {
+   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+ }
+ 
+ /* Gradient utilities */
+ .bg-gradient-to-br {
+   background: linear-gradient(to bottom right, var(--tw-gradient-stops));
+ }
+ 
+ .from-blue-900 {
+   --tw-gradient-from: #1e3a8a;
+   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(30, 58, 138, 0));
+ }
+ 
+ .via-purple-900 {
+   --tw-gradient-stops: var(--tw-gradient-from), #581c87, var(--tw-gradient-to, rgba(88, 28, 135, 0));
+ }
+ 
+ .to-indigo-900 {
+   --tw-gradient-to: #312e81;
+ }
+ 
+ /* Opacity utilities */
+ .bg-black\\/40 { background-color: rgba(0, 0, 0, 0.4); }
+ .bg-black\\/20 { background-color: rgba(0, 0, 0, 0.2); }
+ .bg-black\\/60 { background-color: rgba(0, 0, 0, 0.6); }
+ 
+ /* Position utilities */
+ .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+ 
+ /* Loading spinner */
+ .loading-spinner {
+   width: 50px;
+   height: 50px;
+   border: 3px solid rgba(255, 255, 255, 0.3);
+   border-radius: 50%;
+   border-top-color: #fff;
+   animation: spin 1s ease-in-out infinite;
+ }
+ 
+ @keyframes spin {
+   to { transform: rotate(360deg); }
+ }
 `;
 
   fs.writeFileSync('dist/assets/index.css', cssContent);

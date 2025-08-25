@@ -66,7 +66,7 @@ const PremiumHomepage: React.FC = () => {
     <div className="relative min-h-screen overflow-hidden">
       {/* Video Background */}
       <div className="absolute inset-0 z-0">
-        {/* Video background with multiple fallbacks */}
+        {/* Enhanced video background with better error handling */}
         <video
           ref={videoRef}
           autoPlay
@@ -74,10 +74,11 @@ const PremiumHomepage: React.FC = () => {
           muted
           playsInline
           className="w-full h-full object-cover"
-          preload="metadata"
+          preload="none"
           onError={(e) => {
             console.warn('Video failed to load, using fallback background');
             e.currentTarget.style.display = 'none';
+            setIsVideoLoaded(true); // Set loaded to show content
           }}
           onLoadStart={() => {
             console.log('Video loading started');
@@ -86,22 +87,44 @@ const PremiumHomepage: React.FC = () => {
             console.log('Video can play');
             setIsVideoLoaded(true);
           }}
+          onLoadedData={() => {
+            console.log('Video data loaded');
+            setIsVideoLoaded(true);
+          }}
         >
-          <source src="/videos/background-video.mp4" type="video/mp4; codecs=avc1.42E01E, mp4a.40.2" />
-          <source src="/videos/countryside-bus.mp4" type="video/mp4; codecs=avc1.42E01E, mp4a.40.2" />
-          <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4; codecs=avc1.42E01E, mp4a.40.2" />
+          <source src="/videos/background-video.mp4" type="video/mp4" />
+          <source src="/videos/countryside-bus.mp4" type="video/mp4" />
+          <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4" />
           Your browser does not support the video tag.
         </video>
         
-        {/* Fallback background gradient if video fails */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900" />
+        {/* Enhanced fallback background with animated gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 animate-pulse" />
+        
+        {/* Animated background particles as alternative */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full">
+            {[...Array(20)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-2 h-2 bg-white/20 rounded-full animate-pulse"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: `${2 + Math.random() * 2}s`
+                }}
+              />
+            ))}
+          </div>
+        </div>
 
         {/* Video overlay for better text readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
 
-        {/* Loading overlay */}
+        {/* Loading overlay - Show briefly then hide */}
         {!isVideoLoaded && (
-          <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900 flex items-center justify-center z-50">
             <div className="loading-spinner" />
           </div>
         )}
