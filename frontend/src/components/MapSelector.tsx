@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+// MapLibre CSS is loaded in HTML head
 import { GANPAT_UNIVERSITY } from '../utils/coordinates';
 
 interface MapSelectorProps {

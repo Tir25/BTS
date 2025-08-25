@@ -74,10 +74,18 @@ const PremiumHomepage: React.FC = () => {
           playsInline
           className="w-full h-full object-cover"
           preload="auto"
+          onError={(e) => {
+            console.warn('Video failed to load, using fallback background');
+            e.currentTarget.style.display = 'none';
+          }}
         >
           <source src="/videos/background-video.mp4" type="video/mp4" />
+          <source src="/videos/countryside-bus.mp4" type="video/mp4" />
           Your browser does not support the video tag.
         </video>
+        
+        {/* Fallback background gradient if video fails */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900" />
 
         {/* Video overlay for better text readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
