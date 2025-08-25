@@ -1,6 +1,6 @@
-const esbuild = require('esbuild');
-const fs = require('fs');
-const path = require('path');
+import * as esbuild from 'esbuild';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Ensure dist directory exists
 if (!fs.existsSync('dist')) {
