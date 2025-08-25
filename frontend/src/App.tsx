@@ -1,8 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { apiService } from './services/api';
-import { authService } from './services/authService';
-import { HealthResponse, User } from './types';
 import DriverInterface from './components/DriverInterface';
 import DriverLogin from './components/DriverLogin';
 import DriverDashboard from './components/DriverDashboard';
@@ -16,70 +13,9 @@ import { initAllPerformanceMonitoring } from './utils/performance';
 function App() {
   console.log('🚀 App component is rendering...');
 
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authState, setAuthState] = useState<{
-    isAuthenticated: boolean;
-    user: User | null;
-    loading: boolean;
-  }>({
-    isAuthenticated: false,
-    user: null,
-    loading: true,
-  });
-
   useEffect(() => {
-    const checkHealth = async () => {
-      try {
-        setLoading(true);
-
-        // Wait for auth service to be initialized before making API calls
-        while (!authService.isInitialized()) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-
-        const healthData = await apiService.getHealth();
-        setHealth(healthData);
-        setError(null);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to connect to backend'
-        );
-        setHealth(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkHealth();
-    
     // Initialize performance monitoring
     initAllPerformanceMonitoring();
-  }, []);
-
-  // Global auth state listener
-  useEffect(() => {
-    const updateAuthState = () => {
-      const user = authService.getCurrentUser();
-      const profile = authService.getCurrentProfile();
-
-      setAuthState({
-        isAuthenticated: !!user,
-        user: profile || null,
-        loading: false,
-      });
-    };
-
-    // Set up auth state listener
-    authService.onAuthStateChange(updateAuthState);
-
-    // Initial auth state check
-    updateAuthState();
-
-    return () => {
-      authService.removeAuthStateChangeListener();
-    };
   }, []);
 
   // 404 Not Found Component
