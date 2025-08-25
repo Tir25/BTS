@@ -1,11 +1,10 @@
 [build]
   base = "frontend"
-  command = "npm install --no-optional && npm run build"
+  command = "npm install && npm run build"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "18"
-  NPM_FLAGS = "--no-optional"
 
 [[headers]]
   for = "/*"
