@@ -151,6 +151,22 @@ input[type="number"]::placeholder {
   /* Fix for Netlify asset loading issues */
   .asset-fallback {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    animation: gradientShift 8s ease-in-out infinite;
+  }
+
+  @keyframes gradientShift {
+    0%, 100% {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    25% {
+      background: linear-gradient(135deg, #764ba2 0%, #f093fb 100%);
+    }
+    50% {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+    75% {
+      background: linear-gradient(135deg, #f5576c 0%, #667eea 100%);
+    }
   }
 
   /* Ensure proper z-index stacking */

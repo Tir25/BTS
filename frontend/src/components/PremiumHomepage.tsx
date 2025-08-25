@@ -33,18 +33,19 @@ const PremiumHomepage: React.FC = () => {
 
       // Handle video loading
       const handleVideoLoad = () => {
-        console.log('Video loaded successfully');
+        console.log('✅ Video loaded successfully');
         setIsVideoLoaded(true);
       };
       
       const handleVideoError = (e: Event) => {
-        console.error('Video loading error:', e);
+        console.error('❌ Video loading error:', e);
+        console.log('🔄 Falling back to gradient background');
         setIsVideoError(true);
         setIsVideoLoaded(true); // Remove loading state immediately on error
       };
 
       const handleVideoCanPlay = () => {
-        console.log('Video can play');
+        console.log('✅ Video can play');
         setIsVideoLoaded(true);
       };
 
@@ -55,17 +56,19 @@ const PremiumHomepage: React.FC = () => {
 
       // Set a timeout to remove loading state if video takes too long
       const timeout = setTimeout(() => {
-        console.log('Video loading timeout - removing loading state');
+        console.log('⏰ Video loading timeout - falling back to gradient');
         setIsVideoLoaded(true);
         setIsVideoError(true); // Treat timeout as error
-      }, 2000); // 2 second timeout - reduced for faster fallback
+      }, 1500); // 1.5 second timeout - even faster fallback
 
       // Try to play the video
       const playVideo = async () => {
         try {
+          console.log('🎬 Attempting to play video...');
           await videoRef.current?.play();
+          console.log('✅ Video autoplay successful');
         } catch (error) {
-          console.log('Autoplay failed, but video will play on user interaction');
+          console.log('⚠️ Autoplay failed, but video will play on user interaction');
         }
       };
 
@@ -81,6 +84,7 @@ const PremiumHomepage: React.FC = () => {
       };
     } else {
       // If no video ref, remove loading state immediately
+      console.log('⚠️ No video ref available - using gradient background');
       setIsVideoLoaded(true);
       setIsVideoError(true);
     }
