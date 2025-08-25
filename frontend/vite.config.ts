@@ -12,6 +12,20 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: process.env.NODE_ENV === 'development', // Only enable in development
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          ui: ['framer-motion', '@headlessui/react'],
+          maps: ['maplibre-gl'],
+          charts: ['recharts'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000, // Increase warning limit for larger chunks
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'framer-motion', 'maplibre-gl'],
   },
 });
