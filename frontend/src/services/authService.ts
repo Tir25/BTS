@@ -86,32 +86,32 @@ class AuthService {
 
   private async loadUserProfile(userId: string): Promise<void> {
     try {
-
       // Check if user has dual roles in auth metadata
       const authRoles = this.currentUser?.user_metadata?.roles;
-      const isDualRoleUser = authRoles && Array.isArray(authRoles) && authRoles.length > 1;
-      
+      const isDualRoleUser =
+        authRoles && Array.isArray(authRoles) && authRoles.length > 1;
+
       if (isDualRoleUser) {
-        
-        
         // For dual-role users, determine role based on current interface
         const currentPath = window.location.pathname;
         let role: 'admin' | 'driver' | 'student' = 'admin'; // Default to admin
-        
+
         if (currentPath.includes('/driver')) {
           role = 'driver';
         } else if (currentPath.includes('/admin')) {
           role = 'admin';
         } else {
           // If not on a specific interface, check if admin email
-          const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map((email: string) => email.trim().toLowerCase()) || [
-            'siddharthmali.211@gmail.com',
-          ];
-          role = adminEmails.includes(this.currentUser?.email?.toLowerCase() || '') ? 'admin' : 'driver';
+          const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
+            (email: string) => email.trim().toLowerCase()
+          ) || ['siddharthmali.211@gmail.com'];
+          role = adminEmails.includes(
+            this.currentUser?.email?.toLowerCase() || ''
+          )
+            ? 'admin'
+            : 'driver';
         }
-        
-        
-        
+
         // Load profile from database but override role
         const { data: profile, error } = await supabase
           .from('profiles')
@@ -125,7 +125,6 @@ class AuthService {
           return;
         }
 
-        
         this.currentProfile = {
           id: profile.id,
           email: this.currentUser?.email || '',
@@ -153,11 +152,26 @@ class AuthService {
         return;
       }
 
-      
+      // Check if this is a known admin user - prioritize admin email over database role
+      const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
+        (email: string) => email.trim().toLowerCase()
+      ) || [
+        'siddharthmali.211@gmail.com', // Keep this as fallback for development
+      ];
+
+      const isAdmin = adminEmails.includes(
+        this.currentUser?.email?.toLowerCase() || ''
+      );
+      const role = isAdmin ? 'admin' : profile.role;
+
+      console.log(
+        `🔍 User ${this.currentUser?.email} - Database role: ${profile.role}, Admin check: ${isAdmin}, Final role: ${role}`
+      );
+
       this.currentProfile = {
         id: profile.id,
         email: this.currentUser?.email || '',
-        role: profile.role,
+        role: role,
         full_name: profile.full_name,
         first_name: profile.full_name?.split(' ')[0] || '',
         last_name: profile.full_name?.split(' ').slice(1).join(' ') || '',
@@ -177,7 +191,9 @@ class AuthService {
     console.log('🔄 Setting temporary profile with role check for user login');
 
     // Check if this is a known admin user - use environment variable
-    const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map((email: string) => email.trim().toLowerCase()) || [
+    const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
+      (email: string) => email.trim().toLowerCase()
+    ) || [
       'siddharthmali.211@gmail.com', // Keep this as fallback for development
     ];
 
@@ -578,8 +594,6 @@ class AuthService {
       isAdmin: this.isAdmin(),
     };
   }
-
-
 
   // Method to force a fresh login and clear any stale sessions
   async forceFreshLogin(): Promise<{ success: boolean; error?: string }> {

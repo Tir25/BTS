@@ -15,7 +15,7 @@ const allowedOrigins = [
   // VS Code tunnel origins - more restrictive
   /^https:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
   /^wss:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
-  
+
   // Network access for cross-laptop testing
   /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
   /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,

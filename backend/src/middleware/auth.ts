@@ -78,15 +78,29 @@ export const authenticateUser = async (
         message: 'User profile not found. Please contact administrator.',
       });
       return;
-    } else {
-      // Attach user data to request
-      req.user = {
-        id: profile.id,
-        email: user.email || '',
-        role: profile.role,
-        full_name: profile.full_name,
-      };
     }
+
+    // Check if this is a known admin user - prioritize admin email over database role
+    const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(
+      (email: string) => email.trim().toLowerCase()
+    ) || [
+      'siddharthmali.211@gmail.com', // Keep this as fallback for development
+    ];
+
+    const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
+    const role = isAdmin ? 'admin' : profile.role;
+
+    console.log(
+      `🔍 Backend Auth - User ${user.email} - Database role: ${profile.role}, Admin check: ${isAdmin}, Final role: ${role}`
+    );
+
+    // Attach user data to request
+    req.user = {
+      id: profile.id,
+      email: user.email || '',
+      role: role,
+      full_name: profile.full_name,
+    };
 
     next();
   } catch (error) {

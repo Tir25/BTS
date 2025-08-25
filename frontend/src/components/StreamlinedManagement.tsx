@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { adminApiService } from '../services/adminApiService';
 
-
 import MapSelector from './MapSelector';
-// import { authService } from '../services/authService';
 
 interface Bus {
   id?: string;
@@ -34,8 +32,6 @@ interface Driver {
   role: string;
   assigned_bus_id?: string;
 }
-
-
 
 interface AssignedDriver {
   driver_id: string;
@@ -92,6 +88,7 @@ export default function StreamlinedManagement() {
 
   const [showBusForm, setShowBusForm] = useState(false);
   const [showDriverForm, setShowDriverForm] = useState(false);
+  const [showCreateDriverForm, setShowCreateDriverForm] = useState(false);
   const [showRouteForm, setShowRouteForm] = useState(false);
 
   // Modal states for details and editing
@@ -119,6 +116,18 @@ export default function StreamlinedManagement() {
     role: 'driver',
     assigned_bus_id: '',
   });
+
+  const [createDriverForm, setCreateDriverForm] = useState({
+    email: '',
+    first_name: '',
+    last_name: '',
+    phone: '',
+    password: '',
+    confirm_password: '',
+  });
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [selectedSupabaseDriver, setSelectedSupabaseDriver] =
     useState<string>('');
@@ -148,7 +157,7 @@ export default function StreamlinedManagement() {
   } | null>(null);
 
   const loadAllData = useCallback(async () => {
-    console.log('🔄 Starting to load all data...');
+    // console.log('🔄 Starting to load all data...');
     setLoading(true);
     setError(null);
 
@@ -161,26 +170,53 @@ export default function StreamlinedManagement() {
       ]);
 
       if (busesResult.success && busesResult.data) setBuses(busesResult.data);
-      if (driversResult.success && driversResult.data)
-        setDrivers(driversResult.data);
+      if (driversResult.success && driversResult.data) {
+        // Additional frontend deduplication as safety measure
+        const uniqueDriversMap = new Map();
+        driversResult.data.forEach((driver: Driver) => {
+          const idKey = driver.id;
+
+          if (!uniqueDriversMap.has(idKey)) {
+            // First time seeing this ID
+            uniqueDriversMap.set(idKey, driver);
+          } else {
+            // We already have this ID, check if we should replace it
+            const existing = uniqueDriversMap.get(idKey);
+
+            // Prefer the entry with email over null email
+            if (!existing.email && driver.email) {
+              uniqueDriversMap.set(idKey, driver);
+            }
+            // If both have emails, prefer the one with more complete data
+            else if (existing.email && driver.email) {
+              // Keep the existing one unless the new one has more complete data
+              if (!existing.first_name && driver.first_name) {
+                uniqueDriversMap.set(idKey, driver);
+              }
+            }
+          }
+        });
+        const uniqueDrivers = Array.from(uniqueDriversMap.values());
+        setDrivers(uniqueDrivers);
+      }
       if (routesResult.success && routesResult.data) {
-        console.log('🔍 Routes loaded:', routesResult.data);
-        console.log(
-          '🔍 Routes with city info:',
-          routesResult.data.map((route) => ({
-            id: route.id,
-            name: route.name,
-            city: route.city,
-            cityType: typeof route.city,
-          }))
-        );
+        // console.log('🔍 Routes loaded:', routesResult.data);
+        // console.log(
+        //   '🔍 Routes with city info:',
+        //   routesResult.data.map((route) => ({
+        //     id: route.id,
+        //     name: route.name,
+        //     city: route.city,
+        //     cityType: typeof route.city,
+        //   }))
+        // );
         setRoutes(routesResult.data);
       }
 
-      console.log('✅ Core data loaded successfully');
+      // console.log('✅ Core data loaded successfully');
 
       // Backend API already loaded drivers above, no need for separate Supabase loading
-      console.log('✅ Using backend API drivers data');
+      // console.log('✅ Using backend API drivers data');
 
       // Load assigned drivers
       await loadAssignedDrivers();
@@ -196,7 +232,7 @@ export default function StreamlinedManagement() {
       setError('An error occurred while loading data');
       console.error('❌ Data loading error:', err);
     } finally {
-      console.log('🏁 Finished loading data');
+      // console.log('🏁 Finished loading data');
       setLoading(false);
     }
   }, []);
@@ -209,8 +245,36 @@ export default function StreamlinedManagement() {
     try {
       const result = await adminApiService.getAssignedDrivers();
       if (result.success && result.data) {
-        setAssignedDrivers(result.data);
-        console.log('✅ Assigned drivers loaded:', result.data.length);
+        // Additional frontend deduplication as safety measure
+        const uniqueAssignedDriversMap = new Map();
+        result.data.forEach((driver: AssignedDriver) => {
+          const idKey = driver.driver_id;
+
+          if (!uniqueAssignedDriversMap.has(idKey)) {
+            // First time seeing this ID
+            uniqueAssignedDriversMap.set(idKey, driver);
+          } else {
+            // We already have this ID, check if we should replace it
+            const existing = uniqueAssignedDriversMap.get(idKey);
+
+            // Prefer the entry with email over null email
+            if (!existing.driver_email && driver.driver_email) {
+              uniqueAssignedDriversMap.set(idKey, driver);
+            }
+            // If both have emails, prefer the one with more complete data
+            else if (existing.driver_email && driver.driver_email) {
+              // Keep the existing one unless the new one has more complete data
+              if (!existing.driver_name && driver.driver_name) {
+                uniqueAssignedDriversMap.set(idKey, driver);
+              }
+            }
+          }
+        });
+        const uniqueAssignedDrivers = Array.from(
+          uniqueAssignedDriversMap.values()
+        );
+        setAssignedDrivers(uniqueAssignedDrivers);
+        // console.log('✅ Assigned drivers loaded:', uniqueAssignedDrivers.length);
       } else {
         console.warn('⚠️ Failed to load assigned drivers:', result.error);
         setAssignedDrivers([]);
@@ -220,28 +284,6 @@ export default function StreamlinedManagement() {
       setAssignedDrivers([]);
     }
   };
-
-  // Selection handlers - commented out to fix TypeScript errors
-  // const handleSelectAll = (type: 'buses' | 'drivers' | 'routes') => {
-  //   // Bulk delete functionality removed
-  // };
-
-  // const handleSelectItem = (type: 'buses' | 'drivers' | 'routes', id: string) => {
-  //   // Bulk delete functionality removed
-  // };
-
-  // // Bulk delete handlers
-  // const handleBulkDeleteBuses = async () => {
-  //   // Bulk delete functionality removed
-  // };
-
-  // const handleBulkDeleteDrivers = async () => {
-  //   // Bulk delete functionality removed
-  // };
-
-  // const handleBulkDeleteRoutes = async () => {
-  //   // Bulk delete functionality removed
-  // };
 
   // Bus Management Functions
   const handleCreateBus = async (e: React.FormEvent) => {
@@ -338,7 +380,134 @@ export default function StreamlinedManagement() {
 
   // Driver Management Functions
 
-  // Removed unused handleDeleteDriver function
+  const handleCreateDriver = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    // Enhanced validation
+    if (
+      !createDriverForm.email ||
+      !createDriverForm.first_name ||
+      !createDriverForm.last_name ||
+      !createDriverForm.password
+    ) {
+      setError(
+        'All fields are required: Email, First Name, Last Name, and Password'
+      );
+      setLoading(false);
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(createDriverForm.email)) {
+      setError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+
+    // Validate password
+    if (createDriverForm.password !== createDriverForm.confirm_password) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+
+    if (createDriverForm.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      setLoading(false);
+      return;
+    }
+
+    // Check if email already exists in current drivers list
+    const existingDriver = drivers.find(
+      (driver) => driver.email === createDriverForm.email
+    );
+
+    if (existingDriver) {
+      setError('Driver with this email already exists');
+      setLoading(false);
+      return;
+    }
+
+    // Prevent duplicate submissions
+    if (loading) {
+      return;
+    }
+
+    try {
+      const driverData = {
+        email: createDriverForm.email,
+        first_name: createDriverForm.first_name,
+        last_name: createDriverForm.last_name,
+        phone: createDriverForm.phone,
+        role: 'driver',
+        password: createDriverForm.password,
+      };
+
+      const result = await adminApiService.createDriver(driverData);
+
+      if (result.success && result.data) {
+        // Refresh the entire driver list to get the latest data
+        const driversResult = await adminApiService.getAllDrivers();
+        if (driversResult.success && driversResult.data) {
+          // Additional frontend deduplication as safety measure
+          const uniqueDriversMap = new Map();
+          driversResult.data.forEach((driver: Driver) => {
+            const idKey = driver.id;
+
+            if (!uniqueDriversMap.has(idKey)) {
+              // First time seeing this ID
+              uniqueDriversMap.set(idKey, driver);
+            } else {
+              // We already have this ID, check if we should replace it
+              const existing = uniqueDriversMap.get(idKey);
+
+              // Prefer the entry with email over null email
+              if (!existing.email && driver.email) {
+                uniqueDriversMap.set(idKey, driver);
+              }
+              // If both have emails, prefer the one with more complete data
+              else if (existing.email && driver.email) {
+                // Keep the existing one unless the new one has more complete data
+                if (!existing.first_name && driver.first_name) {
+                  uniqueDriversMap.set(idKey, driver);
+                }
+              }
+            }
+          });
+          const uniqueDrivers = Array.from(uniqueDriversMap.values());
+          setDrivers(uniqueDrivers);
+        }
+
+        // Reset form
+        setCreateDriverForm({
+          email: '',
+          first_name: '',
+          last_name: '',
+          phone: '',
+          password: '',
+          confirm_password: '',
+        });
+        setShowPassword(false);
+        setShowConfirmPassword(false);
+        setShowCreateDriverForm(false);
+
+        setSuccessMessage(
+          `Driver ${result.data.first_name} ${result.data.last_name} created successfully! They can now login with their credentials.`
+        );
+        setTimeout(() => setSuccessMessage(null), 5000);
+      } else {
+        setError(result.error || 'Failed to create driver');
+      }
+    } catch (err) {
+      setError('An error occurred while creating driver');
+      console.error('❌ Error creating driver:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAssignBusToDriver = async (driverId: string, busId: string) => {
     setLoading(true);
@@ -384,6 +553,43 @@ export default function StreamlinedManagement() {
     }
   };
 
+  const handleDeleteDriver = async (
+    driverId: string,
+    firstName: string,
+    lastName: string
+  ) => {
+    const driverName = `${firstName} ${lastName}`;
+    const confirmMessage = `Are you sure you want to delete driver "${driverName}"?\n\nThis action will:\n• Remove the driver from all database tables\n• Delete their Supabase Auth account\n• Unassign them from any buses\n• This action cannot be undone!`;
+
+    if (!confirm(confirmMessage)) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await adminApiService.deleteDriver(driverId);
+      if (result.success && result.data) {
+        // Remove driver from local state
+        setDrivers(drivers.filter((driver) => driver.id !== driverId));
+        setAssignedDrivers(
+          assignedDrivers.filter((assigned) => assigned.driver_id !== driverId)
+        );
+
+        setSuccessMessage(
+          `Driver "${driverName}" deleted successfully from all systems!`
+        );
+        setTimeout(() => setSuccessMessage(null), 5000);
+      } else {
+        setError(result.error || `Failed to delete driver "${driverName}"`);
+      }
+    } catch (err) {
+      setError(`An error occurred while deleting driver "${driverName}"`);
+      console.error('❌ Error deleting driver:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Route Management Functions
   const handleCreateRoute = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -419,8 +625,6 @@ export default function StreamlinedManagement() {
         custom_origin_coordinates: selectedOrigin?.coordinates,
         bus_stops: [],
       };
-
-
 
       const result = await adminApiService.createRoute(routeData);
       if (result.success && result.data) {
@@ -507,12 +711,12 @@ export default function StreamlinedManagement() {
   };
 
   const getDriverNameFromBus = (bus: Bus) => {
-    console.log('🔍 Getting driver name for bus:', {
-      driver_full_name: bus.driver_full_name,
-      driver_first_name: bus.driver_first_name,
-      driver_last_name: bus.driver_last_name,
-      assigned_driver_id: bus.assigned_driver_id,
-    });
+    // console.log('🔍 Getting driver name for bus:', {
+    //   driver_full_name: bus.driver_full_name,
+    //   driver_first_name: bus.driver_first_name,
+    //   driver_last_name: bus.driver_last_name,
+    //   assigned_driver_id: bus.assigned_driver_id,
+    // });
 
     if (bus.driver_full_name) {
       return bus.driver_full_name;
@@ -534,7 +738,7 @@ export default function StreamlinedManagement() {
 
   // Modal and Edit Handlers
   const handleViewBusDetails = (bus: Bus) => {
-    console.log('🔍 Bus details for modal:', bus);
+    // console.log('🔍 Bus details for modal:', bus);
     setSelectedBus(bus);
     setEditingBus(false);
     setShowBusDetails(true);
@@ -910,7 +1114,7 @@ export default function StreamlinedManagement() {
                           <div className="text-sm font-medium text-gray-900">
                             {bus.number_plate}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-gray-900">
                             Capacity: {bus.capacity} | {bus.model} ({bus.year})
                           </div>
                         </div>
@@ -978,11 +1182,17 @@ export default function StreamlinedManagement() {
                               handleAssignRouteToBus(bus.id!, e.target.value)
                             }
                             value={bus.route_id || ''}
-                            className="text-sm border border-gray-300 rounded px-2 py-1"
+                            className="text-sm border border-gray-300 rounded px-2 py-1 text-gray-900 bg-white"
                           >
-                            <option value="">Select Route</option>
+                            <option value="" className="text-gray-900">
+                              Select Route
+                            </option>
                             {routes.map((route) => (
-                              <option key={route.id} value={route.id}>
+                              <option
+                                key={route.id}
+                                value={route.id}
+                                className="text-gray-900"
+                              >
                                 {route.name}
                               </option>
                             ))}
@@ -1007,15 +1217,12 @@ export default function StreamlinedManagement() {
                 Driver & Bus Assignment Management
               </h3>
               <div className="flex space-x-2">
-                {/* {selectedDrivers.size > 0 && (
-                  <button
-                    onClick={handleBulkDeleteDrivers}
-                    disabled={loading}
-                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
-                  >
-                    🗑️ Delete Selected ({selectedDrivers.size})
-                  </button>
-                )} */}
+                <button
+                  onClick={() => setShowCreateDriverForm(!showCreateDriverForm)}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                >
+                  {showCreateDriverForm ? '❌ Cancel' : '➕ Create New Driver'}
+                </button>
                 <button
                   onClick={() => setShowDriverForm(!showDriverForm)}
                   className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
@@ -1048,19 +1255,26 @@ export default function StreamlinedManagement() {
                       onChange={(e) =>
                         setSelectedSupabaseDriver(e.target.value)
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                     >
-                      <option value="">Choose a driver...</option>
+                      <option value="" className="text-gray-900">
+                        Choose a driver...
+                      </option>
                       {drivers.map((driver) => (
-                        <option key={driver.id} value={driver.id}>
-                          {driver.first_name} {driver.last_name} ({driver.email})
+                        <option
+                          key={driver.id}
+                          value={driver.id}
+                          className="text-gray-900"
+                        >
+                          {driver.first_name} {driver.last_name} ({driver.email}
+                          )
                         </option>
                       ))}
                     </select>
                     {drivers.length === 0 && (
-                                              <p className="text-sm text-orange-600 mt-1">
-                          No drivers found. Please create driver accounts first.
-                        </p>
+                      <p className="text-sm text-orange-600 mt-1">
+                        No drivers found. Please create driver accounts first.
+                      </p>
                     )}
                   </div>
 
@@ -1077,11 +1291,17 @@ export default function StreamlinedManagement() {
                           assigned_bus_id: e.target.value || '',
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                     >
-                      <option value="">Choose a bus...</option>
+                      <option value="" className="text-gray-900">
+                        Choose a bus...
+                      </option>
                       {buses.map((bus) => (
-                        <option key={bus.id} value={bus.id}>
+                        <option
+                          key={bus.id}
+                          value={bus.id}
+                          className="text-gray-900"
+                        >
                           {bus.number_plate} ({bus.model || 'Unknown Model'})
                         </option>
                       ))}
@@ -1121,6 +1341,250 @@ export default function StreamlinedManagement() {
               </div>
             )}
 
+            {/* Create New Driver Form */}
+            {showCreateDriverForm && (
+              <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                <div className="mb-4">
+                  <h4 className="text-lg font-medium text-green-900 mb-2">
+                    🆕 Create New Driver Account
+                  </h4>
+                  <p className="text-sm text-green-700 mb-4">
+                    Create a new driver account with Supabase authentication.
+                    The driver will receive login credentials and can
+                    immediately access the driver interface.
+                  </p>
+                </div>
+
+                <form onSubmit={handleCreateDriver} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email Address *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={createDriverForm.email}
+                        onChange={(e) =>
+                          setCreateDriverForm({
+                            ...createDriverForm,
+                            email: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-900 bg-white"
+                        placeholder="driver@university.com"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        First Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={createDriverForm.first_name}
+                        onChange={(e) =>
+                          setCreateDriverForm({
+                            ...createDriverForm,
+                            first_name: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="John"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Last Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={createDriverForm.last_name}
+                        onChange={(e) =>
+                          setCreateDriverForm({
+                            ...createDriverForm,
+                            last_name: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Smith"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        value={createDriverForm.phone}
+                        onChange={(e) =>
+                          setCreateDriverForm({
+                            ...createDriverForm,
+                            phone: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-900 bg-white"
+                        placeholder="+91-9876543210"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Password *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          value={createDriverForm.password}
+                          onChange={(e) => {
+                            console.log(
+                              'Password input changed:',
+                              e.target.value
+                            );
+                            setCreateDriverForm({
+                              ...createDriverForm,
+                              password: e.target.value,
+                            });
+                          }}
+                          onFocus={(e) => {
+                            console.log('Password field focused');
+                            e.target.select();
+                          }}
+                          className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900 bg-white"
+                          placeholder="Minimum 6 characters"
+                          minLength={6}
+                          autoComplete="new-password"
+                          id="driver-password-input"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        >
+                          {showPassword ? '🙈' : '👁️'}
+                        </button>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Current length: {createDriverForm.password.length}/6
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Confirm Password *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          required
+                          value={createDriverForm.confirm_password}
+                          onChange={(e) => {
+                            console.log(
+                              'Confirm password input changed:',
+                              e.target.value
+                            );
+                            setCreateDriverForm({
+                              ...createDriverForm,
+                              confirm_password: e.target.value,
+                            });
+                          }}
+                          onFocus={(e) => {
+                            console.log('Confirm password field focused');
+                            e.target.select();
+                          }}
+                          className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900 bg-white"
+                          placeholder="Confirm password"
+                          minLength={6}
+                          autoComplete="new-password"
+                          id="driver-confirm-password-input"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowConfirmPassword(!showConfirmPassword)
+                          }
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        >
+                          {showConfirmPassword ? '🙈' : '👁️'}
+                        </button>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {createDriverForm.password !==
+                          createDriverForm.confirm_password &&
+                          createDriverForm.confirm_password.length > 0 && (
+                            <span className="text-red-500">
+                              Passwords do not match
+                            </span>
+                          )}
+                        {createDriverForm.password ===
+                          createDriverForm.confirm_password &&
+                          createDriverForm.confirm_password.length > 0 && (
+                            <span className="text-green-500">
+                              Passwords match ✓
+                            </span>
+                          )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <h5 className="font-medium text-blue-900 mb-2">
+                      ℹ️ Important Information:
+                    </h5>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      <li>• Driver account will be created in Supabase Auth</li>
+                      <li>
+                        • Driver can immediately login with these credentials
+                      </li>
+                      <li>
+                        • Email will be auto-confirmed (no email verification
+                        required)
+                      </li>
+                      <li>
+                        • Driver will have access to the driver interface at
+                        /driver
+                      </li>
+                      <li>• You can assign them to a bus after creation</li>
+                    </ul>
+                  </div>
+
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCreateDriverForm(false);
+                        setCreateDriverForm({
+                          email: '',
+                          first_name: '',
+                          last_name: '',
+                          phone: '',
+                          password: '',
+                          confirm_password: '',
+                        });
+                        setShowPassword(false);
+                        setShowConfirmPassword(false);
+                      }}
+                      className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {loading ? 'Creating...' : 'Create Driver Account'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
             {/* Available Drivers Section */}
             <div className="mb-6 p-4 bg-blue-50 rounded-lg">
               <div className="flex items-center justify-between mb-3">
@@ -1130,15 +1594,43 @@ export default function StreamlinedManagement() {
                 <button
                   onClick={async () => {
                     try {
-                      console.log('🔄 Manually refreshing drivers...');
+                      // console.log('🔄 Manually refreshing drivers...');
                       const result = await adminApiService.getAllDrivers();
                       if (result.success && result.data) {
-                        setDrivers(result.data);
-                        console.log(
-                          '✅ Manual refresh successful:',
-                          result.data.length,
-                          'drivers'
+                        // Additional frontend deduplication as safety measure
+                        const uniqueDriversMap = new Map();
+                        result.data.forEach((driver: Driver) => {
+                          const idKey = driver.id;
+
+                          if (!uniqueDriversMap.has(idKey)) {
+                            // First time seeing this ID
+                            uniqueDriversMap.set(idKey, driver);
+                          } else {
+                            // We already have this ID, check if we should replace it
+                            const existing = uniqueDriversMap.get(idKey);
+
+                            // Prefer the entry with email over null email
+                            if (!existing.email && driver.email) {
+                              uniqueDriversMap.set(idKey, driver);
+                            }
+                            // If both have emails, prefer the one with more complete data
+                            else if (existing.email && driver.email) {
+                              // Keep the existing one unless the new one has more complete data
+                              if (!existing.first_name && driver.first_name) {
+                                uniqueDriversMap.set(idKey, driver);
+                              }
+                            }
+                          }
+                        });
+                        const uniqueDrivers = Array.from(
+                          uniqueDriversMap.values()
                         );
+                        setDrivers(uniqueDrivers);
+                        // console.log(
+                        //   '✅ Manual refresh successful:',
+                        //   uniqueDrivers.length,
+                        //   'drivers'
+                        // );
                       } else {
                         console.warn('⚠️ Manual refresh failed:', result.error);
                       }
@@ -1174,12 +1666,12 @@ export default function StreamlinedManagement() {
                 <div className="text-center py-4">
                   <p className="text-gray-600">No available drivers found.</p>
                   <p className="text-sm text-gray-500 mt-1">
-                    All drivers are currently assigned to buses, or create new
-                    driver accounts in Supabase Auth dashboard.
+                    Create new driver accounts using the "Create New Driver"
+                    button above, or check if drivers exist in the system.
                   </p>
-                  <p className="text-xs text-orange-500 mt-2">
-                    💡 If you see this message but expect drivers to be
-                    available, try clicking the "Refresh" button above.
+                  <p className="text-xs text-green-600 mt-2">
+                    💡 Use the "Create New Driver" button to add drivers with
+                    full Supabase Auth integration.
                   </p>
                 </div>
               )}
@@ -1227,7 +1719,7 @@ export default function StreamlinedManagement() {
                           <div className="text-sm font-medium text-gray-900">
                             {driver.first_name} {driver.last_name}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-gray-900">
                             Role: {driver.role}
                           </div>
                         </div>
@@ -1236,7 +1728,7 @@ export default function StreamlinedManagement() {
                         <div className="text-sm text-gray-900">
                           {driver.email}
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-gray-900">
                           {driver.phone || 'No phone'}
                         </div>
                       </td>
@@ -1251,18 +1743,34 @@ export default function StreamlinedManagement() {
                             handleAssignBusToDriver(driver.id, e.target.value)
                           }
                           value={driver.assigned_bus_id || ''}
-                          className="text-sm border border-gray-300 rounded px-2 py-1"
+                          className="text-sm border border-gray-300 rounded px-2 py-1 text-gray-900 bg-white"
                         >
-                          <option value="">Select Bus</option>
+                          <option value="" className="text-gray-900">
+                            Select Bus
+                          </option>
                           {buses.map((bus) => (
-                            <option key={bus.id} value={bus.id}>
+                            <option
+                              key={bus.id}
+                              value={bus.id}
+                              className="text-gray-900"
+                            >
                               {bus.number_plate}
                             </option>
                           ))}
                         </select>
-                        <span className="text-gray-500 text-sm">
-                          Supabase Auth user - Delete from Supabase dashboard
-                        </span>
+                        <button
+                          onClick={() =>
+                            handleDeleteDriver(
+                              driver.id,
+                              driver.first_name,
+                              driver.last_name
+                            )
+                          }
+                          className="ml-2 bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700 transition-colors"
+                          title="Delete driver from all systems"
+                        >
+                          🗑️ Delete
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1277,7 +1785,7 @@ export default function StreamlinedManagement() {
               <h3 className="text-lg font-medium text-gray-900">
                 Currently Assigned Drivers
               </h3>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-900">
                 {assignedDrivers.length} driver
                 {assignedDrivers.length !== 1 ? 's' : ''} assigned
               </div>
@@ -1323,7 +1831,7 @@ export default function StreamlinedManagement() {
                             <div className="text-sm font-medium text-gray-900">
                               {assignedDriver.driver_name}
                             </div>
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-gray-900">
                               {assignedDriver.driver_email}
                             </div>
                           </div>
@@ -1333,7 +1841,7 @@ export default function StreamlinedManagement() {
                             <div className="text-sm font-medium text-gray-900">
                               {assignedDriver.bus_code}
                             </div>
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-gray-900">
                               {assignedDriver.number_plate}
                             </div>
                           </div>
@@ -1343,7 +1851,7 @@ export default function StreamlinedManagement() {
                             {assignedDriver.route_name || 'No route assigned'}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                           <button
                             onClick={() =>
                               handleUnassignDriver(assignedDriver.driver_id)
@@ -1353,6 +1861,25 @@ export default function StreamlinedManagement() {
                             title="Unassign driver from bus"
                           >
                             🚫 Unassign
+                          </button>
+                          <button
+                            onClick={() => {
+                              const driver = drivers.find(
+                                (d) => d.id === assignedDriver.driver_id
+                              );
+                              if (driver) {
+                                handleDeleteDriver(
+                                  driver.id,
+                                  driver.first_name,
+                                  driver.last_name
+                                );
+                              }
+                            }}
+                            disabled={loading}
+                            className="text-red-800 hover:text-red-900 disabled:opacity-50 font-bold"
+                            title="Delete driver from all systems"
+                          >
+                            🗑️ Delete
                           </button>
                         </td>
                       </tr>
@@ -1492,7 +2019,7 @@ export default function StreamlinedManagement() {
                         description: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                     rows={3}
                     placeholder="Route description..."
                   />
@@ -1613,7 +2140,7 @@ export default function StreamlinedManagement() {
                           <div className="text-sm font-medium text-gray-900">
                             {route.name}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-gray-900">
                             {route.description}
                           </div>
                         </div>
@@ -1627,7 +2154,7 @@ export default function StreamlinedManagement() {
                         <div className="text-sm text-gray-900">
                           {route.distance_km} km
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-gray-900">
                           {route.estimated_duration_minutes} min
                         </div>
                       </td>
@@ -1675,8 +2202,6 @@ export default function StreamlinedManagement() {
           </div>
         </div>
       )}
-
-
 
       {/* Map Selector Modal */}
       {showMapSelector && (
@@ -2028,7 +2553,7 @@ export default function StreamlinedManagement() {
                         description: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                     rows={3}
                   />
                 </div>

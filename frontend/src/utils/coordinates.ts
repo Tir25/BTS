@@ -102,5 +102,3 @@ export const getLocationName = (coordinates: [number, number]): string => {
 
   return 'Unknown Location';
 };
-
-

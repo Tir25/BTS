@@ -77,6 +77,8 @@ export const getDriverBusInfo = async (
   driverId: string
 ): Promise<BusInfo | null> => {
   try {
+    console.log('🔍 Fetching bus info for driver:', driverId);
+
     // First, get the bus information without route join
     const { data: busData, error: busError } = await supabaseAdmin
       .from('buses')
@@ -85,6 +87,9 @@ export const getDriverBusInfo = async (
       .eq('is_active', true)
       .limit(1)
       .maybeSingle();
+
+    console.log('🚌 Bus data found:', busData);
+    console.log('❌ Bus error:', busError);
 
     if (busError || !busData) {
       console.error('❌ Error fetching driver bus info:', busError);
@@ -97,6 +102,9 @@ export const getDriverBusInfo = async (
       .select('full_name')
       .eq('id', driverId)
       .maybeSingle();
+
+    console.log('👤 Profile data found:', profileData);
+    console.log('❌ Profile error:', profileError);
 
     if (profileError) {
       console.error('❌ Error fetching driver profile:', profileError);
@@ -111,12 +119,15 @@ export const getDriverBusInfo = async (
         .eq('id', busData.route_id)
         .maybeSingle();
 
+      console.log('🛣️ Route data found:', routeData);
+      console.log('❌ Route error:', routeError);
+
       if (!routeError && routeData) {
         routeName = routeData.name || '';
       }
     }
 
-    return {
+    const busInfo = {
       bus_id: busData.id,
       bus_number: busData.number_plate || '',
       route_id: busData.route_id || '',
@@ -124,6 +135,9 @@ export const getDriverBusInfo = async (
       driver_id: driverId,
       driver_name: profileData?.full_name || 'Unknown Driver',
     };
+
+    console.log('✅ Final bus info:', busInfo);
+    return busInfo;
   } catch (error) {
     console.error('❌ Error in getDriverBusInfo:', error);
     return null;
@@ -227,7 +241,9 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
 
     // Handle the case where joined tables return arrays
     const routeData = Array.isArray(data.routes) ? data.routes[0] : data.routes;
-    const profileData = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
+    const profileData = Array.isArray(data.profiles)
+      ? data.profiles[0]
+      : data.profiles;
 
     return {
       bus_id: data.id,
@@ -274,7 +290,9 @@ export const getAllBuses = async (): Promise<BusInfo[]> => {
       const routeData = Array.isArray(item.routes)
         ? item.routes[0]
         : item.routes;
-      const profileData = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
+      const profileData = Array.isArray(item.profiles)
+        ? item.profiles[0]
+        : item.profiles;
 
       return {
         bus_id: item.id,

@@ -249,7 +249,9 @@ class AdminApiService {
     driverData: Omit<
       DriverData,
       'id' | 'assigned_bus_id' | 'assigned_bus_plate'
-    >
+    > & {
+      password: string;
+    }
   ): Promise<ApiResponse<DriverData>> {
     return this.makeRequest<DriverData>('/drivers', {
       method: 'POST',

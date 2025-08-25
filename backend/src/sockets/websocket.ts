@@ -46,48 +46,59 @@ export const initializeWebSocket = (io: SocketIOServer) => {
       console.log(`💓 Ping received from ${socket.id}`);
     });
 
-                socket.on('driver:authenticate', async (data: { token: string }) => {
-                  try {
-                    const { token } = data;
+    socket.on('driver:authenticate', async (data: { token: string }) => {
+      try {
+        const { token } = data;
 
-                    if (!token) {
-                      socket.emit('error', { message: 'Authentication token required' });
-                      return;
-                    }
+        if (!token) {
+          socket.emit('error', { message: 'Authentication token required' });
+          return;
+        }
 
-                    const {
-                      data: { user },
-                      error,
-                    } = await supabaseAdmin.auth.getUser(token);
+        const {
+          data: { user },
+          error,
+        } = await supabaseAdmin.auth.getUser(token);
 
-                    if (error || !user) {
-                      socket.emit('error', { message: 'Invalid authentication token' });
-                      return;
-                    }
+        if (error || !user) {
+          socket.emit('error', { message: 'Invalid authentication token' });
+          return;
+        }
 
-                    // Check for dual-role users in auth metadata
-                    const authRoles = user.user_metadata?.roles;
-                    const isDualRoleUser = authRoles && Array.isArray(authRoles) && authRoles.includes('driver');
-                    
-                    // Check profiles table for role
-                    const { data: profile } = await supabaseAdmin
-                      .from('profiles')
-                      .select('role')
-                      .eq('id', user.id)
-                      .single();
+        console.log(
+          '🔐 Driver authentication attempt for user:',
+          user.id,
+          user.email
+        );
 
-                    // Allow access if user has driver role in auth metadata OR profiles table
-                    const hasDriverRole = isDualRoleUser || (profile && profile.role === 'driver');
-                    
-                    if (!hasDriverRole) {
-                      socket.emit('error', {
-                        message: 'Access denied. Driver role required.',
-                      });
-                      return;
-                    }
+        // Check for dual-role users in auth metadata
+        const authRoles = user.user_metadata?.roles;
+        const isDualRoleUser =
+          authRoles && Array.isArray(authRoles) && authRoles.includes('driver');
+
+        // Check profiles table for role
+        const { data: profile } = await supabaseAdmin
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        // Allow access if user has driver role in auth metadata OR profiles table
+        const hasDriverRole =
+          isDualRoleUser || (profile && profile.role === 'driver');
+
+        if (!hasDriverRole) {
+          socket.emit('error', {
+            message: 'Access denied. Driver role required.',
+          });
+          return;
+        }
 
         const busInfo = await getDriverBusInfo(user.id);
+        console.log('🚌 Bus info for driver:', user.id, ':', busInfo);
+
         if (!busInfo) {
+          console.log('❌ No bus assigned to driver:', user.id);
           socket.emit('error', { message: 'No bus assigned to driver' });
           return;
         }
@@ -102,11 +113,14 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           `✅ Driver ${user.id} authenticated and assigned to bus ${busInfo.bus_id}`
         );
 
-        socket.emit('driver:authenticated', {
+        const authResponse = {
           driverId: user.id,
           busId: busInfo.bus_id,
           busInfo: busInfo,
-        });
+        };
+
+        console.log('✅ Sending authentication response:', authResponse);
+        socket.emit('driver:authenticated', authResponse);
       } catch (error) {
         console.error('❌ Authentication error:', error);
         socket.emit('error', { message: 'Authentication failed' });
@@ -115,6 +129,15 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
     socket.on('driver:locationUpdate', async (data: LocationUpdate) => {
       try {
+        console.log('📍 Received location update from driver:', {
+          driverId: data.driverId,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          timestamp: data.timestamp,
+          socketDriverId: socket.driverId,
+          socketBusId: socket.busId,
+        });
+
         if (!socket.driverId || !socket.busId) {
           socket.emit('error', { message: 'Driver not authenticated' });
           return;
@@ -185,6 +208,7 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         };
 
         // Broadcast location update to all connected clients
+        console.log('📡 Broadcasting location update:', locationData);
         io.emit('bus:locationUpdate', locationData);
 
         console.log(

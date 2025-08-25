@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const dbHealth = await checkDatabaseHealth();
-    
+
     const healthData = {
       status: 'healthy',
       timestamp: new Date().toISOString(),

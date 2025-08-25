@@ -166,7 +166,9 @@ class BusService implements IBusService {
       };
     }
 
-    console.log(`🔄 Synced bus ${busId}: ${busNumber} - ${routeName} - ${driverName}`);
+    console.log(
+      `🔄 Synced bus ${busId}: ${busNumber} - ${routeName} - ${driverName}`
+    );
   }
 
   // Clear all buses (useful for resetting)

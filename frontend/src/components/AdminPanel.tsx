@@ -30,10 +30,10 @@ export default function AdminPanel() {
       setLoading(true);
       setError(null);
 
-          // Wait for auth service to be initialized
-    while (!authService.isInitialized()) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+      // Wait for auth service to be initialized
+      while (!authService.isInitialized()) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
       const authenticated = authService.isAuthenticated();
       const admin = authService.isAdmin();
@@ -43,8 +43,6 @@ export default function AdminPanel() {
         authenticated,
         admin,
       });
-
-
 
       setIsAuthenticated(authenticated);
       setIsAdmin(admin);
@@ -97,10 +95,10 @@ export default function AdminPanel() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Checking authentication...</p>
+          <div className="loading-spinner mx-auto"></div>
+          <p className="mt-4 text-white/70">Checking authentication...</p>
         </div>
       </div>
     );
@@ -110,23 +108,23 @@ export default function AdminPanel() {
     // Check if there are configuration errors
     if (error && error.includes('environment variables')) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
           <div className="text-center">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md">
-              <h3 className="text-lg font-medium text-yellow-800 mb-2">
+            <div className="card-glass p-8 max-w-md">
+              <h3 className="text-lg font-medium text-yellow-300 mb-2">
                 Configuration Error
               </h3>
-              <p className="text-yellow-700 mb-4">
+              <p className="text-yellow-200 mb-4">
                 The application is not properly configured. Please check your
                 environment variables.
               </p>
-              <p className="text-sm text-yellow-600 mb-4">
+              <p className="text-sm text-yellow-100 mb-4">
                 Make sure the .env file exists in the frontend directory with
                 the correct Supabase configuration.
               </p>
               <button
                 onClick={() => window.location.reload()}
-                className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition-colors"
+                className="btn-primary"
               >
                 Reload Page
               </button>
@@ -141,24 +139,24 @@ export default function AdminPanel() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-            <h3 className="text-lg font-medium text-red-800 mb-2">
+          <div className="card-glass p-8 max-w-md">
+            <h3 className="text-lg font-medium text-red-300 mb-2">
               Access Denied
             </h3>
-            <p className="text-red-700 mb-4">
+            <p className="text-red-200 mb-4">
               You don't have admin privileges. Please contact your
               administrator.
             </p>
             {error && (
-              <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded">
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="mb-4 p-3 bg-red-500/20 border border-red-400/30 rounded-lg">
+                <p className="text-sm text-red-200">{error}</p>
               </div>
             )}
             <button
               onClick={handleSignOut}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
+              className="btn-primary bg-red-600 hover:bg-red-700"
             >
               Sign Out
             </button>

@@ -12,6 +12,7 @@ interface Driver {
   id: string;
   first_name: string;
   last_name: string;
+  email?: string;
   profile_photo_url?: string;
 }
 
@@ -53,7 +54,33 @@ export default function MediaManagement() {
       }
 
       if (driversResult.success && driversResult.data) {
-        setDrivers(driversResult.data);
+        // Additional frontend deduplication as safety measure
+        const uniqueDriversMap = new Map();
+        driversResult.data.forEach((driver: Driver) => {
+          const idKey = driver.id;
+
+          if (!uniqueDriversMap.has(idKey)) {
+            // First time seeing this ID
+            uniqueDriversMap.set(idKey, driver);
+          } else {
+            // We already have this ID, check if we should replace it
+            const existing = uniqueDriversMap.get(idKey);
+
+            // Prefer the entry with email over null email
+            if (!existing.email && driver.email) {
+              uniqueDriversMap.set(idKey, driver);
+            }
+            // If both have emails, prefer the one with more complete data
+            else if (existing.email && driver.email) {
+              // Keep the existing one unless the new one has more complete data
+              if (!existing.first_name && driver.first_name) {
+                uniqueDriversMap.set(idKey, driver);
+              }
+            }
+          }
+        });
+        const uniqueDrivers = Array.from(uniqueDriversMap.values());
+        setDrivers(uniqueDrivers);
       }
 
       if (routesResult.success && routesResult.data) {

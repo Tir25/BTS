@@ -60,14 +60,18 @@ export class ConnectionManager {
 
       console.log('✅ ConnectionManager: WebSocket connected successfully');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.updateStatus({
         isConnected: false,
         status: 'disconnected',
         error: errorMessage,
       });
 
-      console.error('❌ ConnectionManager: WebSocket connection failed:', error);
+      console.error(
+        '❌ ConnectionManager: WebSocket connection failed:',
+        error
+      );
       this.scheduleReconnection();
     }
   }
@@ -97,7 +101,9 @@ export class ConnectionManager {
   // Private methods
   private setupEventListeners(): void {
     if (this.callbacks.onBusLocationUpdate) {
-      this.websocketService.onBusLocationUpdate(this.callbacks.onBusLocationUpdate);
+      this.websocketService.onBusLocationUpdate(
+        this.callbacks.onBusLocationUpdate
+      );
     }
 
     if (this.callbacks.onDriverConnected) {
@@ -105,11 +111,15 @@ export class ConnectionManager {
     }
 
     if (this.callbacks.onDriverDisconnected) {
-      this.websocketService.onDriverDisconnected(this.callbacks.onDriverDisconnected);
+      this.websocketService.onDriverDisconnected(
+        this.callbacks.onDriverDisconnected
+      );
     }
 
     if (this.callbacks.onStudentConnected) {
-      this.websocketService.onStudentConnected(this.callbacks.onStudentConnected);
+      this.websocketService.onStudentConnected(
+        this.callbacks.onStudentConnected
+      );
     }
 
     if (this.callbacks.onBusArriving) {
@@ -153,7 +163,7 @@ export class ConnectionManager {
 
   private updateStatus(newStatus: Partial<ConnectionStatus>): void {
     this.status = { ...this.status, ...newStatus };
-    
+
     if (this.callbacks.onConnectionStatusChange) {
       this.callbacks.onConnectionStatusChange(this.status);
     }

@@ -302,14 +302,40 @@ export class AdminService {
 
       const [profilesResult, usersResult] = await Promise.all([
         pool.query(profilesQuery),
-        pool.query(usersQuery)
+        pool.query(usersQuery),
       ]);
 
-      // Combine results and remove duplicates based on email
+      // Combine results and remove duplicates based on email and ID
       const allDrivers = [...profilesResult.rows, ...usersResult.rows];
-      const uniqueDrivers = allDrivers.filter((driver, index, self) => 
-        index === self.findIndex(d => d.email === driver.email)
-      );
+
+      // Create a Map to track unique drivers by ID first, then by email
+      const uniqueDriversMap = new Map();
+
+      allDrivers.forEach((driver) => {
+        const idKey = driver.id;
+
+        if (!uniqueDriversMap.has(idKey)) {
+          // First time seeing this ID
+          uniqueDriversMap.set(idKey, driver);
+        } else {
+          // We already have this ID, check if we should replace it
+          const existing = uniqueDriversMap.get(idKey);
+
+          // Prefer the entry with email over null email
+          if (!existing.email && driver.email) {
+            uniqueDriversMap.set(idKey, driver);
+          }
+          // If both have emails, prefer the one with more complete data
+          else if (existing.email && driver.email) {
+            // Keep the existing one unless the new one has more complete data
+            if (!existing.full_name && driver.full_name) {
+              uniqueDriversMap.set(idKey, driver);
+            }
+          }
+        }
+      });
+
+      const uniqueDrivers = Array.from(uniqueDriversMap.values());
 
       // Sort by creation date
       uniqueDrivers.sort((a, b) => {
@@ -361,17 +387,47 @@ export class AdminService {
 
       const [profilesResult, usersResult] = await Promise.all([
         pool.query(profilesQuery),
-        pool.query(usersQuery)
+        pool.query(usersQuery),
       ]);
 
-      // Combine results and remove duplicates based on email
+      // Combine results and remove duplicates based on email and ID
       const allAssignedDrivers = [...profilesResult.rows, ...usersResult.rows];
-      const uniqueAssignedDrivers = allAssignedDrivers.filter((driver, index, self) =>
-        index === self.findIndex(d => d.driver_email === driver.driver_email)
+
+      // Create a Map to track unique assigned drivers by ID first, then by email
+      const uniqueAssignedDriversMap = new Map();
+
+      allAssignedDrivers.forEach((driver) => {
+        const idKey = driver.driver_id;
+
+        if (!uniqueAssignedDriversMap.has(idKey)) {
+          // First time seeing this ID
+          uniqueAssignedDriversMap.set(idKey, driver);
+        } else {
+          // We already have this ID, check if we should replace it
+          const existing = uniqueAssignedDriversMap.get(idKey);
+
+          // Prefer the entry with email over null email
+          if (!existing.driver_email && driver.driver_email) {
+            uniqueAssignedDriversMap.set(idKey, driver);
+          }
+          // If both have emails, prefer the one with more complete data
+          else if (existing.driver_email && driver.driver_email) {
+            // Keep the existing one unless the new one has more complete data
+            if (!existing.driver_name && driver.driver_name) {
+              uniqueAssignedDriversMap.set(idKey, driver);
+            }
+          }
+        }
+      });
+
+      const uniqueAssignedDrivers = Array.from(
+        uniqueAssignedDriversMap.values()
       );
 
       // Sort by driver name
-      uniqueAssignedDrivers.sort((a, b) => a.driver_name.localeCompare(b.driver_name));
+      uniqueAssignedDrivers.sort((a, b) =>
+        a.driver_name.localeCompare(b.driver_name)
+      );
 
       return uniqueAssignedDrivers;
     } catch (error) {
@@ -446,25 +502,243 @@ export class AdminService {
     }
   }
 
-  static async createDriver(driverData: DriverData) {
+  static async createDriver(driverData: DriverData & { password: string }) {
     try {
+      // Step 0: Validate required fields
+      if (
+        !driverData.email ||
+        !driverData.first_name ||
+        !driverData.last_name ||
+        !driverData.password
+      ) {
+        throw new Error(
+          'Email, first name, last name, and password are required'
+        );
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(driverData.email)) {
+        throw new Error('Invalid email format');
+      }
+
+      // Validate password length
+      if (driverData.password.length < 6) {
+        throw new Error('Password must be at least 6 characters long');
+      }
+
+      // Import Supabase admin client
+      const { supabaseAdmin } = await import('../config/supabase');
+
+      // Step 1: Comprehensive duplicate check across all tables
+      console.log(
+        `🔍 Checking for existing driver with email: ${driverData.email}`
+      );
+
+      // Check profiles table
+      const { data: existingProfiles, error: profilesCheckError } =
+        await supabaseAdmin
+          .from('profiles')
+          .select('id, email, full_name')
+          .eq('email', driverData.email)
+          .eq('role', 'driver');
+
+      // Check users table
+      const { data: existingUsers, error: usersCheckError } =
+        await supabaseAdmin
+          .from('users')
+          .select('id, email, first_name, last_name')
+          .eq('email', driverData.email)
+          .eq('role', 'driver');
+
+      // Check Supabase Auth
+      const { data: authUsers, error: authCheckError } =
+        await supabaseAdmin.auth.admin.listUsers();
+      const existingAuthUser = authUsers.users.find(
+        (user) => user.email?.toLowerCase() === driverData.email.toLowerCase()
+      );
+
+      if (profilesCheckError || usersCheckError || authCheckError) {
+        console.error(
+          '❌ Error checking existing driver:',
+          profilesCheckError || usersCheckError || authCheckError
+        );
+        throw new Error(
+          `Failed to check existing driver: ${(profilesCheckError || usersCheckError || authCheckError)?.message}`
+        );
+      }
+
+      // Check for any existing entries
+      if (existingProfiles && existingProfiles.length > 0) {
+        console.log(
+          `❌ Driver already exists in profiles table: ${existingProfiles[0].full_name} (${existingProfiles[0].email})`
+        );
+        throw new Error(
+          `Driver with email ${driverData.email} already exists in profiles table`
+        );
+      }
+
+      if (existingUsers && existingUsers.length > 0) {
+        console.log(
+          `❌ Driver already exists in users table: ${existingUsers[0].first_name} ${existingUsers[0].last_name} (${existingUsers[0].email})`
+        );
+        throw new Error(
+          `Driver with email ${driverData.email} already exists in users table`
+        );
+      }
+
+      if (existingAuthUser) {
+        console.log(
+          `❌ Driver already exists in Supabase Auth: ${existingAuthUser.email}`
+        );
+        throw new Error(
+          `Driver with email ${driverData.email} already exists in Supabase Auth`
+        );
+      }
+
+      console.log(
+        `✅ No existing driver found with email: ${driverData.email}`
+      );
+
+      // Step 2: Create Supabase Auth user
+      const { data: authData, error: authError } =
+        await supabaseAdmin.auth.admin.createUser({
+          email: driverData.email,
+          password: driverData.password,
+          email_confirm: true, // Auto-confirm email
+          user_metadata: {
+            full_name: `${driverData.first_name} ${driverData.last_name}`,
+            role: 'driver',
+            phone: driverData.phone || null,
+          },
+        });
+
+      if (authError) {
+        console.error('❌ Supabase Auth error:', authError);
+        throw new Error(
+          `Failed to create Supabase Auth user: ${authError.message}`
+        );
+      }
+
+      if (!authData.user) {
+        throw new Error(
+          'Failed to create Supabase Auth user: No user data returned'
+        );
+      }
+
+      // Step 3: Check if profile already exists
+      const { data: existingProfile, error: checkError } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('❌ Error checking existing profile:', checkError);
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        throw new Error(
+          `Failed to check existing profile: ${checkError.message}`
+        );
+      }
+
+      // Only create profile if it doesn't exist
+      if (!existingProfile) {
+        // Additional safeguard: ensure email is not null
+        if (!driverData.email) {
+          console.error('❌ Cannot create profile with null email');
+          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+          throw new Error('Cannot create profile with null email');
+        }
+
+        const { error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .insert({
+            id: authData.user.id,
+            email: driverData.email,
+            full_name: `${driverData.first_name} ${driverData.last_name}`,
+            role: 'driver',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+        if (profileError) {
+          console.error('❌ Error creating profile:', profileError);
+          // Clean up auth user if profile creation fails
+          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+          throw new Error(`Failed to create profile: ${profileError.message}`);
+        }
+
+        console.log(
+          `✅ Profile created successfully for user ${authData.user.id}`
+        );
+      } else {
+        console.log(
+          `ℹ️ Profile already exists for user ${authData.user.id}, skipping profile creation`
+        );
+      }
+
+      // Step 4: Create backup record in users table for compatibility
+      console.log(
+        `📝 Creating backup record in users table for ${authData.user.id}`
+      );
+
+      // First check if user already exists in users table
+      const checkUserQuery = 'SELECT id FROM users WHERE id = $1';
+      const existingUser = await pool.query(checkUserQuery, [authData.user.id]);
+
+      if (existingUser.rows.length === 0) {
+        // Additional safeguard: ensure email is not null
+        if (!driverData.email) {
+          console.error('❌ Cannot create user record with null email');
+          // Clean up auth user and profile if user creation fails
+          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+          await supabaseAdmin
+            .from('profiles')
+            .delete()
+            .eq('id', authData.user.id);
+          throw new Error('Cannot create user record with null email');
+        }
+
       const query = `
-        INSERT INTO users (email, first_name, last_name, phone, role, profile_photo_url)
-        VALUES ($1, $2, $3, $4, $5, $6)
+          INSERT INTO users (id, email, first_name, last_name, phone, role, profile_photo_url, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `;
 
       const values = [
+          authData.user.id, // Use Supabase Auth user ID
         driverData.email,
         driverData.first_name,
         driverData.last_name,
         driverData.phone || null,
         'driver',
         driverData.profile_photo_url || null,
+          new Date().toISOString(),
+          new Date().toISOString(),
       ];
 
       const result = await pool.query(query, values);
-      return result.rows[0];
+
+        console.log(
+          `✅ Driver created successfully: ${driverData.email} (ID: ${authData.user.id})`
+        );
+
+        // Return the created driver with Supabase Auth user ID
+        return {
+          ...result.rows[0],
+          supabase_user_id: authData.user.id,
+        };
+      } else {
+        console.log(
+          `ℹ️ User already exists in users table for ${authData.user.id}, skipping user creation`
+        );
+
+        // Return the existing user data
+        return {
+          ...existingUser.rows[0],
+          supabase_user_id: authData.user.id,
+        };
+      }
     } catch (error) {
       console.error('❌ Error creating driver:', error);
       throw error;
@@ -519,24 +793,72 @@ export class AdminService {
 
   static async deleteDriver(driverId: string) {
     try {
-      // First, unassign from any bus
-      await pool.query(
-        'UPDATE buses SET assigned_driver_id = NULL WHERE assigned_driver_id = $1',
+      console.log(`🗑️ Starting deletion of driver: ${driverId}`);
+
+      // Import Supabase admin client
+      const { supabaseAdmin } = await import('../config/supabase');
+
+      // Step 1: Unassign from any bus
+      const busUpdateResult = await pool.query(
+        'UPDATE buses SET assigned_driver_id = NULL WHERE assigned_driver_id = $1 RETURNING id',
         [driverId]
       );
 
-      // Only delete from users table (not from profiles table which contains Supabase Auth users)
-      const query =
-        "DELETE FROM users WHERE id = $1 AND role = 'driver' RETURNING *";
-      const result = await pool.query(query, [driverId]);
-
-      if (result.rows.length === 0) {
-        throw new Error(
-          'Driver not found in users table. Supabase Auth users cannot be deleted from this interface.'
+      if (busUpdateResult.rows.length > 0) {
+        console.log(
+          `✅ Unassigned driver from ${busUpdateResult.rows.length} bus(es)`
         );
       }
 
-      return result.rows[0] || null;
+      // Step 2: Delete from profiles table (Supabase managed)
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .delete()
+        .eq('id', driverId)
+        .eq('role', 'driver');
+
+      if (profileError) {
+        console.log(`⚠️ Error deleting from profiles: ${profileError.message}`);
+      } else {
+        console.log(`✅ Deleted driver from profiles table`);
+      }
+
+      // Step 3: Delete from users table (PostgreSQL managed)
+      const userDeleteResult = await pool.query(
+        "DELETE FROM users WHERE id = $1 AND role = 'driver' RETURNING *",
+        [driverId]
+      );
+
+      if (userDeleteResult.rows.length === 0) {
+        console.log(`⚠️ Driver not found in users table`);
+      } else {
+        console.log(`✅ Deleted driver from users table`);
+      }
+
+      // Step 4: Delete from Supabase Auth (if exists)
+      try {
+        const { error: authError } =
+          await supabaseAdmin.auth.admin.deleteUser(driverId);
+
+        if (authError) {
+          console.log(
+            `⚠️ Error deleting from Supabase Auth: ${authError.message}`
+          );
+        } else {
+          console.log(`✅ Deleted driver from Supabase Auth`);
+        }
+      } catch (authError) {
+        console.log(`⚠️ Auth deletion error (may not exist): ${authError}`);
+      }
+
+      // Return the deleted user data if available
+      const deletedData = userDeleteResult.rows[0] || {
+        id: driverId,
+        deleted: true,
+      };
+
+      console.log(`✅ Driver deletion completed for: ${driverId}`);
+      return deletedData;
     } catch (error) {
       console.error('❌ Error deleting driver:', error);
       throw error;
@@ -627,16 +949,18 @@ export class AdminService {
       const healthChecks = await Promise.all([
         pool.query('SELECT COUNT(*) as count FROM buses'),
         pool.query('SELECT COUNT(*) as count FROM routes'),
-        pool.query("SELECT COUNT(*) as count FROM profiles WHERE role = 'driver'"),
+        pool.query(
+          "SELECT COUNT(*) as count FROM profiles WHERE role = 'driver'"
+        ),
         pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'driver'"),
         pool.query(
           "SELECT COUNT(*) as count FROM live_locations WHERE recorded_at >= CURRENT_TIMESTAMP - INTERVAL '1 hour'"
         ),
       ]);
 
-      // Count unique drivers from both tables
-      const profilesDrivers = parseInt(healthChecks[2].rows[0].count);
-      const usersDrivers = parseInt(healthChecks[3].rows[0].count);
+      // Count unique drivers from both tables (for reference)
+      // const profilesDrivers = parseInt(healthChecks[2].rows[0].count);
+      // const usersDrivers = parseInt(healthChecks[3].rows[0].count);
       
       // Get unique driver count by querying both tables and counting distinct emails
       const uniqueDriversQuery = `
@@ -689,8 +1013,6 @@ export class AdminService {
       `;
 
       const result = await pool.query(query);
-
-
 
       return result.rows;
     } catch (error) {
@@ -745,8 +1067,6 @@ export class AdminService {
     stops?: any;
   }) {
     try {
-
-
       // Validate required fields
       if (!routeData.name || !routeData.name.trim()) {
         throw new Error('Route name is required');
@@ -783,8 +1103,6 @@ export class AdminService {
         routeData.is_active,
         routeData.city.trim(), // Use trimmed city value
       ];
-
-
 
       const result = await pool.query(query, values);
       return result.rows[0];

@@ -109,7 +109,7 @@ export class MapService implements IMapService {
           'line-cap': 'round',
         },
         paint: {
-          'line-color': `hsl(${(Math.random() * 360)}, 70%, 50%)`,
+          'line-color': `hsl(${Math.random() * 360}, 70%, 50%)`,
           'line-width': 4,
           'line-opacity': 0.8,
         },
@@ -172,7 +172,9 @@ export class MapService implements IMapService {
     marker.setPopup(popup);
     this.markers[busId] = marker;
 
-    console.log(`📍 Created marker for bus ${busId} at [${longitude.toFixed(6)}, ${latitude.toFixed(6)}]`);
+    console.log(
+      `📍 Created marker for bus ${busId} at [${longitude.toFixed(6)}, ${latitude.toFixed(6)}]`
+    );
   }
 
   private updateMarkerPopup(busId: string, location: BusLocation): void {
@@ -222,7 +224,9 @@ export class MapService implements IMapService {
     if (locations.length === 1) {
       // Single bus - center on it
       const location = locations[0];
-      console.log(`🗺️ Centering on single bus: [${location.longitude}, ${location.latitude}]`);
+      console.log(
+        `🗺️ Centering on single bus: [${location.longitude}, ${location.latitude}]`
+      );
       this.map.flyTo({
         center: [location.longitude, location.latitude],
         zoom: 14,

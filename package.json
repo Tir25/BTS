@@ -24,13 +24,14 @@
     "format": "npm run format:backend && npm run format:frontend",
     "format:backend": "cd backend && npm run format",
     "format:frontend": "cd frontend && npm run format",
+    "list-drivers": "node scripts/list-all-drivers.js",
+    "test-api": "node scripts/test-backend-api.js",
+    "fix-duplicates": "node scripts/permanent-duplicate-fix.js",
+    "sync-tables": "node scripts/sync-all-tables.js",
+    "add-constraints": "node scripts/add-unique-constraints.js",
     "start": "npm run start:backend",
     "start:backend": "cd backend && npm run start",
-    "start:frontend": "cd frontend && npm run start",
-    "create-drivers": "node scripts/create-multiple-drivers.js",
-    "add-dual-user": "node scripts/add-dual-role-user.js",
-    "fix-driver-profiles": "node scripts/fix-driver-profiles.js",
-    "create-dual-profile": "node scripts/create-dual-role-profile.js"
+    "start:frontend": "cd frontend && npm run start"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
@@ -50,6 +51,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.56.0",
     "dotenv": "^17.2.1",
+    "pg": "^8.16.3",
     "socket.io-client": "^4.8.1"
   }
 }

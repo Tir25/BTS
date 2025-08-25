@@ -125,7 +125,9 @@ export class DataManager {
   }
 
   getAvailableRoutes(): string[] {
-    const routes = [...new Set(this.getBuses().map((bus: BusInfo) => bus.routeName))];
+    const routes = [
+      ...new Set(this.getBuses().map((bus: BusInfo) => bus.routeName)),
+    ];
     return routes.filter((route: string) => route !== 'Route TBD');
   }
 

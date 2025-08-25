@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateUser, requireAdmin } from '../middleware/auth';
 import { AdminService } from '../services/adminService';
 import { RouteService } from '../services/routeService';
+import { getDriverBusInfo } from '../services/locationService';
 
 const router = express.Router();
 
@@ -319,6 +320,36 @@ router.post('/drivers/:driverId/assign-bus', async (req, res) => {
   }
 });
 
+// Get driver bus information
+router.get('/drivers/:driverId/bus', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+    const busInfo = await getDriverBusInfo(driverId);
+
+    if (!busInfo) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bus not found',
+        message: `No bus assigned to driver ${driverId}`,
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: { busInfo },
+      message: 'Driver bus information retrieved successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('❌ Error getting driver bus info:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get driver bus information',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Unassign driver from bus
 router.post('/drivers/:driverId/unassign-bus', async (req, res) => {
   try {
@@ -347,11 +378,35 @@ router.post('/drivers', async (req, res) => {
     const driverData = req.body;
 
     // Validate required fields
-    if (!driverData.email || !driverData.first_name || !driverData.last_name) {
+    if (
+      !driverData.email ||
+      !driverData.first_name ||
+      !driverData.last_name ||
+      !driverData.password
+    ) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields',
-        message: 'Email, first name, and last name are required',
+        message: 'Email, first name, last name, and password are required',
+      });
+    }
+
+    // Validate password strength
+    if (driverData.password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Weak password',
+        message: 'Password must be at least 6 characters long',
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(driverData.email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format',
+        message: 'Please provide a valid email address',
       });
     }
 
@@ -360,11 +415,21 @@ router.post('/drivers', async (req, res) => {
     return res.status(201).json({
       success: true,
       data: newDriver,
-      message: 'Driver created successfully',
+      message: 'Driver created successfully with Supabase Auth account',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error('❌ Error creating driver:', error);
+
+    // Handle specific Supabase errors
+    if (error instanceof Error && error.message.includes('Supabase')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Driver creation failed',
+        message: error.message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       error: 'Failed to create driver',
@@ -489,8 +554,6 @@ router.get('/routes/:routeId', async (req, res) => {
 router.post('/routes', async (req, res) => {
   try {
     const routeData = req.body;
-
-
 
     // Validate required fields
     if (!routeData.name || !routeData.name.trim()) {

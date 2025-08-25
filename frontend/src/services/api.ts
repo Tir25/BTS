@@ -138,33 +138,35 @@ class ApiService implements IApiService {
     }
   }
 
-  // Route operations (Supabase)
+  // Route operations (Backend API)
   async getRoutes(): Promise<{
     success: boolean;
     data: Route[];
     timestamp: string;
   }> {
     try {
-      const { data, error } = await supabase
-        .from('routes')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+      // Use backend API instead of direct Supabase call
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: Route[];
+        error?: string;
+        timestamp: string;
+      }>('/routes');
 
-      if (error) {
-        console.error('❌ Error fetching routes:', error);
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        console.error('❌ Error fetching routes from backend:', response.error);
         return {
           success: false,
           data: [],
           timestamp: new Date().toISOString(),
         };
       }
-
-      return {
-        success: true,
-        data: data || [],
-        timestamp: new Date().toISOString(),
-      };
     } catch (error) {
       console.error('❌ Error in getRoutes:', error);
       return {

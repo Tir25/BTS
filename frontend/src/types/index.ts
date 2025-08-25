@@ -58,6 +58,7 @@ export interface Route {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  stops?: GeoJSON.LineString;
 }
 
 export interface Driver {

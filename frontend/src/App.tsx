@@ -4,11 +4,13 @@ import { apiService } from './services/api';
 import { authService } from './services/authService';
 import { HealthResponse, User } from './types';
 import DriverInterface from './components/DriverInterface';
-import StudentMap from './components/StudentMap';
-
+import DriverLogin from './components/DriverLogin';
+import DriverDashboard from './components/DriverDashboard';
+import EnhancedStudentMap from './components/EnhancedStudentMap';
 import AdminPanel from './components/AdminPanel';
-
-
+import AdminLogin from './components/AdminLogin';
+import PremiumHomepage from './components/PremiumHomepage';
+import { TransitionProvider, GlobalTransitionWrapper } from './components/transitions';
 
 function App() {
   console.log('🚀 App component is rendering...');
@@ -76,26 +78,27 @@ function App() {
     };
   }, []);
 
-  const HomePage = () => (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-md w-full mx-auto p-6">
-        <div className="card">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+  // Legacy Homepage (for backward compatibility)
+  const LegacyHomePage = () => (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
+      <div className="max-w-4xl w-full mx-auto">
+        <div className="card-glass p-8">
+          <h1 className="text-4xl font-bold gradient-text mb-6 text-center">
             🚍 University Bus Tracking System
           </h1>
 
-          <div className="space-y-4">
+          <div className="space-y-6">
             {loading && (
               <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-                <p className="text-gray-600 mt-2">
+                <div className="loading-spinner mx-auto"></div>
+                <p className="text-white/70 mt-4">
                   Checking backend connection...
                 </p>
               </div>
             )}
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="bg-red-500/20 backdrop-blur-sm border border-red-400/30 rounded-xl p-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <svg
@@ -111,17 +114,17 @@ function App() {
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800">
+                    <h3 className="text-sm font-medium text-red-300">
                       Connection Error
                     </h3>
-                    <p className="text-sm text-red-700 mt-1">{error}</p>
+                    <p className="text-sm text-red-200 mt-1">{error}</p>
                   </div>
                 </div>
               </div>
             )}
 
             {health && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="bg-green-500/20 backdrop-blur-sm border border-green-400/30 rounded-xl p-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <svg
@@ -137,10 +140,10 @@ function App() {
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800">
+                    <h3 className="text-sm font-medium text-green-300">
                       Backend Connected
                     </h3>
-                    <div className="text-sm text-green-700 mt-1 space-y-1">
+                    <div className="text-sm text-green-200 mt-1 space-y-1">
                       <p>
                         <strong>Status:</strong> {health.status}
                       </p>
@@ -159,8 +162,8 @@ function App() {
                         <div className="mt-2 text-xs">
                           <p>
                             <strong>PostgreSQL:</strong>{' '}
-                            {health.services.database.details.details?.postgresVersion ||
-                              'Unknown'}
+                            {health.services.database.details.details
+                              ?.postgresVersion || 'Unknown'}
                           </p>
                           <p>
                             <strong>Pool Status:</strong>{' '}
@@ -174,14 +177,14 @@ function App() {
               </div>
             )}
 
-            <div className="text-center text-sm text-gray-500 mt-6">
+            <div className="text-center text-sm text-white/60 mt-6">
               <p>Phase 5: Admin Panel & Analytics Dashboard ✅</p>
               <p className="mt-1">
                 Role-based access control, analytics charts, and system
                 management
               </p>
               {authState.isAuthenticated && (
-                <p className="mt-2 text-green-600">
+                <p className="mt-2 text-green-400">
                   ✅ Authenticated as:{' '}
                   {authState.user?.full_name || authState.user?.email}
                 </p>
@@ -189,29 +192,25 @@ function App() {
             </div>
 
             {/* Navigation Links */}
-            <div className="mt-6 space-y-3">
-              <Link
-                to="/driver"
-                className="block w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-              >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+              <Link to="/driver" className="btn-primary text-center block">
                 🚌 Driver Interface
               </Link>
 
-              <Link
-                to="/student"
-                className="block w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-center"
-              >
+              <Link to="/student" className="btn-primary text-center block">
                 👨‍🎓 Student Map (Live Tracking)
               </Link>
 
-              <Link
-                to="/admin"
-                className="block w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-center"
-              >
+              <Link to="/admin" className="btn-primary text-center block">
                 👨‍💼 Admin Panel (Phase 5)
               </Link>
 
-
+              <Link
+                to="/premium-demo"
+                className="btn-secondary text-center block"
+              >
+                ✨ Premium UI Demo
+              </Link>
             </div>
           </div>
         </div>
@@ -221,20 +220,17 @@ function App() {
 
   // 404 Not Found Component
   const NotFound = () => (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-md w-full mx-auto p-6 text-center">
-        <div className="bg-white rounded-lg shadow-md p-8">
-          <h1 className="text-6xl font-bold text-gray-300 mb-4">404</h1>
-          <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
+      <div className="max-w-md w-full mx-auto text-center">
+        <div className="card-glass p-8">
+          <h1 className="text-6xl font-bold gradient-text mb-4">404</h1>
+          <h2 className="text-2xl font-semibold text-white mb-4">
             Page Not Found
           </h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-white/70 mb-6">
             The page you're looking for doesn't exist.
           </p>
-          <Link
-            to="/"
-            className="inline-block bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
+          <Link to="/" className="btn-primary inline-block">
             Go Back Home
           </Link>
         </div>
@@ -244,14 +240,29 @@ function App() {
 
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/driver" element={<DriverInterface />} />
-        <Route path="/student" element={<StudentMap />} />
-        <Route path="/admin" element={<AdminPanel />} />
+      <TransitionProvider>
+        <GlobalTransitionWrapper>
+          <Routes>
+            {/* New Premium Homepage */}
+            <Route path="/" element={<PremiumHomepage />} />
 
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+            {/* Legacy Routes */}
+            <Route path="/legacy" element={<LegacyHomePage />} />
+            <Route path="/driver" element={<DriverInterface />} />
+            <Route path="/student" element={<EnhancedStudentMap />} />
+            <Route path="/admin" element={<AdminPanel />} />
+
+            {/* New Navigation Routes */}
+            <Route path="/driver-login" element={<DriverLogin />} />
+            <Route path="/driver-dashboard" element={<DriverDashboard />} />
+            <Route path="/student-map" element={<EnhancedStudentMap />} />
+            <Route path="/admin-login" element={<AdminLogin />} />
+            <Route path="/admin-dashboard" element={<AdminPanel />} />
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </GlobalTransitionWrapper>
+      </TransitionProvider>
     </Router>
   );
 }

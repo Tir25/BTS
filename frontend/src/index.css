@@ -1,3 +1,6 @@
+/* Import Inter font for premium typography */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 /* MapLibre GL CSS */
 @import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -8,239 +11,486 @@
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    scroll-behavior: smooth;
+    /* Prevent zoom on input focus on iOS */
+    -webkit-text-size-adjust: 100%;
   }
   
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white;
+    background-attachment: fixed;
+    min-height: 100vh;
+    /* Prevent horizontal scroll on mobile */
+    overflow-x: hidden;
+  }
+
+  /* Custom scrollbar for premium feel */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-800/50;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-blue-500/50 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-blue-400/70;
+  }
+
+  /* Mobile-specific optimizations */
+  @media (max-width: 768px) {
+    /* Improve touch targets */
+    button, [role="button"], .cursor-pointer {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    
+    /* Optimize text rendering */
+    * {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Reduce motion for better performance */
+    .animate-pulse {
+      animation-duration: 3s;
+    }
+  }
+
+  /* Input field styling to ensure text visibility */
+input[type="password"],
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="number"] {
+  color: #111827 !important; /* text-gray-900 */
+  background-color: #ffffff !important; /* bg-white */
+}
+
+input[type="password"]::placeholder,
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="tel"]::placeholder,
+input[type="number"]::placeholder {
+  color: #6b7280 !important; /* text-gray-500 */
+}
+
+  /* Ensure input fields in forms are visible */
+.bg-green-50 input[type="password"],
+.bg-green-50 input[type="text"],
+.bg-green-50 input[type="email"],
+.bg-green-50 input[type="tel"],
+.bg-green-50 input[type="number"] {
+  color: #111827 !important;
+  background-color: #ffffff !important;
+}
+
+  /* Global Transition Styles */
+  .transition-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .transition-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+    pointer-events: none;
+  }
+
+  .glass-card-transition {
+    backdrop-filter: blur(20px);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 1rem;
+  }
+
+  .video-zoom-transition {
+    transform-origin: center;
+    transition: transform 0.6s ease-in-out;
+  }
+
+  .map-zoom-transition {
+    transform-origin: center;
+    transition: transform 0.8s ease-out;
   }
 }
 
 @layer components {
+  /* Premium Button Styles */
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    @apply bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 
+           text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 
+           shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5
+           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900
+           active:scale-95;
   }
   
   .btn-secondary {
-    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    @apply bg-white/10 backdrop-blur-sm border border-white/20 text-white font-medium py-3 px-6 
+           rounded-xl transition-all duration-300 hover:bg-white/20 hover:border-white/30
+           hover:-translate-y-0.5 shadow-lg hover:shadow-xl active:scale-95;
   }
-  
+
+  .btn-danger {
+    @apply bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 
+           text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 
+           shadow-lg hover:shadow-xl hover:shadow-red-500/25 hover:-translate-y-0.5
+           active:scale-95;
+  }
+
+  /* Premium Card Styles */
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+    @apply bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl 
+           transition-all duration-300 hover:bg-white/15 hover:border-white/30
+           active:scale-95;
+  }
+
+  .card-glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl 
+           transition-all duration-500 hover:bg-white/10 hover:border-white/20
+           hover:shadow-blue-500/10 hover:-translate-y-1 active:scale-95;
+  }
+
+  /* Glassmorphism Panel */
+  .glass-panel {
+    @apply bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl;
+  }
+
+  /* Premium Input Styles */
+  .input-premium {
+    @apply bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 
+           text-white placeholder-white/60 focus:outline-none focus:ring-2 
+           focus:ring-blue-400 focus:border-transparent transition-all duration-300;
+  }
+
+  /* Status Badges */
+  .badge-success {
+    @apply bg-green-500/20 backdrop-blur-sm border border-green-400/30 text-green-300 
+           px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .badge-error {
+    @apply bg-red-500/20 backdrop-blur-sm border border-red-400/30 text-red-300 
+           px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-500/20 backdrop-blur-sm border border-yellow-400/30 text-yellow-300 
+           px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .badge-info {
+    @apply bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 text-blue-300 
+           px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  /* Mobile-optimized touch interactions */
+  .touch-friendly {
+    @apply cursor-pointer transition-all duration-200 active:scale-95;
+  }
+
+  /* Video background optimizations */
+  .video-background {
+    @apply w-full h-full object-cover;
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
+  /* Mobile-specific video optimizations */
+  @media (max-width: 768px) {
+    .video-background {
+      object-position: center;
+    }
   }
 }
 
-/* Custom styles for bus tracking map */
+/* Enhanced glassmorphism effects */
+.glass-ultra {
+  @apply bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl;
+}
+
+.glass-premium {
+  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
+}
+
+/* Interactive button effects */
+.interactive-button {
+  @apply relative overflow-hidden transition-all duration-300;
+}
+
+.interactive-button::before {
+  content: '';
+  @apply absolute inset-0 bg-gradient-to-r from-white/10 via-transparent to-white/10 
+         opacity-0 transition-opacity duration-300;
+}
+
+.interactive-button:hover::before {
+  @apply opacity-100;
+}
+
+/* Specific glow effects */
+.glow-blue {
+  box-shadow: 
+    0 0 20px rgba(59, 130, 246, 0.3),
+    0 0 40px rgba(59, 130, 246, 0.1);
+}
+
+.glow-purple {
+  box-shadow: 
+    0 0 20px rgba(147, 51, 234, 0.3),
+    0 0 40px rgba(147, 51, 234, 0.1);
+}
+
+.glow-green {
+  box-shadow: 
+    0 0 20px rgba(34, 197, 94, 0.3),
+    0 0 40px rgba(34, 197, 94, 0.1);
+}
+
+/* Particle effects */
+.particle {
+  @apply absolute rounded-full pointer-events-none;
+  will-change: transform, opacity;
+}
+
+/* Text glow effects */
+.text-glow {
+  text-shadow: 
+    0 0 10px rgba(59, 130, 246, 0.5),
+    0 0 20px rgba(59, 130, 246, 0.3),
+    0 0 30px rgba(59, 130, 246, 0.1);
+}
+
+  .text-glow-purple {
+    text-shadow: 
+      0 0 10px rgba(147, 51, 234, 0.5),
+      0 0 20px rgba(147, 51, 234, 0.3),
+      0 0 30px rgba(147, 51, 234, 0.1);
+  }
+
+/* Custom animations for premium feel */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.6); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { 
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  50% { 
+    transform: scale(1.05);
+    box-shadow: 0 0 40px rgba(59, 130, 246, 0.6);
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes tilt {
+  0%, 100% { transform: rotateY(0deg) rotateX(0deg); }
+  25% { transform: rotateY(2deg) rotateX(1deg); }
+  75% { transform: rotateY(-2deg) rotateX(-1deg); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.animate-tilt {
+  animation: tilt 4s ease-in-out infinite;
+}
+
+/* Enhanced map styles */
 .leaflet-container {
   font-family: inherit;
+  border-radius: 1rem;
+  overflow: hidden;
 }
 
 .leaflet-popup-content-wrapper {
-  border-radius: 8px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  @apply bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl;
 }
 
 .leaflet-popup-content {
-  margin: 12px;
-  line-height: 1.4;
+  @apply text-white m-4;
 }
 
 .leaflet-popup-tip {
-  background: white;
+  @apply bg-white/10 backdrop-blur-xl;
 }
 
 /* Custom bus icon animations */
 .custom-bus-icon {
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.1);
-  }
+  animation: pulse-glow 2s infinite;
 }
 
 /* Map controls styling */
 .leaflet-control-zoom {
-  border: none !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  @apply border-none shadow-2xl;
 }
 
 .leaflet-control-zoom a {
-  background: white !important;
-  color: #374151 !important;
-  border: 1px solid #d1d5db !important;
-  border-radius: 4px !important;
-  font-weight: 600 !important;
-}
-
-.leaflet-control-zoom a:hover {
-  background: #f3f4f6 !important;
-  color: #1f2937 !important;
+  @apply bg-white/10 backdrop-blur-sm border border-white/20 text-white 
+         rounded-lg font-semibold hover:bg-white/20 hover:border-white/30;
 }
 
 /* Route line hover effects */
 .leaflet-interactive:hover {
   stroke-width: 3px !important;
   cursor: pointer;
+  filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.5));
 }
 
 /* Bus marker hover effects */
 .custom-bus-icon:hover {
   transform: scale(1.2);
   transition: transform 0.2s ease;
+  filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.8));
 }
 
-/* Scrollbar styling for bus list */
-.overflow-y-auto::-webkit-scrollbar {
-  width: 6px;
+/* Loading spinner */
+.loading-spinner {
+  @apply w-8 h-8 border-2 border-white/20 border-t-blue-400 rounded-full animate-spin;
 }
 
-.overflow-y-auto::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 3px;
+/* Gradient text */
+.gradient-text {
+  @apply bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent;
 }
 
-.overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+/* Glassmorphism backdrop */
+  .glass-backdrop {
+    @apply bg-white/5 backdrop-blur-2xl border border-white/10;
+  }
+
+/* Premium shadows */
+.shadow-premium {
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+.shadow-glow {
+  box-shadow: 
+    0 0 20px rgba(59, 130, 246, 0.3),
+    0 0 40px rgba(59, 130, 246, 0.1);
 }
 
-/* Loading animation for map */
-.map-loading {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 1000;
-}
-
-/* Map attribution styling */
-.leaflet-control-attribution {
-  background: rgba(255, 255, 255, 0.9) !important;
-  font-size: 11px !important;
-  color: #6b7280 !important;
-}
-
-/* Enhanced popup styling */
-.leaflet-popup-content h3 {
-  color: #1f2937;
-  font-weight: 600;
-  margin-bottom: 8px;
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 4px;
-}
-
-.leaflet-popup-content p {
-  margin: 4px 0;
-  color: #4b5563;
-}
-
-.leaflet-popup-content .font-medium {
-  color: #374151;
-}
-
-/* Status indicators */
-.status-active {
-  background: linear-gradient(45deg, #10b981, #059669);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* Map container enhancements */
-.map-container {
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-/* Filter controls styling */
-.filter-controls {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-}
-
-/* Bus card hover effects */
-.bus-card {
-  transition: all 0.2s ease;
-  border: 1px solid #e5e7eb;
-}
-
-.bus-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1), 0 2px 4px -1px rgba(59, 130, 246, 0.06);
-  transform: translateY(-1px);
-}
-
-/* Route information styling */
-.route-info {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 16px;
-}
-
-/* System status panel */
-.system-status {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  border: 1px solid #93c5fd;
-  border-radius: 8px;
-  padding: 16px;
-}
-
-/* Responsive map controls */
+/* Responsive video background */
 @media (max-width: 768px) {
-  .leaflet-control-zoom {
-    display: none;
-  }
-  
-  .map-container {
-    height: 300px !important;
-  }
-  
-  .filter-controls {
-    grid-template-columns: 1fr;
-    gap: 12px;
+  .video-background {
+    object-position: center;
   }
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .leaflet-popup-content-wrapper {
-    background: #1f2937;
-    color: #f9fafb;
+/* Performance optimizations */
+.video-background {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-glow,
+  .animate-pulse-glow,
+  .animate-shimmer,
+  .animate-tilt {
+    animation: none;
   }
   
-  .leaflet-popup-content h3 {
-    color: #f9fafb;
-    border-bottom-color: #374151;
+  /* Reduce motion for mobile devices */
+  @media (max-width: 768px) {
+    .animate-pulse {
+      animation: none;
+    }
+    
+    .animate-spin {
+      animation: none;
+    }
+  }
+}
+
+/* Mobile-specific performance optimizations */
+@media (max-width: 768px) {
+  /* Reduce backdrop blur for better performance */
+  .backdrop-blur-xl {
+    backdrop-filter: blur(12px);
   }
   
-  .leaflet-popup-content p {
-    color: #d1d5db;
+  .backdrop-blur-2xl {
+    backdrop-filter: blur(16px);
   }
   
-  .leaflet-popup-content .font-medium {
-    color: #e5e7eb;
+  /* Optimize shadows for mobile */
+  .shadow-2xl {
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   }
+  
+  /* Reduce particle count and animation complexity */
+  .particle {
+    animation-duration: 2s;
+  }
+}
+
+/* Blob animations for admin login */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
 }
 
 

@@ -949,8 +949,6 @@ const DriverInterface: React.FC = () => {
                   >
                     🧪 Test Location
                   </button>
-
-
                 </div>
               </div>
             )}

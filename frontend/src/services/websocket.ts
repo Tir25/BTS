@@ -168,7 +168,11 @@ class WebSocketService implements IWebSocketService {
   }
 
   onBusLocationUpdate(callback: (location: BusLocation) => void): void {
-    this.socket?.on('bus:locationUpdate', callback);
+    console.log('🎧 Setting up bus:locationUpdate listener');
+    this.socket?.on('bus:locationUpdate', (data) => {
+      console.log('📡 Received bus:locationUpdate event:', data);
+      callback(data);
+    });
   }
 
   onDriverConnected(
@@ -214,22 +218,22 @@ class WebSocketService implements IWebSocketService {
     return this._isConnected;
   }
 
-              authenticateAsDriver(token: string): void {
-              if (this.socket && this.isConnected()) {
-                this.socket.emit('driver:authenticate', { token });
+  authenticateAsDriver(token: string): void {
+    if (this.socket && this.isConnected()) {
+      this.socket.emit('driver:authenticate', { token });
 
-                // Add listener for driver authentication response
-                this.socket.once('driver:authenticated', (data) => {
-                  console.log('✅ Driver: Authentication successful:', data);
-                });
+      // Add listener for driver authentication response
+      this.socket.once('driver:authenticated', (data) => {
+        console.log('✅ Driver: Authentication successful:', data);
+      });
 
-                this.socket.once('error', (error) => {
-                  console.error('❌ Driver: Authentication failed:', error);
-                });
-              } else {
-                console.error('❌ Driver: Cannot authenticate - socket not connected');
-              }
-            }
+      this.socket.once('error', (error) => {
+        console.error('❌ Driver: Authentication failed:', error);
+      });
+    } else {
+      console.error('❌ Driver: Cannot authenticate - socket not connected');
+    }
+  }
 
   off(event: string): void {
     this.socket?.off(event);

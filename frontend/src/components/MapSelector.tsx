@@ -48,7 +48,6 @@ const MapSelector: React.FC<MapSelectorProps> = ({
       GANPAT_UNIVERSITY.coordinates
     );
 
-
     // Initialize map
     map.current = new maplibregl.Map({
       container: mapContainer.current,

@@ -82,10 +82,10 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading admin dashboard...</p>
+          <div className="loading-spinner mx-auto"></div>
+          <p className="mt-4 text-white/70">Loading admin dashboard...</p>
         </div>
       </div>
     );
@@ -93,16 +93,16 @@ export default function AdminDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-            <h3 className="text-lg font-medium text-red-800 mb-2">
+          <div className="card-glass p-8">
+            <h3 className="text-lg font-medium text-red-300 mb-2">
               Error Loading Dashboard
             </h3>
-            <p className="text-red-700 mb-4">{error}</p>
+            <p className="text-red-200 mb-4">{error}</p>
             <button
               onClick={loadDashboardData}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
+              className="btn-primary bg-red-600 hover:bg-red-700"
             >
               Retry
             </button>
@@ -113,20 +113,20 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
       {/* Header */}
-      <header className="bg-white shadow">
+      <header className="bg-white/10 backdrop-blur-sm border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold text-gray-900">
+                <h1 className="text-2xl font-bold text-white">
                   🚍 Admin Dashboard
                 </h1>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-white/80">
                 Welcome,{' '}
                 {currentUser?.first_name ||
                   currentUser?.full_name ||
@@ -134,14 +134,14 @@ export default function AdminDashboard() {
               </span>
               <button
                 onClick={loadDashboardData}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm"
+                className="btn-primary text-sm"
                 disabled={loading}
               >
                 {loading ? 'Refreshing...' : '🔄 Refresh'}
               </button>
               <button
                 onClick={handleSignOut}
-                className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 text-sm"
+                className="btn-secondary text-sm"
               >
                 Sign Out
               </button>
@@ -152,44 +152,44 @@ export default function AdminDashboard() {
 
       {/* Navigation Tabs */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="border-b border-gray-200">
+        <div className="border-b border-white/20">
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
                 activeTab === 'overview'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-blue-400 text-blue-300'
+                  : 'border-transparent text-white/60 hover:text-white/80 hover:border-white/40'
               }`}
             >
               Overview
             </button>
             <button
               onClick={() => setActiveTab('analytics')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
                 activeTab === 'analytics'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-blue-400 text-blue-300'
+                  : 'border-transparent text-white/60 hover:text-white/80 hover:border-white/40'
               }`}
             >
               Analytics
             </button>
             <button
               onClick={() => setActiveTab('management')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
                 activeTab === 'management'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-blue-400 text-blue-300'
+                  : 'border-transparent text-white/60 hover:text-white/80 hover:border-white/40'
               }`}
             >
               Management
             </button>
             <button
               onClick={() => setActiveTab('media')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
                 activeTab === 'media'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-blue-400 text-blue-300'
+                  : 'border-transparent text-white/60 hover:text-white/80 hover:border-white/40'
               }`}
             >
               Media
@@ -204,7 +204,7 @@ export default function AdminDashboard() {
           <div className="px-4 py-6 sm:px-0">
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {/* System Health Cards */}
-              <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="card-glass overflow-hidden">
                 <div className="p-5">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
@@ -220,10 +220,10 @@ export default function AdminDashboard() {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">
+                        <dt className="text-sm font-medium text-white/70 truncate">
                           Total Buses
                         </dt>
-                        <dd className="text-lg font-medium text-gray-900">
+                        <dd className="text-lg font-medium text-white">
                           {systemHealth?.buses || 0}
                         </dd>
                       </dl>
@@ -232,7 +232,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="card-glass overflow-hidden">
                 <div className="p-5">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
@@ -252,10 +252,10 @@ export default function AdminDashboard() {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">
+                        <dt className="text-sm font-medium text-white/70 truncate">
                           Total Routes
                         </dt>
-                        <dd className="text-lg font-medium text-gray-900">
+                        <dd className="text-lg font-medium text-white">
                           {systemHealth?.routes || 0}
                         </dd>
                       </dl>
@@ -264,7 +264,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="card-glass overflow-hidden">
                 <div className="p-5">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
@@ -280,10 +280,10 @@ export default function AdminDashboard() {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">
+                        <dt className="text-sm font-medium text-white/70 truncate">
                           Total Drivers
                         </dt>
-                        <dd className="text-lg font-medium text-gray-900">
+                        <dd className="text-lg font-medium text-white">
                           {systemHealth?.drivers || 0}
                         </dd>
                       </dl>
@@ -292,7 +292,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="card-glass overflow-hidden">
                 <div className="p-5">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
@@ -312,10 +312,10 @@ export default function AdminDashboard() {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">
+                        <dt className="text-sm font-medium text-white/70 truncate">
                           Recent Locations
                         </dt>
-                        <dd className="text-lg font-medium text-gray-900">
+                        <dd className="text-lg font-medium text-white">
                           {systemHealth?.recentLocations || 0}
                         </dd>
                       </dl>
@@ -328,33 +328,33 @@ export default function AdminDashboard() {
             {/* Quick Stats */}
             {analytics && (
               <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="card-glass overflow-hidden">
                   <div className="p-5">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    <h3 className="text-lg font-medium text-white mb-4">
                       System Status
                     </h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-white/70">
                           Active Buses
                         </span>
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-white">
                           {analytics.activeBuses}/{analytics.totalBuses}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-white/70">
                           Active Routes
                         </span>
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-white">
                           {analytics.activeRoutes}/{analytics.totalRoutes}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-white/70">
                           Active Drivers
                         </span>
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-white">
                           {analytics.activeDrivers}/{analytics.totalDrivers}
                         </span>
                       </div>
@@ -362,25 +362,25 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="card-glass overflow-hidden">
                   <div className="p-5">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    <h3 className="text-lg font-medium text-white mb-4">
                       Performance
                     </h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-white/70">
                           Average Delay
                         </span>
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-white">
                           {analytics.averageDelay.toFixed(1)} min
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-white/70">
                           System Health
                         </span>
-                        <span className="text-sm font-medium text-green-600">
+                        <span className="text-sm font-medium text-green-400">
                           Good
                         </span>
                       </div>
@@ -388,12 +388,12 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="card-glass overflow-hidden">
                   <div className="p-5">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    <h3 className="text-lg font-medium text-white mb-4">
                       Last Updated
                     </h3>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-white/70">
                       {systemHealth?.timestamp
                         ? new Date(systemHealth.timestamp).toLocaleString()
                         : 'N/A'}
@@ -409,40 +409,40 @@ export default function AdminDashboard() {
           <div className="px-4 py-6 sm:px-0">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
               {/* System Statistics */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <div className="card-glass p-6">
+                <h3 className="text-lg font-medium text-white mb-4">
                   System Statistics
                 </h3>
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                    <span className="text-blue-700 font-medium">
+                  <div className="flex justify-between items-center p-3 bg-blue-500/20 rounded-lg border border-blue-400/30">
+                    <span className="text-blue-300 font-medium">
                       Active Buses
                     </span>
-                    <span className="text-2xl font-bold text-blue-900">
+                    <span className="text-2xl font-bold text-blue-200">
                       {analytics.activeBuses}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                    <span className="text-green-700 font-medium">
+                  <div className="flex justify-between items-center p-3 bg-green-500/20 rounded-lg border border-green-400/30">
+                    <span className="text-green-300 font-medium">
                       Active Routes
                     </span>
-                    <span className="text-2xl font-bold text-green-900">
+                    <span className="text-2xl font-bold text-green-200">
                       {analytics.activeRoutes}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
-                    <span className="text-yellow-700 font-medium">
+                  <div className="flex justify-between items-center p-3 bg-yellow-500/20 rounded-lg border border-yellow-400/30">
+                    <span className="text-yellow-300 font-medium">
                       Active Drivers
                     </span>
-                    <span className="text-2xl font-bold text-yellow-900">
+                    <span className="text-2xl font-bold text-yellow-200">
                       {analytics.activeDrivers}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                    <span className="text-purple-700 font-medium">
+                  <div className="flex justify-between items-center p-3 bg-purple-500/20 rounded-lg border border-purple-400/30">
+                    <span className="text-purple-300 font-medium">
                       Average Delay
                     </span>
-                    <span className="text-2xl font-bold text-purple-900">
+                    <span className="text-2xl font-bold text-purple-200">
                       {analytics.averageDelay.toFixed(1)} min
                     </span>
                   </div>
@@ -450,61 +450,61 @@ export default function AdminDashboard() {
               </div>
 
               {/* System Distribution */}
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <div className="card-glass p-6">
+                <h3 className="text-lg font-medium text-white mb-4">
                   System Distribution
                 </h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium text-white/80">
                       Active Buses
                     </span>
                     <div className="flex items-center">
-                      <div className="w-32 bg-gray-200 rounded-full h-2 mr-2">
+                      <div className="w-32 bg-white/20 rounded-full h-2 mr-2">
                         <div
-                          className="bg-blue-600 h-2 rounded-full"
+                          className="bg-blue-400 h-2 rounded-full"
                           style={{
                             width: `${(analytics.activeBuses / analytics.totalBuses) * 100}%`,
                           }}
                         ></div>
                       </div>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-white/70">
                         {analytics.activeBuses}/{analytics.totalBuses}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium text-white/80">
                       Active Routes
                     </span>
                     <div className="flex items-center">
-                      <div className="w-32 bg-gray-200 rounded-full h-2 mr-2">
+                      <div className="w-32 bg-white/20 rounded-full h-2 mr-2">
                         <div
-                          className="bg-green-600 h-2 rounded-full"
+                          className="bg-green-400 h-2 rounded-full"
                           style={{
                             width: `${(analytics.activeRoutes / analytics.totalRoutes) * 100}%`,
                           }}
                         ></div>
                       </div>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-white/70">
                         {analytics.activeRoutes}/{analytics.totalRoutes}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium text-white/80">
                       Active Drivers
                     </span>
                     <div className="flex items-center">
-                      <div className="w-32 bg-gray-200 rounded-full h-2 mr-2">
+                      <div className="w-32 bg-white/20 rounded-full h-2 mr-2">
                         <div
-                          className="bg-yellow-600 h-2 rounded-full"
+                          className="bg-yellow-400 h-2 rounded-full"
                           style={{
                             width: `${(analytics.activeDrivers / analytics.totalDrivers) * 100}%`,
                           }}
                         ></div>
                       </div>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-white/70">
                         {analytics.activeDrivers}/{analytics.totalDrivers}
                       </span>
                     </div>
