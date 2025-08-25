@@ -31,48 +31,51 @@ if (fs.existsSync('public')) {
   console.log('✅ Static assets copied successfully!');
 }
 
-// Build CSS first
+// Build JavaScript with CSS handling
 esbuild.build({
-  entryPoints: ['src/index.css'],
+  entryPoints: ['src/main.tsx'],
   bundle: true,
-  outfile: 'dist/assets/index.css',
+  outfile: 'dist/assets/main.js',
+  format: 'esm',
+  target: 'esnext',
   minify: true,
+  sourcemap: false,
   loader: {
+    '.tsx': 'tsx',
+    '.ts': 'ts',
+    '.jsx': 'jsx',
+    '.js': 'js',
     '.css': 'css',
   },
-}).then(() => {
-  console.log('✅ CSS built successfully!');
-  
-  // Build JavaScript
-  return esbuild.build({
-    entryPoints: ['src/main.tsx'],
-    bundle: true,
-    outfile: 'dist/assets/main.js',
-    format: 'esm',
-    target: 'esnext',
-    minify: true,
-    sourcemap: false,
-    loader: {
-      '.tsx': 'tsx',
-      '.ts': 'ts',
-      '.jsx': 'jsx',
-      '.js': 'js',
-    },
-    define: {
-      'process.env.NODE_ENV': '"production"',
-      'import.meta.env.VITE_SUPABASE_URL': `"${envVars.VITE_SUPABASE_URL || ''}"`,
-      'import.meta.env.VITE_SUPABASE_ANON_KEY': `"${envVars.VITE_SUPABASE_ANON_KEY || ''}"`,
-      'import.meta.env.VITE_ADMIN_EMAILS': `"${envVars.VITE_ADMIN_EMAILS || ''}"`,
-      'import.meta.env.VITE_API_URL': `"${envVars.VITE_API_URL || ''}"`,
-      'import.meta.env.VITE_WEBSOCKET_URL': `"${envVars.VITE_WEBSOCKET_URL || ''}"`,
-      'import.meta.env.VITE_MAPLIBRE_TOKEN': `"${envVars.VITE_MAPLIBRE_TOKEN || ''}"`,
-      'import.meta.env.DEV': 'false',
-      'import.meta.env.PROD': 'true',
-      'import.meta.env.MODE': '"production"',
-    },
-  });
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    'import.meta.env.VITE_SUPABASE_URL': `"${envVars.VITE_SUPABASE_URL || ''}"`,
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': `"${envVars.VITE_SUPABASE_ANON_KEY || ''}"`,
+    'import.meta.env.VITE_ADMIN_EMAILS': `"${envVars.VITE_ADMIN_EMAILS || ''}"`,
+    'import.meta.env.VITE_API_URL': `"${envVars.VITE_API_URL || ''}"`,
+    'import.meta.env.VITE_WEBSOCKET_URL': `"${envVars.VITE_WEBSOCKET_URL || ''}"`,
+    'import.meta.env.VITE_MAPLIBRE_TOKEN': `"${envVars.VITE_MAPLIBRE_TOKEN || ''}"`,
+    'import.meta.env.DEV': 'false',
+    'import.meta.env.PROD': 'true',
+    'import.meta.env.MODE': '"production"',
+  },
 }).then(() => {
   console.log('✅ JavaScript built successfully!');
+  
+  // Extract CSS from the bundle and create separate CSS file
+  const mainJsContent = fs.readFileSync('dist/assets/main.js', 'utf8');
+  const cssMatch = mainJsContent.match(/\.css\("([^"]+)"\)/);
+  
+  if (cssMatch) {
+    // If CSS is embedded in JS, extract it
+    const cssContent = cssMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    fs.writeFileSync('dist/assets/index.css', cssContent);
+    console.log('✅ CSS extracted and saved successfully!');
+  } else {
+    // If no CSS found, create empty CSS file
+    fs.writeFileSync('dist/assets/index.css', '/* CSS will be loaded from main.js */');
+    console.log('✅ Empty CSS file created');
+  }
   
   // Create production HTML
   const htmlContent = `<!doctype html>
