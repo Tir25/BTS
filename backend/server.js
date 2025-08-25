@@ -9,9 +9,14 @@ require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
+// Parse CORS origins
+const corsOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : ["http://localhost:5173"];
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+    origin: corsOrigins,
     methods: ["GET", "POST"]
   }
 });
@@ -19,7 +24,7 @@ const io = new Server(server, {
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+  origin: corsOrigins,
   credentials: true
 }));
 
