@@ -41,6 +41,9 @@ if (fs.existsSync('public')) {
 try {
   let cssContent = fs.readFileSync('src/index.css', 'utf8');
   
+  // Remove @import statements that cause path conflicts
+  cssContent = cssContent.replace(/@import\s+['"]maplibre-gl\/dist\/maplibre-gl\.css['"];?\s*/g, '');
+  
   // Basic Tailwind directive replacements
   cssContent = cssContent.replace(/@tailwind\s+base;/g, '');
   cssContent = cssContent.replace(/@tailwind\s+components;/g, '');
@@ -407,8 +410,9 @@ esbuild.build({
     '.ts': 'ts',
     '.jsx': 'jsx',
     '.js': 'js',
-    '.css': 'css',
+    '.css': 'empty', // Don't bundle CSS imports
   },
+  external: ['maplibre-gl/dist/maplibre-gl.css'], // External CSS imports
   define: {
     'process.env.NODE_ENV': '"production"',
     'import.meta.env.VITE_SUPABASE_URL': `"${envVars.VITE_SUPABASE_URL || ''}"`,

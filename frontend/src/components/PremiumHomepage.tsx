@@ -66,6 +66,7 @@ const PremiumHomepage: React.FC = () => {
     <div className="relative min-h-screen overflow-hidden">
       {/* Video Background */}
       <div className="absolute inset-0 z-0">
+        {/* Video background with multiple fallbacks */}
         <video
           ref={videoRef}
           autoPlay
@@ -73,14 +74,22 @@ const PremiumHomepage: React.FC = () => {
           muted
           playsInline
           className="w-full h-full object-cover"
-          preload="auto"
+          preload="metadata"
           onError={(e) => {
             console.warn('Video failed to load, using fallback background');
             e.currentTarget.style.display = 'none';
           }}
+          onLoadStart={() => {
+            console.log('Video loading started');
+          }}
+          onCanPlay={() => {
+            console.log('Video can play');
+            setIsVideoLoaded(true);
+          }}
         >
-          <source src="/videos/background-video.mp4" type="video/mp4" />
-          <source src="/videos/countryside-bus.mp4" type="video/mp4" />
+          <source src="/videos/background-video.mp4" type="video/mp4; codecs=avc1.42E01E, mp4a.40.2" />
+          <source src="/videos/countryside-bus.mp4" type="video/mp4; codecs=avc1.42E01E, mp4a.40.2" />
+          <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4; codecs=avc1.42E01E, mp4a.40.2" />
           Your browser does not support the video tag.
         </video>
         
