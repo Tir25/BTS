@@ -184,7 +184,7 @@ const PremiumHomepage: React.FC = () => {
                 <div className="text-center px-2 flex flex-col items-center justify-center h-full">
                   <div className="card-icon-wrapper mb-2 sm:mb-4 flex items-center justify-center">
                     <div className="icon-container">
-                      <span className="text-4xl sm:text-6xl animate-pulse">🚌</span>
+                      <span className="text-6xl sm:text-8xl animate-pulse">🚌</span>
                     </div>
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -224,7 +224,7 @@ const PremiumHomepage: React.FC = () => {
                 <div className="text-center px-2 flex flex-col items-center justify-center h-full">
                   <div className="card-icon-wrapper mb-2 sm:mb-4 flex items-center justify-center">
                     <div className="icon-container">
-                      <span className="text-4xl sm:text-6xl animate-pulse">🗺️</span>
+                      <span className="text-6xl sm:text-8xl animate-pulse">🗺️</span>
                     </div>
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -264,7 +264,7 @@ const PremiumHomepage: React.FC = () => {
                 <div className="text-center px-2 flex flex-col items-center justify-center h-full">
                   <div className="card-icon-wrapper mb-2 sm:mb-4 flex items-center justify-center">
                     <div className="icon-container">
-                      <span className="text-4xl sm:text-6xl animate-pulse">⚙️</span>
+                      <span className="text-6xl sm:text-8xl animate-pulse">⚙️</span>
                     </div>
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
