@@ -32,16 +32,15 @@ if (fs.existsSync('public')) {
   console.log('✅ Static assets copied successfully!');
 }
 
-// Process CSS with PostCSS and Tailwind
+// Copy CSS file directly
 try {
-  // Use PostCSS to process CSS with Tailwind
-  execSync('npx postcss src/index.css -o dist/assets/index.css --env production', { stdio: 'inherit' });
-  console.log('✅ CSS processed with PostCSS and Tailwind successfully!');
-} catch (error) {
-  console.error('❌ CSS processing failed:', error);
-  // Fallback: copy raw CSS
   fs.copyFileSync('src/index.css', 'dist/assets/index.css');
-  console.log('⚠️ Using fallback CSS (no Tailwind processing)');
+  console.log('✅ CSS file copied successfully!');
+} catch (error) {
+  console.error('❌ CSS copy failed:', error);
+  // Create empty CSS file as fallback
+  fs.writeFileSync('dist/assets/index.css', '/* CSS file not found */');
+  console.log('⚠️ Created empty CSS file as fallback');
 }
 
 // Build JavaScript
