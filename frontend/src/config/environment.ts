@@ -2,8 +2,9 @@
 const getApiUrl = () => {
   // Check for environment variable override first - PRIORITY 1
   if (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL !== 'your_backend_url_here') {
-    console.log('🔧 Using environment variable API URL:', import.meta.env.VITE_API_URL);
-    return import.meta.env.VITE_API_URL;
+    // Force local backend for development
+    console.log('🔧 Environment variable detected, but forcing local backend for development');
+    return 'http://localhost:3000';
   }
 
   // Check if we're accessing from a VS Code tunnel - PRIORITY 2
@@ -47,8 +48,9 @@ const getApiUrl = () => {
 const getWebSocketUrl = () => {
   // Check for environment variable override first - PRIORITY 1
   if (import.meta.env.VITE_WEBSOCKET_URL && import.meta.env.VITE_WEBSOCKET_URL !== 'your_websocket_url_here') {
-    console.log('🔧 Using environment variable WebSocket URL:', import.meta.env.VITE_WEBSOCKET_URL);
-    return import.meta.env.VITE_WEBSOCKET_URL;
+    // Force local WebSocket for development
+    console.log('🔧 Environment variable detected, but forcing local WebSocket for development');
+    return 'ws://localhost:3000';
   }
 
   // Check if we're accessing from a VS Code tunnel - PRIORITY 2
