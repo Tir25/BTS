@@ -231,24 +231,7 @@ const DriverLogin: React.FC = () => {
                 transition={{ duration: 0.6, delay: 0.2 }}
                 className="text-center mb-8"
               >
-                <div className="card-icon-wrapper mb-4 flex items-center justify-center mx-auto">
-                  <div className="icon-container">
-                    <span 
-                      className="animate-pulse" 
-                      style={{ 
-                        fontSize: '7rem', 
-                        lineHeight: '1',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '100%',
-                        height: '100%'
-                      }}
-                    >
-                      🚌
-                    </span>
-                  </div>
-                </div>
+                <div className="text-6xl mb-4 animate-pulse">🚌</div>
                 <h1 className="text-3xl font-bold text-white mb-2">
                   Driver Login
                 </h1>

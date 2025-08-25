@@ -10,7 +10,6 @@ const PremiumHomepage: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
-  const [isVideoError, setIsVideoError] = useState(false);
 
   useEffect(() => {
     // Check if device is mobile
@@ -26,67 +25,17 @@ const PremiumHomepage: React.FC = () => {
 
   useEffect(() => {
     if (videoRef.current) {
-      // Set video properties
-      videoRef.current.playbackRate = 0.8;
-      videoRef.current.muted = true;
-      videoRef.current.playsInline = true;
+      videoRef.current.playbackRate = 0.8; // Slow down the video slightly
 
       // Handle video loading
-      const handleVideoLoad = () => {
-        console.log('✅ Video loaded successfully');
-        setIsVideoLoaded(true);
-      };
-      
-      const handleVideoError = (e: Event) => {
-        console.error('❌ Video loading error:', e);
-        console.log('🔄 Falling back to gradient background');
-        setIsVideoError(true);
-        setIsVideoLoaded(true); // Remove loading state immediately on error
-      };
-
-      const handleVideoCanPlay = () => {
-        console.log('✅ Video can play');
-        setIsVideoLoaded(true);
-      };
-
-      // Add event listeners
+      const handleVideoLoad = () => setIsVideoLoaded(true);
       videoRef.current.addEventListener('loadeddata', handleVideoLoad);
-      videoRef.current.addEventListener('error', handleVideoError);
-      videoRef.current.addEventListener('canplay', handleVideoCanPlay);
-
-      // Set a timeout to remove loading state if video takes too long
-      const timeout = setTimeout(() => {
-        console.log('⏰ Video loading timeout - falling back to gradient');
-        setIsVideoLoaded(true);
-        setIsVideoError(true); // Treat timeout as error
-      }, 1500); // 1.5 second timeout - even faster fallback
-
-      // Try to play the video
-      const playVideo = async () => {
-        try {
-          console.log('🎬 Attempting to play video...');
-          await videoRef.current?.play();
-          console.log('✅ Video autoplay successful');
-        } catch (error) {
-          console.log('⚠️ Autoplay failed, but video will play on user interaction');
-        }
-      };
-
-      playVideo();
 
       return () => {
         if (videoRef.current) {
           videoRef.current.removeEventListener('loadeddata', handleVideoLoad);
-          videoRef.current.removeEventListener('error', handleVideoError);
-          videoRef.current.removeEventListener('canplay', handleVideoCanPlay);
         }
-        clearTimeout(timeout);
       };
-    } else {
-      // If no video ref, remove loading state immediately
-      console.log('⚠️ No video ref available - using gradient background');
-      setIsVideoLoaded(true);
-      setIsVideoError(true);
     }
   }, []);
 
@@ -102,33 +51,33 @@ const PremiumHomepage: React.FC = () => {
       setTransition('default');
     }
     
+    // setIsTransitioning(true); // This line was removed as per the new_code
+    
     // Add a small delay for smooth transition
     setTimeout(() => {
       navigate(path);
     }, 200);
   };
 
+  // Optimize particle count for mobile
+  const particleCount = isMobile ? 8 : 20;
+
   return (
-    <div className="relative min-h-screen overflow-hidden netlify-drawer-fix">
+    <div className="relative min-h-screen overflow-hidden">
       {/* Video Background */}
       <div className="absolute inset-0 z-0">
-        {!isVideoError ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="video-background video-autoplay"
-            preload="auto"
-          >
-            <source src="/videos/background-video.mp4" type="video/mp4" />
-            <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        ) : (
-          <div className="video-background asset-fallback" />
-        )}
+        <video
+          ref={videoRef}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="w-full h-full object-cover"
+          preload="auto"
+        >
+          <source src="/videos/background-video.mp4" type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
 
         {/* Video overlay for better text readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
@@ -142,7 +91,7 @@ const PremiumHomepage: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="relative z-content flex flex-col items-center justify-center min-h-screen p-4 sm:p-6">
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-4 sm:p-6">
         {/* Premium Heading */}
         <motion.div
           initial={{ opacity: 0, y: -50 }}
@@ -178,28 +127,12 @@ const PremiumHomepage: React.FC = () => {
               <GlassyCard
                 variant="ultra"
                 glow={true}
-                padding=""
                 className="w-full sm:w-72 md:w-80 h-40 sm:h-48 flex flex-col items-center justify-center cursor-pointer relative z-10"
                 onClick={() => handleNavigation('/driver-login')}
               >
-                <div className="text-center px-2 flex flex-col items-center justify-center h-full">
-                  <div className="card-icon-wrapper mb-2 sm:mb-4 flex items-center justify-center">
-                    <div className="icon-container">
-                      <span 
-                        className="animate-pulse" 
-                        style={{ 
-                          fontSize: '6rem', 
-                          lineHeight: '1',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '100%',
-                          height: '100%'
-                        }}
-                      >
-                        🚌
-                      </span>
-                    </div>
+                <div className="text-center px-2">
+                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
+                    🚌
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Driver Interface
@@ -232,28 +165,12 @@ const PremiumHomepage: React.FC = () => {
               <GlassyCard
                 variant="ultra"
                 glow={true}
-                padding=""
                 className="w-full sm:w-72 md:w-80 h-40 sm:h-48 flex flex-col items-center justify-center cursor-pointer relative z-10"
                 onClick={() => handleNavigation('/student-map')}
               >
-                <div className="text-center px-2 flex flex-col items-center justify-center h-full">
-                  <div className="card-icon-wrapper mb-2 sm:mb-4 flex items-center justify-center">
-                    <div className="icon-container">
-                      <span 
-                        className="animate-pulse" 
-                        style={{ 
-                          fontSize: '6rem', 
-                          lineHeight: '1',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '100%',
-                          height: '100%'
-                        }}
-                      >
-                        🗺️
-                      </span>
-                    </div>
+                <div className="text-center px-2">
+                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
+                    🗺️
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Student Map
@@ -286,28 +203,12 @@ const PremiumHomepage: React.FC = () => {
               <GlassyCard
                 variant="ultra"
                 glow={true}
-                padding=""
                 className="w-full sm:w-72 md:w-80 h-40 sm:h-48 flex flex-col items-center justify-center cursor-pointer relative z-10"
                 onClick={() => handleNavigation('/admin-login')}
               >
-                <div className="text-center px-2 flex flex-col items-center justify-center h-full">
-                  <div className="card-icon-wrapper mb-2 sm:mb-4 flex items-center justify-center">
-                    <div className="icon-container">
-                      <span 
-                        className="animate-pulse" 
-                        style={{ 
-                          fontSize: '6rem', 
-                          lineHeight: '1',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '100%',
-                          height: '100%'
-                        }}
-                      >
-                        ⚙️
-                      </span>
-                    </div>
+                <div className="text-center px-2">
+                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
+                    ⚙️
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Admin Panel
@@ -338,6 +239,29 @@ const PremiumHomepage: React.FC = () => {
             experience
           </p>
         </motion.div>
+
+        {/* Floating Particles Effect - Optimized for mobile */}
+        <div className="absolute inset-0 pointer-events-none">
+          {[...Array(particleCount)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-1 h-1 sm:w-2 sm:h-2 bg-white/20 rounded-full"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+              }}
+              animate={{
+                y: [0, -50, 0],
+                opacity: [0, 1, 0],
+              }}
+              transition={{
+                duration: 2 + Math.random() * 2,
+                repeat: Infinity,
+                delay: Math.random() * 2,
+              }}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
