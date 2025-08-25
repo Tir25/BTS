@@ -178,6 +178,7 @@ const PremiumHomepage: React.FC = () => {
               <GlassyCard
                 variant="ultra"
                 glow={true}
+                padding=""
                 className="w-full sm:w-72 md:w-80 h-40 sm:h-48 flex flex-col items-center justify-center cursor-pointer relative z-10"
                 onClick={() => handleNavigation('/driver-login')}
               >
@@ -187,7 +188,7 @@ const PremiumHomepage: React.FC = () => {
                       <span 
                         className="animate-pulse" 
                         style={{ 
-                          fontSize: '4rem', 
+                          fontSize: '6rem', 
                           lineHeight: '1',
                           display: 'flex',
                           alignItems: 'center',
@@ -231,6 +232,7 @@ const PremiumHomepage: React.FC = () => {
               <GlassyCard
                 variant="ultra"
                 glow={true}
+                padding=""
                 className="w-full sm:w-72 md:w-80 h-40 sm:h-48 flex flex-col items-center justify-center cursor-pointer relative z-10"
                 onClick={() => handleNavigation('/student-map')}
               >
@@ -240,7 +242,7 @@ const PremiumHomepage: React.FC = () => {
                       <span 
                         className="animate-pulse" 
                         style={{ 
-                          fontSize: '4rem', 
+                          fontSize: '6rem', 
                           lineHeight: '1',
                           display: 'flex',
                           alignItems: 'center',
@@ -284,6 +286,7 @@ const PremiumHomepage: React.FC = () => {
               <GlassyCard
                 variant="ultra"
                 glow={true}
+                padding=""
                 className="w-full sm:w-72 md:w-80 h-40 sm:h-48 flex flex-col items-center justify-center cursor-pointer relative z-10"
                 onClick={() => handleNavigation('/admin-login')}
               >
@@ -293,7 +296,7 @@ const PremiumHomepage: React.FC = () => {
                       <span 
                         className="animate-pulse" 
                         style={{ 
-                          fontSize: '4rem', 
+                          fontSize: '6rem', 
                           lineHeight: '1',
                           display: 'flex',
                           alignItems: 'center',

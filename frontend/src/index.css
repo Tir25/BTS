@@ -287,8 +287,8 @@ input[type="number"]::placeholder {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 120px;
-    height: 120px;
+    width: 140px;
+    height: 140px;
     margin: 0 auto 1rem auto;
     border-radius: 1rem;
     flex-shrink: 0;
@@ -331,6 +331,28 @@ input[type="number"]::placeholder {
     -webkit-font-smoothing: antialiased;
     /* Add subtle glow effect */
     filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
+    /* Ensure emoji renders at full size */
+    font-size: inherit !important;
+    line-height: 1 !important;
+    /* Force emoji rendering */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif !important;
+  }
+
+  /* Specific emoji icon enhancements */
+  .card-icon-wrapper span {
+    /* Ensure emoji icons are properly sized and visible */
+    font-size: inherit !important;
+    line-height: 1 !important;
+    /* Force emoji rendering with proper font */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif !important;
+    /* Enhanced visibility */
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    /* Ensure proper display */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
   }
 
   /* Fix for video loading timeout */

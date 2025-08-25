@@ -9,6 +9,7 @@ interface GlassyCardProps {
   glow?: boolean;
   onClick?: () => void;
   delay?: number;
+  padding?: string;
 }
 
 const GlassyCard: React.FC<GlassyCardProps> = ({
@@ -19,6 +20,7 @@ const GlassyCard: React.FC<GlassyCardProps> = ({
   glow = false,
   onClick,
   delay = 0,
+  padding = '',
 }) => {
   const baseClasses =
     'relative overflow-hidden rounded-2xl transition-all duration-500';
@@ -73,7 +75,7 @@ const GlassyCard: React.FC<GlassyCardProps> = ({
       )}
 
       {/* Content */}
-      <div className="relative z-10 p-6">{children}</div>
+      <div className={`relative z-10 ${padding}`}>{children}</div>
 
       {/* Shimmer effect */}
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-1000" />

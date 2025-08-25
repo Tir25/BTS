@@ -236,7 +236,7 @@ const DriverLogin: React.FC = () => {
                     <span 
                       className="animate-pulse" 
                       style={{ 
-                        fontSize: '5rem', 
+                        fontSize: '7rem', 
                         lineHeight: '1',
                         display: 'flex',
                         alignItems: 'center',
