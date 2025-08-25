@@ -33,7 +33,6 @@ if (fs.existsSync('public')) {
 }
 
 // Process CSS with PostCSS and Tailwind
-
 try {
   // Use PostCSS to process CSS with Tailwind
   execSync('npx postcss src/index.css -o dist/assets/index.css --env production', { stdio: 'inherit' });
@@ -46,7 +45,7 @@ try {
 }
 
 // Build JavaScript
-return esbuild.build({
+esbuild.build({
   entryPoints: ['src/main.tsx'],
   bundle: true,
   outfile: 'dist/assets/main.js',
