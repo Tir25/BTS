@@ -5,10 +5,6 @@ import { StaggerContainer, StaggerItem } from './PageTransition';
 import GlassyCard from './ui/GlassyCard';
 import { useTransition } from './transitions';
 
-// Import video directly to ensure proper bundling
-import backgroundVideo from '/videos/background-video.mp4';
-import fallbackVideo from '/videos/Animated_Countryside_University_Bus.mp4';
-
 const PremiumHomepage: React.FC = () => {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -117,8 +113,8 @@ const PremiumHomepage: React.FC = () => {
             className="video-background video-autoplay"
             preload="auto"
           >
-            <source src={backgroundVideo} type="video/mp4" />
-            <source src={fallbackVideo} type="video/mp4" />
+            <source src="/videos/background-video.mp4" type="video/mp4" />
+            <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4" />
             Your browser does not support the video tag.
           </video>
         ) : (
