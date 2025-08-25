@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { StaggerContainer, StaggerItem } from './PageTransition';
@@ -7,9 +7,7 @@ import { useTransition } from './transitions';
 
 const PremiumHomepage: React.FC = () => {
   const navigate = useNavigate();
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
 
   useEffect(() => {
     // Check if device is mobile
@@ -23,22 +21,6 @@ const PremiumHomepage: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = 0.8; // Slow down the video slightly
-
-      // Handle video loading
-      const handleVideoLoad = () => setIsVideoLoaded(true);
-      videoRef.current.addEventListener('loadeddata', handleVideoLoad);
-
-      return () => {
-        if (videoRef.current) {
-          videoRef.current.removeEventListener('loadeddata', handleVideoLoad);
-        }
-      };
-    }
-  }, []);
-
   const { setTransition } = useTransition();
 
   const handleNavigation = (path: string) => {
@@ -50,7 +32,9 @@ const PremiumHomepage: React.FC = () => {
     } else {
       setTransition('default');
     }
-    
+
+    // setIsTransitioning(true); // This line was removed as per the new_code
+
     // Add a small delay for smooth transition
     setTimeout(() => {
       navigate(path);
@@ -62,31 +46,35 @@ const PremiumHomepage: React.FC = () => {
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Video Background */}
-      <div className="absolute inset-0 z-0">
-        <video
-          ref={videoRef}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-full h-full object-cover"
-          preload="auto"
-          aria-hidden="true"
-        >
-          <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
+      {/* Animated Gradient Background */}
+      <div className="absolute inset-0 z-0 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+        {/* Animated particles */}
+        <div className="absolute inset-0 overflow-hidden">
+          {Array.from({ length: particleCount }).map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-2 h-2 bg-white/10 rounded-full"
+              animate={{
+                x: [0, Math.random() * window.innerWidth],
+                y: [0, Math.random() * window.innerHeight],
+                opacity: [0, 1, 0],
+              }}
+              transition={{
+                duration: Math.random() * 10 + 10,
+                repeat: Infinity,
+                ease: 'linear',
+                delay: Math.random() * 5,
+              }}
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+              }}
+            />
+          ))}
+        </div>
 
-        {/* Video overlay for better text readability */}
+        {/* Gradient overlay for better text readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
-
-        {/* Loading overlay */}
-        {!isVideoLoaded && (
-          <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
-            <div className="loading-spinner" />
-          </div>
-        )}
       </div>
 
       {/* Main Content */}
@@ -130,7 +118,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/driver-login')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse" role="img" aria-label="Bus emoji">
+                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
                     🚌
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -168,7 +156,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/student-map')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse" role="img" aria-label="Map emoji">
+                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
                     🗺️
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -206,7 +194,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/admin-login')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse" role="img" aria-label="Settings emoji">
+                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
                     ⚙️
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -240,7 +228,7 @@ const PremiumHomepage: React.FC = () => {
         </motion.div>
 
         {/* Floating Particles Effect - Optimized for mobile */}
-        <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+        <div className="absolute inset-0 pointer-events-none">
           {[...Array(particleCount)].map((_, i) => (
             <motion.div
               key={i}

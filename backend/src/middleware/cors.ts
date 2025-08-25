@@ -10,8 +10,7 @@ const allowedOrigins = [
   'http://127.0.0.1:3000',
 
   // Production origins - add your production domains here
-  'https://gantpat-bts.netlify.app',
-  'https://your-production-domain.com',
+  // 'https://your-production-domain.com',
 
   // VS Code tunnel origins - more restrictive
   /^https:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
@@ -20,14 +19,6 @@ const allowedOrigins = [
   // Network access for cross-laptop testing
   /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
   /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
-
-  // Netlify and Vercel domains - allow all subdomains
-  /^https:\/\/[a-zA-Z0-9-]+\.netlify\.app$/,
-  /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/,
-  
-  // Render domains - allow all Render subdomains
-  /^https:\/\/[a-zA-Z0-9-]+\.onrender\.com$/,
-  /^wss:\/\/[a-zA-Z0-9-]+\.onrender\.com$/,
 ];
 
 const corsOptions = {

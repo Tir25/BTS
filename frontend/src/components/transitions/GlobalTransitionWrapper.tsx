@@ -8,9 +8,9 @@ interface GlobalTransitionWrapperProps {
   children: React.ReactNode;
 }
 
-export const GlobalTransitionWrapper: React.FC<GlobalTransitionWrapperProps> = ({
-  children,
-}) => {
+export const GlobalTransitionWrapper: React.FC<
+  GlobalTransitionWrapperProps
+> = ({ children }) => {
   const { currentTransition } = useTransition();
 
   // Determine which transition to show based on current transition type
@@ -41,4 +41,3 @@ export const GlobalTransitionWrapper: React.FC<GlobalTransitionWrapperProps> = (
 
   return <>{renderTransition()}</>;
 };
-

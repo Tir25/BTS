@@ -40,4 +40,3 @@ export const LoginToDashboardTransition: React.FC<
     </motion.div>
   );
 };
-

@@ -59,34 +59,10 @@ A real-time bus tracking system designed for university campuses, providing live
 - 🔧 **Bug Fixes**: Resolved route duplication errors and authentication issues
 - 📱 **UI Improvements**: Enhanced Student Map interface with better organization
 - 🛡️ **Error Handling**: Comprehensive error handling and graceful degradation
-- 🚀 **Deployment Optimized**: Configured for Netlify deployment with optimal settings
 
-### Production Readiness Score: **95/100** ✅
+### Production Readiness Score: **93/100** ✅
 
 For detailed production readiness information, see [PRODUCTION_READINESS_FINAL_REPORT.md](./PRODUCTION_READINESS_FINAL_REPORT.md)
-
-## 🌐 Deployment
-
-### Frontend (Netlify)
-The frontend is optimized for deployment on Netlify with:
-- ✅ **Automatic builds** from GitHub
-- ✅ **Global CDN** for fast loading
-- ✅ **HTTPS** with automatic SSL certificates
-- ✅ **SPA routing** support for React Router
-- ✅ **Security headers** and caching optimization
-
-**Deploy to Netlify:**
-1. Connect your GitHub repository to Netlify
-2. Set build directory to `frontend`
-3. Add environment variables (see [NETLIFY_DEPLOYMENT_GUIDE.md](./NETLIFY_DEPLOYMENT_GUIDE.md))
-4. Deploy!
-
-### Backend (Render)
-The backend is deployed on Render with:
-- ✅ **Automatic deployments** from GitHub
-- ✅ **WebSocket support** for real-time communication
-- ✅ **Database integration** with Supabase
-- ✅ **Environment management** for secure configuration
 
 ## 📋 Prerequisites
 

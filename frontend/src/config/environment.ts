@@ -1,13 +1,11 @@
 // Smart API URL detection for cross-laptop testing and VS Code tunnels
 const getApiUrl = () => {
-  // Check for environment variable override first - PRIORITY 1
-  if (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL !== 'your_backend_url_here') {
-    // Force local backend for development
-    console.log('🔧 Environment variable detected, but forcing local backend for development');
-    return 'http://localhost:3000';
-  }
+  // TEMPORARILY DISABLED: Environment variable override
+  // if (import.meta.env.VITE_API_URL) {
+  //   return import.meta.env.VITE_API_URL;
+  // }
 
-  // Check if we're accessing from a VS Code tunnel - PRIORITY 2
+  // Check if we're accessing from a VS Code tunnel - PRIORITY 1
   const currentHost = window.location.hostname;
   const currentProtocol = window.location.protocol;
 
@@ -24,15 +22,7 @@ const getApiUrl = () => {
     return backendUrl;
   }
 
-  // Check if we're accessing from Netlify or other production domains - PRIORITY 3
-  if (currentHost.includes('netlify.app') || currentHost.includes('vercel.app') || currentHost.includes('.com')) {
-    // For now, use local backend even in production (temporary for development)
-    const localBackendUrl = 'http://localhost:3000';
-    console.log('🔧 Production deployment detected, but using local backend for development:', { currentHost, localBackendUrl });
-    return localBackendUrl;
-  }
-
-  // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 4
+  // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 2
   if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
     // We're on a network IP, use the same IP for backend
     const networkUrl = `http://${currentHost}:3000`;
@@ -46,14 +36,12 @@ const getApiUrl = () => {
 };
 
 const getWebSocketUrl = () => {
-  // Check for environment variable override first - PRIORITY 1
-  if (import.meta.env.VITE_WEBSOCKET_URL && import.meta.env.VITE_WEBSOCKET_URL !== 'your_websocket_url_here') {
-    // Force local WebSocket for development
-    console.log('🔧 Environment variable detected, but forcing local WebSocket for development');
-    return 'ws://localhost:3000';
-  }
+  // TEMPORARILY DISABLED: Environment variable override
+  // if (import.meta.env.VITE_WEBSOCKET_URL) {
+  //   return import.meta.env.VITE_WEBSOCKET_URL;
+  // }
 
-  // Check if we're accessing from a VS Code tunnel - PRIORITY 2
+  // Check if we're accessing from a VS Code tunnel - PRIORITY 1
   const currentHost = window.location.hostname;
   const currentProtocol = window.location.protocol;
 
@@ -65,15 +53,7 @@ const getWebSocketUrl = () => {
     return wsUrl;
   }
 
-  // Check if we're accessing from Netlify or other production domains - PRIORITY 3
-  if (currentHost.includes('netlify.app') || currentHost.includes('vercel.app') || currentHost.includes('.com')) {
-    // For now, use local backend WebSocket even in production (temporary for development)
-    const localWsUrl = 'ws://localhost:3000';
-    console.log('🔧 Production WebSocket detected, but using local backend for development:', { currentHost, localWsUrl });
-    return localWsUrl;
-  }
-
-  // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 4
+  // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 2
   if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
     // We're on a network IP, use the same IP for WebSocket
     const wsUrl = `ws://${currentHost}:3000`;

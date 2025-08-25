@@ -133,7 +133,7 @@ const DriverLogin: React.FC = () => {
           setBusInfo(data.busInfo);
           // Set transition type for login to dashboard
           setTransition('login-to-dashboard');
-          
+
           // Navigate to driver dashboard after successful authentication
           setTimeout(() => {
             navigate('/driver-dashboard');

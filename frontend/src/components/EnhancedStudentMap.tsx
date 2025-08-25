@@ -19,7 +19,9 @@ interface EnhancedStudentMapProps {
   className?: string;
 }
 
-const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' }) => {
+const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
+  className = '',
+}) => {
   // Map references
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -40,7 +42,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
   const [lastBusLocations, setLastBusLocations] = useState<{
     [busId: string]: BusLocation;
   }>({});
-  
+
   // Navbar state
   const [isNavbarCollapsed, setIsNavbarCollapsed] = useState(false);
   const [isRouteFilterOpen, setIsRouteFilterOpen] = useState(true);
@@ -52,12 +54,18 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
       console.log('🔄 Loading routes from backend API...');
       const response = await apiService.getRoutes();
       if (response.success && response.data) {
-        console.log('✅ Routes loaded from backend:', response.data.length, 'routes');
+        console.log(
+          '✅ Routes loaded from backend:',
+          response.data.length,
+          'routes'
+        );
         setRoutes(response.data as unknown as Route[]);
-        
+
         // Log route details for debugging
         response.data.forEach((route: Route) => {
-          console.log(`📍 Route: ${route.name} (ID: ${route.id}) - Active: ${route.is_active}`);
+          console.log(
+            `📍 Route: ${route.name} (ID: ${route.id}) - Active: ${route.is_active}`
+          );
         });
       } else {
         console.error('❌ Failed to load routes:', response);
@@ -141,18 +149,19 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
   }, [routes]);
 
   // Update bus marker on map
-  const updateBusMarker = useCallback((location: BusLocation) => {
-    if (!map.current) return;
+  const updateBusMarker = useCallback(
+    (location: BusLocation) => {
+      if (!map.current) return;
 
-    const { busId, latitude, longitude, speed } = location;
-    const bus = busService.getBus(busId);
+      const { busId, latitude, longitude, speed } = location;
+      const bus = busService.getBus(busId);
 
-    if (!bus) return;
+      if (!bus) return;
 
-    if (!markers.current[busId]) {
-      const el = document.createElement('div');
-      el.className = 'bus-marker';
-      el.innerHTML = `
+      if (!markers.current[busId]) {
+        const el = document.createElement('div');
+        el.className = 'bus-marker';
+        el.innerHTML = `
         <div class="bus-marker-pin">
           <div class="bus-marker-icon">🚌</div>
           <div class="bus-marker-pulse"></div>
@@ -164,17 +173,17 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
         </div>
       `;
 
-      const marker = new maplibregl.Marker({
-        element: el,
-        anchor: 'center',
-      })
-        .setLngLat([longitude, latitude])
-        .addTo(map.current);
+        const marker = new maplibregl.Marker({
+          element: el,
+          anchor: 'center',
+        })
+          .setLngLat([longitude, latitude])
+          .addTo(map.current);
 
-      const popup = new maplibregl.Popup({
-        offset: 25,
-        className: 'bus-popup-container',
-      }).setHTML(`
+        const popup = new maplibregl.Popup({
+          offset: 25,
+          className: 'bus-popup-container',
+        }).setHTML(`
         <div class="bus-popup">
           <div class="bus-popup-header">
             <h3>🚌 Bus ${bus.busNumber}</h3>
@@ -193,13 +202,13 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
         </div>
       `);
 
-      marker.setPopup(popup);
-      markers.current[busId] = marker;
-    } else {
-      markers.current[busId].setLngLat([longitude, latitude]);
-      
-      const popup = markers.current[busId].getPopup();
-      popup.setHTML(`
+        marker.setPopup(popup);
+        markers.current[busId] = marker;
+      } else {
+        markers.current[busId].setLngLat([longitude, latitude]);
+
+        const popup = markers.current[busId].getPopup();
+        popup.setHTML(`
         <div class="bus-popup">
           <div class="bus-popup-header">
             <h3>🚌 Bus ${bus.busNumber}</h3>
@@ -217,8 +226,10 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
           </div>
         </div>
       `);
-    }
-  }, [isConnected]);
+      }
+    },
+    [isConnected]
+  );
 
   // Remove bus marker from map
   const removeBusMarker = useCallback((busId: string) => {
@@ -257,7 +268,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
   const handleBusLocationUpdate = useCallback(
     (location: BusLocation) => {
       console.log('📍 Bus location update:', location);
-      
+
       setLastBusLocations((prev) => ({
         ...prev,
         [location.busId]: location,
@@ -406,7 +417,11 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
 
             const response = await apiService.getAllBuses();
             if (response.success && response.data) {
-              console.log('📊 Initial bus data from API:', response.data.length, 'buses');
+              console.log(
+                '📊 Initial bus data from API:',
+                response.data.length,
+                'buses'
+              );
 
               response.data.forEach((apiBus: any) => {
                 const busId = apiBus.bus_id || apiBus.id;
@@ -417,7 +432,10 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
 
               const updatedBuses = busService.getAllBuses();
               setBuses(updatedBuses);
-              console.log('✅ Initial buses loaded and synced:', response.data.length);
+              console.log(
+                '✅ Initial buses loaded and synced:',
+                response.data.length
+              );
             }
           } catch (error) {
             console.error('❌ Error loading initial buses:', error);
@@ -450,14 +468,19 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
       }
       websocketService.disconnect();
     };
-  }, [handleBusArriving, handleBusLocationUpdate, handleDriverConnected, handleDriverDisconnected]);
+  }, [
+    handleBusArriving,
+    handleBusLocationUpdate,
+    handleDriverConnected,
+    handleDriverDisconnected,
+  ]);
 
   // Get filtered buses based on selected route
   const filteredBuses = useMemo(() => {
     if (selectedRoute === 'all') {
       return buses;
     }
-    
+
     return buses.filter((bus) => {
       const busRoute = routes.find((route) => route.name === bus.routeName);
       return busRoute && busRoute.id === selectedRoute;
@@ -531,97 +554,99 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
       {/* Map container */}
       <div ref={mapContainer} className="map-container rounded-lg" />
 
-             {/* Collapsible Glassmorphic Navbar */}
-       <motion.div
-         initial={{ x: -400 }}
-         animate={{ x: isNavbarCollapsed ? -350 : 0 }}
-         transition={{ duration: 0.3, ease: 'easeInOut' }}
-         className="absolute top-4 left-4 z-30"
-       >
-         {/* Collapse/Expand Button (always visible) */}
-         <button
-           onClick={() => setIsNavbarCollapsed(!isNavbarCollapsed)}
-           className="absolute -right-12 top-0 p-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg hover:bg-white/20 transition-all duration-200 z-40"
-         >
-           <svg
-             className={`w-5 h-5 text-white transition-transform duration-200 ${
-               isNavbarCollapsed ? 'rotate-180' : ''
-             }`}
-             fill="none"
-             stroke="currentColor"
-             viewBox="0 0 24 24"
-           >
-             <path
-               strokeLinecap="round"
-               strokeLinejoin="round"
-               strokeWidth={2}
-               d="M15 19l-7-7 7-7"
-             />
-           </svg>
-         </button>
+      {/* Collapsible Glassmorphic Navbar */}
+      <motion.div
+        initial={{ x: -400 }}
+        animate={{ x: isNavbarCollapsed ? -350 : 0 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+        className="absolute top-4 left-4 z-30"
+      >
+        {/* Collapse/Expand Button (always visible) */}
+        <button
+          onClick={() => setIsNavbarCollapsed(!isNavbarCollapsed)}
+          className="absolute -right-12 top-0 p-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg hover:bg-white/20 transition-all duration-200 z-40"
+        >
+          <svg
+            className={`w-5 h-5 text-white transition-transform duration-200 ${
+              isNavbarCollapsed ? 'rotate-180' : ''
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+        </button>
         <GlassyCard
           variant="premium"
           glow={true}
           className="w-80 max-h-[calc(100vh-2rem)] overflow-hidden"
         >
-                     {/* Navbar Header */}
-           <div className="flex items-center justify-between p-4 border-b border-white/20">
-             <div className="flex items-center space-x-3">
-               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-               <h2 className="text-lg font-bold text-gray-900">
-                 Student Live Tracking
-               </h2>
-             </div>
-             <div className="text-xs text-gray-600 bg-white/50 px-2 py-1 rounded">
-               Live Map
-             </div>
-           </div>
+          {/* Navbar Header */}
+          <div className="flex items-center justify-between p-4 border-b border-white/20">
+            <div className="flex items-center space-x-3">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              <h2 className="text-lg font-bold text-gray-900">
+                Student Live Tracking
+              </h2>
+            </div>
+            <div className="text-xs text-gray-600 bg-white/50 px-2 py-1 rounded">
+              Live Map
+            </div>
+          </div>
 
           {/* Navbar Content */}
           <div className="p-4 space-y-4 max-h-[calc(100vh-8rem)] overflow-y-auto">
-                         {/* Connection Status */}
-             <div className="flex items-center justify-between p-3 bg-blue-50/80 rounded-lg border border-blue-200/50">
-               <div className="flex items-center space-x-2">
-                 <div
-                   className={`w-2 h-2 rounded-full ${
-                     isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-                   }`}
-                 ></div>
-                 <span className="text-sm text-gray-800 font-medium">
-                   {isConnected ? 'Live Connected' : 'Offline'}
-                 </span>
-               </div>
-               <span className="text-xs text-gray-600 bg-white/70 px-2 py-1 rounded">
-                 {filteredBuses.length} buses
-               </span>
-             </div>
+            {/* Connection Status */}
+            <div className="flex items-center justify-between p-3 bg-blue-50/80 rounded-lg border border-blue-200/50">
+              <div className="flex items-center space-x-2">
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                  }`}
+                ></div>
+                <span className="text-sm text-gray-800 font-medium">
+                  {isConnected ? 'Live Connected' : 'Offline'}
+                </span>
+              </div>
+              <span className="text-xs text-gray-600 bg-white/70 px-2 py-1 rounded">
+                {filteredBuses.length} buses
+              </span>
+            </div>
 
-                         {/* Route Filter Section */}
-             <div className="space-y-3">
-               <div className="flex items-center justify-between">
-                 <h3 className="text-sm font-semibold text-gray-800">Route Filter</h3>
-                 <button
-                   onClick={() => setIsRouteFilterOpen(!isRouteFilterOpen)}
-                   className="p-1 hover:bg-gray-100 rounded transition-colors duration-200"
-                 >
-                   <svg
-                     className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${
-                       isRouteFilterOpen ? 'rotate-180' : ''
-                     }`}
-                     fill="none"
-                     stroke="currentColor"
-                     viewBox="0 0 24 24"
-                   >
-                     <path
-                       strokeLinecap="round"
-                       strokeLinejoin="round"
-                       strokeWidth={2}
-                       d="M19 9l-7 7-7-7"
-                     />
-                   </svg>
-                 </button>
-               </div>
-              
+            {/* Route Filter Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Route Filter
+                </h3>
+                <button
+                  onClick={() => setIsRouteFilterOpen(!isRouteFilterOpen)}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors duration-200"
+                >
+                  <svg
+                    className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${
+                      isRouteFilterOpen ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+              </div>
+
               <AnimatePresence>
                 {isRouteFilterOpen && (
                   <motion.div
@@ -631,57 +656,59 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
                     transition={{ duration: 0.2 }}
                     className="space-y-3"
                   >
-                                         <select
-                       value={selectedRoute}
-                       onChange={(e) => setSelectedRoute(e.target.value)}
-                       className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200"
-                     >
-                       <option value="all">All Routes ({routes.length})</option>
-                       {availableRoutes.map((route) => (
-                         <option key={route.id} value={route.id}>
-                           {route.name}
-                         </option>
-                       ))}
-                     </select>
-                     
-                     <button
-                       onClick={centerMapOnBuses}
-                       disabled={filteredBuses.length === 0}
-                       className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-lg text-white font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                     >
-                       📍 Center on Buses ({filteredBuses.length})
-                     </button>
+                    <select
+                      value={selectedRoute}
+                      onChange={(e) => setSelectedRoute(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200"
+                    >
+                      <option value="all">All Routes ({routes.length})</option>
+                      {availableRoutes.map((route) => (
+                        <option key={route.id} value={route.id}>
+                          {route.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={centerMapOnBuses}
+                      disabled={filteredBuses.length === 0}
+                      className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-lg text-white font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      📍 Center on Buses ({filteredBuses.length})
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-                         {/* Active Buses Section */}
-             <div className="space-y-3">
-               <div className="flex items-center justify-between">
-                 <h3 className="text-sm font-semibold text-gray-800">Active Buses</h3>
-                 <button
-                   onClick={() => setIsActiveBusesOpen(!isActiveBusesOpen)}
-                   className="p-1 hover:bg-gray-100 rounded transition-colors duration-200"
-                 >
-                   <svg
-                     className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${
-                       isActiveBusesOpen ? 'rotate-180' : ''
-                     }`}
-                     fill="none"
-                     stroke="currentColor"
-                     viewBox="0 0 24 24"
-                   >
-                     <path
-                       strokeLinecap="round"
-                       strokeLinejoin="round"
-                       strokeWidth={2}
-                       d="M19 9l-7 7-7-7"
-                     />
-                   </svg>
-                 </button>
-               </div>
-              
+            {/* Active Buses Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Active Buses
+                </h3>
+                <button
+                  onClick={() => setIsActiveBusesOpen(!isActiveBusesOpen)}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors duration-200"
+                >
+                  <svg
+                    className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${
+                      isActiveBusesOpen ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+              </div>
+
               <AnimatePresence>
                 {isActiveBusesOpen && (
                   <motion.div
@@ -691,28 +718,33 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
                     transition={{ duration: 0.2 }}
                     className="space-y-2 max-h-64 overflow-y-auto"
                   >
-                                         {filteredBuses.length === 0 ? (
-                       <div className="text-center py-4">
-                         <div className="text-gray-400 text-2xl mb-2">🚌</div>
-                         <p className="text-gray-600 text-sm">No buses tracking</p>
-                         <p className="text-gray-500 text-xs mt-1">
-                           Check connection status
-                         </p>
-                       </div>
-                     ) : (
+                    {filteredBuses.length === 0 ? (
+                      <div className="text-center py-4">
+                        <div className="text-gray-400 text-2xl mb-2">🚌</div>
+                        <p className="text-gray-600 text-sm">
+                          No buses tracking
+                        </p>
+                        <p className="text-gray-500 text-xs mt-1">
+                          Check connection status
+                        </p>
+                      </div>
+                    ) : (
                       filteredBuses.map((bus) => {
                         const location = lastBusLocations[bus.busId];
                         return (
-                                                     <motion.div
-                             key={bus.busId}
-                             initial={{ opacity: 0, y: 10 }}
-                             animate={{ opacity: 1, y: 0 }}
-                             className="p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 cursor-pointer transition-all duration-200 shadow-sm"
+                          <motion.div
+                            key={bus.busId}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 cursor-pointer transition-all duration-200 shadow-sm"
                             onClick={() => {
                               const location = lastBusLocations[bus.busId];
                               if (location && map.current) {
                                 map.current.flyTo({
-                                  center: [location.longitude, location.latitude],
+                                  center: [
+                                    location.longitude,
+                                    location.latitude,
+                                  ],
                                   zoom: 16,
                                   duration: 1000,
                                 });
@@ -723,45 +755,49 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({ className = '' 
                               }
                             }}
                           >
-                                                         {/* Bus Header */}
-                             <div className="flex items-center justify-between mb-2">
-                               <div className="flex items-center space-x-2">
-                                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                 <span className="font-medium text-sm text-gray-800">
-                                   {bus.busNumber}
-                                 </span>
-                                 <span className="text-xs text-blue-600 opacity-75">
-                                   👆
-                                 </span>
-                               </div>
-                               <div className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                                 {bus.eta ? `${bus.eta} min` : 'ETA: --'}
-                               </div>
-                             </div>
+                            {/* Bus Header */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                <span className="font-medium text-sm text-gray-800">
+                                  {bus.busNumber}
+                                </span>
+                                <span className="text-xs text-blue-600 opacity-75">
+                                  👆
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                                {bus.eta ? `${bus.eta} min` : 'ETA: --'}
+                              </div>
+                            </div>
 
-                             {/* Bus Details */}
-                             <div className="space-y-1">
-                               <div className="text-xs text-gray-600">
-                                 📍 Route: {bus.routeName}
-                               </div>
-                               <div className="text-xs text-gray-600">
-                                 👨‍💼 Driver: {bus.driverName}
-                               </div>
-                               {location && (
-                                 <div className="flex items-center justify-between text-xs">
-                                   <span className="text-green-600">
-                                     🕐{' '}
-                                     {new Date(location.timestamp).toLocaleTimeString([], {
-                                       hour: '2-digit',
-                                       minute: '2-digit',
-                                     })}
-                                   </span>
-                                   <span className="text-blue-600">
-                                     {location.speed ? `${location.speed} km/h` : 'Speed: --'}
-                                   </span>
-                                 </div>
-                               )}
-                             </div>
+                            {/* Bus Details */}
+                            <div className="space-y-1">
+                              <div className="text-xs text-gray-600">
+                                📍 Route: {bus.routeName}
+                              </div>
+                              <div className="text-xs text-gray-600">
+                                👨‍💼 Driver: {bus.driverName}
+                              </div>
+                              {location && (
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-green-600">
+                                    🕐{' '}
+                                    {new Date(
+                                      location.timestamp
+                                    ).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+                                  <span className="text-blue-600">
+                                    {location.speed
+                                      ? `${location.speed} km/h`
+                                      : 'Speed: --'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </motion.div>
                         );
                       })

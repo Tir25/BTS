@@ -31,42 +31,6 @@ app.use(helmet());
 // CORS middleware
 app.use(corsMiddleware);
 
-// Fallback CORS headers for all routes
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // Allow specific origins
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:5174', 
-    'http://localhost:3000',
-    'https://gantpat-bts.netlify.app',
-    'https://your-production-domain.com'
-  ];
-  
-  // Allow Netlify, Vercel, and Render domains
-  const isAllowedOrigin = allowedOrigins.includes(origin) || 
-    (origin && (
-      origin.includes('.netlify.app') ||
-      origin.includes('.vercel.app') ||
-      origin.includes('.onrender.com')
-    ));
-  
-  if (isAllowedOrigin) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
-
 // Rate limiting
 app.use(rateLimitMiddleware);
 
