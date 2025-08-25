@@ -48,17 +48,29 @@ try {
   console.log('⚠️ Created empty CSS file as fallback');
 }
 
-// Copy MapLibre CSS if it exists
-try {
-  const maplibreCssPath = 'node_modules/maplibre-gl/dist/maplibre-gl.css';
-  if (fs.existsSync(maplibreCssPath)) {
-    fs.copyFileSync(maplibreCssPath, 'dist/assets/maplibre-gl.css');
-    console.log('✅ MapLibre CSS copied successfully!');
-  } else {
-    console.log('⚠️ MapLibre CSS not found, skipping...');
+// Try to find and copy MapLibre CSS from different possible locations
+const possibleMaplibrePaths = [
+  'node_modules/maplibre-gl/dist/maplibre-gl.css',
+  'node_modules/maplibre-gl/maplibre-gl.css',
+  'node_modules/maplibre-gl/dist/maplibre-gl.min.css'
+];
+
+let maplibreCssCopied = false;
+for (const cssPath of possibleMaplibrePaths) {
+  try {
+    if (fs.existsSync(cssPath)) {
+      fs.copyFileSync(cssPath, 'dist/assets/maplibre-gl.css');
+      console.log(`✅ MapLibre CSS copied successfully from ${cssPath}!`);
+      maplibreCssCopied = true;
+      break;
+    }
+  } catch (error) {
+    console.log(`⚠️ Failed to copy from ${cssPath}`);
   }
-} catch (error) {
-  console.log('⚠️ MapLibre CSS copy failed, skipping...');
+}
+
+if (!maplibreCssCopied) {
+  console.log('⚠️ MapLibre CSS not found in any expected location, will use CDN fallback');
 }
 
 // Build JavaScript
@@ -92,7 +104,11 @@ esbuild.build({
 }).then(() => {
   console.log('✅ JavaScript built successfully!');
   
-  // Create production HTML
+  // Create production HTML with conditional MapLibre CSS
+  const maplibreCssLink = maplibreCssCopied 
+    ? '<link rel="stylesheet" href="/assets/maplibre-gl.css">'
+    : '<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css">';
+
   const htmlContent = `<!doctype html>
 <html lang="en">
   <head>
@@ -104,7 +120,7 @@ esbuild.build({
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/assets/index.css">
-    <link rel="stylesheet" href="/assets/maplibre-gl.css">
+    ${maplibreCssLink}
   </head>
   <body>
     <div id="root"></div>
