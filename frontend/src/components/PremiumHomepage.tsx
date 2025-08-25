@@ -103,9 +103,6 @@ const PremiumHomepage: React.FC = () => {
     }, 200);
   };
 
-  // Optimize particle count for mobile
-  const particleCount = isMobile ? 8 : 20;
-
   return (
     <div className="relative min-h-screen overflow-hidden netlify-drawer-fix">
       {/* Video Background */}
