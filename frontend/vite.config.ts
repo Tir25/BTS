@@ -12,15 +12,29 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: false,
     rollupOptions: {
       external: [],
       output: {
         manualChunks: undefined,
+        inlineDynamicImports: true,
       },
+    },
+    target: 'esnext',
+    minify: 'esbuild',
+    commonjsOptions: {
+      include: [],
     },
   },
   optimizeDeps: {
     exclude: ['@rollup/rollup-linux-x64-gnu'],
+    force: true,
+    include: ['react', 'react-dom'],
+  },
+  define: {
+    global: 'globalThis',
+  },
+  esbuild: {
+    target: 'esnext',
   },
 });

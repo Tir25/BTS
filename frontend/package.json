@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --skipLibCheck && vite build",
+    "build": "tsc --skipLibCheck && NODE_ENV=production vite build",
+    "build:vercel": "tsc --skipLibCheck && NODE_ENV=production VITE_DISABLE_ROLLUP_NATIVE=true vite build",
     "start": "vite preview --port 5173",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
