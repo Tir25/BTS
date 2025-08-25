@@ -11,6 +11,7 @@ const PremiumHomepage: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isVideoError, setIsVideoError] = useState(false);
+  const [videoLoadingTimeout, setVideoLoadingTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Check if device is mobile
@@ -29,19 +30,52 @@ const PremiumHomepage: React.FC = () => {
       videoRef.current.playbackRate = 0.8; // Slow down the video slightly
 
       // Handle video loading
-      const handleVideoLoad = () => setIsVideoLoaded(true);
-      const handleVideoError = () => {
+      const handleVideoLoad = () => {
+        console.log('Video loaded successfully');
+        setIsVideoLoaded(true);
+        if (videoLoadingTimeout) {
+          clearTimeout(videoLoadingTimeout);
+        }
+      };
+      
+      const handleVideoError = (e: Event) => {
+        console.error('Video loading error:', e);
         setIsVideoError(true);
         setIsVideoLoaded(true); // Remove loading state even on error
+        if (videoLoadingTimeout) {
+          clearTimeout(videoLoadingTimeout);
+        }
+      };
+
+      const handleVideoCanPlay = () => {
+        console.log('Video can play');
+        setIsVideoLoaded(true);
+        if (videoLoadingTimeout) {
+          clearTimeout(videoLoadingTimeout);
+        }
       };
       
       videoRef.current.addEventListener('loadeddata', handleVideoLoad);
       videoRef.current.addEventListener('error', handleVideoError);
+      videoRef.current.addEventListener('canplay', handleVideoCanPlay);
+
+      // Set a timeout to remove loading state if video takes too long
+      const timeout = setTimeout(() => {
+        console.log('Video loading timeout - removing loading state');
+        setIsVideoLoaded(true);
+        setIsVideoError(true); // Treat timeout as error
+      }, 5000); // 5 second timeout
+
+      setVideoLoadingTimeout(timeout);
 
       return () => {
         if (videoRef.current) {
           videoRef.current.removeEventListener('loadeddata', handleVideoLoad);
           videoRef.current.removeEventListener('error', handleVideoError);
+          videoRef.current.removeEventListener('canplay', handleVideoCanPlay);
+        }
+        if (videoLoadingTimeout) {
+          clearTimeout(videoLoadingTimeout);
         }
       };
     }
@@ -81,8 +115,10 @@ const PremiumHomepage: React.FC = () => {
             playsInline
             className="video-background video-autoplay"
             preload="auto"
+            poster="/videos/background-video.mp4"
           >
             <source src="/videos/background-video.mp4" type="video/mp4" />
+            <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4" />
             Your browser does not support the video tag.
           </video>
         ) : (
@@ -118,12 +154,14 @@ const PremiumHomepage: React.FC = () => {
             Bus Tracker
           </h2>
           
-          {/* Loading indicator */}
-          <div className="flex justify-center mb-8">
-            <div className="w-32 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse" />
+          {/* Loading indicator - only show if video is still loading */}
+          {!isVideoLoaded && (
+            <div className="flex justify-center mb-8">
+              <div className="w-32 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse" />
+              </div>
             </div>
-          </div>
+          )}
         </motion.div>
 
         {/* Feature Cards */}
@@ -139,9 +177,9 @@ const PremiumHomepage: React.FC = () => {
                   onClick={() => handleNavigation('/driver-login')}
                   className="glass-card btn-hover cursor-pointer h-full p-6 sm:p-8 text-center group"
                 >
-                  <div className="mb-4">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-yellow-400 to-blue-500 rounded-2xl flex items-center justify-center group-hover:scale-110 animate-smooth">
-                      <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <div className="card-icon-wrapper bg-gradient-to-br from-yellow-400 to-blue-500 group-hover:scale-110 animate-smooth">
+                    <div className="icon-container">
+                      <svg className="icon-svg text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
                         <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1V8a1 1 0 00-1-1h-3z" />
                       </svg>
@@ -167,9 +205,9 @@ const PremiumHomepage: React.FC = () => {
                   onClick={() => handleNavigation('/student-map')}
                   className="glass-card btn-hover cursor-pointer h-full p-6 sm:p-8 text-center group"
                 >
-                  <div className="mb-4">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center group-hover:scale-110 animate-smooth">
-                      <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <div className="card-icon-wrapper bg-gradient-to-br from-blue-400 to-purple-500 group-hover:scale-110 animate-smooth">
+                    <div className="icon-container">
+                      <svg className="icon-svg text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                       </svg>
                     </div>
@@ -194,9 +232,9 @@ const PremiumHomepage: React.FC = () => {
                   onClick={() => handleNavigation('/admin-login')}
                   className="glass-card btn-hover cursor-pointer h-full p-6 sm:p-8 text-center group"
                 >
-                  <div className="mb-4">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-gray-500 to-gray-700 rounded-2xl flex items-center justify-center group-hover:scale-110 animate-smooth">
-                      <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <div className="card-icon-wrapper bg-gradient-to-br from-gray-500 to-gray-700 group-hover:scale-110 animate-smooth">
+                    <div className="icon-container">
+                      <svg className="icon-svg text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
                       </svg>
                     </div>

@@ -245,6 +245,79 @@ input[type="number"]::placeholder {
     muted: true;
     playsinline: true;
   }
+
+  /* Fix for icon alignment issues */
+  .icon-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+
+  .icon-svg {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    display: block;
+    flex-shrink: 0;
+  }
+
+  /* Fix for card icon alignment */
+  .card-icon-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1rem auto;
+    border-radius: 1rem;
+    flex-shrink: 0;
+  }
+
+  /* Fix for video loading timeout */
+  .video-loading-timeout {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Fix for Netlify video loading issues */
+  video {
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Ensure video poster is visible */
+  video[poster] {
+    background-size: cover;
+    background-position: center;
+  }
+
+  /* Fix for icon rendering in different browsers */
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Fix for flexbox alignment issues */
+  .flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Fix for grid alignment issues */
+  .grid-center {
+    display: grid;
+    place-items: center;
+  }
 }
 
 @layer components {
