@@ -28,7 +28,7 @@ services:
     name: bus-tracking-frontend
     env: static
     plan: free
-    buildCommand: cd frontend && chmod +x render-deploy.sh && ./render-deploy.sh
+    buildCommand: cd frontend && npm install && npm run build
     outputDirectory: frontend/dist
     envVars:
       - key: NODE_ENV
