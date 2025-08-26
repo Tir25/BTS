@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { StaggerContainer, StaggerItem } from './PageTransition';
 import GlassyCard from './ui/GlassyCard';
+import Icon from './ui/Icon';
 import { useTransition } from './transitions';
 
 const PremiumHomepage: React.FC = () => {
@@ -32,8 +33,6 @@ const PremiumHomepage: React.FC = () => {
     } else {
       setTransition('default');
     }
-
-    // setIsTransitioning(true); // This line was removed as per the new_code
 
     // Add a small delay for smooth transition
     setTimeout(() => {
@@ -118,8 +117,8 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/driver-login')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
-                    🚌
+                  <div className="mb-2 sm:mb-4">
+                    <Icon name="bus" size="md" animated={!isMobile} />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Driver Interface
@@ -156,8 +155,8 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/student-map')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
-                    🗺️
+                  <div className="mb-2 sm:mb-4">
+                    <Icon name="map" size="md" animated={!isMobile} />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Student Map
@@ -194,8 +193,8 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/admin-login')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse">
-                    ⚙️
+                  <div className="mb-2 sm:mb-4">
+                    <Icon name="admin" size="md" animated={!isMobile} />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Admin Panel
@@ -214,14 +213,14 @@ const PremiumHomepage: React.FC = () => {
           </StaggerItem>
         </StaggerContainer>
 
-        {/* Footer Info */}
+        {/* Footer */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 1.2 }}
-          className="absolute bottom-4 sm:bottom-8 left-1/2 transform -translate-x-1/2 text-center px-4"
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.5 }}
+          className="mt-8 sm:mt-16 text-center px-4"
         >
-          <p className="text-white/60 text-xs sm:text-sm">
+          <p className="text-white/60 text-sm sm:text-base">
             Powered by cutting-edge technology • Real-time tracking • Premium
             experience
           </p>

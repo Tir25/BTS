@@ -2,7 +2,10 @@
 const getApiUrl = () => {
   // PRIORITY 1: Environment variable override (for deployment)
   if (import.meta.env.VITE_API_URL) {
-    console.log('🔧 Using environment variable API URL:', import.meta.env.VITE_API_URL);
+    console.log(
+      '🔧 Using environment variable API URL:',
+      import.meta.env.VITE_API_URL
+    );
     return import.meta.env.VITE_API_URL;
   }
 
@@ -24,7 +27,11 @@ const getApiUrl = () => {
   }
 
   // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 3
-  if (currentHost !== 'localhost' && currentHost !== '127.0.0.1' && !currentHost.includes('netlify.app')) {
+  if (
+    currentHost !== 'localhost' &&
+    currentHost !== '127.0.0.1' &&
+    !currentHost.includes('netlify.app')
+  ) {
     // We're on a network IP, use the same IP for backend
     const networkUrl = `http://${currentHost}:3000`;
     console.log('🔧 Network IP detected:', { currentHost, networkUrl });
@@ -39,7 +46,10 @@ const getApiUrl = () => {
 const getWebSocketUrl = () => {
   // PRIORITY 1: Environment variable override (for deployment)
   if (import.meta.env.VITE_WEBSOCKET_URL) {
-    console.log('🔧 Using environment variable WebSocket URL:', import.meta.env.VITE_WEBSOCKET_URL);
+    console.log(
+      '🔧 Using environment variable WebSocket URL:',
+      import.meta.env.VITE_WEBSOCKET_URL
+    );
     return import.meta.env.VITE_WEBSOCKET_URL;
   }
 
@@ -56,7 +66,11 @@ const getWebSocketUrl = () => {
   }
 
   // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 3
-  if (currentHost !== 'localhost' && currentHost !== '127.0.0.1' && !currentHost.includes('netlify.app')) {
+  if (
+    currentHost !== 'localhost' &&
+    currentHost !== '127.0.0.1' &&
+    !currentHost.includes('netlify.app')
+  ) {
     // We're on a network IP, use the same IP for WebSocket
     const wsUrl = `ws://${currentHost}:3000`;
     console.log('🔧 WebSocket network URL:', wsUrl);

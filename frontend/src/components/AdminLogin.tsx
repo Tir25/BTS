@@ -48,58 +48,17 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    setSuccess(null);
 
     try {
-      // Add timeout to prevent infinite loading
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Login timeout')), 15000);
-      });
-
-      const loginPromise = authService.signIn(email, password);
-
-      const result = (await Promise.race([loginPromise, timeoutPromise])) as {
-        success: boolean;
-        user?: { role: string };
-        error?: string;
-      };
-
-      if (result.success && result.user) {
-        if (result.user.role === 'admin') {
-          setSuccess('Login successful! Redirecting to admin dashboard...');
-          setTimeout(() => {
-            handleLoginSuccess();
-          }, 1500);
-        } else {
-          setError('Access denied. Admin privileges required.');
-          await authService.signOut();
-        }
+      const result = await authService.signIn(email, password);
+      if (result.success) {
+        handleLoginSuccess();
       } else {
-        setError(
-          result.error || 'Login failed. Please check your credentials.'
-        );
+        setError(result.error || 'Invalid credentials. Please try again.');
       }
-    } catch (err) {
-      console.error('❌ Login error:', err);
-      if (err instanceof Error && err.message === 'Login timeout') {
-        setError(
-          'Login timed out. This might be due to slow network or profile loading. Please try again.'
-        );
-      } else if (
-        err instanceof Error &&
-        err.message.includes('environment variables')
-      ) {
-        setError('Configuration error. Please check your environment setup.');
-      } else if (
-        err instanceof Error &&
-        err.message.includes('Profile loading timeout')
-      ) {
-        setError(
-          'Profile loading is taking longer than expected. Please try again.'
-        );
-      } else {
-        setError('Network error. Please check your connection and try again.');
-      }
+    } catch (error) {
+      setError('Login failed. Please check your credentials and try again.');
+      console.error('Login error:', error);
     } finally {
       setIsLoading(false);
     }
