@@ -15,7 +15,6 @@ pnpm-debug.log*
 DATABASE_CREDENTIALS_BACKUP.md
 
 # Build outputs
-dist/
 build/
 *.tsbuildinfo
 
