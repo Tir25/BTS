@@ -19,6 +19,8 @@ interface LocationUpdate {
 interface AuthenticatedSocket extends Socket {
   driverId?: string;
   busId?: string;
+  userId?: string;
+  userRole?: string;
 }
 
 export const initializeWebSocket = (io: SocketIOServer) => {
