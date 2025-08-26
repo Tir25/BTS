@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import StorageService from '../services/storageService';
+import { StorageService } from '../services/storageService';
 
 interface FileUploadProps {
   type: 'bus' | 'driver' | 'route';
