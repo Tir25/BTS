@@ -22,6 +22,7 @@ export const authenticateUser = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    console.log(`🔐 Auth attempt - ${req.method} ${req.path} - IP: ${req.ip}`);
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -83,15 +84,18 @@ export const authenticateUser = async (
     // Check if this is a known admin user - prioritize admin email over database role
     const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(
       (email: string) => email.trim().toLowerCase()
-    ) || [
-      'siddharthmali.211@gmail.com', // Keep this as fallback for development
-    ];
+    ) || [];
+
+    if (adminEmails.length === 0) {
+      console.error('❌ No admin emails configured');
+      throw new Error('ADMIN_EMAILS environment variable is required');
+    }
 
     const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
     const role = isAdmin ? 'admin' : profile.role;
 
     console.log(
-      `🔍 Backend Auth - User ${user.email} - Database role: ${profile.role}, Admin check: ${isAdmin}, Final role: ${role}`
+      `✅ Auth success - User: ${user.email} - Role: ${role} - IP: ${req.ip}`
     );
 
     // Attach user data to request

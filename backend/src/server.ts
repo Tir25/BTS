@@ -3,7 +3,7 @@ import helmet from 'helmet';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { corsMiddleware } from './middleware/cors';
-import { rateLimitMiddleware } from './middleware/rateLimit';
+import { rateLimitMiddleware, authRateLimit } from './middleware/rateLimit';
 import healthRoutes from './routes/health';
 import busRoutes from './routes/buses';
 import routeRoutes from './routes/routes';
@@ -40,7 +40,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/health', healthRoutes);
-app.use('/admin', adminRoutes);
+app.use('/admin', authRateLimit, adminRoutes); // Apply auth rate limiting to admin routes
 app.use('/buses', busRoutes);
 app.use('/routes', routeRoutes);
 app.use('/storage', storageRoutes);
