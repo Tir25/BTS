@@ -28,9 +28,8 @@ services:
     name: bus-tracking-frontend
     env: static
     plan: free
-    rootDir: frontend
-    buildCommand: chmod +x build-deploy.sh && ./build-deploy.sh
-    outputDirectory: dist
+    buildCommand: cd frontend && chmod +x render-deploy.sh && ./render-deploy.sh
+    outputDirectory: frontend/dist
     envVars:
       - key: NODE_ENV
         value: production
