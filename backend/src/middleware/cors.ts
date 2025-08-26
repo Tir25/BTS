@@ -1,25 +1,8 @@
 import cors from 'cors';
+import initializeEnvironment from '../config/environment';
 
-const allowedOrigins = [
-  // Development origins - specific ports only
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5174',
-  'http://127.0.0.1:3000',
-
-  // Production origins - add your production domains here
-  // 'https://your-production-domain.com',
-
-  // VS Code tunnel origins - more restrictive
-  /^https:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
-  /^wss:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
-
-  // Network access for cross-laptop testing
-  /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
-  /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
-];
+// Initialize environment to get CORS configuration
+const environment = initializeEnvironment();
 
 const corsOptions = {
   origin: function (
@@ -28,8 +11,11 @@ const corsOptions = {
   ) {
     if (!origin) return callback(null, true);
 
+    // Use the environment configuration for allowed origins
+    const allowedOrigins = environment.cors.allowedOrigins;
+
     // Check if origin matches any allowed origin (string or regex)
-    const isAllowed = allowedOrigins.some((allowedOrigin) => {
+    const isAllowed = allowedOrigins.some((allowedOrigin: string | RegExp) => {
       if (typeof allowedOrigin === 'string') {
         return allowedOrigin === origin;
       } else if (allowedOrigin instanceof RegExp) {
