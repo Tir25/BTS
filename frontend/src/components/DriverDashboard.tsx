@@ -362,23 +362,14 @@ const DriverDashboard: React.FC = () => {
               </h1>
               <div className="space-y-1">
                 <p className="text-white/80 text-sm sm:text-base">
-                  Welcome,{' '}
-                  <span className="font-semibold text-white">
-                    {busInfo?.driver_name}
-                  </span>
+                  Welcome, <span className="font-semibold text-white">{busInfo?.driver_name}</span>
                 </p>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm">
                   <span className="text-blue-300">
-                    🚌 Bus:{' '}
-                    <span className="font-semibold text-white">
-                      {busInfo?.bus_number}
-                    </span>
+                    🚌 Bus: <span className="font-semibold text-white">{busInfo?.bus_number}</span>
                   </span>
                   <span className="text-green-300">
-                    🛣️ Route:{' '}
-                    <span className="font-semibold text-white">
-                      {busInfo?.route_name}
-                    </span>
+                    🛣️ Route: <span className="font-semibold text-white">{busInfo?.route_name}</span>
                   </span>
                 </div>
               </div>
@@ -416,9 +407,7 @@ const DriverDashboard: React.FC = () => {
                 className={`w-3 h-3 rounded-full mr-3 ${isTracking ? 'bg-green-500' : 'bg-gray-400'}`}
               ></div>
               <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-white text-sm">
-                  GPS Tracking
-                </h3>
+                <h3 className="font-semibold text-white text-sm">GPS Tracking</h3>
                 <p className="text-xs text-white/70 truncate">
                   {isTracking ? 'Active' : 'Inactive'}
                 </p>
@@ -432,9 +421,7 @@ const DriverDashboard: React.FC = () => {
               <h3 className="font-semibold text-white text-sm">Updates Sent</h3>
               <p className="text-xl font-bold text-blue-300">{updateCount}</p>
               {lastUpdateTime && (
-                <p className="text-xs text-white/70 truncate">
-                  Last: {lastUpdateTime}
-                </p>
+                <p className="text-xs text-white/70 truncate">Last: {lastUpdateTime}</p>
               )}
             </div>
           </div>
@@ -618,9 +605,7 @@ const DriverDashboard: React.FC = () => {
                             }
                           );
                         } else {
-                          alert(
-                            'Geolocation is not supported by this browser.'
-                          );
+                          alert('Geolocation is not supported by this browser.');
                         }
                       }}
                       className="btn-primary text-xs px-3 py-1"
@@ -684,15 +669,11 @@ const DriverDashboard: React.FC = () => {
                   )}
                   <div className="flex justify-between">
                     <span className="text-white/70 text-sm">Updates Sent:</span>
-                    <span className="font-bold text-blue-300 text-sm">
-                      {updateCount}
-                    </span>
+                    <span className="font-bold text-blue-300 text-sm">{updateCount}</span>
                   </div>
                   {lastUpdateTime && (
                     <div className="flex justify-between">
-                      <span className="text-white/70 text-sm">
-                        Last Update:
-                      </span>
+                      <span className="text-white/70 text-sm">Last Update:</span>
                       <span className="text-white font-medium text-sm">
                         {lastUpdateTime}
                       </span>

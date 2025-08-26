@@ -26,3 +26,4 @@ export const HomepageToLoginTransition: React.FC<
     </motion.div>
   );
 };
+

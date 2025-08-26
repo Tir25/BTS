@@ -97,8 +97,6 @@ export const initializeEnvironment = (): EnvironmentConfig => {
             // Production origins - add your production domains here
             'https://your-production-domain.com',
             'https://www.your-production-domain.com',
-            // Netlify domains
-            /^https:\/\/[a-zA-Z0-9-]+\.netlify\.app$/,
           ]
         : [
             // Development origins
@@ -112,8 +110,6 @@ export const initializeEnvironment = (): EnvironmentConfig => {
             // Network access for cross-laptop testing
             /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
             /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
-            // Netlify domains for development testing
-            /^https:\/\/[a-zA-Z0-9-]+\.netlify\.app$/,
           ],
       credentials: true,
     },
@@ -141,9 +137,6 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               // Production WebSocket origins
               'https://your-production-domain.com',
               'wss://your-production-domain.com',
-              // Netlify WebSocket origins
-              /^https:\/\/[a-zA-Z0-9-]+\.netlify\.app$/,
-              /^wss:\/\/[a-zA-Z0-9-]+\.netlify\.app$/,
             ]
           : [
               // Development WebSocket origins
@@ -159,9 +152,6 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               // Network access for cross-laptop testing
               /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
               /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
-              // Netlify domains for development testing
-              /^https:\/\/[a-zA-Z0-9-]+\.netlify\.app$/,
-              /^wss:\/\/[a-zA-Z0-9-]+\.netlify\.app$/,
             ],
         methods: ['GET', 'POST'],
         credentials: true,

@@ -10,10 +10,7 @@ import EnhancedStudentMap from './components/EnhancedStudentMap';
 import AdminPanel from './components/AdminPanel';
 import AdminLogin from './components/AdminLogin';
 import PremiumHomepage from './components/PremiumHomepage';
-import {
-  TransitionProvider,
-  GlobalTransitionWrapper,
-} from './components/transitions';
+import { TransitionProvider, GlobalTransitionWrapper } from './components/transitions';
 
 function App() {
   console.log('🚀 App component is rendering...');

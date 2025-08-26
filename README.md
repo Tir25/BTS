@@ -185,7 +185,7 @@ Set up production environment variables:
 
 ### Deployment Options
 - **Docker**: Use provided Dockerfile
-- **Vercel**: Deploy frontend to Vercel
+- **Render**: Deploy both frontend and backend to Render
 - **Railway/Heroku**: Deploy backend to cloud platforms
 - **Self-hosted**: Deploy on your own servers
 

@@ -48,17 +48,58 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
-      const result = await authService.signIn(email, password);
-      if (result.success) {
-        handleLoginSuccess();
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Login timeout')), 15000);
+      });
+
+      const loginPromise = authService.signIn(email, password);
+
+      const result = (await Promise.race([loginPromise, timeoutPromise])) as {
+        success: boolean;
+        user?: { role: string };
+        error?: string;
+      };
+
+      if (result.success && result.user) {
+        if (result.user.role === 'admin') {
+          setSuccess('Login successful! Redirecting to admin dashboard...');
+          setTimeout(() => {
+            handleLoginSuccess();
+          }, 1500);
+        } else {
+          setError('Access denied. Admin privileges required.');
+          await authService.signOut();
+        }
       } else {
-        setError(result.error || 'Invalid credentials. Please try again.');
+        setError(
+          result.error || 'Login failed. Please check your credentials.'
+        );
       }
-    } catch (error) {
-      setError('Login failed. Please check your credentials and try again.');
-      console.error('Login error:', error);
+    } catch (err) {
+      console.error('❌ Login error:', err);
+      if (err instanceof Error && err.message === 'Login timeout') {
+        setError(
+          'Login timed out. This might be due to slow network or profile loading. Please try again.'
+        );
+      } else if (
+        err instanceof Error &&
+        err.message.includes('environment variables')
+      ) {
+        setError('Configuration error. Please check your environment setup.');
+      } else if (
+        err instanceof Error &&
+        err.message.includes('Profile loading timeout')
+      ) {
+        setError(
+          'Profile loading is taking longer than expected. Please try again.'
+        );
+      } else {
+        setError('Network error. Please check your connection and try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +108,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
   const handleLoginSuccess = () => {
     // Set transition type for login to dashboard
     setTransition('login-to-dashboard');
-
+    
     if (onLoginSuccess) {
       onLoginSuccess();
     } else {
@@ -147,7 +188,11 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         transition={{ duration: 0.8, ease: [0.4, 0.0, 0.2, 1] }}
         className="w-full max-w-md relative z-10"
       >
-        <GlassyCard variant="ultra" glow={true} className="p-8 relative">
+        <GlassyCard
+          variant="ultra"
+          glow={true}
+          className="p-8 relative"
+        >
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -193,10 +238,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5, duration: 0.6 }}
             >
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-blue-200 mb-2"
-              >
+              <label htmlFor="email" className="block text-sm font-medium text-blue-200 mb-2">
                 Email Address
               </label>
               <div className="relative">
@@ -222,10 +264,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6, duration: 0.6 }}
             >
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-blue-200 mb-2"
-              >
+              <label htmlFor="password" className="block text-sm font-medium text-blue-200 mb-2">
                 Password
               </label>
               <div className="relative">
@@ -251,10 +290,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.7, duration: 0.6 }}
             >
-              <label
-                htmlFor="twoFactorCode"
-                className="block text-sm font-medium text-blue-200/80 mb-2"
-              >
+              <label htmlFor="twoFactorCode" className="block text-sm font-medium text-blue-200/80 mb-2">
                 2FA Code <span className="text-blue-200/50">(Optional)</span>
               </label>
               <div className="relative">
@@ -285,11 +321,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                   <div className="inline-flex items-center px-4 py-2 text-sm text-blue-200 bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded-xl">
                     <motion.div
                       animate={{ rotate: 360 }}
-                      transition={{
-                        duration: 1,
-                        repeat: Infinity,
-                        ease: 'linear',
-                      }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                       className="w-4 h-4 border-2 border-blue-300/30 border-t-blue-300 rounded-full mr-3"
                     />
                     Signing in and loading profile...
@@ -424,7 +456,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                   Force Fresh Login
                 </button>
               </div>
-
+              
               <div className="text-xs text-blue-200/50 space-y-1">
                 <p>Enter your admin credentials to access the system</p>
                 <p>Using Supabase Authentication</p>
@@ -433,6 +465,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
           </motion.form>
         </GlassyCard>
       </motion.div>
+
+
     </div>
   );
 }

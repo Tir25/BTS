@@ -30,7 +30,8 @@ const getApiUrl = () => {
   if (
     currentHost !== 'localhost' &&
     currentHost !== '127.0.0.1' &&
-    !currentHost.includes('netlify.app')
+    !currentHost.includes('render.com') &&
+    !currentHost.includes('render.com')
   ) {
     // We're on a network IP, use the same IP for backend
     const networkUrl = `http://${currentHost}:3000`;
@@ -69,7 +70,7 @@ const getWebSocketUrl = () => {
   if (
     currentHost !== 'localhost' &&
     currentHost !== '127.0.0.1' &&
-    !currentHost.includes('netlify.app')
+    !currentHost.includes('render.com')
   ) {
     // We're on a network IP, use the same IP for WebSocket
     const wsUrl = `ws://${currentHost}:3000`;

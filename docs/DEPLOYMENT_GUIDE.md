@@ -534,47 +534,54 @@ docker-compose down
 
 ## Cloud Platform Deployment
 
-### Vercel (Frontend)
+### Render (Frontend - Static Site)
 
-1. **Install Vercel CLI**
-```bash
-npm install -g vercel
-```
+1. **Connect GitHub Repository**
+   - Go to [Render Dashboard](https://dashboard.render.com)
+   - Click "New +" → "Static Site"
+   - Connect your GitHub repository
 
-2. **Deploy Frontend**
-```bash
-cd frontend
-vercel --prod
-```
+2. **Configure Build Settings**
+   - **Name**: `bus-tracking-frontend`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+   - **Branch**: `main`
 
-3. **Configure Environment Variables**
-```bash
-vercel env add VITE_API_URL
-vercel env add VITE_SUPABASE_URL
-vercel env add VITE_SUPABASE_ANON_KEY
-```
+3. **Environment Variables**
+   - `VITE_SUPABASE_URL`: Your Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY`: Your Supabase anon key
+   - `VITE_ADMIN_EMAILS`: Admin email addresses
+   - `VITE_API_URL`: Your Render backend URL
 
-### Railway (Backend)
+4. **Deploy**
+   - Click "Create Static Site"
+   - Render will automatically build and deploy
 
-1. **Install Railway CLI**
-```bash
-npm install -g @railway/cli
-```
+### Render (Backend - Web Service)
 
-2. **Deploy Backend**
-```bash
-cd backend
-railway login
-railway init
-railway up
-```
+1. **Connect GitHub Repository**
+   - Go to [Render Dashboard](https://dashboard.render.com)
+   - Click "New +" → "Web Service"
+   - Connect your GitHub repository
 
-3. **Configure Environment Variables**
-```bash
-railway variables set NODE_ENV=production
-railway variables set DATABASE_URL=your_database_url
-railway variables set SUPABASE_URL=your_supabase_url
-```
+2. **Configure Build Settings**
+   - **Name**: `bus-tracking-backend`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+   - **Branch**: `main`
+
+3. **Environment Variables**
+   - `NODE_ENV`: `production`
+   - `PORT`: `10000`
+   - `SUPABASE_URL`: Your Supabase project URL
+   - `SUPABASE_ANON_KEY`: Your Supabase anon key
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
+   - `DATABASE_URL`: Your Supabase database URL
+   - `ADMIN_EMAILS`: Admin email addresses
+
+4. **Deploy**
+   - Click "Create Web Service"
+   - Render will automatically build and deploy
 
 ### Heroku
 
