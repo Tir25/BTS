@@ -1,43 +1,53 @@
 import express from 'express';
-import { authenticateUser, requireAdminOrStudent } from '../middleware/auth';
 import { getBusInfo, getAllBuses } from '../services/locationService';
-import { validateUUIDWithError } from '../utils/validation';
-import { sendNotFoundError, sendValidationError, sendSuccessResponse, sendInternalServerError } from '../utils/responseHelpers';
 
 const router = express.Router();
 
-// Get all active buses (accessible to students and admins)
-router.get('/', authenticateUser, requireAdminOrStudent, async (_req, res) => {
+// Get all active buses
+router.get('/', async (req, res) => {
   try {
     const buses = await getAllBuses();
-    return sendSuccessResponse(res, buses);
+    res.json({
+      success: true,
+      data: buses,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     console.error('❌ Error fetching buses:', error);
-    return sendInternalServerError(res, error instanceof Error ? error : undefined);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch buses',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 });
 
-// Get specific bus information (accessible to students and admins)
-router.get('/:busId', authenticateUser, requireAdminOrStudent, async (req, res) => {
+// Get specific bus information
+router.get('/:busId', async (req, res) => {
   try {
     const { busId } = req.params;
-    
-    // Validate bus ID
-    const validationError = validateUUIDWithError(busId, 'Bus ID');
-    if (validationError) {
-      return sendValidationError(res, 'busId', validationError);
-    }
-    
     const busInfo = await getBusInfo(busId);
 
     if (!busInfo) {
-      return sendNotFoundError(res, 'Bus', busId);
+      return res.status(404).json({
+        success: false,
+        error: 'Bus not found',
+        message: `Bus with ID ${busId} not found`,
+      });
     }
 
-    return sendSuccessResponse(res, busInfo);
+    return res.json({
+      success: true,
+      data: busInfo,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     console.error('❌ Error fetching bus info:', error);
-    return sendInternalServerError(res, error instanceof Error ? error : undefined);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch bus information',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 });
 

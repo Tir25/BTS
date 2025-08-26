@@ -30,7 +30,7 @@ async function testBackendAPI() {
 
     // Test the backend API
     console.log('\n📡 Testing /drivers endpoint...');
-    const response = await fetch('http://localhost:3000/drivers', {
+    const response = await fetch((process.env.API_URL || 'http://localhost:3000') + '/drivers', {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'

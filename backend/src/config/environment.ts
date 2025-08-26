@@ -51,14 +51,6 @@ export const initializeEnvironment = (): EnvironmentConfig => {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const isProduction = nodeEnv === 'production';
 
-  // Validate environment variable content
-  const validateEnvironmentVariable = (name: string, value: string | undefined): string => {
-    if (!value || value === '' || value.includes('your_')) {
-      throw new Error(`Invalid ${name}: ${value}. Please check your environment variables.`);
-    }
-    return value;
-  };
-
   // Validate required environment variables
   const requiredEnvVars = [
     'SUPABASE_URL',
@@ -94,9 +86,9 @@ export const initializeEnvironment = (): EnvironmentConfig => {
       maxRetries: parseInt(process.env.DB_MAX_RETRIES || '5'),
     },
     supabase: {
-      url: validateEnvironmentVariable('SUPABASE_URL', process.env.SUPABASE_URL),
-      anonKey: validateEnvironmentVariable('SUPABASE_ANON_KEY', process.env.SUPABASE_ANON_KEY),
-      serviceRoleKey: validateEnvironmentVariable('SUPABASE_SERVICE_ROLE_KEY', process.env.SUPABASE_SERVICE_ROLE_KEY),
+      url: process.env.SUPABASE_URL!,
+      anonKey: process.env.SUPABASE_ANON_KEY!,
+      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
     },
     cors: {
               allowedOrigins: isProduction
@@ -104,9 +96,6 @@ export const initializeEnvironment = (): EnvironmentConfig => {
             // Production origins - Render domains
             /^https:\/\/.*\.onrender\.com$/,
             /^https:\/\/.*\.render\.com$/,
-            /^https:\/\/.*\.onrender\.com:.*$/,
-            /^wss:\/\/.*\.onrender\.com$/,
-            /^wss:\/\/.*\.render\.com$/,
           ]
         : [
             // Development origins
@@ -146,9 +135,7 @@ export const initializeEnvironment = (): EnvironmentConfig => {
           ? [
               // Production WebSocket origins
               /^https:\/\/.*\.onrender\.com$/,
-              /^https:\/\/.*\.render\.com$/,
               /^wss:\/\/.*\.onrender\.com$/,
-              /^wss:\/\/.*\.render\.com$/,
             ]
           : [
               // Development WebSocket origins

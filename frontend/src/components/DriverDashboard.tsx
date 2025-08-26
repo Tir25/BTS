@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { supabase } from '../config/supabase';
 import { websocketService } from '../services/websocket';
+import { environment } from '../config/environment';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './DriverInterface.css';
@@ -310,7 +311,7 @@ const DriverDashboard: React.FC = () => {
 
       // Make API call to get driver bus info
       const response = await fetch(
-        `http://localhost:3000/api/drivers/${userId}/bus`,
+        `${environment.api.url}/api/drivers/${userId}/bus`,
         {
           method: 'GET',
           headers: {

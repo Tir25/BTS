@@ -1,4 +1,7 @@
 import { Pool } from 'pg';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // Database configuration interface
 interface DatabaseConfig {
@@ -11,27 +14,12 @@ interface DatabaseConfig {
   maxRetries: number;
 }
 
-// Database URL validation function
-const validateDatabaseUrl = (url: string | undefined): string => {
-  if (!url || url === '' || url.includes('your_')) {
-    throw new Error('DATABASE_URL environment variable is required and must be a valid PostgreSQL connection string');
-  }
-  
-  // Basic PostgreSQL URL validation
-  if (!url.startsWith('postgresql://') && !url.startsWith('postgres://')) {
-    throw new Error('DATABASE_URL must be a valid PostgreSQL connection string starting with postgresql:// or postgres://');
-  }
-  
-  return url;
-};
-
 // Environment-specific configurations
 const getDatabaseConfig = (): DatabaseConfig => {
   const isProduction = process.env.NODE_ENV === 'production';
-  const databaseUrl = validateDatabaseUrl(process.env.DATABASE_URL);
 
   return {
-    connectionString: databaseUrl,
+    connectionString: process.env.DATABASE_URL!,
     ssl: isProduction ? { rejectUnauthorized: false } : false,
     max: parseInt(process.env.DB_POOL_MAX || '20'), // Maximum number of clients in the pool
     idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000'), // Close idle clients after 30 seconds

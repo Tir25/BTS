@@ -10,9 +10,9 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760'), // 10MB default
+    fileSize: 10 * 1024 * 1024, // 10MB limit
   },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (req, file, cb) => {
     // Allow images and PDFs
     if (
       file.mimetype.startsWith('image/') ||

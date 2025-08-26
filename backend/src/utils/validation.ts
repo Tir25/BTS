@@ -1,5 +1,3 @@
-import { validate as uuidValidate } from 'uuid';
-
 interface LocationData {
   driverId: string;
   latitude: number;
@@ -85,24 +83,6 @@ export const validateLocationData = (data: LocationData): string | null => {
   }
 
   return null; // No validation errors
-};
-
-// UUID validation helper
-export const validateUUID = (id: string): boolean => {
-  return uuidValidate(id);
-};
-
-// Validate UUID and return error message if invalid
-export const validateUUIDWithError = (id: string, fieldName: string = 'ID'): string | null => {
-  if (!id || typeof id !== 'string') {
-    return `${fieldName} is required and must be a string`;
-  }
-  
-  if (!uuidValidate(id)) {
-    return `${fieldName} must be a valid UUID`;
-  }
-  
-  return null;
 };
 
 export const validateEmail = (email: string): boolean => {

@@ -1,4 +1,5 @@
 import { authService } from '../services/authService';
+import { environment } from '../config/environment';
 
 // Global fetch interceptor to add authorization headers
 const originalFetch = window.fetch;
@@ -7,7 +8,7 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
   // Only add auth headers for your API requests
   if (
     typeof input === 'string' &&
-    input.includes(import.meta.env.VITE_API_URL || '')
+    (input.includes(environment.api.url) || input.includes('localhost'))
   ) {
     try {
       let token = authService.getAccessToken();

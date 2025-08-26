@@ -34,7 +34,6 @@
     "start:frontend": "cd frontend && npm run start"
   },
   "devDependencies": {
-    "@types/uuid": "^10.0.0",
     "concurrently": "^8.2.2"
   },
   "keywords": [

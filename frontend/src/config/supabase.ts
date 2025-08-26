@@ -80,9 +80,35 @@ const createSupabaseClient = () => {
   } catch (error) {
     console.error('❌ Failed to create Supabase client:', error);
 
-    // No fallback client - require proper configuration
-    console.error('❌ Supabase credentials not properly configured');
-    throw new Error('Supabase credentials required. Please check your environment variables.');
+    // Create a fallback client with default values for development
+    if (import.meta.env.DEV) {
+      console.log('🔄 Creating fallback Supabase client for development...');
+      const fallbackClient = createClient(
+        'https://gthwmwfwvhyriygpcdlr.supabase.co',
+        '',
+        {
+          auth: {
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: true,
+          },
+          global: {
+            headers: {
+              'X-Client-Info': 'bus-tracking-admin',
+            },
+          },
+          realtime: {
+            params: {
+              eventsPerSecond: 10,
+            },
+          },
+        }
+      );
+      console.log('✅ Fallback Supabase client created');
+      return fallbackClient;
+    } else {
+      throw error;
+    }
   }
 };
 

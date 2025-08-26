@@ -1,25 +1,8 @@
 import rateLimit from 'express-rate-limit';
 
-// Validate rate limit configuration
-const validateRateLimitConfig = () => {
-  const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000');
-  const max = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100');
-  
-  if (isNaN(windowMs) || windowMs < 60000) {
-    throw new Error('Invalid RATE_LIMIT_WINDOW_MS: must be at least 60000ms (1 minute)');
-  }
-  if (isNaN(max) || max < 1) {
-    throw new Error('Invalid RATE_LIMIT_MAX_REQUESTS: must be at least 1');
-  }
-  
-  return { windowMs, max };
-};
-
-const { windowMs, max } = validateRateLimitConfig();
-
 export const rateLimitMiddleware = rateLimit({
-  windowMs, // 15 minutes
-  max, // limit each IP to 100 requests per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // limit each IP to 100 requests per windowMs
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: Math.ceil(

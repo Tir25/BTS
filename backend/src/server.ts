@@ -3,7 +3,7 @@ import helmet from 'helmet';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { corsMiddleware } from './middleware/cors';
-import { rateLimitMiddleware, authRateLimit } from './middleware/rateLimit';
+import { rateLimitMiddleware } from './middleware/rateLimit';
 import healthRoutes from './routes/health';
 import busRoutes from './routes/buses';
 import routeRoutes from './routes/routes';
@@ -40,13 +40,13 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/health', healthRoutes);
-app.use('/admin', authRateLimit, adminRoutes); // Apply auth rate limiting to admin routes
+app.use('/admin', adminRoutes);
 app.use('/buses', busRoutes);
 app.use('/routes', routeRoutes);
 app.use('/storage', storageRoutes);
 
 // Root endpoint
-app.get('/', (_req, res) => {
+app.get('/', (req, res) => {
   res.json({
     message: 'University Bus Tracking System API',
     version: '1.0.0',
@@ -85,7 +85,7 @@ app.use('*', (req, res) => {
 app.use(
   (
     err: Error,
-    _req: express.Request,
+    req: express.Request,
     res: express.Response,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
     _next: express.NextFunction

@@ -7,19 +7,6 @@ import {
 import { RouteService } from '../services/routeService';
 import { validateLocationData } from '../utils/validation';
 
-// Connection tracking for monitoring and cleanup
-const activeConnections = new Map<string, {
-  driverId?: string;
-  busId?: string;
-  connectedAt: Date;
-  lastActivity: Date;
-}>();
-
-// Rate limiting for authentication attempts
-const authRateLimit = new Map<string, number>();
-const AUTH_RATE_LIMIT_WINDOW = 5000; // 5 seconds between attempts
-const AUTH_TIMEOUT = 10000; // 10 seconds timeout for auth calls
-
 interface LocationUpdate {
   driverId: string;
   latitude: number;
@@ -46,21 +33,10 @@ export const initializeWebSocket = (io: SocketIOServer) => {
   io.on('connection', async (socket: AuthenticatedSocket) => {
     console.log(`🔌 New client connected: ${socket.id}`);
 
-    // Track connection
-    activeConnections.set(socket.id, {
-      connectedAt: new Date(),
-      lastActivity: new Date(),
-    });
-
     // Set socket options for better mobile support
     socket.conn.on('packet', ({ type }) => {
       if (type === 'pong') {
         console.log(`💓 Pong received from ${socket.id}`);
-        // Update last activity
-        const connection = activeConnections.get(socket.id);
-        if (connection) {
-          connection.lastActivity = new Date();
-        }
       }
     });
 
@@ -79,28 +55,10 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           return;
         }
 
-        // Rate limiting check
-        const clientId = socket.handshake.address;
-        const now = Date.now();
-        const lastAttempt = authRateLimit.get(clientId) || 0;
-        
-        if (now - lastAttempt < AUTH_RATE_LIMIT_WINDOW) {
-          socket.emit('error', { message: 'Too many authentication attempts. Please wait 5 seconds.' });
-          return;
-        }
-        
-        authRateLimit.set(clientId, now);
-
-        // Add timeout for Supabase auth call
-        const authPromise = supabaseAdmin.auth.getUser(token);
-        const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Authentication timeout')), AUTH_TIMEOUT)
-        );
-        
         const {
           data: { user },
           error,
-        } = await Promise.race([authPromise, timeoutPromise]);
+        } = await supabaseAdmin.auth.getUser(token);
 
         if (error || !user) {
           socket.emit('error', { message: 'Invalid authentication token' });
@@ -148,14 +106,6 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         socket.driverId = user.id;
         socket.busId = busInfo.bus_id;
 
-        // Update connection tracking
-        const connection = activeConnections.get(socket.id);
-        if (connection) {
-          connection.driverId = user.id;
-          connection.busId = busInfo.bus_id;
-          connection.lastActivity = new Date();
-        }
-
         socket.join(`driver:${user.id}`);
         socket.join(`bus:${busInfo.bus_id}`);
 
@@ -179,12 +129,6 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
     socket.on('driver:locationUpdate', async (data: LocationUpdate) => {
       try {
-        // Update last activity
-        const connection = activeConnections.get(socket.id);
-        if (connection) {
-          connection.lastActivity = new Date();
-        }
-
         console.log('📍 Received location update from driver:', {
           driverId: data.driverId,
           latitude: data.latitude,
@@ -303,22 +247,6 @@ export const initializeWebSocket = (io: SocketIOServer) => {
     socket.on('disconnect', (reason) => {
       console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason}`);
 
-      // Cleanup connection tracking
-      const connection = activeConnections.get(socket.id);
-      if (connection) {
-        console.log(`🧹 Cleaning up connection for driver: ${connection.driverId}, bus: ${connection.busId}`);
-        activeConnections.delete(socket.id);
-      }
-
-      // Leave specific rooms if they exist
-      if (connection?.driverId) {
-        socket.leave(`driver:${connection.driverId}`);
-      }
-      if (connection?.busId) {
-        socket.leave(`bus:${connection.busId}`);
-      }
-      socket.leave('students');
-
       // Log additional info for debugging mobile disconnections
       if (reason === 'transport close') {
         console.log(`📱 Mobile client likely disconnected: ${socket.id}`);
@@ -329,21 +257,6 @@ export const initializeWebSocket = (io: SocketIOServer) => {
       console.error('❌ Socket error:', error);
     });
   });
-
-  // Add periodic health check for inactive connections
-  setInterval(() => {
-    const now = new Date();
-    activeConnections.forEach((connection, socketId) => {
-      const timeSinceActivity = now.getTime() - connection.lastActivity.getTime();
-      if (timeSinceActivity > 300000) { // 5 minutes of inactivity
-        console.log(`⚠️ Inactive connection detected: ${socketId}`);
-        const socket = io.sockets.sockets.get(socketId);
-        if (socket) {
-          socket.disconnect(true);
-        }
-      }
-    });
-  }, 60000); // Check every minute
 
   return io;
 };

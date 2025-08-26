@@ -1,13 +1,11 @@
 import express from 'express';
-import { authenticateUser, requireAdmin, requireAdminOrStudent } from '../middleware/auth';
 import { RouteService } from '../services/routeService';
-import { validateRouteData, validateUUIDWithError } from '../utils/validation';
-import { sendNotFoundError, sendValidationError, sendSuccessResponse, sendInternalServerError } from '../utils/responseHelpers';
+import { validateRouteData } from '../utils/validation';
 
 const router = express.Router();
 
-// Get all routes with GeoJSON data (accessible to students and admins)
-router.get('/', authenticateUser, requireAdminOrStudent, async (_req, res) => {
+// Get all routes with GeoJSON data
+router.get('/', async (req, res) => {
   try {
     const routes = await RouteService.getAllRoutes();
     res.json({
@@ -25,56 +23,78 @@ router.get('/', authenticateUser, requireAdminOrStudent, async (_req, res) => {
   }
 });
 
-// Get specific route with GeoJSON data (accessible to students and admins)
-router.get('/:routeId', authenticateUser, requireAdminOrStudent, async (req, res) => {
+// Get specific route with GeoJSON data
+router.get('/:routeId', async (req, res) => {
   try {
     const { routeId } = req.params;
-    
-    // Validate route ID
-    const validationError = validateUUIDWithError(routeId, 'Route ID');
-    if (validationError) {
-      return sendValidationError(res, 'routeId', validationError);
-    }
-    
     const route = await RouteService.getRouteById(routeId);
 
     if (!route) {
-      return sendNotFoundError(res, 'Route', routeId);
+      return res.status(404).json({
+        success: false,
+        error: 'Route not found',
+        message: `Route with ID ${routeId} not found`,
+      });
     }
 
-    return sendSuccessResponse(res, route);
+    return res.json({
+      success: true,
+      data: route,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     console.error('❌ Error fetching route:', error);
-    return sendInternalServerError(res, error instanceof Error ? error : undefined);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch route',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 });
 
 // Create new route (Admin only)
-router.post('/', authenticateUser, requireAdmin, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const routeData = req.body;
 
     // Validate route data
     const validationError = validateRouteData(routeData);
     if (validationError) {
-      return sendValidationError(res, 'routeData', validationError);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid route data',
+        message: validationError,
+      });
     }
 
     const newRoute = await RouteService.createRoute(routeData);
 
     if (!newRoute) {
-      return sendInternalServerError(res, new Error('Database error occurred'));
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to create route',
+        message: 'Database error occurred',
+      });
     }
 
-    return sendSuccessResponse(res, newRoute, 'Route created successfully', 201);
+    return res.status(201).json({
+      success: true,
+      data: newRoute,
+      message: 'Route created successfully',
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     console.error('❌ Error creating route:', error);
-    return sendInternalServerError(res, error instanceof Error ? error : undefined);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to create route',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 });
 
 // Assign bus to route (Admin only)
-router.post('/:routeId/assign-bus', authenticateUser, requireAdmin, async (req, res) => {
+router.post('/:routeId/assign-bus', async (req, res) => {
   try {
     const { routeId } = req.params;
     const { busId } = req.body;
@@ -112,8 +132,8 @@ router.post('/:routeId/assign-bus', authenticateUser, requireAdmin, async (req, 
   }
 });
 
-// Calculate ETA for a bus on a route (accessible to students and admins)
-router.post('/:routeId/calculate-eta', authenticateUser, requireAdminOrStudent, async (req, res) => {
+// Calculate ETA for a bus on a route
+router.post('/:routeId/calculate-eta', async (req, res) => {
   try {
     const { routeId } = req.params;
     const { bus_id, latitude, longitude, timestamp } = req.body;
@@ -158,8 +178,8 @@ router.post('/:routeId/calculate-eta', authenticateUser, requireAdminOrStudent, 
   }
 });
 
-// Check if bus is near a stop (accessible to students and admins)
-router.post('/:routeId/check-near-stop', authenticateUser, requireAdminOrStudent, async (req, res) => {
+// Check if bus is near a stop
+router.post('/:routeId/check-near-stop', async (req, res) => {
   try {
     const { routeId } = req.params;
     const { bus_id, latitude, longitude, timestamp } = req.body;

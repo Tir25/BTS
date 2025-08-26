@@ -1059,12 +1059,12 @@ export class AdminService {
     estimated_duration_minutes: number;
     is_active: boolean;
     city: string;
-    coordinates: [number, number][]; // Array of [lng, lat] pairs
     custom_destination?: string;
     custom_destination_coordinates?: [number, number];
     custom_origin?: string;
     custom_origin_coordinates?: [number, number];
     bus_stops?: any[];
+    stops?: any;
   }) {
     try {
       // Validate required fields
@@ -1080,39 +1080,28 @@ export class AdminService {
         throw new Error('Route description is required');
       }
 
-      // Build LINESTRING from provided coordinates for stops geometry
-      if (!Array.isArray(routeData.coordinates) || routeData.coordinates.length < 2) {
-        throw new Error('Route must include at least two coordinates');
-      }
-
-      const coordinatesWkt = routeData.coordinates
-        .map((coord) => `${coord[0]} ${coord[1]}`)
-        .join(',');
-      const lineStringWkt = `LINESTRING(${coordinatesWkt})`;
-
-      // Route creation with city and stops geometry
+      // Route creation with city and geometry
       const query = `
         INSERT INTO routes (
-          name,
-          description,
-          stops,
-          distance_km,
-          estimated_duration_minutes,
+          name, 
+          description, 
+          distance_km, 
+          estimated_duration_minutes, 
           is_active,
-          city
+          city,
+          geom
         )
-        VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromText('LINESTRING(72.5714 23.0225, 72.4563 23.5295)', 4326))
         RETURNING *
       `;
 
       const values = [
         routeData.name,
         routeData.description,
-        lineStringWkt,
         routeData.distance_km,
         routeData.estimated_duration_minutes,
         routeData.is_active,
-        routeData.city.trim(),
+        routeData.city.trim(), // Use trimmed city value
       ];
 
       const result = await pool.query(query, values);

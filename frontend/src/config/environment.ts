@@ -88,23 +88,29 @@ export const environment = {
   supabase: {
     url: (() => {
       const envUrl = import.meta.env.VITE_SUPABASE_URL;
+      const fallbackUrl = 'https://gthwmwfwvhyriygpcdlr.supabase.co';
 
-      if (!envUrl || envUrl === 'your_supabase_project_url' || envUrl === '') {
-        console.error('❌ VITE_SUPABASE_URL is required. Please set it in your environment variables.');
-        throw new Error('VITE_SUPABASE_URL environment variable is required');
+      if (envUrl && envUrl !== 'your_supabase_project_url' && envUrl !== '') {
+        return envUrl;
       }
 
-      return envUrl;
+      console.warn(
+        '⚠️ Using fallback Supabase URL. Please set VITE_SUPABASE_URL in your environment variables.'
+      );
+      return fallbackUrl;
     })(),
     anonKey: (() => {
       const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const fallbackKey = '';
 
-      if (!envKey || envKey === 'your_supabase_anon_key_here' || envKey === '') {
-        console.error('❌ VITE_SUPABASE_ANON_KEY is required. Please set it in your environment variables.');
-        throw new Error('VITE_SUPABASE_ANON_KEY environment variable is required');
+      if (envKey && envKey !== 'your_supabase_anon_key_here' && envKey !== '') {
+        return envKey;
       }
 
-      return envKey;
+      console.warn(
+        '⚠️ Using fallback Supabase anon key. Please set VITE_SUPABASE_ANON_KEY in your environment variables.'
+      );
+      return fallbackKey;
     })(),
   },
 
