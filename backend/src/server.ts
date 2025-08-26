@@ -46,7 +46,7 @@ app.use('/routes', routeRoutes);
 app.use('/storage', storageRoutes);
 
 // Root endpoint
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.json({
     message: 'University Bus Tracking System API',
     version: '1.0.0',
@@ -85,7 +85,7 @@ app.use('*', (req, res) => {
 app.use(
   (
     err: Error,
-    req: express.Request,
+    _req: express.Request,
     res: express.Response,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
     _next: express.NextFunction

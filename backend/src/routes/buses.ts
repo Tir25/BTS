@@ -4,7 +4,7 @@ import { getBusInfo, getAllBuses } from '../services/locationService';
 const router = express.Router();
 
 // Get all active buses
-router.get('/', async (req, res) => {
+router.get('/', async (_req, res) => {
   try {
     const buses = await getAllBuses();
     res.json({

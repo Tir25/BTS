@@ -20,3 +20,5 @@ services:
         sync: false
       - key: WEBSOCKET_PORT
         value: 3000
+      - key: DATABASE_URL
+        sync: false

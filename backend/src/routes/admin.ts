@@ -13,7 +13,7 @@ router.use(requireAdmin);
 // ===== ANALYTICS ENDPOINTS =====
 
 // Get system analytics
-router.get('/analytics', async (req, res) => {
+router.get('/analytics', async (_req, res) => {
   try {
     const analytics = await AdminService.getAnalytics();
     res.json({
@@ -32,7 +32,7 @@ router.get('/analytics', async (req, res) => {
 });
 
 // Get system health
-router.get('/health', async (req, res) => {
+router.get('/health', async (_req, res) => {
   try {
     const health = await AdminService.getSystemHealth();
     res.json({
@@ -53,7 +53,7 @@ router.get('/health', async (req, res) => {
 // ===== BUS MANAGEMENT ENDPOINTS =====
 
 // Get all buses with driver and route information
-router.get('/buses', async (req, res) => {
+router.get('/buses', async (_req, res) => {
   try {
     const buses = await AdminService.getAllBuses();
     res.json({
@@ -214,7 +214,7 @@ router.delete('/buses/:busId', async (req, res) => {
 // ===== DRIVER MANAGEMENT ENDPOINTS =====
 
 // Get all drivers
-router.get('/drivers', async (req, res) => {
+router.get('/drivers', async (_req, res) => {
   try {
     const drivers = await AdminService.getAllDrivers();
     res.json({
@@ -233,7 +233,7 @@ router.get('/drivers', async (req, res) => {
 });
 
 // Get assigned drivers (MUST be before /drivers/:driverId to avoid route conflict)
-router.get('/assigned-drivers', async (req, res) => {
+router.get('/assigned-drivers', async (_req, res) => {
   try {
     const assignedDrivers = await AdminService.getAssignedDrivers();
     res.json({
@@ -503,7 +503,7 @@ router.delete('/drivers/:driverId', async (req, res) => {
 // ===== ROUTE MANAGEMENT ENDPOINTS =====
 
 // Get all routes (admin view)
-router.get('/routes', async (req, res) => {
+router.get('/routes', async (_req, res) => {
   try {
     const routes = await AdminService.getAllRoutes();
     res.json({
@@ -671,7 +671,7 @@ router.delete('/routes/:routeId', async (req, res) => {
 // ===== SYSTEM MANAGEMENT ENDPOINTS =====
 
 // Clear all data (Development only)
-router.post('/clear-all-data', async (req, res) => {
+router.post('/clear-all-data', async (_req, res) => {
   try {
     // Only allow in development
     if (process.env.NODE_ENV !== 'development') {

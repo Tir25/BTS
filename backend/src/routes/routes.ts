@@ -5,7 +5,7 @@ import { validateRouteData } from '../utils/validation';
 const router = express.Router();
 
 // Get all routes with GeoJSON data
-router.get('/', async (req, res) => {
+router.get('/', async (_req, res) => {
   try {
     const routes = await RouteService.getAllRoutes();
     res.json({

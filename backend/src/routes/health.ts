@@ -4,7 +4,7 @@ import { checkDatabaseHealth } from '../config/database';
 const router = express.Router();
 
 // Health check endpoint
-router.get('/', async (req, res) => {
+router.get('/', async (_req, res) => {
   try {
     const dbHealth = await checkDatabaseHealth();
 
@@ -41,7 +41,7 @@ router.get('/', async (req, res) => {
 });
 
 // Detailed health check endpoint
-router.get('/detailed', async (req, res) => {
+router.get('/detailed', async (_req, res) => {
   try {
     const dbHealth = await checkDatabaseHealth();
 
