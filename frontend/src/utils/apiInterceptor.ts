@@ -7,7 +7,7 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
   // Only add auth headers for your API requests
   if (
     typeof input === 'string' &&
-    (input.includes('localhost:3000') || input.includes('localhost'))
+    input.includes(import.meta.env.VITE_API_URL || '')
   ) {
     try {
       let token = authService.getAccessToken();

@@ -56,7 +56,6 @@ export const initializeEnvironment = (): EnvironmentConfig => {
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
     'SUPABASE_SERVICE_ROLE_KEY',
-    'DATABASE_URL',
   ];
 
   const missingEnvVars = requiredEnvVars.filter(
@@ -77,7 +76,7 @@ export const initializeEnvironment = (): EnvironmentConfig => {
     port: parseInt(process.env.PORT || '3000'),
     nodeEnv,
     database: {
-      url: process.env.DATABASE_URL!,
+      url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/bus_tracking',
       poolMax: parseInt(process.env.DB_POOL_MAX || '20'),
       poolIdleTimeout: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000'),
       poolConnectionTimeout: parseInt(
@@ -92,11 +91,14 @@ export const initializeEnvironment = (): EnvironmentConfig => {
       serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
     },
     cors: {
-      allowedOrigins: isProduction
+              allowedOrigins: isProduction
         ? [
-            // Production origins - add your production domains here
-            'https://your-production-domain.com',
-            'https://www.your-production-domain.com',
+            // Production origins - Render domains
+            /^https:\/\/.*\.onrender\.com$/,
+            /^https:\/\/.*\.render\.com$/,
+            /^https:\/\/.*\.onrender\.com:.*$/,
+            /^wss:\/\/.*\.onrender\.com$/,
+            /^wss:\/\/.*\.render\.com$/,
           ]
         : [
             // Development origins
@@ -135,8 +137,10 @@ export const initializeEnvironment = (): EnvironmentConfig => {
         origin: isProduction
           ? [
               // Production WebSocket origins
-              'https://your-production-domain.com',
-              'wss://your-production-domain.com',
+              /^https:\/\/.*\.onrender\.com$/,
+              /^https:\/\/.*\.render\.com$/,
+              /^wss:\/\/.*\.onrender\.com$/,
+              /^wss:\/\/.*\.render\.com$/,
             ]
           : [
               // Development WebSocket origins

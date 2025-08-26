@@ -30,7 +30,6 @@ const getApiUrl = () => {
   if (
     currentHost !== 'localhost' &&
     currentHost !== '127.0.0.1' &&
-    !currentHost.includes('render.com') &&
     !currentHost.includes('render.com')
   ) {
     // We're on a network IP, use the same IP for backend

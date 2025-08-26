@@ -9,7 +9,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: 3000
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY
@@ -18,3 +18,5 @@ services:
         sync: false
       - key: ADMIN_EMAILS
         sync: false
+      - key: WEBSOCKET_PORT
+        value: 3000
