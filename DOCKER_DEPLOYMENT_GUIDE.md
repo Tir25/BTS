@@ -1,327 +1,384 @@
 # 🐳 Docker Deployment Guide
+## University Bus Tracking System
 
-## Overview
+This guide will help you deploy your backend using Docker with step-by-step instructions.
 
-This guide provides step-by-step instructions for deploying the University Bus Tracking System using Docker and Docker Compose.
+---
 
-## 📁 File Structure
+## 📋 **Prerequisites**
 
-```
-/c:/College Project/
-├── Dockerfile                 # Multi-stage Docker build
-├── docker-compose.yml         # Docker Compose configuration
-├── .dockerignore             # Files to exclude from Docker build
-├── nginx.conf                # Nginx reverse proxy configuration
-├── frontend/                 # React frontend
-├── backend/                  # Node.js backend
-└── DOCKER_DEPLOYMENT_GUIDE.md # This file
-```
+### **1. Docker Installation** ✅
+- **Windows**: Docker Desktop
+- **macOS**: Docker Desktop
+- **Linux**: Docker Engine
 
-## 🚀 Quick Start
+### **2. Environment Setup** ✅
+- Supabase database configured
+- Environment variables ready
+- Git repository cloned
 
-### 1. Prerequisites
+---
 
-- Docker Desktop installed
-- Docker Compose installed
-- Environment variables configured
+## 🚀 **Quick Start**
 
-### 2. Environment Setup
-
-Create a `.env` file in the root directory:
-
+### **Step 1: Environment Configuration**
 ```bash
+# Copy environment template
+cp backend/env.production .env
+
+# Edit .env file with your actual values
+notepad .env  # Windows
+nano .env     # Linux/macOS
+```
+
+### **Step 2: Deploy Backend**
+```bash
+# Windows
+deploy.bat prod
+
+# Linux/macOS
+./deploy.sh prod
+```
+
+### **Step 3: Verify Deployment**
+```bash
+# Check if containers are running
+docker ps
+
+# View logs
+docker-compose logs -f backend
+
+# Test health endpoint
+curl http://localhost:3000/health
+```
+
+---
+
+## 🔧 **Detailed Deployment Steps**
+
+### **1. Environment Variables Setup**
+
+Create `.env` file in the root directory:
+
+```env
+# Server Configuration
+NODE_ENV=production
+PORT=3000
+
 # Database Configuration
-DATABASE_URL=your_supabase_database_url
-SUPABASE_URL=your_supabase_url
+DATABASE_URL=your_supabase_connection_string
+DB_POOL_MAX=50
+
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-# Application Configuration
-NODE_ENV=production
-PORT=3000
-ADMIN_EMAILS=siddharthmali.211@gmail.com,tirthraval27@gmail.com
-JWT_SECRET=your_jwt_secret_key
+# CORS Configuration
+CORS_ORIGIN=https://ganpat-bts.netlify.app
+
+# Security Configuration
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Logging Configuration
+LOG_LEVEL=warn
+ENABLE_DEBUG_LOGS=false
 ```
 
-### 3. Build and Deploy
+### **2. Docker Build Process**
 
+The Docker build uses a multi-stage approach:
+
+```dockerfile
+# Stage 1: Builder
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage 2: Production
+FROM node:18-alpine AS production
+# ... production setup
+```
+
+### **3. Container Architecture**
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Nginx Proxy   │    │   Backend       │
+│   (Netlify)     │◄──►│   (Port 80)     │◄──►│   (Port 3000)   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+---
+
+## 🎯 **Deployment Options**
+
+### **Option 1: Local Development**
 ```bash
-# Build the Docker image
-docker-compose build
+# Deploy development environment
+deploy.bat dev          # Windows
+./deploy.sh dev         # Linux/macOS
 
-# Start the services
-docker-compose up -d
-
-# Check service status
-docker-compose ps
-
-# View logs
-docker-compose logs -f
+# Features:
+# - Hot reload enabled
+# - Debug logging
+# - Volume mounting for live code changes
 ```
 
-## 🔧 Deployment Options
-
-### Option 1: Simple Deployment (Recommended for Development)
-
+### **Option 2: Production Deployment**
 ```bash
-# Build and run without Nginx
-docker-compose up bus-tracking-system -d
+# Deploy production environment
+deploy.bat prod         # Windows
+./deploy.sh prod        # Linux/macOS
+
+# Features:
+# - Optimized build
+# - Nginx reverse proxy
+# - Security headers
+# - Rate limiting
 ```
 
-**Access URLs:**
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:3000/api`
-- Health Check: `http://localhost:3000/health`
+### **Option 3: Cloud Deployment**
 
-### Option 2: Production Deployment with Nginx
-
+#### **Vercel (Recommended - Free)**
 ```bash
-# Build and run with Nginx reverse proxy
-docker-compose up -d
+# 1. Install Vercel CLI
+npm i -g vercel
+
+# 2. Deploy
+vercel --prod
 ```
 
-**Access URLs:**
-- Frontend: `http://localhost`
-- Backend API: `http://localhost/api`
-- Health Check: `http://localhost/health`
-
-### Option 3: Custom Domain with SSL
-
-1. Update `nginx.conf` with your domain
-2. Add SSL certificates to `./ssl/` directory
-3. Uncomment HTTPS configuration in `nginx.conf`
-4. Deploy:
-
+#### **Railway ($5/month)**
 ```bash
-docker-compose up -d
+# 1. Install Railway CLI
+npm i -g @railway/cli
+
+# 2. Login and deploy
+railway login
+railway up
 ```
 
-## 🛠️ Management Commands
+#### **DigitalOcean App Platform ($5/month)**
+- Connect GitHub repository
+- Select Docker deployment
+- Configure environment variables
 
-### View Logs
-```bash
-# All services
-docker-compose logs -f
+---
 
-# Specific service
-docker-compose logs -f bus-tracking-system
-docker-compose logs -f nginx
-```
+## 🔍 **Monitoring & Maintenance**
 
-### Stop Services
-```bash
-# Stop all services
-docker-compose down
-
-# Stop and remove volumes
-docker-compose down -v
-```
-
-### Restart Services
-```bash
-# Restart all services
-docker-compose restart
-
-# Restart specific service
-docker-compose restart bus-tracking-system
-```
-
-### Update Application
-```bash
-# Pull latest changes
-git pull origin main
-
-# Rebuild and restart
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
-```
-
-## 🔍 Monitoring and Debugging
-
-### Health Checks
-```bash
-# Check application health
-curl http://localhost:3000/health
-
-# Check detailed health
-curl http://localhost:3000/health/detailed
-```
-
-### Container Status
+### **1. Container Management**
 ```bash
 # View running containers
 docker ps
 
-# View container resources
-docker stats
+# View container logs
+docker-compose logs -f backend
+
+# Stop containers
+deploy.bat stop
+
+# Restart containers
+docker-compose restart backend
 ```
 
-### Access Container Shell
+### **2. Health Monitoring**
 ```bash
-# Access application container
-docker exec -it bus-tracking-system sh
+# Health check endpoint
+curl http://localhost:3000/health
 
-# Access Nginx container
-docker exec -it bus-tracking-nginx sh
+# Detailed health check
+curl http://localhost:3000/health/detailed
 ```
 
-## 🔒 Security Considerations
+### **3. Resource Management**
+```bash
+# View resource usage
+docker stats
 
-### Environment Variables
-- Never commit `.env` files to version control
-- Use Docker secrets for sensitive data in production
-- Rotate JWT secrets regularly
+# Clean up unused resources
+deploy.bat cleanup
+```
 
-### Network Security
-- Use custom networks for service isolation
-- Implement rate limiting (configured in nginx.conf)
-- Enable HTTPS in production
+---
 
-### Container Security
-- Run containers as non-root user
-- Use multi-stage builds to reduce attack surface
-- Keep base images updated
+## 🛠️ **Troubleshooting**
 
-## 📊 Performance Optimization
+### **Common Issues**
 
-### Resource Limits
-Add to `docker-compose.yml`:
+#### **1. Port Already in Use**
+```bash
+# Check what's using port 3000
+netstat -ano | findstr :3000    # Windows
+lsof -i :3000                   # Linux/macOS
 
+# Kill process or change port in docker-compose.yml
+```
+
+#### **2. Environment Variables Missing**
+```bash
+# Check if .env file exists
+ls -la .env
+
+# Verify environment variables are loaded
+docker-compose config
+```
+
+#### **3. Database Connection Issues**
+```bash
+# Check database connectivity
+docker-compose logs backend | grep -i database
+
+# Verify Supabase credentials
+curl -H "apikey: YOUR_ANON_KEY" \
+     https://your-project.supabase.co/rest/v1/
+```
+
+#### **4. CORS Issues**
+```bash
+# Check CORS configuration
+docker-compose logs backend | grep -i cors
+
+# Update CORS_ORIGIN in .env file
+CORS_ORIGIN=https://ganpat-bts.netlify.app,http://localhost:5173
+```
+
+---
+
+## 🔒 **Security Considerations**
+
+### **1. Environment Variables**
+- ✅ Never commit `.env` files to Git
+- ✅ Use strong, unique API keys
+- ✅ Rotate keys regularly
+
+### **2. Container Security**
+- ✅ Run containers as non-root user
+- ✅ Use multi-stage builds
+- ✅ Keep base images updated
+
+### **3. Network Security**
+- ✅ Use internal Docker networks
+- ✅ Implement rate limiting
+- ✅ Add security headers
+
+---
+
+## 📊 **Performance Optimization**
+
+### **1. Container Optimization**
+```dockerfile
+# Use Alpine Linux for smaller images
+FROM node:18-alpine
+
+# Multi-stage builds
+# Copy only production dependencies
+# Use .dockerignore to exclude unnecessary files
+```
+
+### **2. Resource Limits**
 ```yaml
+# docker-compose.yml
 services:
-  bus-tracking-system:
+  backend:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
           memory: 512M
+          cpus: '0.5'
 ```
 
-### Caching
-- Frontend assets are cached for 1 year
-- API responses can be cached based on requirements
-- Database connection pooling is configured
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-#### 1. Port Already in Use
-```bash
-# Check what's using the port
-netstat -tulpn | grep :3000
-
-# Kill the process or change ports in docker-compose.yml
+### **3. Caching Strategy**
+```dockerfile
+# Layer caching for faster builds
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
 ```
 
-#### 2. Build Failures
-```bash
-# Clean build
-docker-compose build --no-cache
+---
 
-# Check Dockerfile syntax
-docker build -t test .
-```
+## 🚀 **Scaling Considerations**
 
-#### 3. Environment Variables Not Loading
-```bash
-# Verify .env file exists
-ls -la .env
-
-# Check environment variables in container
-docker exec bus-tracking-system env
-```
-
-#### 4. Database Connection Issues
-```bash
-# Test database connection
-docker exec bus-tracking-system node -e "
-const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-pool.query('SELECT NOW()', (err, res) => {
-  console.log(err || res.rows[0]);
-  pool.end();
-});
-"
-```
-
-### Log Analysis
-```bash
-# View application logs
-docker-compose logs bus-tracking-system
-
-# View Nginx logs
-docker-compose logs nginx
-
-# Follow logs in real-time
-docker-compose logs -f --tail=100
-```
-
-## 🔄 CI/CD Integration
-
-### GitHub Actions Example
-```yaml
-name: Deploy to Production
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      
-      - name: Build and deploy
-        run: |
-          docker-compose build
-          docker-compose up -d
-```
-
-## 📈 Scaling
-
-### Horizontal Scaling
+### **1. Horizontal Scaling**
 ```bash
 # Scale backend service
-docker-compose up -d --scale bus-tracking-system=3
+docker-compose up --scale backend=3 -d
 ```
 
-### Load Balancing
-Update `nginx.conf` for multiple backend instances:
+### **2. Load Balancing**
 ```nginx
+# nginx.conf
 upstream backend {
-    server bus-tracking-system:3000;
-    server bus-tracking-system:3001;
-    server bus-tracking-system:3002;
+    server backend:3000;
+    server backend:3001;
+    server backend:3002;
 }
 ```
 
-## 🎯 Production Checklist
-
-- [ ] Environment variables configured
-- [ ] SSL certificates installed (if using HTTPS)
-- [ ] Domain configured in nginx.conf
-- [ ] Resource limits set
-- [ ] Monitoring configured
-- [ ] Backup strategy implemented
-- [ ] Security headers enabled
-- [ ] Rate limiting configured
-- [ ] Health checks working
-- [ ] Logs being collected
-
-## 📞 Support
-
-For deployment issues:
-1. Check the troubleshooting section
-2. Review container logs
-3. Verify environment configuration
-4. Test individual components
+### **3. Database Scaling**
+- Consider Supabase Pro plan for higher limits
+- Implement connection pooling
+- Use read replicas if needed
 
 ---
+
+## 📝 **Deployment Checklist**
+
+### **Pre-Deployment** ✅
+- [ ] Docker installed and running
+- [ ] Environment variables configured
+- [ ] Supabase database ready
+- [ ] Frontend deployed to Netlify
+- [ ] CORS origins updated
+
+### **Deployment** ✅
+- [ ] Build Docker image
+- [ ] Start containers
+- [ ] Verify health checks
+- [ ] Test API endpoints
+- [ ] Check WebSocket connections
+
+### **Post-Deployment** ✅
+- [ ] Monitor logs
+- [ ] Test all features
+- [ ] Update frontend API URLs
+- [ ] Configure monitoring
+- [ ] Set up backups
+
+---
+
+## 🎯 **Next Steps**
+
+1. **Deploy to Cloud Platform**
+   - Choose Vercel (free) or Railway ($5/month)
+   - Configure custom domain
+   - Set up SSL certificates
+
+2. **Monitoring Setup**
+   - Implement logging aggregation
+   - Set up alerting
+   - Monitor performance metrics
+
+3. **CI/CD Pipeline**
+   - Automate deployments
+   - Add testing
+   - Implement rollback strategy
+
+---
+
+## 📞 **Support**
+
+If you encounter issues:
+
+1. **Check logs**: `docker-compose logs -f backend`
+2. **Verify configuration**: `docker-compose config`
+3. **Test connectivity**: `curl http://localhost:3000/health`
+4. **Review this guide** for troubleshooting steps
 
 **Happy Deploying! 🚀**

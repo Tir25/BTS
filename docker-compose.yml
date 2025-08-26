@@ -1,14 +1,15 @@
 version: '3.8'
 
 services:
-  bus-tracking-system:
+  # Backend Service
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: bus-tracking-system
+      target: production
+    container_name: bus-tracking-backend
     ports:
       - "3000:3000"
-      - "3001:3001"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -16,13 +17,14 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - ADMIN_EMAILS=${ADMIN_EMAILS}
-      - JWT_SECRET=${JWT_SECRET}
-    volumes:
-      - ./logs:/app/logs
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://ganpat-bts.netlify.app}
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=100
+      - LOG_LEVEL=warn
+      - ENABLE_DEBUG_LOGS=false
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -30,7 +32,7 @@ services:
     networks:
       - bus-tracking-network
 
-  # Optional: Nginx reverse proxy for production
+  # Nginx Reverse Proxy (Optional)
   nginx:
     image: nginx:alpine
     container_name: bus-tracking-nginx
@@ -41,14 +43,16 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
     depends_on:
-      - bus-tracking-system
+      - backend
     restart: unless-stopped
     networks:
       - bus-tracking-network
+    profiles:
+      - production
 
 networks:
   bus-tracking-network:
     driver: bridge
 
 volumes:
-  logs:
+  app-data:
