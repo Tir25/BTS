@@ -1,12 +1,28 @@
 import { Response } from 'express';
 
+// Type definitions for better type safety
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  timestamp: string;
+  details?: Record<string, unknown>;
+}
+
+interface ErrorDetails {
+  field?: string;
+  code?: string;
+  [key: string]: unknown;
+}
+
 // Standard error response helper
 export const createErrorResponse = (
   _statusCode: number,
   error: string,
   message: string,
-  details?: any
-) => ({
+  details?: ErrorDetails
+): ApiResponse => ({
   success: false,
   error,
   message,
@@ -15,11 +31,11 @@ export const createErrorResponse = (
 });
 
 // Standard success response helper
-export const createSuccessResponse = (
-  data: any,
+export const createSuccessResponse = <T = unknown>(
+  data: T,
   message?: string,
   _statusCode: number = 200
-) => ({
+): ApiResponse<T> => ({
   success: true,
   data,
   ...(message && { message }),
@@ -32,7 +48,7 @@ export const sendErrorResponse = (
   statusCode: number,
   error: string,
   message: string,
-  details?: any
+  details?: ErrorDetails
 ) => {
   return res.status(statusCode).json(
     createErrorResponse(statusCode, error, message, details)
@@ -40,14 +56,14 @@ export const sendErrorResponse = (
 };
 
 // Send standardized success response
-export const sendSuccessResponse = (
+export const sendSuccessResponse = <T = unknown>(
   res: Response,
-  data: any,
+  data: T,
   message?: string,
   statusCode: number = 200
 ) => {
   return res.status(statusCode).json(
-    createSuccessResponse(data, message, statusCode)
+    createSuccessResponse<T>(data, message, statusCode)
   );
 };
 
