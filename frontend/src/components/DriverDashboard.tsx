@@ -34,6 +34,7 @@ const DriverDashboard: React.FC = () => {
   const [socketError, setSocketError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<string | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Monitor busInfo changes for debugging
   useEffect(() => {
@@ -59,8 +60,12 @@ const DriverDashboard: React.FC = () => {
         if (session?.user) {
           console.log('🔌 Driver Dashboard: Connecting to WebSocket...');
 
-          // Connect to WebSocket
-          await websocketService.connect();
+          // Connect to WebSocket only if not already connected
+          if (!websocketService.isConnected()) {
+            await websocketService.connect();
+          } else {
+            console.log('✅ WebSocket already connected');
+          }
 
           // Set up WebSocket listeners
           websocketService.socket?.on('connect', () => {
@@ -85,6 +90,7 @@ const DriverDashboard: React.FC = () => {
               console.log('🚌 Bus Info received:', data.busInfo);
               setBusInfo(data.busInfo);
               setSocketError(null);
+              setIsAuthenticated(true);
             }
           );
 
@@ -115,7 +121,7 @@ const DriverDashboard: React.FC = () => {
 
           // Fallback: Fetch bus information from API if WebSocket fails
           setTimeout(() => {
-            if (!busInfo) {
+            if (!busInfo && !isAuthenticated) {
               console.log('🔄 Fallback: Fetching bus info from API...');
               fetchBusInfoFromAPI(session.user.id);
             }
@@ -123,7 +129,7 @@ const DriverDashboard: React.FC = () => {
 
           // Additional fallback after 10 seconds
           setTimeout(() => {
-            if (!busInfo) {
+            if (!busInfo && !isAuthenticated) {
               console.log('🔄 Second fallback: Fetching bus info from API...');
               fetchBusInfoFromAPI(session.user.id);
             }
@@ -144,6 +150,7 @@ const DriverDashboard: React.FC = () => {
         websocketService.socket.off('disconnect');
         websocketService.socket.off('error');
         websocketService.socket.off('driver:authenticated');
+        websocketService.socket.off('driver:authentication_failed');
         websocketService.socket.off('driver:locationConfirmed');
       }
     };

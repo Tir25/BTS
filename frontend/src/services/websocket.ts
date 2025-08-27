@@ -20,6 +20,13 @@ class WebSocketService implements IWebSocketService {
         return;
       }
 
+      // If already connected, don't create a new connection
+      if (this.socket && this.isConnected()) {
+        console.log('✅ Already connected to WebSocket');
+        resolve();
+        return;
+      }
+
       this.isReconnecting = true;
 
       setTimeout(() => {
@@ -31,7 +38,7 @@ class WebSocketService implements IWebSocketService {
             reconnectionAttempts: this.maxReconnectAttempts,
             reconnectionDelay: this.reconnectDelay,
             reconnectionDelayMax: 5000,
-            forceNew: true,
+            forceNew: false, // Changed to false to prevent multiple connections
             // Mobile-specific optimizations
             upgrade: true,
             rememberUpgrade: true,
@@ -221,6 +228,12 @@ class WebSocketService implements IWebSocketService {
   authenticateAsDriver(token: string): void {
     if (this.socket && this.isConnected()) {
       console.log('🔐 Driver: Sending authentication request...');
+      
+      // Remove any existing listeners to prevent duplicates
+      this.socket.off('driver:authenticated');
+      this.socket.off('driver:authentication_failed');
+      this.socket.off('error');
+      
       this.socket.emit('driver:authenticate', { token });
 
       // Add listener for driver authentication response
