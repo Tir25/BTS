@@ -34,7 +34,7 @@ const DriverDashboard: React.FC = () => {
   const [currentLocation, setCurrentLocation] =
     useState<GeolocationPosition | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [socketError, setSocketError] = useState<string | null>(null);
+
   const [lastUpdateTime, setLastUpdateTime] = useState<string | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -54,30 +54,25 @@ const DriverDashboard: React.FC = () => {
 
   // Initialize driver data and WebSocket connection when component mounts
   useEffect(() => {
-    const initializeDriverData = async () => {
-      // Set up connection status monitoring
-      const updateConnectionStatus = () => {
-        if (websocketService.isConnected()) {
-          setConnectionStatus('connected');
-        } else if (websocketService.getConnectionState() === 'connecting' || websocketService.getConnectionState() === 'reconnecting') {
-          setConnectionStatus('connecting');
-        } else {
-          setConnectionStatus('disconnected');
-        }
-      };
-
-      // Initial status check
-      updateConnectionStatus();
-
-      // Set up periodic status monitoring
-      const statusInterval = setInterval(updateConnectionStatus, 2000);
-
-      return () => {
-        clearInterval(statusInterval);
-      };
+    // Set up connection status monitoring
+    const updateConnectionStatus = () => {
+      if (websocketService.isConnected()) {
+        setConnectionStatus('connected');
+      } else if (websocketService.getConnectionState() === 'connecting' || websocketService.getConnectionState() === 'reconnecting') {
+        setConnectionStatus('connecting');
+      } else {
+        setConnectionStatus('disconnected');
+      }
     };
 
+    // Initial status check
+    updateConnectionStatus();
+
+    // Set up periodic status monitoring
+    const statusInterval = setInterval(updateConnectionStatus, 2000);
+
     const initializeDriverData = async () => {
+
       try {
         console.log('🚀 Driver Dashboard: Component mounted, starting initialization...');
         
@@ -127,7 +122,6 @@ const DriverDashboard: React.FC = () => {
               console.log('✅ Bus info and authentication state set from validation');
             } else {
               console.log('❌ Driver Dashboard: Invalid session or no assignment found');
-              setSocketError('Invalid session or no bus assignment');
               return;
             }
           }
@@ -143,17 +137,14 @@ const DriverDashboard: React.FC = () => {
           // Set up WebSocket listeners
           websocketService.socket?.on('connect', () => {
             console.log('🔌 Driver Dashboard: Connected to WebSocket server');
-            setSocketError(null);
           });
 
           websocketService.socket?.on('disconnect', () => {
             console.log('🔌 Driver Dashboard: Disconnected from WebSocket server');
-            setSocketError('Disconnected from server');
           });
 
           websocketService.socket?.on('error', (error) => {
             console.error('❌ Driver Dashboard: Socket error:', error);
-            setSocketError(error.message || 'Socket error occurred');
           });
 
           websocketService.socket?.on(
@@ -162,7 +153,6 @@ const DriverDashboard: React.FC = () => {
               console.log('✅ Driver Dashboard: Authentication successful:', data);
               console.log('🚌 Bus Info received:', data.busInfo);
               setBusInfo(data.busInfo);
-              setSocketError(null);
               setIsAuthenticated(true);
             }
           );
@@ -173,9 +163,6 @@ const DriverDashboard: React.FC = () => {
               console.error(
                 '❌ Driver Dashboard: Authentication failed:',
                 error
-              );
-              setSocketError(
-                'Authentication failed: ' + (error.message || 'Unknown error')
               );
             }
           );
@@ -221,7 +208,7 @@ const DriverDashboard: React.FC = () => {
         }
       } catch (error) {
         console.error('❌ Driver Dashboard: Initialization error:', error);
-        setSocketError('Failed to initialize driver data');
+        console.error('Failed to initialize driver data');
       }
     };
 
@@ -229,6 +216,7 @@ const DriverDashboard: React.FC = () => {
 
     // Cleanup function
     return () => {
+      clearInterval(statusInterval);
       if (websocketService.socket) {
         websocketService.socket.off('connect');
         websocketService.socket.off('disconnect');
@@ -437,7 +425,7 @@ const DriverDashboard: React.FC = () => {
       } else {
         const errorText = await response.text();
         console.error('❌ Failed to fetch bus info from API:', response.status, errorText);
-        setSocketError(`API Error: ${response.status} - ${errorText}`);
+        console.error(`API Error: ${response.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ Error fetching bus info from API:', error);
