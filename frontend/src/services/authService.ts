@@ -496,6 +496,30 @@ class AuthService {
     return token;
   }
 
+  // Simplified token validation for API calls
+  async validateTokenForAPI(): Promise<{ valid: boolean; token: string | null }> {
+    const token = this.getAccessToken();
+    
+    if (!token) {
+      return { valid: false, token: null };
+    }
+
+    try {
+      // Validate token with Supabase
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      
+      if (error || !user) {
+        console.log('❌ Token validation failed:', error?.message);
+        return { valid: false, token: null };
+      }
+
+      return { valid: true, token };
+    } catch (error) {
+      console.error('❌ Token validation error:', error);
+      return { valid: false, token: null };
+    }
+  }
+
   // Refresh session
   async refreshSession(): Promise<{ success: boolean; error?: string }> {
     try {

@@ -30,7 +30,8 @@ const getApiUrl = () => {
   if (
     currentHost !== 'localhost' &&
     currentHost !== '127.0.0.1' &&
-    !currentHost.includes('render.com')
+    !currentHost.includes('render.com') &&
+    !currentHost.includes('vercel.app')
   ) {
     // We're on a network IP, use the same IP for backend
     const networkUrl = `http://${currentHost}:3000`;
@@ -69,7 +70,8 @@ const getWebSocketUrl = () => {
   if (
     currentHost !== 'localhost' &&
     currentHost !== '127.0.0.1' &&
-    !currentHost.includes('render.com')
+    !currentHost.includes('render.com') &&
+    !currentHost.includes('vercel.app')
   ) {
     // We're on a network IP, use the same IP for WebSocket
     const wsUrl = `ws://${currentHost}:3000`;
@@ -88,29 +90,39 @@ export const environment = {
   supabase: {
     url: (() => {
       const envUrl = import.meta.env.VITE_SUPABASE_URL;
-      const fallbackUrl = 'https://gthwmwfwvhyriygpcdlr.supabase.co';
 
       if (envUrl && envUrl !== 'your_supabase_project_url' && envUrl !== '') {
         return envUrl;
       }
 
-      console.warn(
-        '⚠️ Using fallback Supabase URL. Please set VITE_SUPABASE_URL in your environment variables.'
+      if (import.meta.env.DEV) {
+        console.warn(
+          '⚠️ VITE_SUPABASE_URL not set. Please set it in your environment variables.'
+        );
+        return null;
+      }
+
+      throw new Error(
+        'VITE_SUPABASE_URL is required in production. Please set it in your environment variables.'
       );
-      return fallbackUrl;
     })(),
     anonKey: (() => {
       const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      const fallbackKey = '';
 
       if (envKey && envKey !== 'your_supabase_anon_key_here' && envKey !== '') {
         return envKey;
       }
 
-      console.warn(
-        '⚠️ Using fallback Supabase anon key. Please set VITE_SUPABASE_ANON_KEY in your environment variables.'
+      if (import.meta.env.DEV) {
+        console.warn(
+          '⚠️ VITE_SUPABASE_ANON_KEY not set. Please set it in your environment variables.'
+        );
+        return null;
+      }
+
+      throw new Error(
+        'VITE_SUPABASE_ANON_KEY is required in production. Please set it in your environment variables.'
       );
-      return fallbackKey;
     })(),
   },
 

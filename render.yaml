@@ -22,11 +22,12 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: PORT
+        value: "3000"
 
-  # Frontend Service
-  - type: web
+  # Frontend Service (Static Site)
+  - type: static
     name: bus-tracking-frontend
-    env: static
     plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build

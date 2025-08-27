@@ -12,6 +12,7 @@ class WebSocketService implements IWebSocketService {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private isReconnecting = false;
+  private connectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' = 'disconnected';
 
   connect(backendUrl: string = environment.api.websocketUrl): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -28,9 +29,11 @@ class WebSocketService implements IWebSocketService {
       }
 
       this.isReconnecting = true;
+      this.connectionState = 'connecting';
 
       setTimeout(() => {
         try {
+          // Enhanced Socket.IO configuration for production deployment
           this.socket = io(backendUrl, {
             transports: ['websocket', 'polling'],
             timeout: 30000, // Increased timeout for mobile
@@ -44,12 +47,18 @@ class WebSocketService implements IWebSocketService {
             rememberUpgrade: true,
             // Better error handling
             autoConnect: true,
+            // Production optimizations
+            withCredentials: true,
+            // Enhanced timeout for Render deployment
+            pingTimeout: 60000,
+            pingInterval: 25000,
           });
 
           this.socket.on('connect', () => {
             console.log('✅ WebSocket connected');
             this._isConnected = true;
             this.isReconnecting = false;
+            this.connectionState = 'connected';
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000;
 
@@ -65,12 +74,15 @@ class WebSocketService implements IWebSocketService {
           this.socket.on('disconnect', (reason) => {
             console.log('❌ WebSocket disconnected:', reason);
             this._isConnected = false;
+            this.connectionState = 'disconnected';
             this.stopHeartbeat();
 
             // Handle reconnection for mobile
             if (
               reason === 'io server disconnect' ||
-              reason === 'transport close'
+              reason === 'transport close' ||
+              reason === 'ping timeout' ||
+              reason === 'transport error'
             ) {
               this.handleReconnection();
             }
@@ -79,10 +91,11 @@ class WebSocketService implements IWebSocketService {
           this.socket.on('connect_error', (error) => {
             console.error('❌ WebSocket connection error:', error);
             this.isReconnecting = false;
+            this.connectionState = 'disconnected';
             this.reconnectAttempts++;
 
             if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-              reject(new Error('Failed to connect to WebSocket server'));
+              reject(new Error(`Failed to connect to WebSocket server: ${error.message}`));
             } else {
               this.handleReconnection();
             }
@@ -90,6 +103,7 @@ class WebSocketService implements IWebSocketService {
 
           this.socket.on('error', (error) => {
             console.error('❌ WebSocket error:', error);
+            this.connectionState = 'disconnected';
           });
 
           this.socket.on('reconnect', (attemptNumber) => {
@@ -98,6 +112,7 @@ class WebSocketService implements IWebSocketService {
             );
             this._isConnected = true;
             this.isReconnecting = false;
+            this.connectionState = 'connected';
             this.reconnectAttempts = 0;
 
             // Re-emit student connection after reconnect
@@ -106,16 +121,25 @@ class WebSocketService implements IWebSocketService {
 
           this.socket.on('reconnect_error', (error) => {
             console.error('❌ WebSocket reconnection error:', error);
+            this.connectionState = 'reconnecting';
           });
 
           this.socket.on('reconnect_failed', () => {
             console.error('❌ WebSocket reconnection failed');
             this.isReconnecting = false;
+            this.connectionState = 'disconnected';
             reject(new Error('Failed to reconnect to WebSocket server'));
           });
+
+          // Enhanced ping/pong handling
+          this.socket.on('pong', () => {
+            console.log('💓 Pong received from server');
+          });
+
         } catch (error) {
           console.error('❌ Failed to create WebSocket connection:', error);
           this.isReconnecting = false;
+          this.connectionState = 'disconnected';
           reject(error);
         }
       }, 500);
@@ -127,6 +151,7 @@ class WebSocketService implements IWebSocketService {
       this.socket.disconnect();
       this.socket = null;
       this._isConnected = false;
+      this.connectionState = 'disconnected';
     }
     this.stopHeartbeat();
     this.isReconnecting = false;
@@ -156,6 +181,7 @@ class WebSocketService implements IWebSocketService {
     }
 
     this.isReconnecting = true;
+    this.connectionState = 'reconnecting';
     console.log('🔄 Attempting to reconnect...');
 
     // Clear any existing reconnect timer
@@ -170,6 +196,7 @@ class WebSocketService implements IWebSocketService {
       this.connect().catch((error) => {
         console.error('❌ Reconnection failed:', error);
         this.isReconnecting = false;
+        this.connectionState = 'disconnected';
       });
     }, delay);
   }
@@ -225,6 +252,10 @@ class WebSocketService implements IWebSocketService {
     return this._isConnected;
   }
 
+  getConnectionState(): 'disconnected' | 'connecting' | 'connected' | 'reconnecting' {
+    return this.connectionState;
+  }
+
   authenticateAsDriver(token: string): void {
     if (this.socket && this.isConnected()) {
       console.log('🔐 Driver: Sending authentication request...');
@@ -255,6 +286,21 @@ class WebSocketService implements IWebSocketService {
 
   off(event: string): void {
     this.socket?.off(event);
+  }
+
+  // Enhanced method to get connection statistics
+  getConnectionStats(): {
+    isConnected: boolean;
+    connectionState: string;
+    reconnectAttempts: number;
+    maxReconnectAttempts: number;
+  } {
+    return {
+      isConnected: this._isConnected,
+      connectionState: this.connectionState,
+      reconnectAttempts: this.reconnectAttempts,
+      maxReconnectAttempts: this.maxReconnectAttempts,
+    };
   }
 }
 

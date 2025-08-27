@@ -26,9 +26,18 @@ export interface IWebSocketService {
   disconnect(): void;
   isConnected(): boolean;
   getConnectionStatus(): boolean;
+  getConnectionState(): 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
+  getConnectionStats(): {
+    isConnected: boolean;
+    connectionState: string;
+    reconnectAttempts: number;
+    maxReconnectAttempts: number;
+  };
   onBusLocationUpdate(callback: (location: BusLocation) => void): void;
   onDriverConnected(callback: (data: any) => void): void;
   onDriverDisconnected(callback: (data: any) => void): void;
-  onStudentConnected(callback: () => void): void;
+  onStudentConnected(callback: (data: { timestamp: string }) => void): void;
   onBusArriving(callback: (data: any) => void): void;
+  authenticateAsDriver(token: string): void;
+  off(event: string): void;
 }

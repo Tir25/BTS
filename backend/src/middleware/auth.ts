@@ -40,6 +40,18 @@ export const authenticateUser = async (
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
+    // Validate token format
+    if (!token || token.length < 10) {
+      console.log('❌ Invalid token format');
+      res.status(401).json({
+        success: false,
+        error: 'Invalid token format',
+        message: 'Token format is invalid. Please log in again.',
+        code: 'INVALID_TOKEN_FORMAT',
+      });
+      return;
+    }
+
     // Verify token with Supabase
     const {
       data: { user },
@@ -60,6 +72,18 @@ export const authenticateUser = async (
       return;
     }
 
+    // Check if user email is verified (optional but recommended)
+    if (!user.email_confirmed_at && process.env.NODE_ENV === 'production') {
+      console.log('❌ User email not verified:', user.email);
+      res.status(401).json({
+        success: false,
+        error: 'Email not verified',
+        message: 'Please verify your email address before accessing this resource.',
+        code: 'EMAIL_NOT_VERIFIED',
+      });
+      return;
+    }
+
     // Get user profile from profiles table
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -76,6 +100,7 @@ export const authenticateUser = async (
         success: false,
         error: 'Access denied',
         message: 'User profile not found. Please contact administrator.',
+        code: 'PROFILE_NOT_FOUND',
       });
       return;
     }
@@ -109,6 +134,7 @@ export const authenticateUser = async (
       success: false,
       error: 'Authentication failed',
       message: 'Internal server error during authentication',
+      code: 'AUTH_ERROR',
     });
     return;
   }
@@ -122,6 +148,7 @@ export const requireRole = (allowedRoles: string[]) => {
         success: false,
         error: 'Authentication required',
         message: 'User must be authenticated',
+        code: 'NOT_AUTHENTICATED',
       });
       return;
     }
@@ -130,7 +157,8 @@ export const requireRole = (allowedRoles: string[]) => {
       res.status(403).json({
         success: false,
         error: 'Access denied',
-        message: `Role '${req.user.role}' is not authorized for this operation`,
+        message: `Role '${req.user.role}' is not authorized for this operation. Required roles: ${allowedRoles.join(', ')}`,
+        code: 'INSUFFICIENT_PERMISSIONS',
       });
       return;
     }
@@ -153,3 +181,63 @@ export const requireAdminOrDriver = requireRole(['admin', 'driver']);
 
 // Admin or student middleware
 export const requireAdminOrStudent = requireRole(['admin', 'student']);
+
+// Optional authentication middleware (doesn't fail if no token)
+export const optionalAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      // No token provided, continue without authentication
+      next();
+      return;
+    }
+
+    const token = authHeader.substring(7);
+
+    // Try to validate token but don't fail if invalid
+    const {
+      data: { user },
+      error,
+    } = await supabaseAdmin.auth.getUser(token);
+
+    if (error || !user) {
+      // Token is invalid, continue without authentication
+      next();
+      return;
+    }
+
+    // Token is valid, get user profile
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name, role')
+      .eq('id', user.id)
+      .single();
+
+    if (profile) {
+      const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(
+        (email: string) => email.trim().toLowerCase()
+      ) || ['siddharthmali.211@gmail.com'];
+
+      const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
+      const role = isAdmin ? 'admin' : profile.role;
+
+      req.user = {
+        id: profile.id,
+        email: user.email || '',
+        role: role,
+        full_name: profile.full_name,
+      };
+    }
+
+    next();
+  } catch (error) {
+    // Error occurred, continue without authentication
+    console.warn('⚠️ Optional auth error:', error);
+    next();
+  }
+};

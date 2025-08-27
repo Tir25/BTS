@@ -21,39 +21,69 @@ interface AuthenticatedSocket extends Socket {
   busId?: string;
   userId?: string;
   userRole?: string;
+  isAuthenticated?: boolean;
+  lastActivity?: number;
 }
 
 export const initializeWebSocket = (io: SocketIOServer) => {
   console.log('🔌 WebSocket server initialized');
 
-  // Configure Socket.IO for better mobile support
+  // Enhanced Socket.IO configuration for production deployment
   io.engine.opts.pingTimeout = 60000; // 60 seconds
   io.engine.opts.pingInterval = 25000; // 25 seconds
   io.engine.opts.upgradeTimeout = 10000; // 10 seconds
   io.engine.opts.maxHttpBufferSize = 1e6; // 1MB
+  io.engine.opts.allowEIO3 = true; // Allow Engine.IO v3 clients
+  io.engine.opts.cors = {
+    origin: true, // Allow all origins (handled by CORS middleware)
+    credentials: true,
+  };
+
+  // Connection monitoring
+  let totalConnections = 0;
+  let activeConnections = 0;
 
   io.on('connection', async (socket: AuthenticatedSocket) => {
-    console.log(`🔌 New client connected: ${socket.id}`);
+    totalConnections++;
+    activeConnections++;
+    socket.lastActivity = Date.now();
+    
+    console.log(`🔌 New client connected: ${socket.id} (Total: ${totalConnections}, Active: ${activeConnections})`);
 
     // Set socket options for better mobile support
     socket.conn.on('packet', ({ type }) => {
       if (type === 'pong') {
         console.log(`💓 Pong received from ${socket.id}`);
+        socket.lastActivity = Date.now();
       }
     });
 
     // Handle ping/pong for connection health
     socket.on('ping', () => {
       socket.emit('pong');
+      socket.lastActivity = Date.now();
       console.log(`💓 Ping received from ${socket.id}`);
     });
 
+    // Enhanced driver authentication with better error handling
     socket.on('driver:authenticate', async (data: { token: string }) => {
       try {
         const { token } = data;
 
         if (!token) {
-          socket.emit('error', { message: 'Authentication token required' });
+          socket.emit('driver:authentication_failed', { 
+            message: 'Authentication token required',
+            code: 'MISSING_TOKEN'
+          });
+          return;
+        }
+
+        // Validate token format
+        if (typeof token !== 'string' || token.length < 10) {
+          socket.emit('driver:authentication_failed', { 
+            message: 'Invalid token format',
+            code: 'INVALID_TOKEN_FORMAT'
+          });
           return;
         }
 
@@ -63,7 +93,11 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         } = await supabaseAdmin.auth.getUser(token);
 
         if (error || !user) {
-          socket.emit('error', { message: 'Invalid authentication token' });
+          console.error('❌ Authentication error:', error);
+          socket.emit('driver:authentication_failed', { 
+            message: 'Invalid authentication token',
+            code: 'INVALID_TOKEN'
+          });
           return;
         }
 
@@ -90,8 +124,9 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           isDualRoleUser || (profile && profile.role === 'driver');
 
         if (!hasDriverRole) {
-          socket.emit('error', {
+          socket.emit('driver:authentication_failed', {
             message: 'Access denied. Driver role required.',
+            code: 'INSUFFICIENT_PERMISSIONS'
           });
           return;
         }
@@ -101,13 +136,20 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
         if (!busInfo) {
           console.log('❌ No bus assigned to driver:', user.id);
-          socket.emit('error', { message: 'No bus assigned to driver' });
+          socket.emit('driver:authentication_failed', { 
+            message: 'No bus assigned to driver',
+            code: 'NO_BUS_ASSIGNED'
+          });
           return;
         }
 
+        // Set socket properties
         socket.driverId = user.id;
         socket.busId = busInfo.bus_id;
+        socket.isAuthenticated = true;
+        socket.lastActivity = Date.now();
 
+        // Join relevant rooms
         socket.join(`driver:${user.id}`);
         socket.join(`bus:${busInfo.bus_id}`);
 
@@ -125,12 +167,18 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         socket.emit('driver:authenticated', authResponse);
       } catch (error) {
         console.error('❌ Authentication error:', error);
-        socket.emit('error', { message: 'Authentication failed' });
+        socket.emit('driver:authentication_failed', { 
+          message: 'Authentication failed',
+          code: 'AUTH_ERROR'
+        });
       }
     });
 
+    // Enhanced location update with validation
     socket.on('driver:locationUpdate', async (data: LocationUpdate) => {
       try {
+        socket.lastActivity = Date.now();
+        
         console.log('📍 Received location update from driver:', {
           driverId: data.driverId,
           latitude: data.latitude,
@@ -140,19 +188,28 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           socketBusId: socket.busId,
         });
 
-        if (!socket.driverId || !socket.busId) {
-          socket.emit('error', { message: 'Driver not authenticated' });
+        if (!socket.driverId || !socket.busId || !socket.isAuthenticated) {
+          socket.emit('error', { 
+            message: 'Driver not authenticated',
+            code: 'NOT_AUTHENTICATED'
+          });
           return;
         }
 
         const validationError = validateLocationData(data);
         if (validationError) {
-          socket.emit('error', { message: validationError });
+          socket.emit('error', { 
+            message: validationError,
+            code: 'VALIDATION_ERROR'
+          });
           return;
         }
 
         if (data.driverId !== socket.driverId) {
-          socket.emit('error', { message: 'Unauthorized location update' });
+          socket.emit('error', { 
+            message: 'Unauthorized location update',
+            code: 'UNAUTHORIZED'
+          });
           return;
         }
 
@@ -167,7 +224,10 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         });
 
         if (!savedLocation) {
-          socket.emit('error', { message: 'Failed to save location update' });
+          socket.emit('error', { 
+            message: 'Failed to save location update',
+            code: 'SAVE_ERROR'
+          });
           return;
         }
 
@@ -236,29 +296,64 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         );
       } catch (error) {
         console.error('❌ Location update error:', error);
-        socket.emit('error', { message: 'Failed to process location update' });
+        socket.emit('error', { 
+          message: 'Failed to process location update',
+          code: 'PROCESSING_ERROR'
+        });
       }
     });
 
+    // Enhanced student connection
     socket.on('student:connect', () => {
+      socket.lastActivity = Date.now();
       socket.join('students');
       console.log(`✅ Student connected: ${socket.id}`);
       socket.emit('student:connected', { timestamp: new Date().toISOString() });
     });
 
+    // Enhanced disconnect handling
     socket.on('disconnect', (reason) => {
-      console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason}`);
+      activeConnections--;
+      console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason} (Active: ${activeConnections})`);
 
       // Log additional info for debugging mobile disconnections
       if (reason === 'transport close') {
         console.log(`📱 Mobile client likely disconnected: ${socket.id}`);
+      } else if (reason === 'ping timeout') {
+        console.log(`⏰ Ping timeout for client: ${socket.id}`);
+      } else if (reason === 'transport error') {
+        console.log(`🚨 Transport error for client: ${socket.id}`);
+      }
+
+      // Clean up authenticated driver
+      if (socket.isAuthenticated && socket.driverId) {
+        console.log(`🚌 Driver ${socket.driverId} disconnected from bus ${socket.busId}`);
       }
     });
 
+    // Enhanced error handling
     socket.on('error', (error) => {
       console.error('❌ Socket error:', error);
+      socket.lastActivity = Date.now();
+    });
+
+    // Activity monitoring
+    socket.onAny((eventName, ...args) => {
+      socket.lastActivity = Date.now();
     });
   });
+
+  // Server-wide monitoring
+  setInterval(() => {
+    const now = Date.now();
+    const inactiveThreshold = 5 * 60 * 1000; // 5 minutes
+    
+    io.sockets.sockets.forEach((socket: AuthenticatedSocket) => {
+      if (socket.lastActivity && (now - socket.lastActivity) > inactiveThreshold) {
+        console.log(`⏰ Inactive socket detected: ${socket.id}, last activity: ${new Date(socket.lastActivity).toISOString()}`);
+      }
+    });
+  }, 60000); // Check every minute
 
   return io;
 };

@@ -21,11 +21,9 @@ export interface DriverProfile {
 }
 
 class SupabaseUserService {
-  // Get all users from Supabase Auth (Note: This requires admin privileges)
+  // Get all users from profiles table (frontend-safe)
   async getAllUsers(): Promise<SupabaseUser[]> {
     try {
-      // This method requires admin privileges and should be called from backend
-      // For frontend, we'll use the profiles table instead
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('*')
@@ -167,49 +165,96 @@ class SupabaseUserService {
     }
   }
 
-  // Create a new user in Supabase Auth
+  // Frontend-safe user creation (redirects to backend API)
   async createUser(
     email: string,
     password: string,
     metadata: any
   ): Promise<any> {
     try {
-      const { data, error } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        user_metadata: metadata,
-        email_confirm: true, // Auto-confirm email for testing
+      // Instead of using admin functions, call the backend API
+      const response = await fetch('/api/admin/drivers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getAccessToken()}`,
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          first_name: metadata.full_name?.split(' ')[0] || '',
+          last_name: metadata.full_name?.split(' ').slice(1).join(' ') || '',
+          role: 'driver',
+        }),
       });
 
-      if (error) {
-        console.error('❌ Error creating user in Supabase:', error);
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create user');
       }
 
-      return data;
+      return await response.json();
     } catch (error) {
       console.error('❌ Error in createUser:', error);
       throw error;
     }
   }
 
-  // Update user metadata
+  // Frontend-safe user metadata update (redirects to backend API)
   async updateUserMetadata(userId: string, metadata: any): Promise<any> {
     try {
-      const { data, error } = await supabase.auth.admin.updateUserById(userId, {
-        user_metadata: metadata,
+      // Instead of using admin functions, call the backend API
+      const response = await fetch(`/api/admin/drivers/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getAccessToken()}`,
+        },
+        body: JSON.stringify(metadata),
       });
 
-      if (error) {
-        console.error('❌ Error updating user metadata:', error);
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update user');
       }
 
-      return data;
+      return await response.json();
     } catch (error) {
       console.error('❌ Error in updateUserMetadata:', error);
       throw error;
     }
+  }
+
+  // Helper method to get access token
+  private getAccessToken(): string | null {
+    try {
+      // Try multiple localStorage keys that Supabase might use
+      const possibleKeys = [
+        'supabase.auth.token',
+        'sb-gthwmwfwvhyriygpcdlr-auth-token',
+        'supabase.auth.session',
+      ];
+
+      for (const key of possibleKeys) {
+        const storedSession = localStorage.getItem(key);
+        if (storedSession) {
+          const parsedSession = JSON.parse(storedSession);
+          const token =
+            parsedSession?.currentSession?.access_token ||
+            parsedSession?.access_token ||
+            parsedSession?.session?.access_token ||
+            null;
+
+          if (token) {
+            return token;
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Error reading token from localStorage:', error);
+    }
+
+    return null;
   }
 }
 

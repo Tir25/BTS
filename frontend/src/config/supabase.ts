@@ -118,6 +118,12 @@ export const supabase = createSupabaseClient();
 // Test Supabase connection
 export const testSupabaseConnection = async () => {
   try {
+    // Skip test for mock client
+    if (!supabase.from || typeof supabase.from !== 'function') {
+      console.log('🔄 Skipping Supabase connection test (mock client)');
+      return true;
+    }
+
     // Testing Supabase connection...
     const { error } = await supabase.from('profiles').select('count').limit(1);
 
