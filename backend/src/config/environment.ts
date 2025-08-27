@@ -91,11 +91,14 @@ export const initializeEnvironment = (): EnvironmentConfig => {
       serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
     },
     cors: {
-              allowedOrigins: isProduction
+      allowedOrigins: isProduction
         ? [
             // Production origins - Render domains
             /^https:\/\/.*\.onrender\.com$/,
             /^https:\/\/.*\.render\.com$/,
+            // Vercel domains
+            /^https:\/\/.*\.vercel\.app$/,
+            /^https:\/\/.*\.vercel\.com$/,
           ]
         : [
             // Development origins
@@ -136,6 +139,11 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               // Production WebSocket origins
               /^https:\/\/.*\.onrender\.com$/,
               /^wss:\/\/.*\.onrender\.com$/,
+              // Vercel WebSocket origins
+              /^https:\/\/.*\.vercel\.app$/,
+              /^wss:\/\/.*\.vercel\.app$/,
+              /^https:\/\/.*\.vercel\.com$/,
+              /^wss:\/\/.*\.vercel\.com$/,
             ]
           : [
               // Development WebSocket origins
