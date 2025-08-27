@@ -108,7 +108,9 @@ class AdminApiService {
       const controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-      const response = await fetch(`${API_BASE_URL}/admin${endpoint}`, {
+      // Ensure we're using the correct backend URL for production
+      const baseUrl = API_BASE_URL || environment.api.url;
+      const response = await fetch(`${baseUrl}/admin${endpoint}`, {
         ...options,
         signal: controller.signal,
         headers: {

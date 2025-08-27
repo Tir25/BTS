@@ -201,6 +201,7 @@ class WebSocketService implements IWebSocketService {
     }, delay);
   }
 
+  // Fixed event name to match backend
   onBusLocationUpdate(callback: (location: BusLocation) => void): void {
     console.log('🎧 Setting up bus:locationUpdate listener');
     this.socket?.on('bus:locationUpdate', (data) => {
@@ -209,6 +210,7 @@ class WebSocketService implements IWebSocketService {
     });
   }
 
+  // Fixed event names to match backend
   onDriverConnected(
     callback: (data: {
       driverId: string;
@@ -216,6 +218,7 @@ class WebSocketService implements IWebSocketService {
       timestamp: string;
     }) => void
   ): void {
+    console.log('🎧 Setting up driver:connected listener');
     this.socket?.on('driver:connected', callback);
   }
 
@@ -226,10 +229,12 @@ class WebSocketService implements IWebSocketService {
       timestamp: string;
     }) => void
   ): void {
+    console.log('🎧 Setting up driver:disconnected listener');
     this.socket?.on('driver:disconnected', callback);
   }
 
   onStudentConnected(callback: (data: { timestamp: string }) => void): void {
+    console.log('🎧 Setting up student:connected listener');
     this.socket?.on('student:connected', callback);
   }
 
@@ -241,6 +246,7 @@ class WebSocketService implements IWebSocketService {
       timestamp: string;
     }) => void
   ): void {
+    console.log('🎧 Setting up bus:arriving listener');
     this.socket?.on('bus:arriving', callback);
   }
 
@@ -256,6 +262,7 @@ class WebSocketService implements IWebSocketService {
     return this.connectionState;
   }
 
+  // Enhanced driver authentication with proper event handling
   authenticateAsDriver(token: string): void {
     if (this.socket && this.isConnected()) {
       console.log('🔐 Driver: Sending authentication request...');
@@ -270,6 +277,12 @@ class WebSocketService implements IWebSocketService {
       // Add listener for driver authentication response
       this.socket.once('driver:authenticated', (data) => {
         console.log('✅ Driver: Authentication successful:', data);
+        // Emit driver connected event after successful authentication
+        this.socket?.emit('driver:connected', {
+          driverId: data.driverId,
+          busId: data.busId,
+          timestamp: new Date().toISOString(),
+        });
       });
 
       this.socket.once('driver:authentication_failed', (error) => {
@@ -281,6 +294,23 @@ class WebSocketService implements IWebSocketService {
       });
     } else {
       console.error('❌ Driver: Cannot authenticate - socket not connected');
+    }
+  }
+
+  // Method to send location updates (for drivers)
+  sendLocationUpdate(locationData: {
+    driverId: string;
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+    speed?: number;
+    heading?: number;
+  }): void {
+    if (this.socket && this.isConnected()) {
+      console.log('📍 Sending location update:', locationData);
+      this.socket.emit('driver:locationUpdate', locationData);
+    } else {
+      console.error('❌ Cannot send location update - socket not connected');
     }
   }
 

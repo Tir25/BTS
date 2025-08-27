@@ -18,7 +18,9 @@ class ApiService implements IApiService {
     endpoint: string,
     options?: RequestInit
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Ensure we're using the correct backend URL for production
+    const baseUrl = this.baseUrl || environment.api.url;
+    const url = `${baseUrl}${endpoint}`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

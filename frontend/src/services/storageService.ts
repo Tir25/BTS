@@ -53,7 +53,9 @@ export class StorageService {
       ...(token && { Authorization: `Bearer ${token}` }),
     };
 
-    return fetch(`${API_BASE_URL}/storage${endpoint}`, {
+    // Ensure we're using the correct backend URL for production
+    const baseUrl = API_BASE_URL || environment.api.url;
+    return fetch(`${baseUrl}/storage${endpoint}`, {
       ...options,
       headers: {
         ...defaultHeaders,
@@ -80,9 +82,11 @@ export class StorageService {
       formData.append('image', file);
       formData.append('busId', busId);
 
+      // Ensure we're using the correct backend URL for production
+      const baseUrl = API_BASE_URL || environment.api.url;
       console.log(
         '📤 Sending request to:',
-        `${API_BASE_URL}/storage/upload/bus-image`
+        `${baseUrl}/storage/upload/bus-image`
       );
       console.log('📋 FormData contents:', {
         busId,
@@ -91,7 +95,7 @@ export class StorageService {
         fileType: file.type,
       });
 
-      const response = await fetch(`${API_BASE_URL}/storage/upload/bus-image`, {
+      const response = await fetch(`${baseUrl}/storage/upload/bus-image`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -139,8 +143,10 @@ export class StorageService {
       formData.append('photo', file);
       formData.append('driverId', driverId);
 
+      // Ensure we're using the correct backend URL for production
+      const baseUrl = API_BASE_URL || environment.api.url;
       const response = await fetch(
-        `${API_BASE_URL}/storage/upload/driver-photo`,
+        `${baseUrl}/storage/upload/driver-photo`,
         {
           method: 'POST',
           headers: {
@@ -182,7 +188,9 @@ export class StorageService {
       formData.append('map', file);
       formData.append('routeId', routeId);
 
-      const response = await fetch(`${API_BASE_URL}/storage/upload/route-map`, {
+      // Ensure we're using the correct backend URL for production
+      const baseUrl = API_BASE_URL || environment.api.url;
+      const response = await fetch(`${baseUrl}/storage/upload/route-map`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

@@ -19,5 +19,13 @@ export interface IWebSocketService {
   onStudentConnected(callback: (data: StudentConnectionData) => void): void;
   onBusArriving(callback: (data: BusArrivingData) => void): void;
   authenticateAsDriver(token: string): void;
+  sendLocationUpdate(locationData: {
+    driverId: string;
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+    speed?: number;
+    heading?: number;
+  }): void;
   off(event: string): void;
 }
