@@ -317,13 +317,17 @@ const DriverDashboard: React.FC = () => {
     try {
       console.log('🔄 Fetching bus info for user:', userId);
 
+      // Get current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
       // Make API call to get driver bus info
       const response = await fetch(
-        `${environment.api.url}/api/drivers/${userId}/bus`,
+        `${environment.api.url}/api/admin/drivers/${userId}/bus`,
         {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || ''}`,
           },
         }
       );
@@ -332,11 +336,17 @@ const DriverDashboard: React.FC = () => {
         const data = await response.json();
         console.log('✅ Bus info from API:', data);
 
-        if (data.busInfo) {
+        if (data.data?.busInfo) {
+          setBusInfo(data.data.busInfo);
+        } else if (data.busInfo) {
           setBusInfo(data.busInfo);
+        } else {
+          console.error('❌ No bus info in response:', data);
         }
       } else {
-        console.error('❌ Failed to fetch bus info from API:', response.status);
+        const errorText = await response.text();
+        console.error('❌ Failed to fetch bus info from API:', response.status, errorText);
+        setSocketError(`API Error: ${response.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ Error fetching bus info from API:', error);
