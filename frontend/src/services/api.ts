@@ -1,5 +1,4 @@
 import { authService } from './authService';
-import { supabase } from '../config/supabase';
 import { HealthResponse, Bus, Route, Driver } from '../types';
 import { environment } from '../config/environment';
 
@@ -183,26 +182,28 @@ class ApiService implements IApiService {
     timestamp: string;
   }> {
     try {
-      const { data, error } = await supabase
-        .from('routes')
-        .select('*')
-        .eq('id', routeId)
-        .single();
+      // Use backend API instead of direct Supabase call
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: Route;
+        error?: string;
+        timestamp: string;
+      }>(`/routes/${routeId}`);
 
-      if (error) {
-        console.error('❌ Error fetching route info:', error);
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        console.error('❌ Error fetching route info from backend:', response.error);
         return {
           success: false,
           data: null,
           timestamp: new Date().toISOString(),
         };
       }
-
-      return {
-        success: true,
-        data: data,
-        timestamp: new Date().toISOString(),
-      };
     } catch (error) {
       console.error('❌ Error in getRouteInfo:', error);
       return {
@@ -213,33 +214,35 @@ class ApiService implements IApiService {
     }
   }
 
-  // Driver operations (Supabase)
+  // Driver operations (Backend API)
   async getAllDrivers(): Promise<{
     success: boolean;
     data: Driver[];
     timestamp: string;
   }> {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('role', 'driver')
-        .order('created_at', { ascending: false });
+      // Use backend API instead of direct Supabase call
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: Driver[];
+        error?: string;
+        timestamp: string;
+      }>('/admin/drivers');
 
-      if (error) {
-        console.error('❌ Error fetching drivers:', error);
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        console.error('❌ Error fetching drivers from backend:', response.error);
         return {
           success: false,
           data: [],
           timestamp: new Date().toISOString(),
         };
       }
-
-      return {
-        success: true,
-        data: data || [],
-        timestamp: new Date().toISOString(),
-      };
     } catch (error) {
       console.error('❌ Error in getAllDrivers:', error);
       return {
@@ -256,27 +259,28 @@ class ApiService implements IApiService {
     timestamp: string;
   }> {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', driverId)
-        .eq('role', 'driver')
-        .single();
+      // Use backend API instead of direct Supabase call
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: Driver;
+        error?: string;
+        timestamp: string;
+      }>(`/admin/drivers/${driverId}`);
 
-      if (error) {
-        console.error('❌ Error fetching driver info:', error);
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        console.error('❌ Error fetching driver info from backend:', response.error);
         return {
           success: false,
           data: null,
           timestamp: new Date().toISOString(),
         };
       }
-
-      return {
-        success: true,
-        data: data,
-        timestamp: new Date().toISOString(),
-      };
     } catch (error) {
       console.error('❌ Error in getDriverInfo:', error);
       return {
@@ -287,49 +291,35 @@ class ApiService implements IApiService {
     }
   }
 
-  // Live location operations (Supabase)
+  // Live location operations (Backend API)
   async getLiveLocations(): Promise<{
     success: boolean;
     data: unknown[];
     timestamp: string;
   }> {
     try {
-      const { data, error } = await supabase
-        .from('live_locations')
-        .select(
-          `
-          *,
-          bus:buses!live_locations_bus_id_fkey (
-            id,
-            bus_number,
-            capacity,
-            bus_image_url
-          ),
-          driver:users!live_locations_driver_id_fkey (
-            id,
-            first_name,
-            last_name,
-            email,
-            phone
-          )
-        `
-        )
-        .order('updated_at', { ascending: false });
+      // Use backend API instead of direct Supabase call
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: unknown[];
+        error?: string;
+        timestamp: string;
+      }>('/locations/current');
 
-      if (error) {
-        console.error('❌ Error fetching live locations:', error);
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        console.error('❌ Error fetching live locations from backend:', response.error);
         return {
           success: false,
           data: [],
           timestamp: new Date().toISOString(),
         };
       }
-
-      return {
-        success: true,
-        data: data || [],
-        timestamp: new Date().toISOString(),
-      };
     } catch (error) {
       console.error('❌ Error in getLiveLocations:', error);
       return {
@@ -350,32 +340,36 @@ class ApiService implements IApiService {
     timestamp: string;
   }> {
     try {
-      const { data, error } = await supabase
-        .from('live_locations')
-        .upsert({
-          bus_id: busId,
-          driver_id: driverId,
+      // Use backend API instead of direct Supabase call
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: unknown;
+        error?: string;
+        timestamp: string;
+      }>('/locations/update', {
+        method: 'POST',
+        body: JSON.stringify({
+          busId,
+          driverId,
           latitude: location.latitude,
           longitude: location.longitude,
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (error) {
-        console.error('❌ Error updating live location:', error);
+      if (response.success && response.data) {
+        return {
+          success: true,
+          data: response.data,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        console.error('❌ Error updating live location via backend:', response.error);
         return {
           success: false,
           data: null,
           timestamp: new Date().toISOString(),
         };
       }
-
-      return {
-        success: true,
-        data: data,
-        timestamp: new Date().toISOString(),
-      };
     } catch (error) {
       console.error('❌ Error in updateLiveLocation:', error);
       return {

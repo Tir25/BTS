@@ -9,8 +9,9 @@ import busRoutes from './routes/buses';
 import routeRoutes from './routes/routes';
 import adminRoutes from './routes/admin';
 import storageRoutes from './routes/storage';
+import locationRoutes from './routes/locations';
 import { initializeDatabase, testDatabaseConnection } from './models/database';
-import { closeDatabaseConnection } from './config/database';
+import { closeDatabasePool } from './config/database';
 import { initializeEnvironment } from './config/environment';
 import { initializeWebSocket } from './sockets/websocket';
 
@@ -44,6 +45,7 @@ app.use('/admin', adminRoutes);
 app.use('/buses', busRoutes);
 app.use('/routes', routeRoutes);
 app.use('/storage', storageRoutes);
+app.use('/locations', locationRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -60,6 +62,7 @@ app.get('/', (req, res) => {
       buses: '/buses',
       routes: '/routes',
       storage: '/storage',
+      locations: '/locations',
     },
   });
 });
@@ -77,6 +80,7 @@ app.use('*', (req, res) => {
       '/routes',
       '/admin',
       '/storage',
+      '/locations',
     ],
   });
 });
@@ -153,7 +157,7 @@ const gracefulShutdown = async (signal: string) => {
     console.log('✅ WebSocket connections closed');
 
     // Close database connections
-    await closeDatabaseConnection();
+    await closeDatabasePool();
     console.log('✅ Database connections closed');
 
     // Exit process
