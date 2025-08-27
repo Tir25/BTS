@@ -131,6 +131,8 @@ const DriverLogin: React.FC = () => {
         
         // Store bus info in localStorage for DriverDashboard to use
         localStorage.setItem('driverBusInfo', JSON.stringify(data.busInfo));
+        localStorage.setItem('driverId', data.driverId);
+        localStorage.setItem('busId', data.busId);
         
         setIsAuthenticated(true);
         setBusInfo(data.busInfo);

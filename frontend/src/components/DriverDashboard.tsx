@@ -138,6 +138,17 @@ const DriverDashboard: React.FC = () => {
           } else {
             console.log('✅ Driver Dashboard: Already authenticated, bus info available');
             setIsAuthenticated(true);
+            
+            // Emit driver:connected event to notify the server
+            const driverId = localStorage.getItem('driverId');
+            const busId = localStorage.getItem('busId');
+            if (driverId && busId) {
+              websocketService.socket?.emit('driver:connected', {
+                driverId,
+                busId,
+                timestamp: new Date().toISOString()
+              });
+            }
           }
 
           // Fallback: Fetch bus information from API if WebSocket fails
