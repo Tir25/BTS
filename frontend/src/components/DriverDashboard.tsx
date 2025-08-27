@@ -327,12 +327,9 @@ const DriverDashboard: React.FC = () => {
       // Get current session for authentication
       const { data: { session } } = await supabase.auth.getSession();
       
-      console.log('🔑 Session token available:', !!session?.access_token);
-      console.log('🔗 API URL:', `${environment.api.url}/admin/drivers/${userId}/bus`);
-      
       // Make API call to get driver bus info
       const response = await fetch(
-        `${environment.api.url}/admin/drivers/${userId}/bus`,
+        `${environment.api.url}/api/admin/drivers/${userId}/bus`,
         {
           method: 'GET',
           headers: {

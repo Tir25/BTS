@@ -27,6 +27,9 @@ export default {
     },
   },
   plugins: [],
+  corePlugins: {
+    fontSmoothing: false, // Disable font-smoothing to prevent -moz-osx-font-smoothing
+  },
 }
 
 

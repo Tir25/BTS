@@ -1,4 +1,4 @@
-import pool from '../config/database';
+image.pngimport pool from '../config/database';
 import type { LineString } from 'geojson';
 
 interface Route {
