@@ -280,12 +280,12 @@ class AuthService {
 
         console.log('📋 Loading user profile...');
         try {
-          // Add timeout to profile loading with longer timeout
+          // Add timeout to profile loading with optimized timeout
           const profilePromise = this.loadUserProfile(data.user.id);
           const profileTimeout = new Promise((_, reject) => {
             setTimeout(
               () => reject(new Error('Profile loading timeout')),
-              10000 // Increased from 3s to 10s
+              5000 // Reduced from 10s to 5s for better UX
             );
           });
 
@@ -297,21 +297,8 @@ class AuthService {
             profileError
           );
 
-          // Try one more time after a short delay
-          try {
-            console.log('🔄 Retrying profile loading...');
-            await this.loadUserProfile(data.user.id);
-            console.log(
-              '✅ Profile loaded on retry:',
-              this.currentProfile?.role
-            );
-          } catch (retryError) {
-            console.warn(
-              '⚠️ Profile retry also failed, using temporary profile'
-            );
-            // Check if this is an admin user before setting temporary profile
-            this.setTemporaryProfileWithRoleCheck(data.user.id, data.user);
-          }
+          // Set temporary profile immediately for faster response
+          this.setTemporaryProfileWithRoleCheck(data.user.id, data.user);
         }
 
         // Notify listeners immediately after successful sign in

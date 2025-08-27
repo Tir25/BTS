@@ -25,6 +25,12 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     const attemptSessionRecovery = async () => {
       try {
         console.log('🔄 Attempting automatic session recovery...');
+        
+        // Wait for auth service to be fully initialized
+        while (!authService.isInitialized()) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
         const result = await authService.recoverSession();
         if (result.success && authService.isAdmin()) {
           console.log('✅ Session recovered, redirecting to admin panel');
@@ -41,7 +47,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     };
 
     // Delay the recovery attempt to ensure auth service is fully initialized
-    setTimeout(attemptSessionRecovery, 1000);
+    setTimeout(attemptSessionRecovery, 2000);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,7 +59,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     try {
       // Add timeout to prevent infinite loading
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Login timeout')), 15000);
+        setTimeout(() => reject(new Error('Login timeout')), 8000); // Reduced from 15s to 8s
       });
 
       const loginPromise = authService.signIn(email, password);
@@ -64,21 +70,21 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         error?: string;
       };
 
-      if (result.success && result.user) {
-        if (result.user.role === 'admin') {
-          setSuccess('Login successful! Redirecting to admin dashboard...');
-          setTimeout(() => {
-            handleLoginSuccess();
-          }, 1500);
+              if (result.success && result.user) {
+          if (result.user.role === 'admin') {
+            setSuccess('Login successful! Loading admin dashboard...');
+            setTimeout(() => {
+              handleLoginSuccess();
+            }, 1000); // Reduced from 1.5s to 1s
+          } else {
+            setError('Access denied. Admin privileges required.');
+            await authService.signOut();
+          }
         } else {
-          setError('Access denied. Admin privileges required.');
-          await authService.signOut();
+          setError(
+            result.error || 'Login failed. Please check your credentials.'
+          );
         }
-      } else {
-        setError(
-          result.error || 'Login failed. Please check your credentials.'
-        );
-      }
     } catch (err) {
       console.error('❌ Login error:', err);
       if (err instanceof Error && err.message === 'Login timeout') {
@@ -109,11 +115,15 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     // Set transition type for login to dashboard
     setTransition('login-to-dashboard');
     
-    if (onLoginSuccess) {
-      onLoginSuccess();
-    } else {
-      navigate('/admin-dashboard');
-    }
+    // Add a small delay to ensure session is properly set
+    setTimeout(() => {
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
+        // Use replace to avoid 404 issues
+        navigate('/admin-dashboard', { replace: true });
+      }
+    }, 500);
   };
 
   const handleRecoverSession = async () => {
