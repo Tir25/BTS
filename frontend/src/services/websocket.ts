@@ -220,6 +220,7 @@ class WebSocketService implements IWebSocketService {
 
   authenticateAsDriver(token: string): void {
     if (this.socket && this.isConnected()) {
+      console.log('🔐 Driver: Sending authentication request...');
       this.socket.emit('driver:authenticate', { token });
 
       // Add listener for driver authentication response
@@ -227,8 +228,12 @@ class WebSocketService implements IWebSocketService {
         console.log('✅ Driver: Authentication successful:', data);
       });
 
-      this.socket.once('error', (error) => {
+      this.socket.once('driver:authentication_failed', (error) => {
         console.error('❌ Driver: Authentication failed:', error);
+      });
+
+      this.socket.once('error', (error) => {
+        console.error('❌ Driver: Socket error during authentication:', error);
       });
     } else {
       console.error('❌ Driver: Cannot authenticate - socket not connected');

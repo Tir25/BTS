@@ -36,9 +36,9 @@ const DriverDashboard: React.FC = () => {
   const [updateCount, setUpdateCount] = useState(0);
 
   // Monitor busInfo changes for debugging
-  // useEffect(() => {
-  //   console.log('🚌 BusInfo state changed:', busInfo);
-  // }, [busInfo]);
+  useEffect(() => {
+    console.log('🚌 BusInfo state changed:', busInfo);
+  }, [busInfo]);
 
   const socketRef = useRef<Socket | null>(null);
   // const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -57,14 +57,14 @@ const DriverDashboard: React.FC = () => {
         } = await supabase.auth.getSession();
 
         if (session?.user) {
-          // console.log('🔌 Driver Dashboard: Connecting to WebSocket...');
+          console.log('🔌 Driver Dashboard: Connecting to WebSocket...');
 
           // Connect to WebSocket
           await websocketService.connect();
 
           // Set up WebSocket listeners
           websocketService.socket?.on('connect', () => {
-            // console.log('🔌 Driver Dashboard: Connected to WebSocket server');
+            console.log('🔌 Driver Dashboard: Connected to WebSocket server');
             setSocketError(null);
           });
 
@@ -81,8 +81,8 @@ const DriverDashboard: React.FC = () => {
           websocketService.socket?.on(
             'driver:authenticated',
             (data: { driverId: string; busId: string; busInfo: BusInfo }) => {
-              // console.log('✅ Driver Dashboard: Authentication successful:', data);
-              // console.log('🚌 Bus Info received:', data.busInfo);
+              console.log('✅ Driver Dashboard: Authentication successful:', data);
+              console.log('🚌 Bus Info received:', data.busInfo);
               setBusInfo(data.busInfo);
               setSocketError(null);
             }
@@ -116,10 +116,18 @@ const DriverDashboard: React.FC = () => {
           // Fallback: Fetch bus information from API if WebSocket fails
           setTimeout(() => {
             if (!busInfo) {
-              // console.log('🔄 Fallback: Fetching bus info from API...');
+              console.log('🔄 Fallback: Fetching bus info from API...');
               fetchBusInfoFromAPI(session.user.id);
             }
-          }, 3000); // Wait 3 seconds for WebSocket authentication
+          }, 5000); // Wait 5 seconds for WebSocket authentication
+
+          // Additional fallback after 10 seconds
+          setTimeout(() => {
+            if (!busInfo) {
+              console.log('🔄 Second fallback: Fetching bus info from API...');
+              fetchBusInfoFromAPI(session.user.id);
+            }
+          }, 10000);
         }
       } catch (error) {
         console.error('❌ Driver Dashboard: Initialization error:', error);
@@ -307,7 +315,7 @@ const DriverDashboard: React.FC = () => {
 
   const fetchBusInfoFromAPI = async (userId: string) => {
     try {
-      // console.log('🔄 Fetching bus info for user:', userId);
+      console.log('🔄 Fetching bus info for user:', userId);
 
       // Make API call to get driver bus info
       const response = await fetch(
@@ -322,7 +330,7 @@ const DriverDashboard: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        // console.log('✅ Bus info from API:', data);
+        console.log('✅ Bus info from API:', data);
 
         if (data.busInfo) {
           setBusInfo(data.busInfo);
@@ -375,12 +383,26 @@ const DriverDashboard: React.FC = () => {
                 </div>
               </div>
             </div>
-            <button
-              onClick={handleSignOut}
-              className="btn-secondary w-full sm:w-auto"
-            >
-              Sign Out
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (session?.user?.id) {
+                    console.log('🔄 Manual refresh: Fetching bus info...');
+                    fetchBusInfoFromAPI(session.user.id);
+                  }
+                }}
+                className="btn-primary w-full sm:w-auto"
+              >
+                🔄 Refresh
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="btn-secondary w-full sm:w-auto"
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         </div>
 
