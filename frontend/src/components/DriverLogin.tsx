@@ -23,7 +23,6 @@ interface LoginForm {
 const DriverLogin: React.FC = () => {
   const navigate = useNavigate();
   const { setTransition } = useTransition();
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [busInfo, setBusInfo] = useState<BusInfo | null>(null);
   const [loginForm, setLoginForm] = useState<LoginForm>({
@@ -32,7 +31,6 @@ const DriverLogin: React.FC = () => {
   });
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   // Check if device is mobile
@@ -47,21 +45,7 @@ const DriverLogin: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Handle video loading
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = 0.8; // Slow down the video slightly
 
-      const handleVideoLoad = () => setIsVideoLoaded(true);
-      videoRef.current.addEventListener('loadeddata', handleVideoLoad);
-
-      return () => {
-        if (videoRef.current) {
-          videoRef.current.removeEventListener('loadeddata', handleVideoLoad);
-        }
-      };
-    }
-  }, []);
 
   // Initialize Supabase auth listener (same as original)
   useEffect(() => {
@@ -230,36 +214,7 @@ const DriverLogin: React.FC = () => {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Video Background */}
-      <div className="absolute inset-0 z-0">
-        <video
-          ref={videoRef}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-full h-full object-cover"
-          preload="auto"
-        >
-          <source
-            src="/videos/Animated_Countryside_University_Bus.mp4"
-            type="video/mp4"
-          />
-          Your browser does not support the video tag.
-        </video>
-
-        {/* Video overlay for better text readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/60" />
-
-        {/* Loading overlay */}
-        {!isVideoLoaded && (
-          <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
-            <div className="loading-spinner" />
-          </div>
-        )}
-      </div>
-
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
       {/* Main Content */}
       <div className="relative z-10 flex items-center justify-center min-h-screen p-4">
         <motion.div

@@ -154,9 +154,7 @@ const AdminIcon = () => (
 
 const PremiumHomepage: React.FC = () => {
   const navigate = useNavigate();
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
 
   useEffect(() => {
     // Check if device is mobile
@@ -170,21 +168,7 @@ const PremiumHomepage: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = 0.8; // Slow down the video slightly
 
-      // Handle video loading
-      const handleVideoLoad = () => setIsVideoLoaded(true);
-      videoRef.current.addEventListener('loadeddata', handleVideoLoad);
-
-      return () => {
-        if (videoRef.current) {
-          videoRef.current.removeEventListener('loadeddata', handleVideoLoad);
-        }
-      };
-    }
-  }, []);
 
   const { setTransition } = useTransition();
 
@@ -210,33 +194,7 @@ const PremiumHomepage: React.FC = () => {
   const particleCount = isMobile ? 8 : 20;
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Video Background */}
-      <div className="absolute inset-0 z-0">
-        <video
-          ref={videoRef}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-full h-full object-cover"
-          preload="auto"
-        >
-          <source src="/videos/Animated_Countryside_University_Bus.mp4" type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
-
-        {/* Video overlay for better text readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
-
-        {/* Loading overlay */}
-        {!isVideoLoaded && (
-          <div className="absolute inset-0 bg-slate-900 flex items-center justify-center">
-            <div className="loading-spinner" />
-          </div>
-        )}
-      </div>
-
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
       {/* Main Content */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-4 sm:p-6">
         {/* Premium Heading */}

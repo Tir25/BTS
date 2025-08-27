@@ -223,19 +223,7 @@ input[type="number"]::placeholder {
     @apply cursor-pointer transition-all duration-200 active:scale-95;
   }
 
-  /* Video background optimizations */
-  .video-background {
-    @apply w-full h-full object-cover;
-    will-change: transform;
-    transform: translateZ(0);
-  }
 
-  /* Mobile-specific video optimizations */
-  @media (max-width: 768px) {
-    .video-background {
-      object-position: center;
-    }
-  }
 }
 
 /* Enhanced glassmorphism effects */
@@ -432,18 +420,7 @@ input[type="number"]::placeholder {
     0 0 40px rgba(59, 130, 246, 0.1);
 }
 
-/* Responsive video background */
-@media (max-width: 768px) {
-  .video-background {
-    object-position: center;
-  }
-}
 
-/* Performance optimizations */
-.video-background {
-  will-change: transform;
-  transform: translateZ(0);
-}
 
 /* Accessibility improvements */
 @media (prefers-reduced-motion: reduce) {
