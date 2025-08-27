@@ -89,17 +89,29 @@ input[type="number"]::placeholder {
   background-color: #ffffff !important;
 }
 
-  /* SVG Icon Styles for consistent rendering */
+  /* Enhanced SVG Icon Styles for realistic rendering */
   svg {
     display: inline-block;
     vertical-align: middle;
     shape-rendering: geometricPrecision;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
   }
 
   /* Ensure SVG icons render consistently across platforms */
   .animate-pulse svg {
     will-change: transform;
     transform: translateZ(0);
+  }
+
+  /* Enhanced icon hover effects */
+  .group:hover svg {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+    transition: filter 0.3s ease;
+  }
+
+  /* Icon color transitions */
+  svg * {
+    transition: fill 0.3s ease, stroke 0.3s ease;
   }
 
   /* Global Transition Styles */
