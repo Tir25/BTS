@@ -1,61 +1,27 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
-  "routes": [
+  "headers": [
     {
-      "src": "/driver-login",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/driver-dashboard",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/admin-login",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/admin-dashboard",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/student-map",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/driver",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/student",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/admin",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/premium-demo",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/legacy",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }

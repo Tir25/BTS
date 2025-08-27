@@ -6,13 +6,12 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   envDir: path.resolve(__dirname, '..'), // Look for env files in the project root
-  base: '/',
   server: {
     port: 5173,
     host: true,
   },
   build: {
     outDir: 'dist',
-    sourcemap: false, // Disable sourcemaps for production
+    sourcemap: true,
   },
 });
