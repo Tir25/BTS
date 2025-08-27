@@ -6,6 +6,7 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   envDir: path.resolve(__dirname, '..'), // Look for env files in the project root
+  base: '/',
   server: {
     port: 5173,
     host: true,
