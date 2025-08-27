@@ -21,6 +21,11 @@ interface BusData {
   is_active: boolean;
   assigned_driver_id?: string;
   route_id?: string;
+  driver_full_name?: string;
+  driver_email?: string;
+  driver_first_name?: string;
+  driver_last_name?: string;
+  route_name?: string;
 }
 
 interface DriverData {

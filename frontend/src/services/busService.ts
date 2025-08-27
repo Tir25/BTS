@@ -1,5 +1,6 @@
-import { BusLocation, BusInfo } from '../types';
+import { BusLocation, BusInfo, Bus } from '../types';
 import { IBusService } from './interfaces/IBusService';
+import { apiService } from './api';
 
 interface BusData {
   [busId: string]: BusInfo;
@@ -118,30 +119,59 @@ class BusService implements IBusService {
   }
 
   // Sync bus data from API
-  syncBusFromAPI(busId: string, apiData: any): void {
-    if (this.buses[busId]) {
-      // Update existing bus with API data
-      this.buses[busId] = {
-        ...this.buses[busId],
-        busNumber: apiData.bus_number || apiData.number_plate || `Bus ${busId}`,
-        routeName: apiData.route_name || 'Route TBD',
-        driverName: apiData.driver_name || apiData.driver_full_name || 'Driver TBD',
-      };
-    } else {
-      // Create new bus from API data
-      this.buses[busId] = {
-        busId,
-        busNumber: apiData.bus_number || apiData.number_plate || `Bus ${busId}`,
-        routeName: apiData.route_name || 'Route TBD',
-        driverName: apiData.driver_name || apiData.driver_full_name || 'Driver TBD',
-        currentLocation: {
+  async syncBusFromAPI(busId: string, apiData?: Bus): Promise<void> {
+    try {
+      // If no API data provided, fetch it from the backend
+      if (!apiData) {
+        const response = await apiService.getBusInfo(busId);
+        if (response.success && response.data) {
+          apiData = response.data;
+        } else {
+          console.error('❌ Failed to fetch bus data from API for bus:', busId);
+          return;
+        }
+      }
+
+      if (this.buses[busId]) {
+        // Update existing bus with API data
+        this.buses[busId] = {
+          ...this.buses[busId],
+          busNumber: apiData.number_plate || apiData.code || `Bus ${busId}`,
+          routeName: apiData.route_name || 'Route TBD',
+          driverName: apiData.driver_full_name || 'Driver TBD',
+        };
+      } else {
+        // Create new bus from API data
+        this.buses[busId] = {
           busId,
-          driverId: apiData.driver_id || '',
-          latitude: 0,
-          longitude: 0,
-          timestamp: new Date().toISOString(),
-        },
-      };
+          busNumber: apiData.number_plate || apiData.code || `Bus ${busId}`,
+          routeName: apiData.route_name || 'Route TBD',
+          driverName: apiData.driver_full_name || 'Driver TBD',
+          currentLocation: {
+            busId,
+            driverId: apiData.assigned_driver_id || '',
+            latitude: 0,
+            longitude: 0,
+            timestamp: new Date().toISOString(),
+          },
+        };
+      }
+    } catch (error) {
+      console.error('❌ Error syncing bus data from API:', error);
+    }
+  }
+
+  // Sync all buses from API
+  async syncAllBusesFromAPI(): Promise<void> {
+    try {
+      const response = await apiService.getAllBuses();
+      if (response.success && response.data) {
+        response.data.forEach((bus: Bus) => {
+          this.syncBusFromAPI(bus.id, bus);
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error syncing all buses from API:', error);
     }
   }
 

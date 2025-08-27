@@ -1,5 +1,5 @@
 import { authService } from './authService';
-import { HealthResponse, Bus, Route, Driver } from '../types';
+import { HealthResponse, Bus, Route, Driver, BusLocation } from '../types';
 import { environment } from '../config/environment';
 
 const API_BASE_URL = environment.api.url;
@@ -44,8 +44,9 @@ class ApiService implements IApiService {
     });
 
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        `API request failed: ${response.status} ${response.statusText}`
+        errorData.message || errorData.error || `API request failed: ${response.status} ${response.statusText}`
       );
     }
 
@@ -57,7 +58,7 @@ class ApiService implements IApiService {
     return this.backendRequest<HealthResponse>('/health');
   }
 
-  // Bus operations (Supabase)
+  // Bus operations (Backend API)
   async getAllBuses(): Promise<{
     success: boolean;
     data: Bus[];
@@ -294,14 +295,14 @@ class ApiService implements IApiService {
   // Live location operations (Backend API)
   async getLiveLocations(): Promise<{
     success: boolean;
-    data: unknown[];
+    data: BusLocation[];
     timestamp: string;
   }> {
     try {
       // Use backend API instead of direct Supabase call
       const response = await this.backendRequest<{
         success: boolean;
-        data: unknown[];
+        data: BusLocation[];
         error?: string;
         timestamp: string;
       }>('/locations/current');
@@ -333,17 +334,17 @@ class ApiService implements IApiService {
   async updateLiveLocation(
     busId: string,
     driverId: string,
-    location: { latitude: number; longitude: number }
+    location: { latitude: number; longitude: number; speed?: number; heading?: number }
   ): Promise<{
     success: boolean;
-    data: unknown | null;
+    data: BusLocation | null;
     timestamp: string;
   }> {
     try {
       // Use backend API instead of direct Supabase call
       const response = await this.backendRequest<{
         success: boolean;
-        data: unknown;
+        data: BusLocation;
         error?: string;
         timestamp: string;
       }>('/locations/update', {
@@ -353,6 +354,9 @@ class ApiService implements IApiService {
           driverId,
           latitude: location.latitude,
           longitude: location.longitude,
+          speed: location.speed,
+          heading: location.heading,
+          timestamp: new Date().toISOString(),
         }),
       });
 

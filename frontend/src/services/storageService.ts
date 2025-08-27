@@ -1,5 +1,4 @@
 import { authService } from './authService';
-
 import { environment } from '../config/environment';
 
 const API_BASE_URL = environment.api.url;
@@ -54,7 +53,7 @@ export class StorageService {
       ...(token && { Authorization: `Bearer ${token}` }),
     };
 
-    return fetch(`${API_BASE_URL}${endpoint}`, {
+    return fetch(`${API_BASE_URL}/storage${endpoint}`, {
       ...options,
       headers: {
         ...defaultHeaders,
@@ -215,7 +214,7 @@ export class StorageService {
   ): Promise<SignedUrlResult> {
     try {
       const response = await this.makeRequest(
-        `/storage/signed-url/${type}/${id}`
+        `/signed-url/${type}/${id}`
       );
 
       if (!response.ok) {
@@ -245,7 +244,7 @@ export class StorageService {
     fileUrl: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await this.makeRequest(`/storage/delete/${type}/${id}`, {
+      const response = await this.makeRequest(`/delete/${type}/${id}`, {
         method: 'DELETE',
         body: JSON.stringify({ fileUrl }),
       });
@@ -268,7 +267,7 @@ export class StorageService {
     id: string
   ): Promise<FileInfo> {
     try {
-      const response = await this.makeRequest(`/storage/info/${type}/${id}`);
+      const response = await this.makeRequest(`/info/${type}/${id}`);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -297,7 +296,7 @@ export class StorageService {
     folder: string
   ): Promise<{ success: boolean; files?: unknown[]; error?: string }> {
     try {
-      const response = await this.makeRequest(`/storage/list/${folder}`);
+      const response = await this.makeRequest(`/list/${folder}`);
 
       if (!response.ok) {
         const errorData = await response.json();
