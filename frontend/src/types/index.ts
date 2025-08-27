@@ -97,7 +97,6 @@ export interface Route {
   starting_point_type?: 'route_origin' | 'custom_starting' | 'driver_location';
   use_custom_origin?: boolean;
   custom_origin_point?: string;
-  custom_origin_coordinates?: any;
   origin_point_type?: 'driver_location' | 'custom_origin';
   // Bus stops
   bus_stops?: BusStop[];

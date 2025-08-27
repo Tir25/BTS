@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../config/environment';
 import { IWebSocketService } from './interfaces/IWebSocketService';
-import { BusLocation } from '../../types';
+import { BusLocation } from '../types';
 
 class WebSocketService implements IWebSocketService {
   public socket: Socket | null = null;
@@ -50,7 +50,7 @@ class WebSocketService implements IWebSocketService {
             // Production optimizations
             withCredentials: true,
             // Enhanced timeout for Render deployment
-            pingInterval: 25000,
+
           });
 
           this.socket.on('connect', () => {
@@ -279,6 +279,23 @@ class WebSocketService implements IWebSocketService {
     }
   }
 
+  sendLocationUpdate(locationData: {
+    driverId: string;
+    busId: string;
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+    speed?: number;
+    heading?: number;
+  }): void {
+    if (this.socket && this.isConnected()) {
+      console.log('📍 Sending location update:', locationData);
+      this.socket.emit('bus:location_update', locationData);
+    } else {
+      console.error('❌ Cannot send location update - socket not connected');
+    }
+  }
+
   off(event: string): void {
     this.socket?.off(event);
   }
@@ -300,4 +317,4 @@ class WebSocketService implements IWebSocketService {
 }
 
 export const websocketService = new WebSocketService();
-export type { BusLocation } from './interfaces/IWebSocketService';
+export type { BusLocation } from '../types';
