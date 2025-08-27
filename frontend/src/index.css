@@ -8,6 +8,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Ensure consistent emoji rendering across platforms */
+.emoji-icon {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', system-ui, sans-serif;
+  font-variant-emoji: emoji;
+  text-rendering: optimizeLegibility;
+}
+
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
