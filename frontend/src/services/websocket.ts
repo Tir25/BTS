@@ -265,6 +265,15 @@ class WebSocketService implements IWebSocketService {
       this.socket.off('error');
       
       this.socket.emit('driver:authenticate', { token });
+      
+      // Set up authentication response listeners
+      this.socket.once('driver:authenticated', (data) => {
+        console.log('✅ Driver: Authentication successful:', data);
+      });
+      
+      this.socket.once('driver:authentication_failed', (error) => {
+        console.error('❌ Driver: Authentication failed:', error);
+      });
     } else {
       console.error('❌ Driver: Cannot authenticate - socket not connected');
     }

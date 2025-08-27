@@ -130,25 +130,33 @@ const DriverDashboard: React.FC = () => {
           // Store socket reference
           socketRef.current = websocketService.socket;
 
-          // Check if we already have bus info (from localStorage or previous authentication)
-          // If not, authenticate with the server
-          if (!busInfo) {
-            console.log('🔐 Driver Dashboard: Authenticating with server...');
-            websocketService.authenticateAsDriver(session.access_token);
-          } else {
-            console.log('✅ Driver Dashboard: Already authenticated, bus info available');
-            setIsAuthenticated(true);
-            
-            // Emit driver:connected event to notify the server
-            const driverId = localStorage.getItem('driverId');
-            const busId = localStorage.getItem('busId');
-            if (driverId && busId) {
+          // Check if we already have bus info from localStorage
+          const savedBusInfo = localStorage.getItem('driverBusInfo');
+          const savedDriverId = localStorage.getItem('driverId');
+          const savedBusId = localStorage.getItem('busId');
+          
+          if (savedBusInfo && savedDriverId && savedBusId) {
+            console.log('✅ Driver Dashboard: Found saved authentication data, skipping re-authentication');
+            try {
+              const parsedBusInfo = JSON.parse(savedBusInfo);
+              setBusInfo(parsedBusInfo);
+              setIsAuthenticated(true);
+              
+              // Emit driver:connected event to notify the server
               websocketService.socket?.emit('driver:connected', {
-                driverId,
-                busId,
+                driverId: savedDriverId,
+                busId: savedBusId,
                 timestamp: new Date().toISOString()
               });
+            } catch (error) {
+              console.error('❌ Error parsing saved bus info:', error);
+              // If parsing fails, authenticate again
+              console.log('🔐 Driver Dashboard: Authenticating with server...');
+              websocketService.authenticateAsDriver(session.access_token);
             }
+          } else {
+            console.log('🔐 Driver Dashboard: No saved authentication data, authenticating with server...');
+            websocketService.authenticateAsDriver(session.access_token);
           }
 
           // Fallback: Fetch bus information from API if WebSocket fails
