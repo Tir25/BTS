@@ -1,88 +1,62 @@
-// Smart API URL detection for cross-laptop testing and VS Code tunnels
+// Smart API URL detection for cross-laptop testing and VS Code tunnels - OPTIMIZED
 const getApiUrl = () => {
-  // PRIORITY 1: Environment variable override (for deployment)
+  // PRIORITY 1: Environment variable override (for deployment) - FAST PATH
   if (import.meta.env.VITE_API_URL) {
-    console.log(
-      '🔧 Using environment variable API URL:',
-      import.meta.env.VITE_API_URL
-    );
     return import.meta.env.VITE_API_URL;
   }
 
-  // Check if we're accessing from a VS Code tunnel - PRIORITY 2
+  // PRIORITY 2: Production domains - FAST PATH
   const currentHost = window.location.hostname;
   const currentProtocol = window.location.protocol;
 
+  // Fast check for production domains
+  if (currentHost.includes('render.com') || currentHost.includes('vercel.app') || currentHost.includes('vercel.com')) {
+    return 'https://bus-tracking-backend-sxh8.onrender.com';
+  }
+
+  // PRIORITY 3: VS Code tunnels - OPTIMIZED
   if (currentHost.includes('devtunnels.ms')) {
-    // For VS Code tunnels, we need to use the tunnel URL for the backend too
-    // Extract the tunnel ID and create the backend tunnel URL
-    const tunnelId = currentHost.split('.')[0]; // Extract tunnel ID
-    const backendUrl = `${currentProtocol}//${tunnelId}-3000.inc1.devtunnels.ms`;
-    console.log('🔧 VS Code tunnel detected (PRIORITY 2):', {
-      currentHost,
-      tunnelId,
-      backendUrl,
-    });
-    return backendUrl;
+    const tunnelId = currentHost.split('.')[0];
+    return `${currentProtocol}//${tunnelId}-3000.inc1.devtunnels.ms`;
   }
 
-  // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 3
-  if (
-    currentHost !== 'localhost' &&
-    currentHost !== '127.0.0.1' &&
-    !currentHost.includes('render.com') &&
-    !currentHost.includes('vercel.app') &&
-    !currentHost.includes('vercel.com')
-  ) {
-    // We're on a network IP, use the same IP for backend
-    const networkUrl = `http://${currentHost}:3000`;
-    console.log('🔧 Network IP detected:', { currentHost, networkUrl });
-    return networkUrl;
+  // PRIORITY 4: Network IP (cross-laptop) - OPTIMIZED
+  if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+    return `http://${currentHost}:3000`;
   }
 
-  // Default to localhost for local development and deployment
-  console.log('🔧 Localhost detected:', { currentHost });
+  // PRIORITY 5: Localhost - FAST PATH
   return 'http://localhost:3000';
 };
 
 const getWebSocketUrl = () => {
-  // PRIORITY 1: Environment variable override (for deployment)
+  // PRIORITY 1: Environment variable override (for deployment) - FAST PATH
   if (import.meta.env.VITE_WEBSOCKET_URL) {
-    console.log(
-      '🔧 Using environment variable WebSocket URL:',
-      import.meta.env.VITE_WEBSOCKET_URL
-    );
     return import.meta.env.VITE_WEBSOCKET_URL;
   }
 
-  // Check if we're accessing from a VS Code tunnel - PRIORITY 2
+  // PRIORITY 2: Production domains - FAST PATH
   const currentHost = window.location.hostname;
   const currentProtocol = window.location.protocol;
 
+  // Fast check for production domains
+  if (currentHost.includes('render.com') || currentHost.includes('vercel.app') || currentHost.includes('vercel.com')) {
+    return 'wss://bus-tracking-backend-sxh8.onrender.com';
+  }
+
+  // PRIORITY 3: VS Code tunnels - OPTIMIZED
   if (currentHost.includes('devtunnels.ms')) {
-    // For VS Code tunnels, we need to use the tunnel URL for the backend too
-    const tunnelId = currentHost.split('.')[0]; // Extract tunnel ID
+    const tunnelId = currentHost.split('.')[0];
     const wsUrl = `${currentProtocol === 'https:' ? 'wss:' : 'ws:'}//${tunnelId}-3000.inc1.devtunnels.ms`;
-    console.log('🔧 WebSocket tunnel URL (PRIORITY 2):', wsUrl);
     return wsUrl;
   }
 
-  // Check if we're accessing from a network IP (cross-laptop) - PRIORITY 3
-  if (
-    currentHost !== 'localhost' &&
-    currentHost !== '127.0.0.1' &&
-    !currentHost.includes('render.com') &&
-    !currentHost.includes('vercel.app') &&
-    !currentHost.includes('vercel.com')
-  ) {
-    // We're on a network IP, use the same IP for WebSocket
-    const wsUrl = `ws://${currentHost}:3000`;
-    console.log('🔧 WebSocket network URL:', wsUrl);
-    return wsUrl;
+  // PRIORITY 4: Network IP (cross-laptop) - OPTIMIZED
+  if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+    return `ws://${currentHost}:3000`;
   }
 
-  // Default to localhost for local development and deployment
-  console.log('🔧 WebSocket localhost URL: ws://localhost:3000');
+  // PRIORITY 5: Localhost - FAST PATH
   return 'ws://localhost:3000';
 };
 

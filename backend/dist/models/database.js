@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getDatabaseHealth = exports.testDatabaseConnection = exports.initializeDatabase = void 0;
+exports.getTableColumns = exports.tableExists = exports.getDatabaseHealth = exports.testDatabaseConnection = exports.initializeDatabase = void 0;
 const database_1 = __importStar(require("../config/database"));
 const initializeDatabase = async () => {
     try {
@@ -46,107 +46,6 @@ const initializeDatabase = async () => {
         catch (error) {
             console.warn('⚠️ PostGIS extension may already be enabled or not available:', error);
         }
-        await database_1.default.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        email VARCHAR(255) UNIQUE NOT NULL,
-        role VARCHAR(50) NOT NULL CHECK (role IN ('student', 'driver', 'admin')),
-        first_name VARCHAR(100),
-        last_name VARCHAR(100),
-        phone VARCHAR(20),
-        profile_photo_url TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-        console.log('✅ Users table created');
-        await database_1.default.query(`
-      CREATE TABLE IF NOT EXISTS routes (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(100) NOT NULL,
-        description TEXT,
-        stops GEOMETRY(LINESTRING, 4326),
-        distance_km DECIMAL(10,2) NOT NULL,
-        estimated_duration_minutes INTEGER,
-        route_map_url TEXT,
-        city VARCHAR(100),
-        geom GEOMETRY(LINESTRING, 4326) DEFAULT ST_GeomFromText('LINESTRING(72.5714 23.0225, 72.4563 23.5295)', 4326),
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-        console.log('✅ Routes table created');
-        await database_1.default.query(`
-      CREATE TABLE IF NOT EXISTS buses (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        code VARCHAR(20) UNIQUE NOT NULL,
-        number_plate VARCHAR(20) UNIQUE NOT NULL,
-        capacity INTEGER NOT NULL,
-        model VARCHAR(100),
-        year INTEGER,
-        bus_image_url TEXT,
-        assigned_driver_id UUID REFERENCES users(id),
-        route_id UUID REFERENCES routes(id),
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-        console.log('✅ Buses table created');
-        try {
-            await database_1.default.query(`
-        ALTER TABLE buses 
-        ADD COLUMN IF NOT EXISTS code VARCHAR(20) UNIQUE,
-        ADD COLUMN IF NOT EXISTS number_plate VARCHAR(20) UNIQUE,
-        ADD COLUMN IF NOT EXISTS capacity INTEGER,
-        ADD COLUMN IF NOT EXISTS model VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS year INTEGER,
-        ADD COLUMN IF NOT EXISTS assigned_driver_id UUID REFERENCES users(id),
-        ADD COLUMN IF NOT EXISTS route_id UUID REFERENCES routes(id),
-        ADD COLUMN IF NOT EXISTS bus_image_url TEXT,
-        ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
-        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-      `);
-            await database_1.default.query(`
-        ALTER TABLE routes 
-        ADD COLUMN IF NOT EXISTS stops GEOMETRY(LINESTRING, 4326),
-        ADD COLUMN IF NOT EXISTS geom GEOMETRY(LINESTRING, 4326),
-        ADD COLUMN IF NOT EXISTS distance_km DECIMAL(10,2),
-        ADD COLUMN IF NOT EXISTS estimated_duration_minutes INTEGER,
-        ADD COLUMN IF NOT EXISTS route_map_url TEXT,
-        ADD COLUMN IF NOT EXISTS city VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
-        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-      `);
-            await database_1.default.query(`
-        ALTER TABLE users 
-        ADD COLUMN IF NOT EXISTS role VARCHAR(50) CHECK (role IN ('student', 'driver', 'admin')),
-        ADD COLUMN IF NOT EXISTS first_name VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS last_name VARCHAR(100),
-        ADD COLUMN IF NOT EXISTS phone VARCHAR(20),
-        ADD COLUMN IF NOT EXISTS profile_photo_url TEXT,
-        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-      `);
-            console.log('✅ Database migration completed');
-        }
-        catch (migrationError) {
-            console.warn('⚠️ Migration warning:', migrationError);
-        }
-        await database_1.default.query(`
-      CREATE TABLE IF NOT EXISTS live_locations (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        bus_id UUID REFERENCES buses(id) ON DELETE CASCADE,
-        location GEOMETRY(POINT, 4326) NOT NULL,
-        speed_kmh DECIMAL(5,2),
-        heading_degrees DECIMAL(5,2),
-        recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-        console.log('✅ Live locations table created');
         try {
             await database_1.default.query(`
         CREATE INDEX IF NOT EXISTS idx_live_locations_bus_id ON live_locations(bus_id);
@@ -154,24 +53,26 @@ const initializeDatabase = async () => {
         CREATE INDEX IF NOT EXISTS idx_live_locations_location ON live_locations USING GIST(location);
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
         CREATE INDEX IF NOT EXISTS idx_buses_number_plate ON buses(number_plate);
+        CREATE INDEX IF NOT EXISTS idx_buses_code ON buses(code);
+        CREATE INDEX IF NOT EXISTS idx_routes_name ON routes(name);
+        CREATE INDEX IF NOT EXISTS idx_routes_is_active ON routes(is_active);
+        CREATE INDEX IF NOT EXISTS idx_bus_stops_route_id ON bus_stops(route_id);
+        CREATE INDEX IF NOT EXISTS idx_bus_stops_location ON bus_stops USING GIST(location);
+        CREATE INDEX IF NOT EXISTS idx_driver_bus_assignments_driver_id ON driver_bus_assignments(driver_id);
+        CREATE INDEX IF NOT EXISTS idx_driver_bus_assignments_bus_id ON driver_bus_assignments(bus_id);
+        CREATE INDEX IF NOT EXISTS idx_driver_bus_assignments_route_id ON driver_bus_assignments(route_id);
       `);
             try {
                 await database_1.default.query(`CREATE INDEX IF NOT EXISTS idx_routes_stops ON routes USING GIST(stops);`);
+                await database_1.default.query(`CREATE INDEX IF NOT EXISTS idx_routes_geom ON routes USING GIST(geom);`);
             }
             catch (indexError) {
-                console.warn('⚠️ Could not create routes stops index:', indexError);
+                console.warn('⚠️ Could not create routes geometry indexes:', indexError);
             }
             console.log('✅ Database indexes created');
         }
         catch (indexError) {
             console.warn('⚠️ Some indexes could not be created:', indexError);
-        }
-        try {
-            await insertSampleData();
-            console.log('✅ Sample data inserted successfully');
-        }
-        catch (sampleDataError) {
-            console.warn('⚠️ Sample data insertion failed:', sampleDataError);
         }
         console.log('🎉 Database initialization completed successfully');
     }
@@ -181,16 +82,6 @@ const initializeDatabase = async () => {
     }
 };
 exports.initializeDatabase = initializeDatabase;
-const insertSampleData = async () => {
-    try {
-        console.log('ℹ️ Sample data insertion skipped - Use Supabase Auth for real users');
-        console.log('ℹ️ Buses and routes should be created through the admin interface');
-        console.log('ℹ️ Live locations are managed by the driver interface');
-    }
-    catch (error) {
-        console.error('❌ Sample data insertion failed:', error);
-    }
-};
 const testDatabaseConnection = async () => {
     try {
         const health = await (0, database_1.checkDatabaseHealth)();
@@ -214,4 +105,38 @@ const getDatabaseHealth = async () => {
     return await (0, database_1.checkDatabaseHealth)();
 };
 exports.getDatabaseHealth = getDatabaseHealth;
+const tableExists = async (tableName) => {
+    try {
+        const result = await database_1.default.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = $1
+      );
+    `, [tableName]);
+        return result.rows[0].exists;
+    }
+    catch (error) {
+        console.error(`❌ Error checking if table ${tableName} exists:`, error);
+        return false;
+    }
+};
+exports.tableExists = tableExists;
+const getTableColumns = async (tableName) => {
+    try {
+        const result = await database_1.default.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = $1 
+      ORDER BY ordinal_position;
+    `, [tableName]);
+        return result.rows.map(row => row.column_name);
+    }
+    catch (error) {
+        console.error(`❌ Error getting columns for table ${tableName}:`, error);
+        return [];
+    }
+};
+exports.getTableColumns = getTableColumns;
 //# sourceMappingURL=database.js.map

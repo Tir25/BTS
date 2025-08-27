@@ -68,7 +68,23 @@ const initializeWebSocket = (io) => {
                     .select('role')
                     .eq('id', user.id)
                     .single();
-                const hasDriverRole = isDualRoleUser || (profile && profile.role === 'driver');
+                const { data: userRecord } = await supabase_1.supabaseAdmin
+                    .from('users')
+                    .select('role')
+                    .eq('id', user.id)
+                    .single();
+                const hasDriverRole = isDualRoleUser ||
+                    (profile && profile.role === 'driver') ||
+                    (userRecord && userRecord.role === 'driver');
+                console.log('🔍 Driver role check:', {
+                    userId: user.id,
+                    email: user.email,
+                    authRoles,
+                    isDualRoleUser,
+                    profileRole: profile?.role,
+                    userRecordRole: userRecord?.role,
+                    hasDriverRole
+                });
                 if (!hasDriverRole) {
                     socket.emit('driver:authentication_failed', {
                         message: 'Access denied. Driver role required.',

@@ -100,15 +100,43 @@ const DriverLogin: React.FC = () => {
     try {
       console.log('🔌 Driver: Connecting to WebSocket...');
       await websocketService.connect();
+      
+      // Wait for connection to be established - REDUCED TIMEOUT
+      let connectionAttempts = 0;
+      const maxAttempts = 5; // Reduced from 10 to 5 attempts
+      
+      while (!websocketService.isConnected() && connectionAttempts < maxAttempts) {
+        console.log(`⏳ Waiting for WebSocket connection... (attempt ${connectionAttempts + 1}/${maxAttempts})`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        connectionAttempts++;
+      }
+      
+      if (!websocketService.isConnected()) {
+        throw new Error('Failed to establish WebSocket connection');
+      }
+      
+      console.log('✅ WebSocket connection established');
 
       websocketService.socket?.on('connect', () => {
         console.log('🔌 Driver: Connected to WebSocket server');
+      });
+
+      websocketService.socket?.on('disconnect', () => {
+        console.log('🔌 Driver: Disconnected from WebSocket server');
       });
 
       websocketService.socket?.on('error', (error) => {
         console.error('❌ Driver: Socket error:', error);
         setLoginError(error.message || 'Socket error occurred');
       });
+
+      // Wait a moment for connection to stabilize - REDUCED WAIT TIME
+      await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 1s to 500ms
+      
+      // Double-check connection status
+      if (!websocketService.isConnected()) {
+        throw new Error('WebSocket connection failed to establish');
+      }
 
       // Set up authentication response handler
       const handleAuthenticationSuccess = async (data: { driverId: string; busId: string; busInfo: BusInfo }) => {
@@ -158,32 +186,40 @@ const DriverLogin: React.FC = () => {
         setLoginError('Authentication failed: ' + (error.message || 'Unknown error'));
       };
 
-      // Add timeout for authentication
+      // Add timeout for authentication (increased to 30 seconds)
       const authTimeout = setTimeout(() => {
         console.error('❌ Driver: Authentication timeout');
         setLoginError('Authentication timeout - please try again');
         // Clean up listeners
         websocketService.socket?.off('driver:authenticated', handleAuthenticationSuccess);
         websocketService.socket?.off('driver:authentication_failed', handleAuthenticationFailed);
-      }, 10000);
-
-      // Set up listeners for authentication response
-      websocketService.socket?.once('driver:authenticated', (data) => {
-        clearTimeout(authTimeout);
-        handleAuthenticationSuccess(data);
-        // Clean up listeners
-        websocketService.socket?.off('driver:authentication_failed', handleAuthenticationFailed);
-      });
-
-      websocketService.socket?.once('driver:authentication_failed', (error) => {
-        clearTimeout(authTimeout);
-        handleAuthenticationFailed(error);
-        // Clean up listeners
-        websocketService.socket?.off('driver:authenticated', handleAuthenticationSuccess);
-      });
+      }, 30000);
 
       console.log('🔐 Driver: Sending authentication request...');
-      websocketService.authenticateAsDriver(token);
+      
+      // Ensure we have a valid token
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+      
+      // Send authentication request with callbacks
+      websocketService.authenticateAsDriver(token, {
+        onSuccess: (data) => {
+          clearTimeout(authTimeout);
+          handleAuthenticationSuccess(data);
+        },
+        onFailure: (error) => {
+          clearTimeout(authTimeout);
+          handleAuthenticationFailed(error);
+        },
+        onError: (error) => {
+          clearTimeout(authTimeout);
+          console.error('❌ Driver: Authentication error:', error);
+          setLoginError('Authentication error: ' + (error.message || 'Unknown error'));
+        }
+      });
+      
+      console.log('📤 Authentication request sent, waiting for response...');
     } catch (error) {
       console.error('❌ Driver: Authentication error:', error);
       setLoginError('Failed to authenticate with server');

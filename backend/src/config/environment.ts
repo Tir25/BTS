@@ -57,6 +57,7 @@ export const initializeEnvironment = (): EnvironmentConfig => {
       'SUPABASE_URL',
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
+      'DATABASE_URL',
     ];
 
     const missingEnvVars = requiredEnvVars.filter(

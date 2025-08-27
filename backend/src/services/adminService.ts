@@ -555,7 +555,8 @@ export class AdminService {
       const { data: authUsers, error: authCheckError } =
         await supabaseAdmin.auth.admin.listUsers();
       const existingAuthUser = authUsers.users.find(
-        (user: any) => user.email?.toLowerCase() === driverData.email.toLowerCase()
+        (user: any) =>
+          user.email?.toLowerCase() === driverData.email.toLowerCase()
       );
 
       if (profilesCheckError || usersCheckError || authCheckError) {
@@ -699,25 +700,25 @@ export class AdminService {
           throw new Error('Cannot create user record with null email');
         }
 
-      const query = `
+        const query = `
           INSERT INTO users (id, email, first_name, last_name, phone, role, profile_photo_url, created_at, updated_at)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `;
 
-      const values = [
+        const values = [
           authData.user.id, // Use Supabase Auth user ID
-        driverData.email,
-        driverData.first_name,
-        driverData.last_name,
-        driverData.phone || null,
-        'driver',
-        driverData.profile_photo_url || null,
+          driverData.email,
+          driverData.first_name,
+          driverData.last_name,
+          driverData.phone || null,
+          'driver',
+          driverData.profile_photo_url || null,
           new Date().toISOString(),
           new Date().toISOString(),
-      ];
+        ];
 
-      const result = await pool.query(query, values);
+        const result = await pool.query(query, values);
 
         console.log(
           `✅ Driver created successfully: ${driverData.email} (ID: ${authData.user.id})`
@@ -961,7 +962,7 @@ export class AdminService {
       // Count unique drivers from both tables (for reference)
       // const profilesDrivers = parseInt(healthChecks[2].rows[0].count);
       // const usersDrivers = parseInt(healthChecks[3].rows[0].count);
-      
+
       // Get unique driver count by querying both tables and counting distinct emails
       const uniqueDriversQuery = `
         SELECT COUNT(DISTINCT email) as unique_count
@@ -971,7 +972,7 @@ export class AdminService {
           SELECT email FROM users WHERE role = 'driver'
         ) as all_drivers
       `;
-      
+
       const uniqueDriversResult = await pool.query(uniqueDriversQuery);
       const totalDrivers = parseInt(uniqueDriversResult.rows[0].unique_count);
 

@@ -15,6 +15,7 @@ const initializeEnvironment = () => {
             'SUPABASE_URL',
             'SUPABASE_ANON_KEY',
             'SUPABASE_SERVICE_ROLE_KEY',
+            'DATABASE_URL',
         ];
         const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
         if (missingEnvVars.length > 0) {

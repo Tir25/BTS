@@ -1,10 +1,11 @@
 import { 
-  BusLocation, 
   WebSocketStats, 
   DriverConnectionData, 
   BusArrivingData, 
   StudentConnectionData 
 } from '../../types';
+
+export type { BusLocation } from '../../types';
 
 export interface IWebSocketService {
   connect(backendUrl?: string): Promise<void>;
@@ -13,7 +14,7 @@ export interface IWebSocketService {
   getConnectionStatus(): boolean;
   getConnectionState(): 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
   getConnectionStats(): WebSocketStats;
-  onBusLocationUpdate(callback: (location: BusLocation) => void): void;
+  onBusLocationUpdate(callback: (location: import('../../types').BusLocation) => void): void;
   onDriverConnected(callback: (data: DriverConnectionData) => void): void;
   onDriverDisconnected(callback: (data: DriverConnectionData) => void): void;
   onStudentConnected(callback: (data: StudentConnectionData) => void): void;

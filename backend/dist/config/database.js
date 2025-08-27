@@ -8,13 +8,7 @@ const pg_1 = require("pg");
 const environment_1 = __importDefault(require("./environment"));
 const environment = (0, environment_1.default)();
 const getDatabaseUrl = () => {
-    if (environment.nodeEnv === 'production') {
-        if (!process.env.DATABASE_URL) {
-            throw new Error('DATABASE_URL is required in production environment');
-        }
-        return process.env.DATABASE_URL;
-    }
-    return process.env.DATABASE_URL || 'postgresql://localhost:5432/bus_tracking_dev';
+    return environment.database.url;
 };
 const poolConfig = {
     connectionString: getDatabaseUrl(),

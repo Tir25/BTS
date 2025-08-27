@@ -1,58 +1,56 @@
 {
   "name": "bus-tracking-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node postbuild.js",
-    "postbuild": "node postbuild.js",
-    "start": "vite preview --port 5173",
+    "build": "tsc && vite build",
+    "build:optimized": "tsc && vite build --mode production",
+    "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
-    "preview": "vite preview",
-    "format": "prettier --write src/**/*.{ts,tsx}"
+    "type-check": "tsc --noEmit",
+    "analyze": "npm run build && npx vite-bundle-analyzer dist",
+    "predeploy": "npm run build:optimized"
   },
   "dependencies": {
-    "@headlessui/react": "^2.2.7",
-    "@react-three/drei": "^9.102.6",
-    "@react-three/fiber": "^8.15.19",
     "@supabase/supabase-js": "^2.39.0",
-    "@types/leaflet": "^1.9.20",
-    "@types/three": "^0.179.0",
-    "framer-motion": "^12.23.12",
+    "framer-motion": "^10.16.16",
     "leaflet": "^1.9.4",
     "maplibre-gl": "^3.6.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-leaflet": "^4.2.1",
-    "react-router-dom": "^6.20.0",
-    "recharts": "^3.1.2",
-    "socket.io-client": "^4.7.5",
-    "three": "^0.179.1",
-    "vite": "^5.0.0"
-  },
-  "engines": {
-    "node": "20.x",
-    "npm": "10.x"
+    "react-router-dom": "^6.20.1",
+    "socket.io-client": "^4.7.4"
   },
   "devDependencies": {
-    "@types/geojson": "^7946.0.16",
-    "@types/react": "^18.2.37",
-    "@types/react-dom": "^18.2.15",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "@vitejs/plugin-react": "^4.2.0",
+    "@types/leaflet": "^1.9.8",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
-    "eslint": "^8.54.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-prettier": "^5.0.1",
-    "eslint-plugin-react": "^7.33.2",
+    "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.4",
-    "postcss": "^8.4.31",
-    "prettier": "^3.1.0",
-    "tailwindcss": "^3.3.5",
-    "typescript": "^5.2.2"
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8",
+    "vite-bundle-analyzer": "^0.7.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }

@@ -78,7 +78,8 @@ export const authenticateUser = async (
       res.status(401).json({
         success: false,
         error: 'Email not verified',
-        message: 'Please verify your email address before accessing this resource.',
+        message:
+          'Please verify your email address before accessing this resource.',
         code: 'EMAIL_NOT_VERIFIED',
       });
       return;

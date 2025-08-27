@@ -58,16 +58,26 @@ const getDriverBusInfo = async (driverId) => {
             console.error('❌ Error fetching driver bus info:', busError);
             return null;
         }
+        let driverName = 'Unknown Driver';
         const { data: profileData, error: profileError } = await supabase_1.supabaseAdmin
             .from('profiles')
             .select('full_name')
             .eq('id', driverId)
             .maybeSingle();
-        console.log('👤 Profile data found:', profileData);
-        console.log('❌ Profile error:', profileError);
-        if (profileError) {
-            console.error('❌ Error fetching driver profile:', profileError);
+        if (profileData?.full_name) {
+            driverName = profileData.full_name;
         }
+        else {
+            const { data: userData, error: userError } = await supabase_1.supabaseAdmin
+                .from('users')
+                .select('first_name, last_name')
+                .eq('id', driverId)
+                .maybeSingle();
+            if (userData) {
+                driverName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || 'Unknown Driver';
+            }
+        }
+        console.log('👤 Driver name resolved:', driverName);
         let routeName = '';
         if (busData.route_id) {
             const { data: routeData, error: routeError } = await supabase_1.supabaseAdmin
@@ -87,7 +97,7 @@ const getDriverBusInfo = async (driverId) => {
             route_id: busData.route_id || '',
             route_name: routeName,
             driver_id: driverId,
-            driver_name: profileData?.full_name || 'Unknown Driver',
+            driver_name: driverName,
         };
         console.log('✅ Final bus info:', busInfo);
         return busInfo;

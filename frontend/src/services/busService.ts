@@ -261,3 +261,4 @@ class BusService implements IBusService {
 // Export singleton instance
 export const busService = new BusService();
 export default busService;
+export type { BusInfo } from '../types';

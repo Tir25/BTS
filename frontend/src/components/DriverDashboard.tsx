@@ -67,27 +67,45 @@ const DriverDashboard: React.FC = () => {
         if (session?.user) {
           console.log('🔌 Driver Dashboard: Initializing...');
 
-          // Validate driver session using auth service
-          console.log('🔍 Validating driver session...');
-          const { isValid, assignment } = await authService.validateDriverSession();
-          console.log('🔍 Validation result:', { isValid, assignment: assignment ? 'Found' : 'Not found' });
+          // Check for existing bus info first (from DriverLogin)
+          const existingAssignment = authService.getCurrentDriverAssignment();
+          console.log('🔍 Checking for existing assignment:', existingAssignment ? 'Found' : 'Not found');
           
-          if (isValid && assignment) {
-            console.log('✅ Driver Dashboard: Valid session found with assignment:', assignment);
+          if (existingAssignment) {
+            console.log('✅ Driver Dashboard: Using existing assignment from DriverLogin:', existingAssignment);
             setBusInfo({
-              bus_id: assignment.bus_id,
-              bus_number: assignment.bus_number,
-              route_id: assignment.route_id,
-              route_name: assignment.route_name,
-              driver_id: assignment.driver_id,
-              driver_name: assignment.driver_name,
+              bus_id: existingAssignment.bus_id,
+              bus_number: existingAssignment.bus_number,
+              route_id: existingAssignment.route_id,
+              route_name: existingAssignment.route_name,
+              driver_id: existingAssignment.driver_id,
+              driver_name: existingAssignment.driver_name,
             });
             setIsAuthenticated(true);
-            console.log('✅ Bus info and authentication state set');
+            console.log('✅ Bus info and authentication state set from existing assignment');
           } else {
-            console.log('❌ Driver Dashboard: Invalid session or no assignment found');
-            setSocketError('Invalid session or no bus assignment');
-            return;
+            // Validate driver session using auth service as fallback
+            console.log('🔍 No existing assignment, validating driver session...');
+            const { isValid, assignment } = await authService.validateDriverSession();
+            console.log('🔍 Validation result:', { isValid, assignment: assignment ? 'Found' : 'Not found' });
+            
+            if (isValid && assignment) {
+              console.log('✅ Driver Dashboard: Valid session found with assignment:', assignment);
+              setBusInfo({
+                bus_id: assignment.bus_id,
+                bus_number: assignment.bus_number,
+                route_id: assignment.route_id,
+                route_name: assignment.route_name,
+                driver_id: assignment.driver_id,
+                driver_name: assignment.driver_name,
+              });
+              setIsAuthenticated(true);
+              console.log('✅ Bus info and authentication state set from validation');
+            } else {
+              console.log('❌ Driver Dashboard: Invalid session or no assignment found');
+              setSocketError('Invalid session or no bus assignment');
+              return;
+            }
           }
 
           // Connect to WebSocket only if not already connected
@@ -148,10 +166,11 @@ const DriverDashboard: React.FC = () => {
           socketRef.current = websocketService.socket;
 
           // Emit driver:connected event to notify the server
-          if (assignment) {
+          const currentAssignment = authService.getCurrentDriverAssignment();
+          if (currentAssignment) {
             websocketService.socket?.emit('driver:connected', {
-              driverId: assignment.driver_id,
-              busId: assignment.bus_id,
+              driverId: currentAssignment.driver_id,
+              busId: currentAssignment.bus_id,
               timestamp: new Date().toISOString()
             });
           }

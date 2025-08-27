@@ -7,7 +7,7 @@ import DriverInterface from './components/DriverInterface';
 import DriverLogin from './components/DriverLogin';
 import DriverDashboard from './components/DriverDashboard';
 import EnhancedStudentMap from './components/EnhancedStudentMap';
-import AdminPanel from './components/AdminPanel';
+import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import PremiumHomepage from './components/PremiumHomepage';
 import { TransitionProvider, GlobalTransitionWrapper } from './components/transitions';
@@ -58,11 +58,17 @@ function App() {
   useEffect(() => {
     const updateAuthState = () => {
       const user = authService.getCurrentUser();
-      const profile = authService.getCurrentProfile();
+      // const profile = authService.getCurrentProfile(); // Unused variable
 
       setAuthState({
         isAuthenticated: !!user,
-        user: profile || null,
+        user: user ? {
+          id: user.id,
+          email: user.email || '',
+          role: 'student' as const,
+          created_at: user.created_at,
+          updated_at: user.updated_at
+        } : null,
         loading: false,
       });
     };
@@ -250,14 +256,14 @@ function App() {
             <Route path="/legacy" element={<LegacyHomePage />} />
             <Route path="/driver" element={<DriverInterface />} />
             <Route path="/student" element={<EnhancedStudentMap />} />
-            <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/admin" element={<AdminDashboard />} />
 
             {/* New Navigation Routes */}
             <Route path="/driver-login" element={<DriverLogin />} />
             <Route path="/driver-dashboard" element={<DriverDashboard />} />
             <Route path="/student-map" element={<EnhancedStudentMap />} />
             <Route path="/admin-login" element={<AdminLogin />} />
-            <Route path="/admin-dashboard" element={<AdminPanel />} />
+            <Route path="/admin-dashboard" element={<AdminDashboard />} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -25,12 +25,12 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     const attemptSessionRecovery = async () => {
       try {
         console.log('🔄 Attempting automatic session recovery...');
-        
+
         // Wait for auth service to be fully initialized
         while (!authService.isInitialized()) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        
+
         const result = await authService.recoverSession();
         if (result.success && authService.isAdmin()) {
           console.log('✅ Session recovered, redirecting to admin panel');
@@ -57,9 +57,9 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     setSuccess(null);
 
     try {
-      // Add timeout to prevent infinite loading
+      // Add timeout to prevent infinite loading - REDUCED TIMEOUT
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Login timeout')), 8000); // Reduced from 15s to 8s
+        setTimeout(() => reject(new Error('Login timeout')), 5000); // Reduced from 8s to 5s
       });
 
       const loginPromise = authService.signIn(email, password);
@@ -70,21 +70,21 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         error?: string;
       };
 
-              if (result.success && result.user) {
-          if (result.user.role === 'admin') {
-            setSuccess('Login successful! Loading admin dashboard...');
-            setTimeout(() => {
-              handleLoginSuccess();
-            }, 1000); // Reduced from 1.5s to 1s
-          } else {
-            setError('Access denied. Admin privileges required.');
-            await authService.signOut();
-          }
+      if (result.success && result.user) {
+        if (result.user.role === 'admin') {
+          setSuccess('Login successful! Loading admin dashboard...');
+          setTimeout(() => {
+            handleLoginSuccess();
+          }, 500); // Reduced from 1s to 500ms
         } else {
-          setError(
-            result.error || 'Login failed. Please check your credentials.'
-          );
+          setError('Access denied. Admin privileges required.');
+          await authService.signOut();
         }
+      } else {
+        setError(
+          result.error || 'Login failed. Please check your credentials.'
+        );
+      }
     } catch (err) {
       console.error('❌ Login error:', err);
       if (err instanceof Error && err.message === 'Login timeout') {
@@ -114,7 +114,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
   const handleLoginSuccess = () => {
     // Set transition type for login to dashboard
     setTransition('login-to-dashboard');
-    
+
     // Add a small delay to ensure session is properly set
     setTimeout(() => {
       if (onLoginSuccess) {
@@ -198,11 +198,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         transition={{ duration: 0.8, ease: [0.4, 0.0, 0.2, 1] }}
         className="w-full max-w-md relative z-10"
       >
-        <GlassyCard
-          variant="ultra"
-          glow={true}
-          className="p-8 relative"
-        >
+        <GlassyCard variant="ultra" glow={true} className="p-8 relative">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -248,7 +244,10 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5, duration: 0.6 }}
             >
-              <label htmlFor="email" className="block text-sm font-medium text-blue-200 mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-blue-200 mb-2"
+              >
                 Email Address
               </label>
               <div className="relative">
@@ -274,7 +273,10 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.6, duration: 0.6 }}
             >
-              <label htmlFor="password" className="block text-sm font-medium text-blue-200 mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-blue-200 mb-2"
+              >
                 Password
               </label>
               <div className="relative">
@@ -300,7 +302,10 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.7, duration: 0.6 }}
             >
-              <label htmlFor="twoFactorCode" className="block text-sm font-medium text-blue-200/80 mb-2">
+              <label
+                htmlFor="twoFactorCode"
+                className="block text-sm font-medium text-blue-200/80 mb-2"
+              >
                 2FA Code <span className="text-blue-200/50">(Optional)</span>
               </label>
               <div className="relative">
@@ -331,7 +336,11 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                   <div className="inline-flex items-center px-4 py-2 text-sm text-blue-200 bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded-xl">
                     <motion.div
                       animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      transition={{
+                        duration: 1,
+                        repeat: Infinity,
+                        ease: 'linear',
+                      }}
                       className="w-4 h-4 border-2 border-blue-300/30 border-t-blue-300 rounded-full mr-3"
                     />
                     Signing in and loading profile...
@@ -466,7 +475,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                   Force Fresh Login
                 </button>
               </div>
-              
+
               <div className="text-xs text-blue-200/50 space-y-1">
                 <p>Enter your admin credentials to access the system</p>
                 <p>Using Supabase Authentication</p>
@@ -475,8 +484,6 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
           </motion.form>
         </GlassyCard>
       </motion.div>
-
-
     </div>
   );
 }

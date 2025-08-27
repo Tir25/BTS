@@ -8,6 +8,7 @@ export interface User {
   role: 'student' | 'driver' | 'admin';
   first_name?: string;
   last_name?: string;
+  full_name?: string;
   phone?: string;
   profile_photo_url?: string;
   created_at?: string;
@@ -18,6 +19,8 @@ export interface UserProfile {
   id: string;
   email?: string;
   full_name?: string;
+  first_name?: string;
+  last_name?: string;
   role: 'student' | 'driver' | 'admin';
   driver_id?: string;
   created_at?: string;

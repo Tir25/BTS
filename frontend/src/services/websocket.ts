@@ -1,250 +1,256 @@
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../config/environment';
-import { IWebSocketService } from './interfaces/IWebSocketService';
-import { BusLocation } from '../types';
+// import { authService } from './authService'; // Unused import
 
-class WebSocketService implements IWebSocketService {
+export interface BusLocation {
+  busId: string;
+  latitude: number;
+  longitude: number;
+  timestamp: string;
+  speed?: number;
+  heading?: number;
+  eta?: {
+    estimated_arrival_minutes: number;
+    distance_remaining: number;
+    is_near_stop: boolean;
+  };
+}
+
+class WebSocketService {
   public socket: Socket | null = null;
-  private _isConnected = false;
-  private reconnectAttempts = 0;
-  private readonly maxReconnectAttempts = 10; // Increased for mobile
-  private reconnectDelay = 1000;
-  private reconnectTimer: NodeJS.Timeout | null = null;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
-  private isReconnecting = false;
+  private _isConnected: boolean = false;
   private connectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' = 'disconnected';
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 10;
+  private reconnectDelay: number = 1000;
+  private maxReconnectDelay: number = 30000;
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private connectionTimeout: NodeJS.Timeout | null = null;
+  private lastHeartbeat: number = 0;
+  private isShuttingDown: boolean = false;
 
-  connect(backendUrl: string = environment.api.websocketUrl): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.isReconnecting) {
-        console.log('🔄 Already attempting to reconnect...');
-        return;
-      }
+  // Event listeners
+  private busLocationListeners: ((location: BusLocation) => void)[] = [];
+  private driverConnectedListeners: ((data: any) => void)[] = [];
+  private driverDisconnectedListeners: ((data: any) => void)[] = [];
+  private studentConnectedListeners: (() => void)[] = [];
+  private busArrivingListeners: ((data: any) => void)[] = [];
 
-      // If already connected, don't create a new connection
-      if (this.socket && this.isConnected()) {
-        console.log('✅ Already connected to WebSocket');
-        resolve();
-        return;
-      }
+  constructor() {
+    // Bind methods to preserve context
+    this.handleConnect = this.handleConnect.bind(this);
+    this.handleDisconnect = this.handleDisconnect.bind(this);
+    this.handleError = this.handleError.bind(this);
+    this.handleReconnect = this.handleReconnect.bind(this);
+    this.startHeartbeat = this.startHeartbeat.bind(this);
+    this.stopHeartbeat = this.stopHeartbeat.bind(this);
+  }
 
-      this.isReconnecting = true;
+  async connect(): Promise<void> {
+    if (this.socket?.connected || this.connectionState === 'connecting') {
+      console.log('🔌 WebSocket already connected or connecting');
+      return;
+    }
+
+    if (this.isShuttingDown) {
+      console.log('🔌 WebSocket service is shutting down, cannot connect');
+      return;
+    }
+
+    try {
       this.connectionState = 'connecting';
+      console.log('🔌 Connecting to WebSocket server...');
 
-      setTimeout(() => {
-        try {
-          // Enhanced Socket.IO configuration for production deployment
-          this.socket = io(backendUrl, {
-            transports: ['websocket', 'polling'],
-            timeout: 30000, // Increased timeout for mobile
-            reconnection: true,
-            reconnectionAttempts: this.maxReconnectAttempts,
-            reconnectionDelay: this.reconnectDelay,
-            reconnectionDelayMax: 5000,
-            forceNew: false, // Changed to false to prevent multiple connections
-            // Mobile-specific optimizations
-            upgrade: true,
-            rememberUpgrade: true,
-            // Better error handling
-            autoConnect: true,
-            // Production optimizations
-            withCredentials: true,
-            // Enhanced timeout for Render deployment
+      // Get WebSocket URL with fallback
+      const wsUrl = environment.api.websocketUrl;
+      console.log('🔌 WebSocket URL:', wsUrl);
 
-          });
+      // Enhanced Socket.IO configuration for production with reduced timeouts
+      this.socket = io(wsUrl, {
+        transports: ['websocket', 'polling'], // Prefer WebSocket, fallback to polling
+        upgrade: true,
+        rememberUpgrade: true,
+        timeout: 10000, // Reduced from 20s to 10s for faster connection
+        forceNew: true,
+        reconnection: false, // We'll handle reconnection manually
+        autoConnect: false,
+        query: {
+          clientType: 'driver',
+          version: '1.0.0',
+          timestamp: Date.now().toString(),
+        },
+        extraHeaders: {
+          'User-Agent': 'BusTrackingDriver/1.0.0',
+        },
+      });
 
-          this.socket.on('connect', () => {
-            console.log('✅ WebSocket connected');
-            this._isConnected = true;
-            this.isReconnecting = false;
-            this.connectionState = 'connected';
-            this.reconnectAttempts = 0;
-            this.reconnectDelay = 1000;
-
-            // Start heartbeat
-            this.startHeartbeat();
-
-            // Emit student connection for public access
-            this.socket?.emit('student:connect');
-
-            resolve();
-          });
-
-          this.socket.on('disconnect', (reason) => {
-            console.log('❌ WebSocket disconnected:', reason);
-            this._isConnected = false;
-            this.connectionState = 'disconnected';
-            this.stopHeartbeat();
-
-            // Handle reconnection for mobile
-            if (
-              reason === 'io server disconnect' ||
-              reason === 'transport close' ||
-              reason === 'ping timeout' ||
-              reason === 'transport error'
-            ) {
-              this.handleReconnection();
-            }
-          });
-
-          this.socket.on('connect_error', (error) => {
-            console.error('❌ WebSocket connection error:', error);
-            this.isReconnecting = false;
-            this.connectionState = 'disconnected';
-            this.reconnectAttempts++;
-
-            if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-              reject(new Error(`Failed to connect to WebSocket server: ${error.message}`));
-            } else {
-              this.handleReconnection();
-            }
-          });
-
-          this.socket.on('error', (error) => {
-            console.error('❌ WebSocket error:', error);
-            this.connectionState = 'disconnected';
-          });
-
-          this.socket.on('reconnect', (attemptNumber) => {
-            console.log(
-              `🔄 WebSocket reconnected after ${attemptNumber} attempts`
-            );
-            this._isConnected = true;
-            this.isReconnecting = false;
-            this.connectionState = 'connected';
-            this.reconnectAttempts = 0;
-
-            // Re-emit student connection after reconnect
-            this.socket?.emit('student:connect');
-          });
-
-          this.socket.on('reconnect_error', (error) => {
-            console.error('❌ WebSocket reconnection error:', error);
-            this.connectionState = 'reconnecting';
-          });
-
-          this.socket.on('reconnect_failed', () => {
-            console.error('❌ WebSocket reconnection failed');
-            this.isReconnecting = false;
-            this.connectionState = 'disconnected';
-            reject(new Error('Failed to reconnect to WebSocket server'));
-          });
-
-          // Enhanced ping/pong handling
-          this.socket.on('pong', () => {
-            console.log('💓 Pong received from server');
-          });
-
-        } catch (error) {
-          console.error('❌ Failed to create WebSocket connection:', error);
-          this.isReconnecting = false;
-          this.connectionState = 'disconnected';
-          reject(error);
+      // Set up connection timeout - reduced from 25s to 12s
+      this.connectionTimeout = setTimeout(() => {
+        if (this.connectionState === 'connecting') {
+          console.error('❌ WebSocket connection timeout');
+          this.handleError(new Error('Connection timeout'));
         }
-      }, 500);
+      }, 12000); // 12 seconds timeout
+
+      // Set up event listeners
+      this.socket.on('connect', this.handleConnect);
+      this.socket.on('disconnect', this.handleDisconnect);
+      this.socket.on('connect_error', this.handleError);
+      this.socket.on('error', this.handleError);
+
+      // Connect to server
+      this.socket.connect();
+
+    } catch (error) {
+      console.error('❌ WebSocket connection error:', error);
+      this.handleError(error);
+    }
+  }
+
+  private handleConnect(): void {
+    console.log('✅ WebSocket connected');
+    this._isConnected = true;
+    this.connectionState = 'connected';
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = 1000;
+
+    // Clear connection timeout
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
+
+    // Start heartbeat
+    this.startHeartbeat();
+
+    // Emit connection event
+    this.socket?.emit('driver:connected', {
+      timestamp: new Date().toISOString(),
+      clientInfo: {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+      },
     });
   }
 
-  disconnect(): void {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-      this._isConnected = false;
-      this.connectionState = 'disconnected';
-    }
+  private handleDisconnect(reason: string): void {
+    console.log('❌ WebSocket disconnected:', reason);
+    this._isConnected = false;
+    this.connectionState = 'disconnected';
     this.stopHeartbeat();
-    this.isReconnecting = false;
+
+    // Clear connection timeout
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
+
+    // Don't reconnect if we're shutting down or if it was a manual disconnect
+    if (this.isShuttingDown || reason === 'io client disconnect') {
+      return;
+    }
+
+    // Attempt reconnection
+    this.handleReconnect();
+  }
+
+  private handleError(error: any): void {
+    console.error('❌ WebSocket error:', error);
+    
+    // Clear connection timeout
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
+
+    // Don't reconnect if we're shutting down
+    if (this.isShuttingDown) {
+      return;
+    }
+
+    // Attempt reconnection for network errors
+    if (error.type === 'TransportError' || error.type === 'TransportOpenError') {
+      this.handleReconnect();
+    }
+  }
+
+  private handleReconnect(): void {
+    if (this.isShuttingDown || this.connectionState === 'reconnecting') {
+      return;
+    }
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('❌ Max reconnection attempts reached');
+      this.connectionState = 'disconnected';
+      return;
+    }
+
+    this.connectionState = 'reconnecting';
+    this.reconnectAttempts++;
+
+    console.log(`🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+
+    // Exponential backoff with jitter
+    const delay = Math.min(
+      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) + Math.random() * 1000,
+      this.maxReconnectDelay
+    );
+
+    setTimeout(() => {
+      if (!this.isShuttingDown) {
+        this.connect();
+      }
+    }, delay);
   }
 
   private startHeartbeat(): void {
     this.stopHeartbeat(); // Clear any existing heartbeat
 
-    this.heartbeatTimer = setInterval(() => {
-      if (this.socket && this._isConnected) {
+    this.heartbeatInterval = setInterval(() => {
+      if (this.socket?.connected) {
         this.socket.emit('ping');
+        this.lastHeartbeat = Date.now();
         console.log('💓 Heartbeat sent');
       }
     }, 30000); // Send heartbeat every 30 seconds
   }
 
   private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
     }
   }
 
-  private handleReconnection(): void {
-    if (this.isReconnecting) {
-      return;
+  disconnect(): void {
+    console.log('🔌 Disconnecting WebSocket...');
+    this.isShuttingDown = true;
+    this.connectionState = 'disconnected';
+    this._isConnected = false;
+
+    // Stop heartbeat
+    this.stopHeartbeat();
+
+    // Clear connection timeout
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
     }
 
-    this.isReconnecting = true;
-    this.connectionState = 'reconnecting';
-    console.log('🔄 Attempting to reconnect...');
-
-    // Clear any existing reconnect timer
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
+    // Disconnect socket
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
     }
 
-    // Exponential backoff for reconnection
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
-
-    this.reconnectTimer = setTimeout(() => {
-      this.connect().catch((error) => {
-        console.error('❌ Reconnection failed:', error);
-        this.isReconnecting = false;
-        this.connectionState = 'disconnected';
-      });
-    }, delay);
-  }
-
-  onBusLocationUpdate(callback: (location: BusLocation) => void): void {
-    console.log('🎧 Setting up bus:locationUpdate listener');
-    this.socket?.on('bus:locationUpdate', (data) => {
-      console.log('📡 Received bus:locationUpdate event:', data);
-      callback(data);
-    });
-  }
-
-  onDriverConnected(
-    callback: (data: {
-      driverId: string;
-      busId: string;
-      timestamp: string;
-    }) => void
-  ): void {
-    this.socket?.on('driver:connected', callback);
-  }
-
-  onDriverDisconnected(
-    callback: (data: {
-      driverId: string;
-      busId: string;
-      timestamp: string;
-    }) => void
-  ): void {
-    this.socket?.on('driver:disconnected', callback);
-  }
-
-  onStudentConnected(callback: (data: { timestamp: string }) => void): void {
-    this.socket?.on('student:connected', callback);
-  }
-
-  onBusArriving(
-    callback: (data: {
-      busId: string;
-      routeId: string;
-      location: [number, number];
-      timestamp: string;
-    }) => void
-  ): void {
-    this.socket?.on('bus:arriving', callback);
+    // Reset state
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = 1000;
   }
 
   isConnected(): boolean {
-    return this._isConnected;
+    return this._isConnected && this.socket?.connected === true;
   }
 
   getConnectionStatus(): boolean {
@@ -255,7 +261,15 @@ class WebSocketService implements IWebSocketService {
     return this.connectionState;
   }
 
-  authenticateAsDriver(token: string): void {
+  authenticateAsDriver(token: string, callbacks?: {
+    onSuccess?: (data: any) => void;
+    onFailure?: (error: any) => void;
+    onError?: (error: any) => void;
+  }): void {
+    console.log('🔐 Driver: Starting authentication process...');
+    console.log('🔐 Socket connected:', this.isConnected());
+    console.log('🔐 Socket state:', this.getConnectionState());
+    
     if (this.socket && this.isConnected()) {
       console.log('🔐 Driver: Sending authentication request...');
       
@@ -264,18 +278,39 @@ class WebSocketService implements IWebSocketService {
       this.socket.off('driver:authentication_failed');
       this.socket.off('error');
       
-      this.socket.emit('driver:authenticate', { token });
-      
-      // Set up authentication response listeners
+      // Set up authentication response listeners BEFORE sending the request
       this.socket.once('driver:authenticated', (data) => {
         console.log('✅ Driver: Authentication successful:', data);
+        if (callbacks?.onSuccess) {
+          callbacks.onSuccess(data);
+        }
       });
       
       this.socket.once('driver:authentication_failed', (error) => {
         console.error('❌ Driver: Authentication failed:', error);
+        if (callbacks?.onFailure) {
+          callbacks.onFailure(error);
+        }
       });
+      
+      this.socket.once('error', (error) => {
+        console.error('❌ Driver: Socket error during authentication:', error);
+        if (callbacks?.onError) {
+          callbacks.onError(error);
+        }
+      });
+      
+      // Send the authentication request
+      this.socket.emit('driver:authenticate', { token });
+      console.log('📤 Authentication request sent with token length:', token.length);
     } else {
       console.error('❌ Driver: Cannot authenticate - socket not connected');
+      console.error('❌ Socket object:', !!this.socket);
+      console.error('❌ Connection state:', this.getConnectionState());
+      
+      if (callbacks?.onError) {
+        callbacks.onError(new Error('Socket not connected'));
+      }
     }
   }
 
@@ -296,6 +331,32 @@ class WebSocketService implements IWebSocketService {
     }
   }
 
+  // Event listener methods
+  onBusLocationUpdate(callback: (location: BusLocation) => void): void {
+    this.busLocationListeners.push(callback);
+    this.socket?.on('bus:location_update', callback);
+  }
+
+  onDriverConnected(callback: (data: any) => void): void {
+    this.driverConnectedListeners.push(callback);
+    this.socket?.on('driver:connected', callback);
+  }
+
+  onDriverDisconnected(callback: (data: any) => void): void {
+    this.driverDisconnectedListeners.push(callback);
+    this.socket?.on('driver:disconnected', callback);
+  }
+
+  onStudentConnected(callback: () => void): void {
+    this.studentConnectedListeners.push(callback);
+    this.socket?.on('student:connected', callback);
+  }
+
+  onBusArriving(callback: (data: any) => void): void {
+    this.busArrivingListeners.push(callback);
+    this.socket?.on('bus:arriving', callback);
+  }
+
   off(event: string): void {
     this.socket?.off(event);
   }
@@ -306,15 +367,38 @@ class WebSocketService implements IWebSocketService {
     connectionState: string;
     reconnectAttempts: number;
     maxReconnectAttempts: number;
+    lastHeartbeat: number;
+    uptime: number;
   } {
     return {
       isConnected: this._isConnected,
       connectionState: this.connectionState,
       reconnectAttempts: this.reconnectAttempts,
       maxReconnectAttempts: this.maxReconnectAttempts,
+      lastHeartbeat: this.lastHeartbeat,
+      uptime: this.lastHeartbeat > 0 ? Date.now() - this.lastHeartbeat : 0,
+    };
+  }
+
+  // Health check method
+  async healthCheck(): Promise<{ healthy: boolean; details: any }> {
+    const stats = this.getConnectionStats();
+    
+    const healthy = this.isConnected() && 
+                   this.connectionState === 'connected' && 
+                   stats.lastHeartbeat > 0 &&
+                   (Date.now() - stats.lastHeartbeat) < 60000; // Last heartbeat within 1 minute
+
+    return {
+      healthy,
+      details: {
+        ...stats,
+        socketExists: !!this.socket,
+        socketConnected: this.socket?.connected,
+        isShuttingDown: this.isShuttingDown,
+      }
     };
   }
 }
 
 export const websocketService = new WebSocketService();
-export type { BusLocation } from '../types';

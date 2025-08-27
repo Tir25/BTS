@@ -264,7 +264,7 @@ class AuthService {
   //   }
   // }
 
-  // Sign in with email and password
+  // Sign in with email and password - OPTIMIZED VERSION
   async signIn(
     email: string,
     password: string
@@ -272,11 +272,17 @@ class AuthService {
     try {
       console.log('🔐 Starting sign in process for:', email);
 
-      // Direct authentication without connection test
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // Direct authentication with timeout
+      const authPromise = supabase.auth.signInWithPassword({
         email,
         password,
       });
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Authentication timeout')), 5000); // 5s timeout
+      });
+
+      const { data, error } = await Promise.race([authPromise, timeoutPromise]) as any;
 
       if (error) {
         console.error('❌ Sign in error:', error);
@@ -292,12 +298,12 @@ class AuthService {
 
         console.log('📋 Loading user profile...');
         try {
-          // Add timeout to profile loading with optimized timeout
+          // Load profile with timeout
           const profilePromise = this.loadUserProfile(data.user.id);
           const profileTimeout = new Promise((_, reject) => {
             setTimeout(
               () => reject(new Error('Profile loading timeout')),
-              5000 // Reduced from 10s to 5s for better UX
+              3000 // Reduced from 5s to 3s for better UX
             );
           });
 
@@ -333,6 +339,12 @@ class AuthService {
           success: false,
           error:
             'Network connection error. Please check your internet connection and try again.',
+        };
+      }
+      if (error instanceof Error && error.message.includes('timeout')) {
+        return {
+          success: false,
+          error: 'Login timed out. Please try again.',
         };
       }
       return { success: false, error: 'Network error during sign in' };
@@ -508,27 +520,50 @@ class AuthService {
     return token;
   }
 
-  // Simplified token validation for API calls
-  async validateTokenForAPI(): Promise<{ valid: boolean; token: string | null }> {
-    const token = this.getAccessToken();
+  // Enhanced token validation for API calls with automatic refresh
+  async validateTokenForAPI(): Promise<{ valid: boolean; token: string | null; refreshed: boolean }> {
+    let token = this.getAccessToken();
+    let refreshed = false;
     
     if (!token) {
-      return { valid: false, token: null };
+      return { valid: false, token: null, refreshed: false };
     }
 
     try {
-      // Validate token with Supabase
+      // First, try to validate the current token
       const { data: { user }, error } = await supabase.auth.getUser(token);
       
       if (error || !user) {
-        console.log('❌ Token validation failed:', error?.message);
-        return { valid: false, token: null };
+        console.log('🔄 Token validation failed, attempting refresh:', error?.message);
+        
+        // Try to refresh the session
+        const refreshResult = await this.refreshSession();
+        if (refreshResult.success) {
+          token = this.getAccessToken();
+          refreshed = true;
+          console.log('✅ Token refreshed successfully');
+        } else {
+          console.log('❌ Token refresh failed:', refreshResult.error);
+          return { valid: false, token: null, refreshed: false };
+        }
       }
 
-      return { valid: true, token };
+      // Validate the token again (either original or refreshed)
+      if (token) {
+        const { data: { user: validatedUser }, error: validationError } = await supabase.auth.getUser(token);
+        
+        if (validationError || !validatedUser) {
+          console.log('❌ Final token validation failed:', validationError?.message);
+          return { valid: false, token: null, refreshed };
+        }
+
+        return { valid: true, token, refreshed };
+      }
+
+      return { valid: false, token: null, refreshed };
     } catch (error) {
       console.error('❌ Token validation error:', error);
-      return { valid: false, token: null };
+      return { valid: false, token: null, refreshed: false };
     }
   }
 
@@ -846,7 +881,7 @@ class AuthService {
   /**
    * Clear driver-bus assignment from database
    */
-  async clearDriverBusAssignment(driverId: string): Promise<boolean> {
+  async clearDriverBusAssignment(_driverId: string): Promise<boolean> {
     try {
       // Just clear from memory since the backend handles the actual assignment
       this.currentDriverAssignment = null;

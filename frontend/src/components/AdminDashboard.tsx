@@ -139,10 +139,7 @@ export default function AdminDashboard() {
               >
                 {loading ? 'Refreshing...' : '🔄 Refresh'}
               </button>
-              <button
-                onClick={handleSignOut}
-                className="btn-secondary text-sm"
-              >
+              <button onClick={handleSignOut} className="btn-secondary text-sm">
                 Sign Out
               </button>
             </div>

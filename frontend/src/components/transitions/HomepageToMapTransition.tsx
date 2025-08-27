@@ -40,4 +40,3 @@ export const HomepageToMapTransition: React.FC<
     </motion.div>
   );
 };
-

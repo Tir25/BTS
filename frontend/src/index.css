@@ -1,4 +1,4 @@
-/* Import Inter font for premium typography */
+/* Import Inter font for premium typography with display=swap for better loading */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 /* MapLibre GL CSS */
@@ -14,6 +14,11 @@
     scroll-behavior: smooth;
     /* Prevent zoom on input focus on iOS */
     -webkit-text-size-adjust: 100%;
+    /* Ensure consistent font rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Prevent layout shifts during font loading */
+    font-display: swap;
   }
   
   body {
@@ -22,6 +27,16 @@
     min-height: 100vh;
     /* Prevent horizontal scroll on mobile */
     overflow-x: hidden;
+    /* Ensure consistent rendering */
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Font loading optimization to prevent layout shifts */
+  @font-face {
+    font-family: 'Inter';
+    font-display: swap;
+    font-weight: 300 900;
+    src: url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
   }
 
   /* Custom scrollbar for premium feel */
@@ -88,12 +103,18 @@ input[type="number"]::placeholder {
   background-color: #ffffff !important;
 }
 
-  /* Enhanced SVG Icon Styles for realistic rendering */
+  /* Enhanced SVG Icon Styles for realistic rendering - PRODUCTION OPTIMIZED */
   svg {
     display: inline-block;
     vertical-align: middle;
     shape-rendering: geometricPrecision;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    /* Prevent layout shifts */
+    width: 1em;
+    height: 1em;
+    /* Ensure consistent rendering across browsers */
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
 
   /* Ensure SVG icons render consistently across platforms */
@@ -111,6 +132,24 @@ input[type="number"]::placeholder {
   /* Icon color transitions */
   svg * {
     transition: fill 0.3s ease, stroke 0.3s ease;
+  }
+
+  /* Specific icon size classes to prevent layout shifts */
+  .icon-xs { width: 0.75rem; height: 0.75rem; }
+  .icon-sm { width: 1rem; height: 1rem; }
+  .icon-md { width: 1.25rem; height: 1.25rem; }
+  .icon-lg { width: 1.5rem; height: 1.5rem; }
+  .icon-xl { width: 1.75rem; height: 1.75rem; }
+  .icon-2xl { width: 2rem; height: 2rem; }
+  .icon-3xl { width: 3rem; height: 3rem; }
+  .icon-4xl { width: 4rem; height: 4rem; }
+
+  /* Prevent layout shifts for custom SVG icons */
+  .custom-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
   /* Global Transition Styles */
@@ -146,6 +185,22 @@ input[type="number"]::placeholder {
   .map-zoom-transition {
     transform-origin: center;
     transition: transform 0.8s ease-out;
+  }
+
+  /* Layout stability improvements */
+  .layout-stable {
+    contain: layout style paint;
+  }
+
+  /* Prevent content jumping during font loading */
+  .font-loading-fix {
+    font-display: swap;
+    font-synthesis: none;
+  }
+
+  /* Ensure consistent spacing */
+  .space-stable {
+    contain: layout;
   }
 }
 

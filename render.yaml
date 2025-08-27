@@ -25,23 +25,23 @@ services:
       - key: PORT
         value: "3000"
 
-  # Frontend Service (Static Site)
-  - type: static
-    name: bus-tracking-frontend
-    plan: free
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    outputDirectory: dist
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: VITE_SUPABASE_URL
-        sync: false
-      - key: VITE_SUPABASE_ANON_KEY
-        sync: false
-      - key: VITE_ADMIN_EMAILS
-        sync: false
-      - key: VITE_API_URL
-        sync: false
-      - key: VITE_WEBSOCKET_URL
-        sync: false
+  # Frontend Service (Static Site) - Commented out since using Vercel
+  # - type: static
+  #   name: bus-tracking-frontend
+  #   plan: free
+  #   rootDir: frontend
+  #   buildCommand: npm install && npm run build
+  #   outputDirectory: dist
+  #   envVars:
+  #     - key: NODE_ENV
+  #       value: production
+  #     - key: VITE_SUPABASE_URL
+  #       sync: false
+  #     - key: VITE_SUPABASE_ANON_KEY
+  #       sync: false
+  #     - key: VITE_ADMIN_EMAILS
+  #       sync: false
+  #     - key: VITE_API_URL
+  #       sync: false
+  #     - key: VITE_WEBSOCKET_URL
+  #       sync: false

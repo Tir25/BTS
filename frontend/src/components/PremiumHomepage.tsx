@@ -5,9 +5,9 @@ import { StaggerContainer, StaggerItem } from './PageTransition';
 import GlassyCard from './ui/GlassyCard';
 import { useTransition } from './transitions';
 
-// SVG Icon Components
+// SVG Icon Components - Production Optimized
 const BusIcon = () => (
-  <svg className="w-12 h-12 sm:w-16 sm:h-16" viewBox="0 0 48 48" fill="none">
+  <svg className="w-12 h-12 sm:w-16 sm:h-16 custom-icon" viewBox="0 0 48 48" fill="none" aria-label="Bus Icon">
     {/* Bus Body - Main Structure */}
     <rect x="4" y="12" width="40" height="20" rx="2" fill="#3B82F6" stroke="#1E40AF" strokeWidth="1"/>
     
@@ -42,7 +42,7 @@ const BusIcon = () => (
 );
 
 const MapIcon = () => (
-  <svg className="w-12 h-12 sm:w-16 sm:h-16" viewBox="0 0 48 48" fill="none">
+  <svg className="w-12 h-12 sm:w-16 sm:h-16 custom-icon" viewBox="0 0 48 48" fill="none" aria-label="Map Icon">
     {/* Map Background */}
     <rect x="4" y="8" width="40" height="32" rx="2" fill="#F0FDF4" stroke="#16A34A" strokeWidth="1"/>
     
@@ -92,7 +92,7 @@ const MapIcon = () => (
 );
 
 const AdminIcon = () => (
-  <svg className="w-12 h-12 sm:w-16 sm:h-16" viewBox="0 0 48 48" fill="none">
+  <svg className="w-12 h-12 sm:w-16 sm:h-16 custom-icon" viewBox="0 0 48 48" fill="none" aria-label="Admin Icon">
     {/* Dashboard Background */}
     <rect x="4" y="8" width="40" height="32" rx="3" fill="#F8FAFC" stroke="#8B5CF6" strokeWidth="1"/>
     

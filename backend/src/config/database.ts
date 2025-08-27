@@ -3,17 +3,9 @@ import initializeEnvironment from './environment';
 
 const environment = initializeEnvironment();
 
-// Validate database URL in production
+// Use centralized environment configuration for database URL
 const getDatabaseUrl = (): string => {
-  if (environment.nodeEnv === 'production') {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL is required in production environment');
-    }
-    return process.env.DATABASE_URL;
-  }
-  
-  // Development fallback
-  return process.env.DATABASE_URL || 'postgresql://localhost:5432/bus_tracking_dev';
+  return environment.database.url;
 };
 
 // Enhanced database configuration

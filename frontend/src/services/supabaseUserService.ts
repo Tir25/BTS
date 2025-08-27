@@ -177,7 +177,7 @@ class SupabaseUserService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAccessToken()}`,
+          Authorization: `Bearer ${this.getAccessToken()}`,
         },
         body: JSON.stringify({
           email,
@@ -208,7 +208,7 @@ class SupabaseUserService {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAccessToken()}`,
+          Authorization: `Bearer ${this.getAccessToken()}`,
         },
         body: JSON.stringify(metadata),
       });

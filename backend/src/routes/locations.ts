@@ -1,9 +1,9 @@
 import express from 'express';
 import { authenticateUser } from '../middleware/auth';
-import { 
-  getCurrentBusLocations, 
-  getBusLocationHistory, 
-  saveLocationUpdate 
+import {
+  getCurrentBusLocations,
+  getBusLocationHistory,
+  saveLocationUpdate,
 } from '../services/locationService';
 
 const router = express.Router();
@@ -71,7 +71,12 @@ router.post('/update', async (req, res) => {
     const { busId, driverId, latitude, longitude, speed, heading } = req.body;
 
     // Validate required fields
-    if (!busId || !driverId || latitude === undefined || longitude === undefined) {
+    if (
+      !busId ||
+      !driverId ||
+      latitude === undefined ||
+      longitude === undefined
+    ) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields',
@@ -80,11 +85,17 @@ router.post('/update', async (req, res) => {
     }
 
     // Validate coordinates
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    if (
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
       return res.status(400).json({
         success: false,
         error: 'Invalid coordinates',
-        message: 'Latitude must be between -90 and 90, longitude between -180 and 180',
+        message:
+          'Latitude must be between -90 and 90, longitude between -180 and 180',
       });
     }
 
