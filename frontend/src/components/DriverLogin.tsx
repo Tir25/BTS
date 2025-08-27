@@ -101,18 +101,19 @@ const DriverLogin: React.FC = () => {
       console.log('🔌 Driver: Connecting to WebSocket...');
       await websocketService.connect();
       
-      // Wait for connection to be established - REDUCED TIMEOUT
+      // Wait for connection to be established with improved timeout handling
       let connectionAttempts = 0;
-      const maxAttempts = 5; // Reduced from 10 to 5 attempts
+      const maxAttempts = 10; // Increased attempts for better reliability
       
       while (!websocketService.isConnected() && connectionAttempts < maxAttempts) {
         console.log(`⏳ Waiting for WebSocket connection... (attempt ${connectionAttempts + 1}/${maxAttempts})`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Increased wait time
         connectionAttempts++;
       }
       
       if (!websocketService.isConnected()) {
-        throw new Error('Failed to establish WebSocket connection');
+        console.error('❌ WebSocket connection failed after all attempts');
+        throw new Error('Failed to establish WebSocket connection. Please check your internet connection and try again.');
       }
       
       console.log('✅ WebSocket connection established');

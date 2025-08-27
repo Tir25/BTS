@@ -38,6 +38,7 @@ const DriverDashboard: React.FC = () => {
   const [lastUpdateTime, setLastUpdateTime] = useState<string | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
 
   // Monitor busInfo changes for debugging
   useEffect(() => {
@@ -53,6 +54,29 @@ const DriverDashboard: React.FC = () => {
 
   // Initialize driver data and WebSocket connection when component mounts
   useEffect(() => {
+    const initializeDriverData = async () => {
+      // Set up connection status monitoring
+      const updateConnectionStatus = () => {
+        if (websocketService.isConnected()) {
+          setConnectionStatus('connected');
+        } else if (websocketService.getConnectionState() === 'connecting' || websocketService.getConnectionState() === 'reconnecting') {
+          setConnectionStatus('connecting');
+        } else {
+          setConnectionStatus('disconnected');
+        }
+      };
+
+      // Initial status check
+      updateConnectionStatus();
+
+      // Set up periodic status monitoring
+      const statusInterval = setInterval(updateConnectionStatus, 2000);
+
+      return () => {
+        clearInterval(statusInterval);
+      };
+    };
+
     const initializeDriverData = async () => {
       try {
         console.log('🚀 Driver Dashboard: Component mounted, starting initialization...');
@@ -489,12 +513,22 @@ const DriverDashboard: React.FC = () => {
           <div className="card-glass p-4">
             <div className="flex items-center">
               <div
-                className={`w-3 h-3 rounded-full mr-3 ${socketError ? 'bg-red-500' : 'bg-green-500'}`}
+                className={`w-3 h-3 rounded-full mr-3 ${
+                  connectionStatus === 'connected' 
+                    ? 'bg-green-500' 
+                    : connectionStatus === 'connecting' 
+                    ? 'bg-yellow-500 animate-pulse' 
+                    : 'bg-red-500'
+                }`}
               ></div>
               <div className="min-w-0 flex-1">
                 <h3 className="font-semibold text-white text-sm">Connection</h3>
                 <p className="text-xs text-white/70 truncate">
-                  {socketError ? 'Disconnected' : 'Connected'}
+                  {connectionStatus === 'connected' 
+                    ? 'Connected' 
+                    : connectionStatus === 'connecting' 
+                    ? 'Connecting...' 
+                    : 'Disconnected'}
                 </p>
               </div>
             </div>
