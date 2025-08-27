@@ -42,6 +42,8 @@ const initializeEnvironment = () => {
                 ? [
                     /^https:\/\/.*\.onrender\.com$/,
                     /^https:\/\/.*\.render\.com$/,
+                    /^https:\/\/.*\.vercel\.app$/,
+                    /^https:\/\/.*\.vercel\.com$/,
                 ]
                 : [
                     'http://localhost:5173',
@@ -75,6 +77,10 @@ const initializeEnvironment = () => {
                     ? [
                         /^https:\/\/.*\.onrender\.com$/,
                         /^wss:\/\/.*\.onrender\.com$/,
+                        /^https:\/\/.*\.vercel\.app$/,
+                        /^wss:\/\/.*\.vercel\.app$/,
+                        /^https:\/\/.*\.vercel\.com$/,
+                        /^wss:\/\/.*\.vercel\.com$/,
                     ]
                     : [
                         'http://localhost:5173',
