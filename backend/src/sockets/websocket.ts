@@ -119,9 +119,28 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           .eq('id', user.id)
           .single();
 
-        // Allow access if user has driver role in auth metadata OR profiles table
+        // Check users table for role (fallback)
+        const { data: userRecord } = await supabaseAdmin
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        // Allow access if user has driver role in auth metadata, profiles table, or users table
         const hasDriverRole =
-          isDualRoleUser || (profile && profile.role === 'driver');
+          isDualRoleUser || 
+          (profile && profile.role === 'driver') ||
+          (userRecord && userRecord.role === 'driver');
+
+        console.log('🔍 Driver role check:', {
+          userId: user.id,
+          email: user.email,
+          authRoles,
+          isDualRoleUser,
+          profileRole: profile?.role,
+          userRecordRole: userRecord?.role,
+          hasDriverRole
+        });
 
         if (!hasDriverRole) {
           socket.emit('driver:authentication_failed', {
@@ -165,14 +184,6 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
         console.log('✅ Sending authentication response:', authResponse);
         socket.emit('driver:authenticated', authResponse);
-
-        // Broadcast driver connected event to all clients
-        io.emit('driver:connected', {
-          driverId: user.id,
-          busId: busInfo.bus_id,
-          timestamp: new Date().toISOString(),
-        });
-
       } catch (error) {
         console.error('❌ Authentication error:', error);
         socket.emit('driver:authentication_failed', { 
@@ -319,24 +330,6 @@ export const initializeWebSocket = (io: SocketIOServer) => {
       socket.emit('student:connected', { timestamp: new Date().toISOString() });
     });
 
-    // Handle driver connected event (emitted by frontend after authentication)
-    socket.on('driver:connected', (data: { driverId: string; busId: string; timestamp: string }) => {
-      socket.lastActivity = Date.now();
-      console.log(`🚌 Driver connected: ${data.driverId} on bus ${data.busId}`);
-      
-      // Broadcast to all clients
-      io.emit('driver:connected', data);
-    });
-
-    // Handle driver disconnected event
-    socket.on('driver:disconnected', (data: { driverId: string; busId: string; timestamp: string }) => {
-      socket.lastActivity = Date.now();
-      console.log(`🚌 Driver disconnected: ${data.driverId} from bus ${data.busId}`);
-      
-      // Broadcast to all clients
-      io.emit('driver:disconnected', data);
-    });
-
     // Enhanced disconnect handling
     socket.on('disconnect', (reason) => {
       activeConnections--;
@@ -351,16 +344,9 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         console.log(`🚨 Transport error for client: ${socket.id}`);
       }
 
-      // Clean up authenticated driver and broadcast disconnect
-      if (socket.isAuthenticated && socket.driverId && socket.busId) {
+      // Clean up authenticated driver
+      if (socket.isAuthenticated && socket.driverId) {
         console.log(`🚌 Driver ${socket.driverId} disconnected from bus ${socket.busId}`);
-        
-        // Broadcast driver disconnected event
-        io.emit('driver:disconnected', {
-          driverId: socket.driverId,
-          busId: socket.busId,
-          timestamp: new Date().toISOString(),
-        });
       }
     });
 

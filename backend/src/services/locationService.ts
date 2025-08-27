@@ -96,19 +96,32 @@ export const getDriverBusInfo = async (
       return null;
     }
 
-    // Then, get the driver profile information
+    // Then, get the driver profile information from both tables
+    let driverName = 'Unknown Driver';
+    
+    // First try profiles table
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('full_name')
       .eq('id', driverId)
       .maybeSingle();
 
-    console.log('👤 Profile data found:', profileData);
-    console.log('❌ Profile error:', profileError);
+    if (profileData?.full_name) {
+      driverName = profileData.full_name;
+    } else {
+      // Fallback to users table
+      const { data: userData, error: userError } = await supabaseAdmin
+        .from('users')
+        .select('first_name, last_name')
+        .eq('id', driverId)
+        .maybeSingle();
 
-    if (profileError) {
-      console.error('❌ Error fetching driver profile:', profileError);
+      if (userData) {
+        driverName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || 'Unknown Driver';
+      }
     }
+
+    console.log('👤 Driver name resolved:', driverName);
 
     // Get route information only if route_id exists
     let routeName = '';
@@ -133,7 +146,7 @@ export const getDriverBusInfo = async (
       route_id: busData.route_id || '',
       route_name: routeName,
       driver_id: driverId,
-      driver_name: profileData?.full_name || 'Unknown Driver',
+      driver_name: driverName,
     };
 
     console.log('✅ Final bus info:', busInfo);

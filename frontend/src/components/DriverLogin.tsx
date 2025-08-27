@@ -125,22 +125,55 @@ const DriverLogin: React.FC = () => {
         setLoginError(error.message || 'Socket error occurred');
       });
 
-      websocketService.socket?.on(
-        'driver:authenticated',
-        (data: { driverId: string; busId: string; busInfo: BusInfo }) => {
-          console.log('✅ Driver: Authentication successful:', data);
-          setIsAuthenticated(true);
-          setBusInfo(data.busInfo);
-          // Set transition type for login to dashboard
-          setTransition('login-to-dashboard');
-          
-          // Navigate to driver dashboard after successful authentication
-          setTimeout(() => {
-            navigate('/driver-dashboard');
-          }, 1000);
-        }
-      );
+      // Set up authentication response handler
+      const handleAuthenticationSuccess = (data: { driverId: string; busId: string; busInfo: BusInfo }) => {
+        console.log('✅ Driver: Authentication successful:', data);
+        
+        // Store bus info in localStorage for DriverDashboard to use
+        localStorage.setItem('driverBusInfo', JSON.stringify(data.busInfo));
+        
+        setIsAuthenticated(true);
+        setBusInfo(data.busInfo);
+        // Set transition type for login to dashboard
+        setTransition('login-to-dashboard');
+        
+        // Navigate to driver dashboard after successful authentication
+        setTimeout(() => {
+          console.log('🚀 Driver: Navigating to dashboard...');
+          navigate('/driver-dashboard');
+        }, 1000);
+      };
 
+      const handleAuthenticationFailed = (error: any) => {
+        console.error('❌ Driver: Authentication failed:', error);
+        setLoginError('Authentication failed: ' + (error.message || 'Unknown error'));
+      };
+
+      // Add timeout for authentication
+      const authTimeout = setTimeout(() => {
+        console.error('❌ Driver: Authentication timeout');
+        setLoginError('Authentication timeout - please try again');
+        // Clean up listeners
+        websocketService.socket?.off('driver:authenticated', handleAuthenticationSuccess);
+        websocketService.socket?.off('driver:authentication_failed', handleAuthenticationFailed);
+      }, 10000);
+
+      // Set up listeners for authentication response
+      websocketService.socket?.once('driver:authenticated', (data) => {
+        clearTimeout(authTimeout);
+        handleAuthenticationSuccess(data);
+        // Clean up listeners
+        websocketService.socket?.off('driver:authentication_failed', handleAuthenticationFailed);
+      });
+
+      websocketService.socket?.once('driver:authentication_failed', (error) => {
+        clearTimeout(authTimeout);
+        handleAuthenticationFailed(error);
+        // Clean up listeners
+        websocketService.socket?.off('driver:authenticated', handleAuthenticationSuccess);
+      });
+
+      console.log('🔐 Driver: Sending authentication request...');
       websocketService.authenticateAsDriver(token);
     } catch (error) {
       console.error('❌ Driver: Authentication error:', error);
@@ -217,10 +250,10 @@ const DriverLogin: React.FC = () => {
             className="relative overflow-hidden rounded-3xl bg-white/10 backdrop-blur-2xl border border-white/20 shadow-2xl"
           >
             {/* Animated background gradient */}
-            <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 opacity-0 hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 hover:bg-opacity-100 transition-all duration-500" />
 
             {/* Glow effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 opacity-0 hover:opacity-100 transition-opacity duration-500 rounded-3xl" />
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 hover:bg-opacity-100 transition-all duration-500 rounded-3xl" />
 
             {/* Content */}
             <div className="relative z-10 p-8">
@@ -354,7 +387,7 @@ const DriverLogin: React.FC = () => {
             </div>
 
             {/* Shimmer effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-1000" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -translate-x-full hover:translate-x-full transition-transform duration-1000" />
           </motion.div>
         </motion.div>
       </div>

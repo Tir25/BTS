@@ -33,7 +33,7 @@ class WebSocketIntegrationTester {
 
   constructor() {
     this.websocketUrl = environment.api.websocketUrl;
-    console.log('🔧 Testing WebSocket integration with backend at:', this.websocketUrl);
+    console.log('🔌 Testing WebSocket integration with backend at:', this.websocketUrl);
   }
 
   private async runTest(
@@ -69,10 +69,11 @@ class WebSocketIntegrationTester {
     }
   }
 
-  // Test basic WebSocket connection
-  private async testBasicConnection(): Promise<any> {
+  // Test WebSocket connection
+  private async testWebSocketConnection(): Promise<any> {
     return new Promise((resolve, reject) => {
       const { io } = require('socket.io-client');
+      
       const socket = io(this.websocketUrl, {
         timeout: 10000,
         transports: ['websocket', 'polling'],
@@ -85,8 +86,9 @@ class WebSocketIntegrationTester {
 
       socket.on('connect', () => {
         clearTimeout(timeout);
+        console.log('✅ WebSocket connected successfully');
         socket.disconnect();
-        resolve({ status: 'Connected successfully' });
+        resolve({ connected: true, socketId: socket.id });
       });
 
       socket.on('connect_error', (error: any) => {
@@ -101,6 +103,7 @@ class WebSocketIntegrationTester {
   private async testStudentConnection(): Promise<any> {
     return new Promise((resolve, reject) => {
       const { io } = require('socket.io-client');
+      
       const socket = io(this.websocketUrl, {
         timeout: 10000,
         transports: ['websocket', 'polling'],
@@ -117,8 +120,9 @@ class WebSocketIntegrationTester {
 
       socket.on('student:connected', (data: any) => {
         clearTimeout(timeout);
+        console.log('✅ Student connected successfully:', data);
         socket.disconnect();
-        resolve({ status: 'Student connected', data });
+        resolve(data);
       });
 
       socket.on('connect_error', (error: any) => {
@@ -129,42 +133,11 @@ class WebSocketIntegrationTester {
     });
   }
 
-  // Test ping/pong functionality
-  private async testPingPong(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const { io } = require('socket.io-client');
-      const socket = io(this.websocketUrl, {
-        timeout: 10000,
-        transports: ['websocket', 'polling'],
-      });
-
-      const timeout = setTimeout(() => {
-        socket.disconnect();
-        reject(new Error('Ping/pong timeout'));
-      }, 10000);
-
-      socket.on('connect', () => {
-        socket.emit('ping');
-      });
-
-      socket.on('pong', () => {
-        clearTimeout(timeout);
-        socket.disconnect();
-        resolve({ status: 'Ping/pong working' });
-      });
-
-      socket.on('connect_error', (error: any) => {
-        clearTimeout(timeout);
-        socket.disconnect();
-        reject(new Error(`Ping/pong failed: ${error.message}`));
-      });
-    });
-  }
-
   // Test driver authentication (without valid token)
   private async testDriverAuthentication(): Promise<any> {
     return new Promise((resolve, reject) => {
       const { io } = require('socket.io-client');
+      
       const socket = io(this.websocketUrl, {
         timeout: 10000,
         transports: ['websocket', 'polling'],
@@ -181,8 +154,9 @@ class WebSocketIntegrationTester {
 
       socket.on('driver:authentication_failed', (data: any) => {
         clearTimeout(timeout);
+        console.log('✅ Driver authentication correctly failed:', data);
         socket.disconnect();
-        resolve({ status: 'Driver authentication failed as expected', data });
+        resolve({ status: 'correctly_failed', error: data });
       });
 
       socket.on('connect_error', (error: any) => {
@@ -193,10 +167,11 @@ class WebSocketIntegrationTester {
     });
   }
 
-  // Test event listener setup
-  private async testEventListeners(): Promise<any> {
+  // Test ping/pong functionality
+  private async testPingPong(): Promise<any> {
     return new Promise((resolve, reject) => {
       const { io } = require('socket.io-client');
+      
       const socket = io(this.websocketUrl, {
         timeout: 10000,
         transports: ['websocket', 'polling'],
@@ -204,46 +179,74 @@ class WebSocketIntegrationTester {
 
       const timeout = setTimeout(() => {
         socket.disconnect();
-        reject(new Error('Event listener test timeout'));
+        reject(new Error('Ping/pong timeout'));
       }, 10000);
 
-      const events = [
-        'bus:locationUpdate',
-        'driver:connected',
-        'driver:disconnected',
-        'student:connected',
-        'bus:arriving',
-      ];
-
-      let eventCount = 0;
-
       socket.on('connect', () => {
-        // Set up all event listeners
-        events.forEach(event => {
-          socket.on(event, (data: any) => {
-            console.log(`📡 Received ${event}:`, data);
-            eventCount++;
-          });
-        });
-
-        // Emit student connect to trigger student:connected
-        socket.emit('student:connect');
+        socket.emit('ping');
       });
 
-      socket.on('student:connected', () => {
+      socket.on('pong', () => {
         clearTimeout(timeout);
+        console.log('✅ Ping/pong working correctly');
         socket.disconnect();
-        resolve({ 
-          status: 'Event listeners working', 
-          eventsSetUp: events.length,
-          eventsReceived: eventCount 
-        });
+        resolve({ status: 'ping_pong_working' });
       });
 
       socket.on('connect_error', (error: any) => {
         clearTimeout(timeout);
         socket.disconnect();
-        reject(new Error(`Event listener test failed: ${error.message}`));
+        reject(new Error(`Ping/pong test failed: ${error.message}`));
+      });
+    });
+  }
+
+  // Test event emission and reception
+  private async testEventEmission(): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const { io } = require('socket.io-client');
+      
+      const socket1 = io(this.websocketUrl, {
+        timeout: 10000,
+        transports: ['websocket', 'polling'],
+      });
+
+      const socket2 = io(this.websocketUrl, {
+        timeout: 10000,
+        transports: ['websocket', 'polling'],
+      });
+
+      const timeout = setTimeout(() => {
+        socket1.disconnect();
+        socket2.disconnect();
+        reject(new Error('Event emission timeout'));
+      }, 10000);
+
+      let eventsReceived = 0;
+
+      socket1.on('connect', () => {
+        socket2.on('connect', () => {
+          // Test custom event
+          socket1.emit('test:event', { message: 'Hello from socket1' });
+        });
+      });
+
+      socket2.on('test:event', (data: any) => {
+        eventsReceived++;
+        if (eventsReceived === 1) {
+          clearTimeout(timeout);
+          console.log('✅ Event emission working correctly:', data);
+          socket1.disconnect();
+          socket2.disconnect();
+          resolve({ status: 'event_emission_working', data });
+        }
+      });
+
+      socket1.on('connect_error', (error: any) => {
+        clearTimeout(timeout);
+        socket1.disconnect();
+        socket2.disconnect();
+        reject(new Error(`Event emission test failed: ${error.message}`));
       });
     });
   }
@@ -255,11 +258,11 @@ class WebSocketIntegrationTester {
     const startTime = Date.now();
 
     // Basic connectivity tests
-    await this.runTest('Basic WebSocket Connection', () => this.testBasicConnection());
+    await this.runTest('WebSocket Connection', () => this.testWebSocketConnection());
     await this.runTest('Student Connection', () => this.testStudentConnection());
-    await this.runTest('Ping/Pong Functionality', () => this.testPingPong());
     await this.runTest('Driver Authentication (Invalid Token)', () => this.testDriverAuthentication());
-    await this.runTest('Event Listener Setup', () => this.testEventListeners());
+    await this.runTest('Ping/Pong Functionality', () => this.testPingPong());
+    await this.runTest('Event Emission', () => this.testEventEmission());
 
     const totalDuration = Date.now() - startTime;
     const passedTests = this.results.filter(r => r.success).length;
@@ -318,4 +321,3 @@ if (require.main === module) {
 }
 
 export { WebSocketIntegrationTester, WebSocketTestReport };
-

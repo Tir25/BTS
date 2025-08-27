@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../config/environment';
-
-import { IWebSocketService, BusLocation } from './interfaces/IWebSocketService';
+import { IWebSocketService } from './interfaces/IWebSocketService';
+import { BusLocation } from '../../types';
 
 class WebSocketService implements IWebSocketService {
   public socket: Socket | null = null;
@@ -50,7 +50,6 @@ class WebSocketService implements IWebSocketService {
             // Production optimizations
             withCredentials: true,
             // Enhanced timeout for Render deployment
-            pingTimeout: 60000,
             pingInterval: 25000,
           });
 
@@ -201,7 +200,6 @@ class WebSocketService implements IWebSocketService {
     }, delay);
   }
 
-  // Fixed event name to match backend
   onBusLocationUpdate(callback: (location: BusLocation) => void): void {
     console.log('🎧 Setting up bus:locationUpdate listener');
     this.socket?.on('bus:locationUpdate', (data) => {
@@ -210,7 +208,6 @@ class WebSocketService implements IWebSocketService {
     });
   }
 
-  // Fixed event names to match backend
   onDriverConnected(
     callback: (data: {
       driverId: string;
@@ -218,7 +215,6 @@ class WebSocketService implements IWebSocketService {
       timestamp: string;
     }) => void
   ): void {
-    console.log('🎧 Setting up driver:connected listener');
     this.socket?.on('driver:connected', callback);
   }
 
@@ -229,12 +225,10 @@ class WebSocketService implements IWebSocketService {
       timestamp: string;
     }) => void
   ): void {
-    console.log('🎧 Setting up driver:disconnected listener');
     this.socket?.on('driver:disconnected', callback);
   }
 
   onStudentConnected(callback: (data: { timestamp: string }) => void): void {
-    console.log('🎧 Setting up student:connected listener');
     this.socket?.on('student:connected', callback);
   }
 
@@ -246,7 +240,6 @@ class WebSocketService implements IWebSocketService {
       timestamp: string;
     }) => void
   ): void {
-    console.log('🎧 Setting up bus:arriving listener');
     this.socket?.on('bus:arriving', callback);
   }
 
@@ -262,55 +255,12 @@ class WebSocketService implements IWebSocketService {
     return this.connectionState;
   }
 
-  // Enhanced driver authentication with proper event handling
   authenticateAsDriver(token: string): void {
     if (this.socket && this.isConnected()) {
       console.log('🔐 Driver: Sending authentication request...');
-      
-      // Remove any existing listeners to prevent duplicates
-      this.socket.off('driver:authenticated');
-      this.socket.off('driver:authentication_failed');
-      this.socket.off('error');
-      
       this.socket.emit('driver:authenticate', { token });
-
-      // Add listener for driver authentication response
-      this.socket.once('driver:authenticated', (data) => {
-        console.log('✅ Driver: Authentication successful:', data);
-        // Emit driver connected event after successful authentication
-        this.socket?.emit('driver:connected', {
-          driverId: data.driverId,
-          busId: data.busId,
-          timestamp: new Date().toISOString(),
-        });
-      });
-
-      this.socket.once('driver:authentication_failed', (error) => {
-        console.error('❌ Driver: Authentication failed:', error);
-      });
-
-      this.socket.once('error', (error) => {
-        console.error('❌ Driver: Socket error during authentication:', error);
-      });
     } else {
       console.error('❌ Driver: Cannot authenticate - socket not connected');
-    }
-  }
-
-  // Method to send location updates (for drivers)
-  sendLocationUpdate(locationData: {
-    driverId: string;
-    latitude: number;
-    longitude: number;
-    timestamp: string;
-    speed?: number;
-    heading?: number;
-  }): void {
-    if (this.socket && this.isConnected()) {
-      console.log('📍 Sending location update:', locationData);
-      this.socket.emit('driver:locationUpdate', locationData);
-    } else {
-      console.error('❌ Cannot send location update - socket not connected');
     }
   }
 

@@ -52,16 +52,30 @@ const DriverDashboard: React.FC = () => {
   useEffect(() => {
     const initializeDriverData = async () => {
       try {
+        // Try to get bus info from localStorage first
+        const savedBusInfo = localStorage.getItem('driverBusInfo');
+        if (savedBusInfo) {
+          try {
+            const parsedBusInfo = JSON.parse(savedBusInfo);
+            console.log('✅ Driver Dashboard: Found saved bus info in localStorage:', parsedBusInfo);
+            setBusInfo(parsedBusInfo);
+            setIsAuthenticated(true);
+          } catch (error) {
+            console.error('❌ Error parsing saved bus info:', error);
+          }
+        }
+        
         // Get current user session
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
         if (session?.user) {
-          console.log('🔌 Driver Dashboard: Connecting to WebSocket...');
+          console.log('🔌 Driver Dashboard: Initializing...');
 
           // Connect to WebSocket only if not already connected
           if (!websocketService.isConnected()) {
+            console.log('🔌 Driver Dashboard: Connecting to WebSocket...');
             await websocketService.connect();
           } else {
             console.log('✅ WebSocket already connected');
@@ -74,7 +88,7 @@ const DriverDashboard: React.FC = () => {
           });
 
           websocketService.socket?.on('disconnect', () => {
-            // console.log('🔌 Driver Dashboard: Disconnected from WebSocket server');
+            console.log('🔌 Driver Dashboard: Disconnected from WebSocket server');
             setSocketError('Disconnected from server');
           });
 
@@ -108,7 +122,7 @@ const DriverDashboard: React.FC = () => {
           );
 
           websocketService.socket?.on('driver:locationConfirmed', () => {
-            // console.log('📍 Driver Dashboard: Location confirmed');
+            console.log('📍 Driver Dashboard: Location confirmed');
             setLastUpdateTime(new Date().toLocaleTimeString());
             setUpdateCount((prev) => prev + 1);
           });
@@ -116,8 +130,15 @@ const DriverDashboard: React.FC = () => {
           // Store socket reference
           socketRef.current = websocketService.socket;
 
-          // Authenticate with the server
-          websocketService.authenticateAsDriver(session.access_token);
+          // Check if we already have bus info (from localStorage or previous authentication)
+          // If not, authenticate with the server
+          if (!busInfo) {
+            console.log('🔐 Driver Dashboard: Authenticating with server...');
+            websocketService.authenticateAsDriver(session.access_token);
+          } else {
+            console.log('✅ Driver Dashboard: Already authenticated, bus info available');
+            setIsAuthenticated(true);
+          }
 
           // Fallback: Fetch bus information from API if WebSocket fails
           setTimeout(() => {
@@ -134,6 +155,10 @@ const DriverDashboard: React.FC = () => {
               fetchBusInfoFromAPI(session.user.id);
             }
           }, 10000);
+        } else {
+          console.log('❌ Driver Dashboard: No session found, redirecting to login');
+          // Redirect to login if no session
+          window.location.href = '/driver-login';
         }
       } catch (error) {
         console.error('❌ Driver Dashboard: Initialization error:', error);

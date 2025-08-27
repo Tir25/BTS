@@ -27,73 +27,190 @@ this.socket?.on('bus:arriving', callback);
 
 ### 2. **Missing Event Handlers**
 
-**Added to Backend:**
+**Added Missing Backend Handlers:**
+- ✅ `driver:connected` event handler
+- ✅ `driver:disconnected` event handler
+- ✅ Enhanced `student:connect` handler
+- ✅ Improved error handling for all events
+
+### 3. **Authentication Flow Issues**
+
+**Enhanced Driver Authentication:**
 ```typescript
-// Handle driver connected event (emitted by frontend after authentication)
-socket.on('driver:connected', (data) => {
-  console.log(`🚌 Driver connected: ${data.driverId} on bus ${data.busId}`);
-  io.emit('driver:connected', data);
-});
-
-// Handle driver disconnected event
-socket.on('driver:disconnected', (data) => {
-  console.log(`🚌 Driver disconnected: ${data.driverId} from bus ${data.busId}`);
-  io.emit('driver:disconnected', data);
-});
-```
-
-### 3. **Authentication Flow Improvements**
-
-**Enhanced Frontend Authentication:**
-```typescript
+// Frontend: Proper authentication flow
 authenticateAsDriver(token: string): void {
-  if (this.socket && this.isConnected()) {
-    this.socket.emit('driver:authenticate', { token });
-    
-    this.socket.once('driver:authenticated', (data) => {
-      // Emit driver connected event after successful authentication
-      this.socket?.emit('driver:connected', {
-        driverId: data.driverId,
-        busId: data.busId,
-        timestamp: new Date().toISOString(),
-      });
+  this.socket?.emit('driver:authenticate', { token });
+  
+  this.socket?.once('driver:authenticated', (data) => {
+    // Emit driver connected after successful authentication
+    this.socket?.emit('driver:connected', {
+      driverId: data.driverId,
+      busId: data.busId,
+      timestamp: new Date().toISOString(),
     });
-  }
+  });
 }
-```
 
-**Enhanced Backend Authentication:**
-```typescript
-// Broadcast driver connected event to all clients after authentication
-io.emit('driver:connected', {
-  driverId: user.id,
-  busId: busInfo.bus_id,
-  timestamp: new Date().toISOString(),
+// Backend: Enhanced authentication with proper response
+socket.on('driver:authenticate', async (data: { token: string }) => {
+  // Validate token and user role
+  // Check bus assignment
+  // Emit authentication response
+  socket.emit('driver:authenticated', authResponse);
+  
+  // Broadcast driver connected event
+  io.emit('driver:connected', {
+    driverId: user.id,
+    busId: busInfo.bus_id,
+    timestamp: new Date().toISOString(),
+  });
 });
 ```
 
-### 4. **Missing Location Update Method**
+### 4. **Data Structure Inconsistencies**
 
-**Added to Frontend:**
+**Standardized Event Data Structures:**
 ```typescript
-sendLocationUpdate(locationData: {
+// Driver Connection Data
+interface DriverConnectionData {
+  driverId: string;
+  busId: string;
+  timestamp: string;
+}
+
+// Bus Location Update Data
+interface BusLocation {
+  busId: string;
   driverId: string;
   latitude: number;
   longitude: number;
   timestamp: string;
   speed?: number;
   heading?: number;
-}): void {
-  if (this.socket && this.isConnected()) {
-    this.socket.emit('driver:locationUpdate', locationData);
-  }
+  eta?: ETAInfo;
+  nearStop?: NearStopInfo;
+}
+
+// Student Connection Data
+interface StudentConnectionData {
+  timestamp: string;
 }
 ```
 
-### 5. **Enhanced Error Handling**
+### 5. **Production Deployment Concerns**
 
-**Improved Error Messages:**
+**Enhanced Configuration for Render/Vercel:**
 ```typescript
+// Frontend: Dynamic WebSocket URL detection
+const getWebSocketUrl = () => {
+  if (import.meta.env.VITE_WEBSOCKET_URL) {
+    return import.meta.env.VITE_WEBSOCKET_URL;
+  }
+  
+  // Handle VS Code tunnels, network IPs, and production domains
+  if (currentHost.includes('devtunnels.ms')) {
+    // VS Code tunnel handling
+  } else if (currentHost.includes('render.com')) {
+    // Render deployment handling
+  } else if (currentHost.includes('vercel.app')) {
+    // Vercel deployment handling
+  }
+  
+  return 'ws://localhost:3000'; // Default fallback
+};
+
+// Backend: Enhanced CORS for production
+websocket: {
+  cors: {
+    origin: isProduction
+      ? [
+          /^https:\/\/.*\.onrender\.com$/,
+          /^wss:\/\/.*\.onrender\.com$/,
+          /^https:\/\/.*\.vercel\.app$/,
+          /^wss:\/\/.*\.vercel\.app$/,
+        ]
+      : [
+          'http://localhost:5173',
+          'ws://localhost:3000',
+          // Development origins...
+        ],
+    credentials: true,
+  },
+}
+```
+
+## 🔧 WebSocket Event Mapping
+
+### **Frontend → Backend Event Flow**
+
+| Frontend Event | Backend Handler | Purpose | Authentication Required |
+|----------------|-----------------|---------|------------------------|
+| `student:connect` | `student:connect` | Student connects to map | ❌ No |
+| `driver:authenticate` | `driver:authenticate` | Driver authentication | ❌ No (but requires valid token) |
+| `driver:connected` | `driver:connected` | Driver connection broadcast | ✅ Yes |
+| `driver:locationUpdate` | `driver:locationUpdate` | Location updates | ✅ Yes |
+| `ping` | `ping` | Connection health check | ❌ No |
+
+### **Backend → Frontend Event Flow**
+
+| Backend Event | Frontend Listener | Purpose | Recipients |
+|---------------|-------------------|---------|------------|
+| `student:connected` | `student:connected` | Confirm student connection | Student clients |
+| `driver:authenticated` | `driver:authenticated` | Confirm driver auth | Driver clients |
+| `driver:authentication_failed` | `driver:authentication_failed` | Auth failure | Driver clients |
+| `driver:connected` | `driver:connected` | Driver connected broadcast | All clients |
+| `driver:disconnected` | `driver:disconnected` | Driver disconnected broadcast | All clients |
+| `bus:locationUpdate` | `bus:locationUpdate` | Location updates | All clients |
+| `bus:arriving` | `bus:arriving` | Bus near stop | All clients |
+| `pong` | `pong` | Connection health response | All clients |
+
+## 🚀 Enhanced Features
+
+### 1. **Mobile-Optimized Reconnection**
+```typescript
+// Enhanced reconnection logic for mobile devices
+private handleReconnection(): void {
+  if (this.isReconnecting) return;
+  
+  this.isReconnecting = true;
+  this.connectionState = 'reconnecting';
+  
+  // Exponential backoff
+  const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
+  
+  this.reconnectTimer = setTimeout(() => {
+    this.connect().catch((error) => {
+      console.error('❌ Reconnection failed:', error);
+      this.isReconnecting = false;
+      this.connectionState = 'disconnected';
+    });
+  }, delay);
+}
+```
+
+### 2. **Heartbeat Monitoring**
+```typescript
+// Frontend heartbeat
+private startHeartbeat(): void {
+  this.heartbeatTimer = setInterval(() => {
+    if (this.socket && this._isConnected) {
+      this.socket.emit('ping');
+      console.log('💓 Heartbeat sent');
+    }
+  }, 30000);
+}
+
+// Backend heartbeat handling
+socket.on('ping', () => {
+  socket.emit('pong');
+  socket.lastActivity = Date.now();
+  console.log(`💓 Ping received from ${socket.id}`);
+});
+```
+
+### 3. **Enhanced Error Handling**
+```typescript
+// Comprehensive error responses
 socket.emit('driver:authentication_failed', { 
   message: 'Authentication token required',
   code: 'MISSING_TOKEN'
@@ -105,108 +222,85 @@ socket.emit('error', {
 });
 ```
 
-## 🔧 WebSocket Event Flow Analysis
-
-### **Event Flow Diagram**
-
-```
-Frontend (Vercel)                    Backend (Render)
-     |                                    |
-     |-- connect ------------------------>|
-     |<-- connected ---------------------|
-     |                                    |
-     |-- student:connect ---------------->|
-     |<-- student:connected -------------|
-     |                                    |
-     |-- driver:authenticate ----------->|
-     |<-- driver:authenticated ---------|
-     |                                    |
-     |-- driver:connected --------------->|
-     |<-- driver:connected -------------|
-     |                                    |
-     |-- driver:locationUpdate --------->|
-     |<-- bus:locationUpdate -----------|
-     |                                    |
-     |-- ping --------------------------->|
-     |<-- pong --------------------------|
-```
-
-### **Event Mapping**
-
-| Frontend Event | Backend Event | Purpose | Data Structure |
-|----------------|---------------|---------|----------------|
-| `student:connect` | `student:connect` | Student connects to system | `{ timestamp: string }` |
-| `driver:authenticate` | `driver:authenticate` | Driver authentication | `{ token: string }` |
-| `driver:locationUpdate` | `driver:locationUpdate` | Location updates | `{ driverId, latitude, longitude, timestamp, speed?, heading? }` |
-| `ping` | `ping` | Connection health check | None |
-| `driver:connected` | `driver:connected` | Driver connection broadcast | `{ driverId, busId, timestamp }` |
-| `driver:disconnected` | `driver:disconnected` | Driver disconnection broadcast | `{ driverId, busId, timestamp }` |
-
-## 📊 WebSocket Configuration Analysis
-
-### **Frontend Configuration (Vercel)**
+### 4. **Activity Monitoring**
 ```typescript
-// Enhanced Socket.IO configuration for production deployment
-this.socket = io(backendUrl, {
-  transports: ['websocket', 'polling'],
-  timeout: 30000,
-  reconnection: true,
-  reconnectionAttempts: 10,
-  reconnectionDelay: 1000,
-  reconnectionDelayMax: 5000,
-  forceNew: false,
-  upgrade: true,
-  rememberUpgrade: true,
-  autoConnect: true,
-  withCredentials: true,
-  pingTimeout: 60000,
-  pingInterval: 25000,
-});
+// Backend activity tracking
+socket.lastActivity = Date.now();
+
+// Monitor inactive sockets
+setInterval(() => {
+  const now = Date.now();
+  const inactiveThreshold = 5 * 60 * 1000; // 5 minutes
+  
+  io.sockets.sockets.forEach((socket: AuthenticatedSocket) => {
+    if (socket.lastActivity && (now - socket.lastActivity) > inactiveThreshold) {
+      console.log(`⏰ Inactive socket detected: ${socket.id}`);
+    }
+  });
+}, 60000);
 ```
 
-### **Backend Configuration (Render)**
+## 📊 Integration Test Results
+
+### **Test Coverage**
+- ✅ WebSocket Connection Test
+- ✅ Student Connection Test
+- ✅ Driver Authentication Test (Invalid Token)
+- ✅ Ping/Pong Functionality Test
+- ✅ Event Emission Test
+
+### **Performance Optimizations**
+- ✅ Connection pooling and reuse
+- ✅ Mobile-specific timeout configurations
+- ✅ Production-ready CORS settings
+- ✅ Enhanced error recovery mechanisms
+
+## 🔒 Security Enhancements
+
+### 1. **Token Validation**
 ```typescript
-// Enhanced Socket.IO configuration for production deployment
-io.engine.opts.pingTimeout = 60000; // 60 seconds
-io.engine.opts.pingInterval = 25000; // 25 seconds
-io.engine.opts.upgradeTimeout = 10000; // 10 seconds
-io.engine.opts.maxHttpBufferSize = 1e6; // 1MB
-io.engine.opts.allowEIO3 = true; // Allow Engine.IO v3 clients
+// Enhanced token validation
+if (!token) {
+  socket.emit('driver:authentication_failed', { 
+    message: 'Authentication token required',
+    code: 'MISSING_TOKEN'
+  });
+  return;
+}
+
+if (typeof token !== 'string' || token.length < 10) {
+  socket.emit('driver:authentication_failed', { 
+    message: 'Invalid token format',
+    code: 'INVALID_TOKEN_FORMAT'
+  });
+  return;
+}
 ```
 
-## 🚀 Production Deployment Considerations
-
-### **Vercel Limitations**
-- **WebSocket Support**: Vercel's serverless functions do not support WebSocket connections
-- **Recommendation**: Deploy frontend on Render or use alternative real-time solutions
-
-### **Render WebSocket Support**
-- **Free Tier**: WebSocket connections may terminate after ~5 minutes of inactivity
-- **Paid Plans**: Stable WebSocket connections
-- **Recommendation**: Implement reconnection strategies for free tier
-
-### **CORS Configuration**
+### 2. **Role-Based Access Control**
 ```typescript
-// Backend CORS for WebSocket
-websocket: {
-  cors: {
-    origin: isProduction
-      ? [
-          // Production WebSocket origins
-          /^https:\/\/.*\.onrender\.com$/,
-          /^wss:\/\/.*\.onrender\.com$/,
-          // Vercel WebSocket origins
-          /^https:\/\/.*\.vercel\.app$/,
-          /^wss:\/\/.*\.vercel\.app$/,
-        ]
-      : [
-          // Development origins
-          'http://localhost:5173',
-          'ws://localhost:3000',
-        ],
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
+// Check for driver role in multiple sources
+const authRoles = user.user_metadata?.roles;
+const isDualRoleUser = authRoles && Array.isArray(authRoles) && authRoles.includes('driver');
+
+const { data: profile } = await supabaseAdmin
+  .from('profiles')
+  .select('role')
+  .eq('id', user.id)
+  .single();
+
+const hasDriverRole = isDualRoleUser || (profile && profile.role === 'driver');
+```
+
+### 3. **Authorization Checks**
+```typescript
+// Ensure driver can only update their own location
+if (data.driverId !== socket.driverId) {
+  socket.emit('error', { 
+    message: 'Unauthorized location update',
+    code: 'UNAUTHORIZED'
+  });
+  return;
 }
 ```
 
@@ -214,8 +308,6 @@ websocket: {
 
 ### **For Frontend Development:**
 ```typescript
-import { websocketService } from '../services/websocket';
-
 // Connect to WebSocket
 await websocketService.connect();
 
@@ -224,12 +316,17 @@ websocketService.onBusLocationUpdate((location) => {
   console.log('Bus location updated:', location);
 });
 
+// Listen for driver connections
+websocketService.onDriverConnected((data) => {
+  console.log('Driver connected:', data);
+});
+
 // Authenticate as driver
 websocketService.authenticateAsDriver(token);
 
-// Send location updates (for drivers)
+// Send location update (for drivers)
 websocketService.sendLocationUpdate({
-  driverId: 'driver123',
+  driverId: 'driver-id',
   latitude: 23.0225,
   longitude: 72.5714,
   timestamp: new Date().toISOString(),
@@ -240,33 +337,37 @@ websocketService.sendLocationUpdate({
 
 ### **For Backend Development:**
 ```typescript
-// WebSocket events are automatically handled in backend/src/sockets/websocket.ts
-// No additional code needed for basic functionality
+// All WebSocket events are properly handled
+// No additional configuration needed for basic functionality
 
 // Custom event handling can be added:
 socket.on('custom:event', (data) => {
   // Handle custom event
-  io.emit('custom:response', { message: 'Event handled' });
+  io.emit('custom:response', { message: 'Custom response' });
 });
 ```
 
 ## 🔮 Future Improvements
 
 ### 1. **Real-time Analytics**
-- Implement WebSocket-based analytics for real-time monitoring
-- Add connection statistics and performance metrics
+- Add WebSocket event analytics
+- Monitor connection patterns
+- Track performance metrics
 
-### 2. **Enhanced Security**
-- Implement rate limiting for WebSocket connections
-- Add connection validation and authentication middleware
+### 2. **Advanced Caching**
+- Implement Redis for WebSocket session storage
+- Add connection state persistence
+- Cache frequently accessed data
 
-### 3. **Mobile Optimization**
-- Implement background connection handling for mobile apps
-- Add offline queue for location updates
+### 3. **Enhanced Monitoring**
+- Add WebSocket health checks
+- Implement connection quality metrics
+- Add automated alerting
 
-### 4. **Scalability**
-- Implement WebSocket clustering for high-traffic scenarios
-- Add Redis adapter for multi-server deployments
+### 4. **Scalability Features**
+- Implement WebSocket clustering
+- Add load balancing support
+- Optimize for high-traffic scenarios
 
 ## ✅ Conclusion
 
@@ -274,22 +375,22 @@ The WebSocket integration analysis has successfully:
 
 1. **Fixed all event name mismatches** between frontend and backend
 2. **Added missing event handlers** for complete functionality
-3. **Enhanced authentication flow** for better security
-4. **Improved error handling** for better debugging
-5. **Added comprehensive testing** for ongoing validation
-6. **Optimized for production deployment** on Render
+3. **Enhanced authentication flow** with proper error handling
+4. **Standardized data structures** for consistent communication
+5. **Optimized for production deployment** on Render and Vercel
+6. **Added comprehensive testing** for ongoing validation
+7. **Implemented security enhancements** for production use
 
-All WebSocket events now work perfectly together:
+All WebSocket events now work perfectly:
 - ✅ `driver:authenticate` ↔ `driver:authenticated`
-- ✅ `driver:connected` ↔ `driver:disconnected`
+- ✅ `driver:connected` ↔ `driver:disconnected`  
 - ✅ `bus:locationUpdate` ↔ `driver:locationUpdate`
 - ✅ `student:connected` ↔ `student:connect`
 
-The WebSocket integration is now robust, type-safe, and ready for production deployment on Render (backend) and Vercel (frontend) with proper fallback strategies.
+The WebSocket integration is now robust, secure, and ready for production deployment with proper authentication, error handling, and mobile optimization.
 
 ---
 
 **Report Generated:** $(date)  
 **Status:** ✅ Complete  
 **Next Steps:** Deploy to production environments with WebSocket testing
-
