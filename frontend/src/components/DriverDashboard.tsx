@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { supabase } from '../config/supabase';
 import { websocketService } from '../services/websocket';
+import { authService } from '../services/authService';
 import { environment } from '../config/environment';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -52,19 +53,6 @@ const DriverDashboard: React.FC = () => {
   useEffect(() => {
     const initializeDriverData = async () => {
       try {
-        // Try to get bus info from localStorage first
-        const savedBusInfo = localStorage.getItem('driverBusInfo');
-        if (savedBusInfo) {
-          try {
-            const parsedBusInfo = JSON.parse(savedBusInfo);
-            console.log('✅ Driver Dashboard: Found saved bus info in localStorage:', parsedBusInfo);
-            setBusInfo(parsedBusInfo);
-            setIsAuthenticated(true);
-          } catch (error) {
-            console.error('❌ Error parsing saved bus info:', error);
-          }
-        }
-        
         // Get current user session
         const {
           data: { session },
@@ -72,6 +60,26 @@ const DriverDashboard: React.FC = () => {
 
         if (session?.user) {
           console.log('🔌 Driver Dashboard: Initializing...');
+
+          // Validate driver session using auth service
+          const { isValid, assignment } = await authService.validateDriverSession();
+          
+          if (isValid && assignment) {
+            console.log('✅ Driver Dashboard: Valid session found with assignment:', assignment);
+            setBusInfo({
+              bus_id: assignment.bus_id,
+              bus_number: assignment.bus_number,
+              route_id: assignment.route_id,
+              route_name: assignment.route_name,
+              driver_id: assignment.driver_id,
+              driver_name: assignment.driver_name,
+            });
+            setIsAuthenticated(true);
+          } else {
+            console.log('❌ Driver Dashboard: Invalid session or no assignment found');
+            setSocketError('Invalid session or no bus assignment');
+            return;
+          }
 
           // Connect to WebSocket only if not already connected
           if (!websocketService.isConnected()) {
@@ -130,33 +138,13 @@ const DriverDashboard: React.FC = () => {
           // Store socket reference
           socketRef.current = websocketService.socket;
 
-          // Check if we already have bus info from localStorage
-          const savedBusInfo = localStorage.getItem('driverBusInfo');
-          const savedDriverId = localStorage.getItem('driverId');
-          const savedBusId = localStorage.getItem('busId');
-          
-          if (savedBusInfo && savedDriverId && savedBusId) {
-            console.log('✅ Driver Dashboard: Found saved authentication data, skipping re-authentication');
-            try {
-              const parsedBusInfo = JSON.parse(savedBusInfo);
-              setBusInfo(parsedBusInfo);
-              setIsAuthenticated(true);
-              
-              // Emit driver:connected event to notify the server
-              websocketService.socket?.emit('driver:connected', {
-                driverId: savedDriverId,
-                busId: savedBusId,
-                timestamp: new Date().toISOString()
-              });
-            } catch (error) {
-              console.error('❌ Error parsing saved bus info:', error);
-              // If parsing fails, authenticate again
-              console.log('🔐 Driver Dashboard: Authenticating with server...');
-              websocketService.authenticateAsDriver(session.access_token);
-            }
-          } else {
-            console.log('🔐 Driver Dashboard: No saved authentication data, authenticating with server...');
-            websocketService.authenticateAsDriver(session.access_token);
+          // Emit driver:connected event to notify the server
+          if (assignment) {
+            websocketService.socket?.emit('driver:connected', {
+              driverId: assignment.driver_id,
+              busId: assignment.bus_id,
+              timestamp: new Date().toISOString()
+            });
           }
 
           // Fallback: Fetch bus information from API if WebSocket fails

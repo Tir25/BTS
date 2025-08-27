@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../config/supabase';
 import { websocketService } from '../services/websocket';
+import { authService } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
 import { useTransition } from './transitions';
 
@@ -126,24 +127,41 @@ const DriverLogin: React.FC = () => {
       });
 
       // Set up authentication response handler
-      const handleAuthenticationSuccess = (data: { driverId: string; busId: string; busInfo: BusInfo }) => {
+      const handleAuthenticationSuccess = async (data: { driverId: string; busId: string; busInfo: BusInfo }) => {
         console.log('✅ Driver: Authentication successful:', data);
         
-        // Store bus info in localStorage for DriverDashboard to use
-        localStorage.setItem('driverBusInfo', JSON.stringify(data.busInfo));
-        localStorage.setItem('driverId', data.driverId);
-        localStorage.setItem('busId', data.busId);
-        
-        setIsAuthenticated(true);
-        setBusInfo(data.busInfo);
-        // Set transition type for login to dashboard
-        setTransition('login-to-dashboard');
-        
-        // Navigate to driver dashboard after successful authentication
-        setTimeout(() => {
-          console.log('🚀 Driver: Navigating to dashboard...');
-          navigate('/driver-dashboard');
-        }, 1000);
+        try {
+          // Store driver-bus assignment in database instead of localStorage
+          const assignment = {
+            driver_id: data.driverId,
+            bus_id: data.busId,
+            bus_number: data.busInfo.bus_number,
+            route_id: data.busInfo.route_id,
+            route_name: data.busInfo.route_name,
+            driver_name: data.busInfo.driver_name,
+          };
+          
+          const stored = await authService.storeDriverBusAssignment(assignment);
+          if (!stored) {
+            console.error('❌ Failed to store driver assignment in database');
+            setLoginError('Failed to store authentication data');
+            return;
+          }
+          
+          setIsAuthenticated(true);
+          setBusInfo(data.busInfo);
+          // Set transition type for login to dashboard
+          setTransition('login-to-dashboard');
+          
+          // Navigate to driver dashboard after successful authentication
+          setTimeout(() => {
+            console.log('🚀 Driver: Navigating to dashboard...');
+            navigate('/driver-dashboard');
+          }, 1000);
+        } catch (error) {
+          console.error('❌ Error storing authentication data:', error);
+          setLoginError('Failed to complete authentication');
+        }
       };
 
       const handleAuthenticationFailed = (error: any) => {

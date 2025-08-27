@@ -9,10 +9,22 @@ export interface AuthState {
   loading: boolean;
 }
 
+export interface DriverBusAssignment {
+  driver_id: string;
+  bus_id: string;
+  bus_number: string;
+  route_id: string;
+  route_name: string;
+  driver_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 class AuthService {
   private currentUser: User | null = null;
   private currentSession: Session | null = null;
   private currentProfile: UserProfile | null = null;
+  private currentDriverAssignment: DriverBusAssignment | null = null;
   private authStateChangeListener: (() => void) | null = null;
   private _isInitialized: boolean = false;
 
@@ -734,6 +746,221 @@ class AuthService {
     } catch (error) {
       console.error('❌ Error recovering session:', error);
       return { success: false, error: 'Failed to recover session' };
+    }
+  }
+
+  // New methods for proper authentication state management
+
+  /**
+   * Get driver-bus assignment from database
+   */
+  async getDriverBusAssignment(driverId: string): Promise<DriverBusAssignment | null> {
+    try {
+      const { data, error } = await supabase
+        .from('driver_bus_assignments')
+        .select(`
+          driver_id,
+          bus_id,
+          buses!inner(
+            number_plate,
+            route_id
+          ),
+          routes!inner(
+            name
+          ),
+          profiles!inner(
+            full_name
+          )
+        `)
+        .eq('driver_id', driverId)
+        .eq('is_active', true)
+        .single();
+
+      if (error) {
+        console.error('❌ Error fetching driver bus assignment:', error);
+        return null;
+      }
+
+      return {
+        driver_id: data.driver_id,
+        bus_id: data.bus_id,
+        bus_number: data.buses.number_plate,
+        route_id: data.buses.route_id,
+        route_name: data.routes.name,
+        driver_name: data.profiles.full_name,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      };
+    } catch (error) {
+      console.error('❌ Error in getDriverBusAssignment:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Store driver-bus assignment in database
+   */
+  async storeDriverBusAssignment(assignment: Omit<DriverBusAssignment, 'created_at' | 'updated_at'>): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('driver_bus_assignments')
+        .upsert({
+          driver_id: assignment.driver_id,
+          bus_id: assignment.bus_id,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) {
+        console.error('❌ Error storing driver bus assignment:', error);
+        return false;
+      }
+
+      this.currentDriverAssignment = assignment as DriverBusAssignment;
+      return true;
+    } catch (error) {
+      console.error('❌ Error in storeDriverBusAssignment:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clear driver-bus assignment from database
+   */
+  async clearDriverBusAssignment(driverId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('driver_bus_assignments')
+        .update({ 
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('driver_id', driverId);
+
+      if (error) {
+        console.error('❌ Error clearing driver bus assignment:', error);
+        return false;
+      }
+
+      this.currentDriverAssignment = null;
+      return true;
+    } catch (error) {
+      console.error('❌ Error in clearDriverBusAssignment:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get current driver assignment from memory (cached)
+   */
+  getCurrentDriverAssignment(): DriverBusAssignment | null {
+    return this.currentDriverAssignment;
+  }
+
+  /**
+   * Validate session and refresh if needed
+   */
+  async validateSession(): Promise<boolean> {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('❌ Session validation error:', error);
+        return false;
+      }
+
+      if (!session) {
+        console.log('❌ No active session found');
+        return false;
+      }
+
+      // Check if session is expired or about to expire
+      const expiresAt = new Date(session.expires_at! * 1000);
+      const now = new Date();
+      const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+      
+      // If session expires in less than 5 minutes, refresh it
+      if (timeUntilExpiry < 5 * 60 * 1000) {
+        console.log('🔄 Session expiring soon, refreshing...');
+        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError) {
+          console.error('❌ Session refresh error:', refreshError);
+          return false;
+        }
+        
+        if (refreshedSession) {
+          this.currentSession = refreshedSession;
+          this.currentUser = refreshedSession.user;
+          console.log('✅ Session refreshed successfully');
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Error validating session:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if user has valid driver session
+   */
+  async validateDriverSession(): Promise<{ isValid: boolean; assignment: DriverBusAssignment | null }> {
+    try {
+      // First validate the session
+      const isSessionValid = await this.validateSession();
+      if (!isSessionValid) {
+        return { isValid: false, assignment: null };
+      }
+
+      // Check if user is a driver
+      if (this.currentProfile?.role !== 'driver') {
+        console.log('❌ User is not a driver');
+        return { isValid: false, assignment: null };
+      }
+
+      // Get driver assignment from database
+      const assignment = await this.getDriverBusAssignment(this.currentUser!.id);
+      if (!assignment) {
+        console.log('❌ No active bus assignment found for driver');
+        return { isValid: false, assignment: null };
+      }
+
+      this.currentDriverAssignment = assignment;
+      return { isValid: true, assignment };
+    } catch (error) {
+      console.error('❌ Error validating driver session:', error);
+      return { isValid: false, assignment: null };
+    }
+  }
+
+  /**
+   * Logout and clear all session data
+   */
+  async logout(): Promise<void> {
+    try {
+      // Clear driver assignment if exists
+      if (this.currentUser && this.currentProfile?.role === 'driver') {
+        await this.clearDriverBusAssignment(this.currentUser.id);
+      }
+
+      // Clear current state
+      this.currentUser = null;
+      this.currentSession = null;
+      this.currentProfile = null;
+      this.currentDriverAssignment = null;
+
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('❌ Error signing out:', error);
+      } else {
+        console.log('✅ Logged out successfully');
+      }
+    } catch (error) {
+      console.error('❌ Error in logout:', error);
     }
   }
 }
