@@ -1,5 +1,4 @@
 import pool, {
-  initializeDatabaseConnection,
   checkDatabaseHealth,
 } from '../config/database';
 
@@ -9,7 +8,7 @@ export const initializeDatabase = async (): Promise<void> => {
     console.log('🔄 Initializing database schema...');
 
     // First, ensure database connection is established
-    await initializeDatabaseConnection();
+    await checkDatabaseHealth();
 
     // Enable PostGIS extension
     try {
@@ -199,15 +198,9 @@ export const testDatabaseConnection = async (): Promise<void> => {
 
     if (health.healthy) {
       // Database connection test successful
-      console.log('📅 Current time:', health.details.currentTime);
-      console.log('🗺️ PostgreSQL version:', health.details.postgresVersion);
-      console.log('📊 Pool status:', {
-        total: health.details.poolSize,
-        idle: health.details.idleCount,
-        waiting: health.details.waitingCount,
-      });
+      console.log('✅ Database connection test successful');
     } else {
-      const errorMessage = health.details.error;
+      const errorMessage = health.error;
       throw new Error(
         typeof errorMessage === 'string'
           ? errorMessage

@@ -14,6 +14,7 @@ const buses_1 = __importDefault(require("./routes/buses"));
 const routes_1 = __importDefault(require("./routes/routes"));
 const admin_1 = __importDefault(require("./routes/admin"));
 const storage_1 = __importDefault(require("./routes/storage"));
+const locations_1 = __importDefault(require("./routes/locations"));
 const database_1 = require("./models/database");
 const database_2 = require("./config/database");
 const environment_1 = require("./config/environment");
@@ -35,6 +36,7 @@ app.use('/admin', admin_1.default);
 app.use('/buses', buses_1.default);
 app.use('/routes', routes_1.default);
 app.use('/storage', storage_1.default);
+app.use('/locations', locations_1.default);
 app.get('/', (req, res) => {
     res.json({
         message: 'University Bus Tracking System API',
@@ -49,6 +51,7 @@ app.get('/', (req, res) => {
             buses: '/buses',
             routes: '/routes',
             storage: '/storage',
+            locations: '/locations',
         },
     });
 });
@@ -64,6 +67,7 @@ app.use('*', (req, res) => {
             '/routes',
             '/admin',
             '/storage',
+            '/locations',
         ],
     });
 });
@@ -109,7 +113,7 @@ const gracefulShutdown = async (signal) => {
     try {
         io.close();
         console.log('✅ WebSocket connections closed');
-        await (0, database_2.closeDatabaseConnection)();
+        await (0, database_2.closeDatabasePool)();
         console.log('✅ Database connections closed');
         process.exit(0);
     }

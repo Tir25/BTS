@@ -38,7 +38,7 @@ const database_1 = __importStar(require("../config/database"));
 const initializeDatabase = async () => {
     try {
         console.log('🔄 Initializing database schema...');
-        await (0, database_1.initializeDatabaseConnection)();
+        await (0, database_1.checkDatabaseHealth)();
         try {
             await database_1.default.query('CREATE EXTENSION IF NOT EXISTS postgis;');
             console.log('✅ PostGIS extension enabled');
@@ -195,16 +195,10 @@ const testDatabaseConnection = async () => {
     try {
         const health = await (0, database_1.checkDatabaseHealth)();
         if (health.healthy) {
-            console.log('📅 Current time:', health.details.currentTime);
-            console.log('🗺️ PostgreSQL version:', health.details.postgresVersion);
-            console.log('📊 Pool status:', {
-                total: health.details.poolSize,
-                idle: health.details.idleCount,
-                waiting: health.details.waitingCount,
-            });
+            console.log('✅ Database connection test successful');
         }
         else {
-            const errorMessage = health.details.error;
+            const errorMessage = health.error;
             throw new Error(typeof errorMessage === 'string'
                 ? errorMessage
                 : 'Database health check failed');

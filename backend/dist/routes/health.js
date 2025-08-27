@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
                     status: dbHealth.healthy ? 'healthy' : 'unhealthy',
                     details: {
                         status: dbHealth.healthy ? 'connected' : 'disconnected',
-                        details: dbHealth.details,
+                        error: dbHealth.error,
                     },
                 },
                 api: {
