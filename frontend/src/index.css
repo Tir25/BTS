@@ -52,7 +52,7 @@
     /* Optimize text rendering */
     * {
       -webkit-font-smoothing: antialiased;
-      font-smooth: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     
     /* Reduce motion for better performance */
