@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../config/supabase';
 import { websocketService } from '../services/websocket';
 import { authService } from '../services/authService';
@@ -27,6 +28,7 @@ interface LocationData {
 }
 
 const DriverDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [isTracking, setIsTracking] = useState(false);
   const [busInfo, setBusInfo] = useState<BusInfo | null>(null);
   const [currentLocation, setCurrentLocation] =
@@ -53,16 +55,22 @@ const DriverDashboard: React.FC = () => {
   useEffect(() => {
     const initializeDriverData = async () => {
       try {
+        console.log('🚀 Driver Dashboard: Component mounted, starting initialization...');
+        
         // Get current user session
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
+        console.log('🔑 Session check:', session ? 'Found' : 'Not found', session?.user?.email);
+
         if (session?.user) {
           console.log('🔌 Driver Dashboard: Initializing...');
 
           // Validate driver session using auth service
+          console.log('🔍 Validating driver session...');
           const { isValid, assignment } = await authService.validateDriverSession();
+          console.log('🔍 Validation result:', { isValid, assignment: assignment ? 'Found' : 'Not found' });
           
           if (isValid && assignment) {
             console.log('✅ Driver Dashboard: Valid session found with assignment:', assignment);
@@ -75,6 +83,7 @@ const DriverDashboard: React.FC = () => {
               driver_name: assignment.driver_name,
             });
             setIsAuthenticated(true);
+            console.log('✅ Bus info and authentication state set');
           } else {
             console.log('❌ Driver Dashboard: Invalid session or no assignment found');
             setSocketError('Invalid session or no bus assignment');
@@ -165,7 +174,7 @@ const DriverDashboard: React.FC = () => {
         } else {
           console.log('❌ Driver Dashboard: No session found, redirecting to login');
           // Redirect to login if no session
-          window.location.href = '/driver-login';
+          navigate('/driver-login');
         }
       } catch (error) {
         console.error('❌ Driver Dashboard: Initialization error:', error);

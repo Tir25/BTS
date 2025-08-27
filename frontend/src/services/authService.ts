@@ -756,40 +756,65 @@ class AuthService {
    */
   async getDriverBusAssignment(driverId: string): Promise<DriverBusAssignment | null> {
     try {
-      const { data, error } = await supabase
-        .from('driver_bus_assignments')
-        .select(`
-          driver_id,
-          bus_id,
-          buses!inner(
-            number_plate,
-            route_id
-          ),
-          routes!inner(
-            name
-          ),
-          profiles!inner(
-            full_name
-          )
-        `)
-        .eq('driver_id', driverId)
+      // Get bus assignment directly from buses table (matching backend logic)
+      const { data: busData, error: busError } = await supabase
+        .from('buses')
+        .select('id, number_plate, route_id')
+        .eq('assigned_driver_id', driverId)
         .eq('is_active', true)
         .single();
 
-      if (error) {
-        console.error('❌ Error fetching driver bus assignment:', error);
+      if (busError || !busData) {
+        console.error('❌ Error fetching bus assignment:', busError);
         return null;
       }
 
+      // Get route information
+      let routeName = '';
+      if (busData.route_id) {
+        const { data: routeData, error: routeError } = await supabase
+          .from('routes')
+          .select('name')
+          .eq('id', busData.route_id)
+          .single();
+
+        if (!routeError && routeData) {
+          routeName = routeData.name;
+        }
+      }
+
+      // Get driver name from profiles
+      let driverName = 'Unknown Driver';
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', driverId)
+        .single();
+
+      if (!profileError && profileData?.full_name) {
+        driverName = profileData.full_name;
+      } else {
+        // Fallback to users table
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('first_name, last_name')
+          .eq('id', driverId)
+          .single();
+
+        if (!userError && userData) {
+          driverName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || 'Unknown Driver';
+        }
+      }
+
       return {
-        driver_id: data.driver_id,
-        bus_id: data.bus_id,
-        bus_number: data.buses.number_plate,
-        route_id: data.buses.route_id,
-        route_name: data.routes.name,
-        driver_name: data.profiles.full_name,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
+        driver_id: driverId,
+        bus_id: busData.id,
+        bus_number: busData.number_plate,
+        route_id: busData.route_id || '',
+        route_name: routeName,
+        driver_name: driverName,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
     } catch (error) {
       console.error('❌ Error in getDriverBusAssignment:', error);
@@ -802,22 +827,15 @@ class AuthService {
    */
   async storeDriverBusAssignment(assignment: Omit<DriverBusAssignment, 'created_at' | 'updated_at'>): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('driver_bus_assignments')
-        .upsert({
-          driver_id: assignment.driver_id,
-          bus_id: assignment.bus_id,
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-
-      if (error) {
-        console.error('❌ Error storing driver bus assignment:', error);
-        return false;
-      }
-
-      this.currentDriverAssignment = assignment as DriverBusAssignment;
+      // Since the backend already has the assignment in the buses table,
+      // we just need to store the assignment in memory for the frontend
+      this.currentDriverAssignment = {
+        ...assignment,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      console.log('✅ Driver bus assignment stored in memory successfully');
       return true;
     } catch (error) {
       console.error('❌ Error in storeDriverBusAssignment:', error);
@@ -830,20 +848,9 @@ class AuthService {
    */
   async clearDriverBusAssignment(driverId: string): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('driver_bus_assignments')
-        .update({ 
-          is_active: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq('driver_id', driverId);
-
-      if (error) {
-        console.error('❌ Error clearing driver bus assignment:', error);
-        return false;
-      }
-
+      // Just clear from memory since the backend handles the actual assignment
       this.currentDriverAssignment = null;
+      console.log('✅ Driver bus assignment cleared from memory');
       return true;
     } catch (error) {
       console.error('❌ Error in clearDriverBusAssignment:', error);

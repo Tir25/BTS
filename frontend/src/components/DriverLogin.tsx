@@ -141,23 +141,28 @@ const DriverLogin: React.FC = () => {
             driver_name: data.busInfo.driver_name,
           };
           
+          console.log('💾 Storing driver assignment:', assignment);
           const stored = await authService.storeDriverBusAssignment(assignment);
+          console.log('💾 Assignment stored result:', stored);
+          
           if (!stored) {
             console.error('❌ Failed to store driver assignment in database');
             setLoginError('Failed to store authentication data');
             return;
           }
           
+          console.log('✅ Setting authentication state...');
           setIsAuthenticated(true);
           setBusInfo(data.busInfo);
+          
           // Set transition type for login to dashboard
           setTransition('login-to-dashboard');
           
           // Navigate to driver dashboard after successful authentication
-          setTimeout(() => {
-            console.log('🚀 Driver: Navigating to dashboard...');
-            navigate('/driver-dashboard');
-          }, 1000);
+          console.log('🚀 Driver: Navigating to dashboard immediately...');
+          navigate('/driver-dashboard');
+          
+          console.log('✅ Navigation initiated successfully');
         } catch (error) {
           console.error('❌ Error storing authentication data:', error);
           setLoginError('Failed to complete authentication');
