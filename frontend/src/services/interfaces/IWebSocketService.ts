@@ -1,25 +1,10 @@
-export interface BusLocation {
-  busId: string;
-  driverId: string;
-  latitude: number;
-  longitude: number;
-  timestamp: string;
-  speed?: number;
-  heading?: number;
-  eta?: {
-    bus_id: string;
-    route_id: string;
-    current_location: [number, number];
-    next_stop: string;
-    distance_remaining: number;
-    estimated_arrival_minutes: number;
-    is_near_stop: boolean;
-  };
-  nearStop?: {
-    is_near_stop: boolean;
-    distance_to_stop: number;
-  };
-}
+import { 
+  BusLocation, 
+  WebSocketStats, 
+  DriverConnectionData, 
+  BusArrivingData, 
+  StudentConnectionData 
+} from '../../types';
 
 export interface IWebSocketService {
   connect(backendUrl?: string): Promise<void>;
@@ -27,17 +12,12 @@ export interface IWebSocketService {
   isConnected(): boolean;
   getConnectionStatus(): boolean;
   getConnectionState(): 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
-  getConnectionStats(): {
-    isConnected: boolean;
-    connectionState: string;
-    reconnectAttempts: number;
-    maxReconnectAttempts: number;
-  };
+  getConnectionStats(): WebSocketStats;
   onBusLocationUpdate(callback: (location: BusLocation) => void): void;
-  onDriverConnected(callback: (data: any) => void): void;
-  onDriverDisconnected(callback: (data: any) => void): void;
-  onStudentConnected(callback: (data: { timestamp: string }) => void): void;
-  onBusArriving(callback: (data: any) => void): void;
+  onDriverConnected(callback: (data: DriverConnectionData) => void): void;
+  onDriverDisconnected(callback: (data: DriverConnectionData) => void): void;
+  onStudentConnected(callback: (data: StudentConnectionData) => void): void;
+  onBusArriving(callback: (data: BusArrivingData) => void): void;
   authenticateAsDriver(token: string): void;
   off(event: string): void;
 }

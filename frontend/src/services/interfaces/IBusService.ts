@@ -1,13 +1,4 @@
-import { BusLocation } from './IWebSocketService';
-
-export interface BusInfo {
-  busId: string;
-  busNumber: string;
-  routeName: string;
-  driverName: string;
-  currentLocation: BusLocation;
-  eta?: number;
-}
+import { BusLocation, BusInfo } from '../../types';
 
 export interface IBusService {
   updateBusLocation(location: BusLocation): void;

@@ -1,5 +1,5 @@
-import { BusLocation } from './interfaces/IWebSocketService';
-import { IBusService, BusInfo } from './interfaces/IBusService';
+import { BusLocation, BusInfo } from '../types';
+import { IBusService } from './interfaces/IBusService';
 
 interface BusData {
   [busId: string]: BusInfo;
@@ -100,146 +100,134 @@ class BusService implements IBusService {
     };
   }
 
+  // Get bus information by ID
+  getBus(busId: string): BusInfo | null {
+    return this.buses[busId] || null;
+  }
+
   // Get all buses
   getAllBuses(): BusInfo[] {
     return Object.values(this.buses);
   }
 
-  // Update bus information from API data
-  updateBusInfo(busId: string, busInfo: Partial<BusInfo>): void {
-    if (this.buses[busId]) {
-      this.buses[busId] = {
-        ...this.buses[busId],
-        ...busInfo,
-      };
-    }
-  }
-
-  // Sync bus information from API data (for new buses)
-  syncBusFromAPI(
-    busId: string,
-    apiBusData: {
-      number_plate?: string;
-      bus_number?: string;
-      route_name?: string;
-      route_city?: string;
-      routes?: { name: string };
-      driver_name?: string;
-      driver?: { first_name?: string; last_name?: string };
-    }
-  ): void {
-    // Handle both frontend and backend data structures
-    const busNumber =
-      apiBusData.bus_number || apiBusData.number_plate || `Bus ${busId}`;
-    const routeName =
-      apiBusData.route_name || apiBusData.routes?.name || 'Route TBD';
-    const driverName =
-      apiBusData.driver_name ||
-      (apiBusData.driver
-        ? `${apiBusData.driver.first_name || ''} ${apiBusData.driver.last_name || ''}`.trim()
-        : 'Driver TBD');
-
-    if (this.buses[busId]) {
-      // Update existing bus with real data from API
-      this.buses[busId] = {
-        ...this.buses[busId],
-        busNumber,
-        routeName,
-        driverName,
-      };
-    } else {
-      // Create new bus entry with API data
-      this.buses[busId] = {
-        busId,
-        busNumber,
-        routeName,
-        driverName,
-        currentLocation: {
-          busId,
-          driverId: '',
-          latitude: 0,
-          longitude: 0,
-          timestamp: new Date().toISOString(),
-          speed: 0,
-        },
-        eta: undefined,
-      };
-    }
-
-    console.log(
-      `🔄 Synced bus ${busId}: ${busNumber} - ${routeName} - ${driverName}`
+  // Get buses by route name
+  getBusesByRoute(routeName: string): BusInfo[] {
+    return Object.values(this.buses).filter(
+      (bus) => bus.routeName === routeName
     );
   }
 
-  // Clear all buses (useful for resetting)
+  // Sync bus data from API
+  syncBusFromAPI(busId: string, apiData: any): void {
+    if (this.buses[busId]) {
+      // Update existing bus with API data
+      this.buses[busId] = {
+        ...this.buses[busId],
+        busNumber: apiData.bus_number || apiData.number_plate || `Bus ${busId}`,
+        routeName: apiData.route_name || 'Route TBD',
+        driverName: apiData.driver_name || apiData.driver_full_name || 'Driver TBD',
+      };
+    } else {
+      // Create new bus from API data
+      this.buses[busId] = {
+        busId,
+        busNumber: apiData.bus_number || apiData.number_plate || `Bus ${busId}`,
+        routeName: apiData.route_name || 'Route TBD',
+        driverName: apiData.driver_name || apiData.driver_full_name || 'Driver TBD',
+        currentLocation: {
+          busId,
+          driverId: apiData.driver_id || '',
+          latitude: 0,
+          longitude: 0,
+          timestamp: new Date().toISOString(),
+        },
+      };
+    }
+  }
+
+  // Clear all buses
   clearBuses(): void {
     this.buses = {};
     this.previousLocations = {};
   }
 
-  // Get specific bus
-  getBus(busId: string): BusInfo | null {
-    return this.buses[busId] || null;
+  // Get bus statistics
+  getBusStats(): {
+    totalBuses: number;
+    activeBuses: number;
+    busesByRoute: { [routeName: string]: number };
+  } {
+    const buses = Object.values(this.buses);
+    const busesByRoute: { [routeName: string]: number } = {};
+
+    buses.forEach((bus) => {
+      const routeName = bus.routeName;
+      busesByRoute[routeName] = (busesByRoute[routeName] || 0) + 1;
+    });
+
+    return {
+      totalBuses: buses.length,
+      activeBuses: buses.filter((bus) => bus.currentLocation).length,
+      busesByRoute,
+    };
   }
 
-  // Filter buses by route
-  getBusesByRoute(routeName: string): BusInfo[] {
-    return Object.values(this.buses).filter((bus) =>
-      bus.routeName.toLowerCase().includes(routeName.toLowerCase())
-    );
-  }
-
-  // Filter buses by proximity to a location
-  getBusesNearLocation(
-    lat: number,
-    lon: number,
-    radiusKm: number = 5
-  ): BusInfo[] {
+  // Get buses with recent activity (within last 5 minutes)
+  getActiveBuses(): BusInfo[] {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     return Object.values(this.buses).filter((bus) => {
-      const distance = this.calculateDistance(
-        lat,
-        lon,
-        bus.currentLocation.latitude,
-        bus.currentLocation.longitude
-      );
-      return distance <= radiusKm;
+      const lastUpdate = new Date(bus.currentLocation.timestamp);
+      return lastUpdate > fiveMinutesAgo;
     });
   }
 
-  // Calculate distance between two points
-  private calculateDistance(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number
-  ): number {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = this.toRadians(lat2 - lat1);
-    const dLon = this.toRadians(lon2 - lon1);
+  // Get bus location history (simplified - in real app, this would come from API)
+  getBusLocationHistory(busId: string): BusLocation[] {
+    // This is a simplified implementation
+    // In a real application, this would fetch from the backend API
+    const bus = this.buses[busId];
+    if (!bus) return [];
 
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRadians(lat1)) *
-        Math.cos(this.toRadians(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    return [bus.currentLocation];
   }
 
-  // Remove bus (when driver disconnects)
-  removeBus(busId: string): void {
-    delete this.buses[busId];
-    delete this.previousLocations[busId];
+  // Update bus ETA
+  updateBusETA(busId: string, eta: number): void {
+    if (this.buses[busId]) {
+      this.buses[busId].eta = eta;
+    }
   }
 
-  // Get buses count
-  getBusesCount(): number {
-    return Object.keys(this.buses).length;
+  // Get buses near a specific location
+  getBusesNearLocation(
+    latitude: number,
+    longitude: number,
+    radiusKm: number = 5
+  ): BusInfo[] {
+    return Object.values(this.buses).filter((bus) => {
+      const busLat = bus.currentLocation.latitude;
+      const busLng = bus.currentLocation.longitude;
+
+      // Calculate distance using Haversine formula
+      const R = 6371; // Earth's radius in kilometers
+      const dLat = this.toRadians(busLat - latitude);
+      const dLon = this.toRadians(busLng - longitude);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(this.toRadians(latitude)) *
+          Math.cos(this.toRadians(busLat)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c;
+
+      return distance <= radiusKm;
+    });
   }
 }
 
 // Export singleton instance
 export const busService = new BusService();
-export type { BusInfo } from './interfaces/IBusService';
+export default busService;
