@@ -5,6 +5,25 @@ import { StaggerContainer, StaggerItem } from './PageTransition';
 import GlassyCard from './ui/GlassyCard';
 import { useTransition } from './transitions';
 
+// SVG Icon Components
+const BusIcon = () => (
+  <svg className="w-12 h-12 sm:w-16 sm:h-16 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
+  </svg>
+);
+
+const MapIcon = () => (
+  <svg className="w-12 h-12 sm:w-16 sm:h-16 text-green-400" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/>
+  </svg>
+);
+
+const AdminIcon = () => (
+  <svg className="w-12 h-12 sm:w-16 sm:h-16 text-purple-400" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+  </svg>
+);
+
 const PremiumHomepage: React.FC = () => {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -131,8 +150,8 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/driver-login')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse emoji-icon">
-                    🚌
+                  <div className="mb-2 sm:mb-4 animate-pulse">
+                    <BusIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Driver Interface
@@ -169,8 +188,8 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/student-map')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse emoji-icon">
-                    🗺️
+                  <div className="mb-2 sm:mb-4 animate-pulse">
+                    <MapIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Student Map
@@ -207,8 +226,8 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/admin-login')}
               >
                 <div className="text-center px-2">
-                  <div className="text-4xl sm:text-6xl mb-2 sm:mb-4 animate-pulse emoji-icon">
-                    ⚙️
+                  <div className="mb-2 sm:mb-4 animate-pulse">
+                    <AdminIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
                     Admin Panel
