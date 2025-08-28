@@ -109,12 +109,15 @@ input[type="number"]::placeholder {
     vertical-align: middle;
     shape-rendering: geometricPrecision;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-    /* Prevent layout shifts */
-    width: 1em;
-    height: 1em;
     /* Ensure consistent rendering across browsers */
     transform: translateZ(0);
     backface-visibility: hidden;
+  }
+
+  /* Only apply default sizing to generic SVGs, not custom icons */
+  svg:not(.custom-icon):not([class*="w-"]):not([class*="h-"]) {
+    width: 1em;
+    height: 1em;
   }
 
   /* Ensure SVG icons render consistently across platforms */
@@ -144,12 +147,50 @@ input[type="number"]::placeholder {
   .icon-3xl { width: 3rem; height: 3rem; }
   .icon-4xl { width: 4rem; height: 4rem; }
 
+  /* Enhanced icon container styles for better alignment */
+  .icon-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* Prevent layout shifts */
+    contain: layout style;
+  }
+
+  /* Ensure consistent icon alignment in cards */
+  .text-center .custom-icon {
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Ensure emoji icons are properly aligned */
+  .icon-container {
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Prevent emoji from being affected by font-size changes */
+  .icon-container:has(span) {
+    font-size: inherit;
+  }
+
   /* Prevent layout shifts for custom SVG icons */
   .custom-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    /* Ensure proper sizing and alignment */
+    width: auto;
+    height: auto;
+    /* Prevent any unwanted transformations */
+    transform: none;
+    /* Ensure consistent rendering */
+    vertical-align: middle;
   }
 
   /* Global Transition Styles */

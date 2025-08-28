@@ -547,7 +547,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/driver-login')}
               >
                 <div className="text-center px-2">
-                  <div className="mb-2 sm:mb-4 animate-pulse">
+                  <div className="mb-2 sm:mb-4 animate-pulse icon-container">
                     <BusIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -585,7 +585,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/student-map')}
               >
                 <div className="text-center px-2">
-                  <div className="mb-2 sm:mb-4 animate-pulse">
+                  <div className="mb-2 sm:mb-4 animate-pulse icon-container">
                     <MapIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -623,7 +623,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/admin-login')}
               >
                 <div className="text-center px-2">
-                  <div className="mb-2 sm:mb-4 animate-pulse">
+                  <div className="mb-2 sm:mb-4 animate-pulse icon-container">
                     <AdminIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
