@@ -252,6 +252,22 @@ cp frontend/env.example frontend/env.local
    - Check Node.js version compatibility
    - Verify all dependencies are installed
    - Check for TypeScript compilation errors
+   - Fix syntax errors in code (e.g., mismatched braces)
+   - Ensure BusInfo interface has all required properties
+
+### Known Deployment Issues and Solutions
+
+1. **TypeScript Error: Property 'assigned_driver_id' does not exist on type 'BusInfo'**
+   - **Issue**: The BusInfo interface doesn't include the assigned_driver_id property used in the buses.ts route
+   - **Solution**: Update the BusInfo interface in backend/src/services/locationService.ts to include the assigned_driver_id property
+
+2. **TypeScript Error: Declaration or statement expected**
+   - **Issue**: Syntax error in frontend/src/components/DriverDashboard.tsx due to misplaced code
+   - **Solution**: Move the marker creation code inside the try block in the initializeMap function
+
+3. **WebGL Context Loss in Maps**
+   - **Issue**: MapLibre GL maps may lose WebGL context on some devices
+   - **Solution**: Add preserveDrawingBuffer: true to the map initialization options
 
 ### Support Resources
 - [Render Documentation](https://render.com/docs)

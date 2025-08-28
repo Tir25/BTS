@@ -351,25 +351,24 @@ const DriverDashboard: React.FC = () => {
       mapRef.current.on('webglcontextrestored', () => {
         console.log('✅ WebGL context restored');
       });
+
+      const markerElement = document.createElement('div');
+      markerElement.className = 'driver-marker';
+      markerElement.innerHTML = `
+        <div class="driver-marker-content">
+          <div style="font-size: 16px;">🚌</div>
+        </div>
+      `;
+
+      markerRef.current = new maplibregl.Marker({
+        element: markerElement,
+        anchor: 'center',
+      })
+        .setLngLat([longitude, latitude])
+        .addTo(mapRef.current);
     } catch (error) {
       console.error('❌ Error initializing map:', error);
     }
-  };
-
-    const markerElement = document.createElement('div');
-    markerElement.className = 'driver-marker';
-    markerElement.innerHTML = `
-      <div class="driver-marker-content">
-        <div style="font-size: 16px;">🚌</div>
-      </div>
-    `;
-
-    markerRef.current = new maplibregl.Marker({
-      element: markerElement,
-      anchor: 'center',
-    })
-      .setLngLat([longitude, latitude])
-      .addTo(mapRef.current);
   };
 
   const updateMapLocation = (latitude: number, longitude: number) => {

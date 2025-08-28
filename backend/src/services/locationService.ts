@@ -17,7 +17,7 @@ interface BusInfo {
   route_name: string;
   driver_id: string;
   driver_name: string;
-  assigned_driver_id?: string;
+  assigned_driver_id?: string; // Added for compatibility with filter
   route_city?: string;
   bus_image_url?: string | null;
 }
