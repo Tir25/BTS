@@ -387,7 +387,7 @@ class WebSocketService {
   }): void {
     if (this.socket && this.isConnected()) {
       console.log('📍 Sending location update:', locationData);
-      this.socket.emit('bus:location_update', locationData);
+      this.socket.emit('driver:locationUpdate', locationData);
     } else {
       console.error('❌ Cannot send location update - socket not connected');
     }
@@ -396,7 +396,7 @@ class WebSocketService {
   // Event listener methods
   onBusLocationUpdate(callback: (location: BusLocation) => void): void {
     this.busLocationListeners.push(callback);
-    this.socket?.on('bus:location_update', callback);
+    this.socket?.on('bus:locationUpdate', callback);
   }
 
   onDriverConnected(callback: (data: any) => void): void {

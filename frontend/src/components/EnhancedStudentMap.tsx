@@ -394,6 +394,9 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         websocketService.onBusLocationUpdate(handleBusLocationUpdate);
         websocketService.onDriverConnected(handleDriverConnected);
         websocketService.onDriverDisconnected(handleDriverDisconnected);
+        // Emit student connection event
+        websocketService.socket?.emit('student:connect');
+        
         websocketService.onStudentConnected(() => {
           console.log('✅ Student connected to WebSocket');
         });
