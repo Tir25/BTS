@@ -28,6 +28,7 @@ const io = new socket_io_1.Server(server, {
 const PORT = config.port;
 app.use((0, helmet_1.default)());
 app.use(cors_1.corsMiddleware);
+app.use(cors_1.handlePreflight);
 app.use(rateLimit_1.rateLimitMiddleware);
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true }));

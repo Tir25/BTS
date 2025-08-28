@@ -81,8 +81,8 @@ export interface DatabaseRoute {
     id: string;
     name: string;
     description?: string;
-    geom: any;
-    stops?: any;
+    geom: PostGISGeometry;
+    stops?: PostGISGeometry;
     total_distance_m?: number;
     distance_km?: number;
     estimated_duration_minutes?: number;
@@ -96,29 +96,29 @@ export interface DatabaseRoute {
     city?: string;
     custom_destination?: string;
     custom_origin?: string;
-    custom_destination_coordinates?: any;
-    custom_origin_coordinates?: any;
-    destination_coordinates?: any;
-    origin_coordinates?: any;
+    custom_destination_coordinates?: PostGISGeometry;
+    custom_origin_coordinates?: PostGISGeometry;
+    destination_coordinates?: PostGISGeometry;
+    origin_coordinates?: PostGISGeometry;
     use_custom_arrival?: boolean;
     custom_arrival_point?: string;
-    custom_arrival_coordinates?: any;
+    custom_arrival_coordinates?: PostGISGeometry;
     use_custom_starting_point?: boolean;
     custom_starting_point?: string;
-    custom_starting_coordinates?: any;
+    custom_starting_coordinates?: PostGISGeometry;
     arrival_point_type?: 'ganpat_university' | 'custom_arrival' | 'driver_location';
     starting_point_type?: 'route_origin' | 'custom_starting' | 'driver_location';
     use_custom_origin?: boolean;
     custom_origin_point?: string;
     origin_point_type?: 'driver_location' | 'custom_origin';
-    bus_stops?: any;
+    bus_stops?: Record<string, unknown>;
     last_eta_calculation?: string;
     current_eta_minutes?: number;
 }
 export interface DatabaseLiveLocation {
     id: string;
     bus_id: string;
-    location: any;
+    location: PostGISGeometry;
     speed_kmh?: number;
     heading_degrees?: number;
     recorded_at: string;

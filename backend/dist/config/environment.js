@@ -58,6 +58,10 @@ const initializeEnvironment = () => {
                     /^https:\/\/.*\.render\.com$/,
                     /^https:\/\/.*\.vercel\.app$/,
                     /^https:\/\/.*\.vercel\.com$/,
+                    /^https:\/\/bts-frontend-navy\.vercel\.app$/,
+                    /^https:\/\/bts-frontend-navy\.vercel\.com$/,
+                    /^https:\/\/.*\.vercel\.app$/,
+                    /^https:\/\/.*\.vercel\.com$/,
                 ]
                 : [
                     'http://localhost:5173',
@@ -95,6 +99,10 @@ const initializeEnvironment = () => {
                         /^wss:\/\/.*\.vercel\.app$/,
                         /^https:\/\/.*\.vercel\.com$/,
                         /^wss:\/\/.*\.vercel\.com$/,
+                        /^https:\/\/bts-frontend-navy\.vercel\.app$/,
+                        /^wss:\/\/bts-frontend-navy\.vercel\.app$/,
+                        /^https:\/\/bts-frontend-navy\.vercel\.com$/,
+                        /^wss:\/\/bts-frontend-navy\.vercel\.com$/,
                     ]
                     : [
                         'http://localhost:5173',
@@ -108,7 +116,7 @@ const initializeEnvironment = () => {
                         /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
                         /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
                     ],
-                methods: ['GET', 'POST'],
+                methods: ['GET', 'POST', 'OPTIONS'],
                 credentials: true,
             },
         },

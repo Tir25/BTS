@@ -16,10 +16,18 @@ export interface SignedUrlResult {
     expiresIn?: number;
 }
 export declare class StorageService {
-    static validateFile(file: any, allowedTypes: string[], maxSize: number): FileValidationResult;
+    static validateFile(file: {
+        mimetype: string;
+        size: number;
+    }, allowedTypes: string[], maxSize: number): FileValidationResult;
     private static generatePublicUrl;
     static convertToPublicUrl(filePathOrUrl: string): string;
-    static uploadImage(file: any, folder: string, fileName?: string): Promise<UploadResult>;
+    static uploadImage(file: {
+        mimetype: string;
+        size: number;
+        originalname: string;
+        buffer: Buffer;
+    }, folder: string, fileName?: string): Promise<UploadResult>;
     static uploadDocument(file: any, folder: string, fileName?: string): Promise<UploadResult>;
     static createSignedUrl(filePath: string, expiresIn?: number): Promise<SignedUrlResult>;
     static deleteFile(filePath: string): Promise<{

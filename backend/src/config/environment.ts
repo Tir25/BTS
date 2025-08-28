@@ -119,7 +119,12 @@ export const initializeEnvironment = (): EnvironmentConfig => {
             // Production origins - Render domains
             /^https:\/\/.*\.onrender\.com$/,
             /^https:\/\/.*\.render\.com$/,
-            // Vercel domains
+            // Vercel domains - more comprehensive
+            /^https:\/\/.*\.vercel\.app$/,
+            /^https:\/\/.*\.vercel\.com$/,
+            /^https:\/\/bts-frontend-navy\.vercel\.app$/,
+            /^https:\/\/bts-frontend-navy\.vercel\.com$/,
+            // Allow all Vercel subdomains
             /^https:\/\/.*\.vercel\.app$/,
             /^https:\/\/.*\.vercel\.com$/,
           ]
@@ -162,11 +167,15 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               // Production WebSocket origins
               /^https:\/\/.*\.onrender\.com$/,
               /^wss:\/\/.*\.onrender\.com$/,
-              // Vercel WebSocket origins
+              // Vercel WebSocket origins - more comprehensive
               /^https:\/\/.*\.vercel\.app$/,
               /^wss:\/\/.*\.vercel\.app$/,
               /^https:\/\/.*\.vercel\.com$/,
               /^wss:\/\/.*\.vercel\.com$/,
+              /^https:\/\/bts-frontend-navy\.vercel\.app$/,
+              /^wss:\/\/bts-frontend-navy\.vercel\.app$/,
+              /^https:\/\/bts-frontend-navy\.vercel\.com$/,
+              /^wss:\/\/bts-frontend-navy\.vercel\.com$/,
             ]
           : [
               // Development WebSocket origins
@@ -183,7 +192,7 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
               /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
             ],
-        methods: ['GET', 'POST'],
+        methods: ['GET', 'POST', 'OPTIONS'],
         credentials: true,
       },
     },

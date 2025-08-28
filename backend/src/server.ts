@@ -2,7 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { corsMiddleware } from './middleware/cors';
+import { corsMiddleware, handlePreflight } from './middleware/cors';
 import { rateLimitMiddleware } from './middleware/rateLimit';
 import healthRoutes from './routes/health';
 import busRoutes from './routes/buses';
@@ -31,6 +31,7 @@ app.use(helmet());
 
 // CORS middleware
 app.use(corsMiddleware);
+app.use(handlePreflight);
 
 // Rate limiting
 app.use(rateLimitMiddleware);
