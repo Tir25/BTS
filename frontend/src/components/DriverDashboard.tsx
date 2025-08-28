@@ -53,9 +53,16 @@ const DriverDashboard: React.FC = () => {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
+  const initializationRef = useRef(false);
 
   // Initialize driver data and WebSocket connection when component mounts
   useEffect(() => {
+    // Prevent multiple initializations
+    if (initializationRef.current) {
+      return;
+    }
+    initializationRef.current = true;
+
     // Set up connection status monitoring
     const updateConnectionStatus = () => {
       if (websocketService.isConnected()) {
@@ -224,7 +231,7 @@ const DriverDashboard: React.FC = () => {
 
           // Fallback: Fetch bus information from API if WebSocket fails
           setTimeout(() => {
-            if (!busInfo && !isAuthenticated) {
+            if (!initializationRef.current) {
               console.log('🔄 Fallback: Fetching bus info from API...');
               fetchBusInfoFromAPI(session.user.id);
             }
@@ -232,7 +239,7 @@ const DriverDashboard: React.FC = () => {
 
           // Additional fallback after 10 seconds
           setTimeout(() => {
-            if (!busInfo && !isAuthenticated) {
+            if (!initializationRef.current) {
               console.log('🔄 Second fallback: Fetching bus info from API...');
               fetchBusInfoFromAPI(session.user.id);
             }
@@ -255,6 +262,7 @@ const DriverDashboard: React.FC = () => {
     // Cleanup function
     return () => {
       clearInterval(statusInterval);
+      initializationRef.current = false;
       if (websocketService.socket) {
         websocketService.socket.off('connect');
         websocketService.socket.off('disconnect');
@@ -264,7 +272,7 @@ const DriverDashboard: React.FC = () => {
         websocketService.socket.off('driver:locationConfirmed');
       }
     };
-  }, [busInfo, isAuthenticated, navigate]);
+  }, [navigate]);
 
   // Initialize map when component mounts
   useEffect(() => {
@@ -457,8 +465,10 @@ const DriverDashboard: React.FC = () => {
 
         if (data.data?.busInfo) {
           setBusInfo(data.data.busInfo);
+          setIsAuthenticated(true);
         } else if (data.busInfo) {
           setBusInfo(data.busInfo);
+          setIsAuthenticated(true);
         } else {
           console.error('❌ No bus info in response:', data);
         }
