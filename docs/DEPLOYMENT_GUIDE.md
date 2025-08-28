@@ -157,7 +157,7 @@ cp frontend/env.example frontend/env.local
    - **Output Directory**: `dist`
 
 3. **Environment Variables**
-   ```bash
+```bash
    VITE_SUPABASE_URL=https://gthwmwfwvhyriygpcdlr.supabase.co
    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    VITE_API_URL=https://bus-tracking-backend-sxh8.onrender.com

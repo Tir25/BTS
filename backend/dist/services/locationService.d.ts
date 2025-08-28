@@ -14,6 +14,9 @@ interface BusInfo {
     route_name: string;
     driver_id: string;
     driver_name: string;
+    assigned_driver_id?: string;
+    route_city?: string;
+    bus_image_url?: string | null;
 }
 interface SavedLocation {
     id: string;
