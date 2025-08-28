@@ -8,6 +8,7 @@ import { environment } from '../config/environment';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './DriverInterface.css';
+import './DriverDashboard.css';
 
 interface BusInfo {
   bus_id: string;
@@ -54,6 +55,7 @@ const DriverDashboard: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const initializationRef = useRef(false);
+  const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize driver data and WebSocket connection when component mounts
   useEffect(() => {
@@ -238,21 +240,39 @@ const DriverDashboard: React.FC = () => {
             });
           }
 
-          // Fallback: Fetch bus information from API if WebSocket fails
-          setTimeout(() => {
+          // Enhanced fallback mechanism with retry logic
+          let fallbackAttempt = 0;
+          const maxFallbackAttempts = 3;
+          const fallbackInterval = 5000; // 5 seconds between attempts
+          
+          fallbackTimerRef.current = setInterval(() => {
+            fallbackAttempt++;
+            
             if (!busInfo && !isAuthenticated) {
-              console.log('🔄 Fallback: Fetching bus info from API...');
-              fetchBusInfoFromAPI(session.user.id);
+              console.log(`🔄 Fallback attempt ${fallbackAttempt}/${maxFallbackAttempts}: Fetching bus info from API...`);
+              fetchBusInfoFromAPI(session.user.id).then(success => {
+                if (success) {
+                  console.log('✅ Fallback API call successful');
+                  if (fallbackTimerRef.current) {
+                    clearInterval(fallbackTimerRef.current);
+                    fallbackTimerRef.current = null;
+                  }
+                } else if (fallbackAttempt >= maxFallbackAttempts) {
+                  console.log('❌ Max fallback attempts reached, stopping retries');
+                  if (fallbackTimerRef.current) {
+                    clearInterval(fallbackTimerRef.current);
+                    fallbackTimerRef.current = null;
+                  }
+                }
+              });
+            } else {
+              console.log('✅ Bus info already set, canceling fallback timer');
+              if (fallbackTimerRef.current) {
+                clearInterval(fallbackTimerRef.current);
+                fallbackTimerRef.current = null;
+              }
             }
-          }, 5000); // Wait 5 seconds for WebSocket authentication
-
-          // Additional fallback after 10 seconds
-          setTimeout(() => {
-            if (!busInfo && !isAuthenticated) {
-              console.log('🔄 Second fallback: Fetching bus info from API...');
-              fetchBusInfoFromAPI(session.user.id);
-            }
-          }, 10000);
+          }, fallbackInterval);
         } else {
           console.log(
             '❌ Driver Dashboard: No session found, redirecting to login'
@@ -271,6 +291,13 @@ const DriverDashboard: React.FC = () => {
     // Cleanup function
     return () => {
       clearInterval(statusInterval);
+      
+      // Clear fallback timer if it exists
+      if (fallbackTimerRef.current) {
+        clearInterval(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
+      
       // Reset initialization flag on cleanup
       initializationRef.current = false;
       
@@ -314,6 +341,7 @@ const DriverDashboard: React.FC = () => {
     }
 
     try {
+      // Create map with optimized settings to prevent WebGL context loss
       mapRef.current = new maplibregl.Map({
         container: mapContainerRef.current,
         style: {
@@ -341,17 +369,42 @@ const DriverDashboard: React.FC = () => {
         attributionControl: false,
         preserveDrawingBuffer: true, // Prevent WebGL context loss
         antialias: true,
+        failIfMajorPerformanceCaveat: false, // Allow fallback rendering
+        maxPitch: 60, // Limit pitch to improve performance
+        localIdeographFontFamily: false, // Improve font rendering
+        renderWorldCopies: true, // Improve performance at world edges
       });
 
       // Handle WebGL context loss
-      mapRef.current.on('webglcontextlost', () => {
+      mapRef.current.on('webglcontextlost', (event) => {
         console.warn('⚠️ WebGL context lost, attempting to restore...');
+        // Prevent the default behavior which halts all rendering
+        event.preventDefault();
+        
+        // Attempt to restore the context after a short delay
+        setTimeout(() => {
+          try {
+            if (mapRef.current) {
+              mapRef.current.resize();
+              console.log('✅ Attempted map context restoration');
+            }
+          } catch (error) {
+            console.error('❌ Failed to restore map context:', error);
+          }
+        }, 1000);
       });
 
       mapRef.current.on('webglcontextrestored', () => {
         console.log('✅ WebGL context restored');
+        // Redraw the map and marker
+        if (mapRef.current && markerRef.current) {
+          mapRef.current.resize();
+          const currentLngLat = markerRef.current.getLngLat();
+          markerRef.current.setLngLat(currentLngLat);
+        }
       });
-
+      
+      // Create marker
       const markerElement = document.createElement('div');
       markerElement.className = 'driver-marker';
       markerElement.innerHTML = `
@@ -366,8 +419,66 @@ const DriverDashboard: React.FC = () => {
       })
         .setLngLat([longitude, latitude])
         .addTo(mapRef.current);
+        
+      // Add error handling for tile loading
+      mapRef.current.on('error', (e) => {
+        console.error('❌ Map error:', e);
+      });
+      
+      // Optimize performance
+      mapRef.current.on('load', () => {
+        console.log('✅ Map loaded successfully');
+      });
+      
     } catch (error) {
       console.error('❌ Error initializing map:', error);
+      // Fallback to a simpler map initialization if the first attempt fails
+      try {
+        console.log('🔄 Attempting fallback map initialization...');
+        if (mapContainerRef.current && !mapRef.current) {
+          mapRef.current = new maplibregl.Map({
+            container: mapContainerRef.current,
+            style: {
+              version: 8,
+              sources: {
+                osm: {
+                  type: 'raster',
+                  tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                  tileSize: 256,
+                },
+              },
+              layers: [
+                {
+                  id: 'osm-tiles',
+                  type: 'raster',
+                  source: 'osm',
+                  minzoom: 0,
+                  maxzoom: 22,
+                },
+              ],
+            },
+            center: [longitude, latitude],
+            zoom: 15,
+            attributionControl: false,
+            preserveDrawingBuffer: true,
+          });
+          
+          // Create simple marker
+          const markerElement = document.createElement('div');
+          markerElement.className = 'driver-marker';
+          markerElement.innerHTML = `<div>🚌</div>`;
+          
+          markerRef.current = new maplibregl.Marker({
+            element: markerElement,
+          })
+            .setLngLat([longitude, latitude])
+            .addTo(mapRef.current);
+            
+          console.log('✅ Fallback map initialization successful');
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback map initialization failed:', fallbackError);
+      }
     }
   };
 
@@ -469,18 +580,29 @@ const DriverDashboard: React.FC = () => {
 
   const cleanupMap = () => {
     try {
+      // Properly remove all event listeners before removing the map
       if (mapRef.current) {
+        // Remove event listeners to prevent memory leaks
+        mapRef.current.off('webglcontextlost');
+        mapRef.current.off('webglcontextrestored');
+        mapRef.current.off('error');
+        mapRef.current.off('load');
+        
+        // Remove the map
         mapRef.current.remove();
         mapRef.current = null;
       }
+      
+      // Clear marker reference
       markerRef.current = null;
+      
       console.log('🗺️ Map cleanup completed');
     } catch (error) {
       console.error('❌ Error during map cleanup:', error);
     }
   };
 
-  const fetchBusInfoFromAPI = async (userId: string) => {
+  const fetchBusInfoFromAPI = async (userId: string): Promise<boolean> => {
     try {
       console.log('🔄 Fetching bus info for user:', userId);
 
@@ -489,6 +611,11 @@ const DriverDashboard: React.FC = () => {
         data: { session },
       } = await supabase.auth.getSession();
 
+      if (!session?.access_token) {
+        console.error('❌ No access token available for API call');
+        return false;
+      }
+
       // Make API call to get driver bus info - use the correct endpoint
       const response = await fetch(
         `${environment.api.url}/api/buses?driver_id=${userId}`,
@@ -496,8 +623,10 @@ const DriverDashboard: React.FC = () => {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token || ''}`,
+            Authorization: `Bearer ${session.access_token}`,
           },
+          // Add timeout handling
+          signal: AbortSignal.timeout(10000), // 10 second timeout
         }
       );
 
@@ -509,22 +638,26 @@ const DriverDashboard: React.FC = () => {
         if (data.success && data.data && Array.isArray(data.data) && data.data.length > 0) {
           const busData = data.data[0]; // Get the first bus assigned to this driver
           setBusInfo({
-            bus_id: busData.id,
-            bus_number: busData.number_plate || busData.code,
+            bus_id: busData.bus_id || busData.id,
+            bus_number: busData.bus_number || busData.number_plate || busData.code,
             route_id: busData.route_id || '',
             route_name: busData.route_name || 'Route TBD',
-            driver_id: busData.assigned_driver_id,
-            driver_name: busData.driver_full_name || 'Driver TBD',
+            driver_id: busData.driver_id || busData.assigned_driver_id,
+            driver_name: busData.driver_name || busData.driver_full_name || 'Driver TBD',
           });
           setIsAuthenticated(true);
+          return true;
         } else if (data.data?.busInfo) {
           setBusInfo(data.data.busInfo);
           setIsAuthenticated(true);
+          return true;
         } else if (data.busInfo) {
           setBusInfo(data.busInfo);
           setIsAuthenticated(true);
+          return true;
         } else {
           console.error('❌ No bus info in response:', data);
+          return false;
         }
       } else {
         const errorText = await response.text();
@@ -534,9 +667,11 @@ const DriverDashboard: React.FC = () => {
           errorText
         );
         console.error(`API Error: ${response.status} - ${errorText}`);
+        return false;
       }
     } catch (error) {
       console.error('❌ Error fetching bus info from API:', error);
+      return false;
     }
   };
 
@@ -557,7 +692,7 @@ const DriverDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-4 driver-dashboard-container">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="card-glass p-6 mb-6">
@@ -738,7 +873,7 @@ const DriverDashboard: React.FC = () => {
             </h2>
             <div
               ref={mapContainerRef}
-              className="w-full h-64 sm:h-80 lg:h-96 rounded-lg border border-white/20 bg-white/5"
+              className="w-full h-64 sm:h-80 lg:h-96 rounded-lg border border-white/20 bg-white/5 driver-map-container"
               style={{ minHeight: '300px' }}
             />
 

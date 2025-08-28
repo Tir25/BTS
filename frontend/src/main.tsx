@@ -17,13 +17,11 @@ preconnectLink.crossOrigin = 'anonymous';
 document.head.appendChild(preconnectLink);
 
 // 2. Add the font stylesheet with proper loading strategy
-// Using addEventListener to ensure the font is loaded when needed
-window.addEventListener('DOMContentLoaded', () => {
-  const fontLink = document.createElement('link');
-  fontLink.rel = 'stylesheet';
-  fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap';
-  document.head.appendChild(fontLink);
-});
+// Using a direct link element with font-display: swap to prevent FOIT
+const fontLink = document.createElement('link');
+fontLink.rel = 'stylesheet';
+fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap&font-display=swap';
+document.head.appendChild(fontLink);
 
 // Ensure proper rendering
 ReactDOM.createRoot(document.getElementById('root')!).render(
