@@ -103,7 +103,9 @@ input[type="number"]::placeholder {
   background-color: #ffffff !important;
 }
 
-  /* Enhanced SVG Icon Styles for realistic rendering - PRODUCTION OPTIMIZED */
+  /* ===== COMPREHENSIVE ICON ALIGNMENT SYSTEM ===== */
+  
+  /* Base SVG styles - optimized for consistent rendering */
   svg {
     display: inline-block;
     vertical-align: middle;
@@ -112,6 +114,8 @@ input[type="number"]::placeholder {
     /* Ensure consistent rendering across browsers */
     transform: translateZ(0);
     backface-visibility: hidden;
+    /* Prevent layout shifts */
+    contain: layout style;
   }
 
   /* Only apply default sizing to generic SVGs, not custom icons */
@@ -120,21 +124,35 @@ input[type="number"]::placeholder {
     height: 1em;
   }
 
-  /* Ensure SVG icons render consistently across platforms */
-  .animate-pulse svg {
-    will-change: transform;
-    transform: translateZ(0);
+  /* Custom icon class - optimized for production */
+  .custom-icon {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    /* Ensure proper sizing and alignment */
+    width: auto !important;
+    height: auto !important;
+    /* Prevent any unwanted transformations */
+    transform: none !important;
+    /* Ensure consistent rendering */
+    vertical-align: middle !important;
+    /* Prevent layout shifts */
+    contain: layout style !important;
   }
 
-  /* Enhanced icon hover effects */
-  .group:hover svg {
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
-    transition: filter 0.3s ease;
-  }
-
-  /* Icon color transitions */
-  svg * {
-    transition: fill 0.3s ease, stroke 0.3s ease;
+  /* Icon container - for wrapping icons in cards */
+  .icon-container {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    line-height: 1 !important;
+    /* Prevent layout shifts */
+    contain: layout style !important;
+    /* Ensure consistent sizing */
+    width: auto !important;
+    height: auto !important;
   }
 
   /* Specific icon size classes to prevent layout shifts */
@@ -147,50 +165,126 @@ input[type="number"]::placeholder {
   .icon-3xl { width: 3rem; height: 3rem; }
   .icon-4xl { width: 4rem; height: 4rem; }
 
-  /* Enhanced icon container styles for better alignment */
-  .icon-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    /* Prevent layout shifts */
-    contain: layout style;
+  /* Animation and hover effects */
+  .animate-pulse svg {
+    will-change: transform;
+    transform: translateZ(0);
   }
 
-  /* Ensure consistent icon alignment in cards */
+  .group:hover svg {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+    transition: filter 0.3s ease;
+  }
+
+  svg * {
+    transition: fill 0.3s ease, stroke 0.3s ease;
+  }
+
+  /* Card-specific icon alignment */
   .text-center .custom-icon {
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    margin: 0 auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
-  /* Ensure emoji icons are properly aligned */
-  .icon-container {
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  /* Prevent emoji from being affected by font-size changes */
+  /* Emoji icon support */
   .icon-container:has(span) {
     font-size: inherit;
   }
 
-  /* Prevent layout shifts for custom SVG icons */
-  .custom-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    /* Ensure proper sizing and alignment */
-    width: auto;
-    height: auto;
-    /* Prevent any unwanted transformations */
-    transform: none;
-    /* Ensure consistent rendering */
-    vertical-align: middle;
+  /* ===== PRODUCTION ICON ALIGNMENT FIXES ===== */
+  
+  /* Force center alignment for all icon containers */
+  .icon-container {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    width: auto !important;
+    height: auto !important;
+  }
+
+  /* Ensure SVG icons maintain their aspect ratio */
+  .custom-icon svg {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: contain !important;
+  }
+
+  /* Prevent any unwanted transformations on icons */
+  .custom-icon,
+  .icon-container {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Ensure consistent sizing across all browsers */
+  .w-12.h-12,
+  .w-16.h-16,
+  .sm\\:w-16.sm\\:h-16 {
+    width: 3rem !important;
+    height: 3rem !important;
+  }
+
+  @media (min-width: 640px) {
+    .sm\\:w-16.sm\\:h-16 {
+      width: 4rem !important;
+      height: 4rem !important;
+    }
+  }
+
+  /* Force center alignment for text content */
+  .text-center {
+    text-align: center !important;
+  }
+
+  /* Ensure flex containers center properly */
+  .flex.flex-col.items-center.justify-center {
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* ===== BROWSER-SPECIFIC ICON ALIGNMENT FIXES ===== */
+  
+  /* Ensure consistent line height across browsers */
+  body {
+    line-height: 1.5;
+  }
+
+  /* Fix for Safari and WebKit browsers */
+  @supports (-webkit-appearance: none) {
+    .custom-icon {
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
+    }
+  }
+
+  /* Fix for Firefox */
+  @supports (-moz-appearance: none) {
+    .custom-icon {
+      transform: translateZ(0);
+    }
+  }
+
+  /* Fix for Edge and IE */
+  @supports (-ms-ime-align: auto) {
+    .custom-icon {
+      transform: translateZ(0);
+    }
+  }
+
+  /* Ensure consistent emoji rendering */
+  .icon-container {
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  }
+
+  /* Prevent any font loading issues from affecting icons */
+  .custom-icon,
+  .icon-container {
+    font-display: swap;
   }
 
   /* Global Transition Styles */

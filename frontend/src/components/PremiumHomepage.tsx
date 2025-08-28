@@ -10,8 +10,11 @@ const BusIcon = () => (
   <svg
     className="w-12 h-12 sm:w-16 sm:h-16 custom-icon"
     viewBox="0 0 48 48"
+    width="48"
+    height="48"
     fill="none"
     aria-label="Bus Icon"
+    style={{ display: 'block', margin: '0 auto' }}
   >
     {/* Bus Body - Main Structure */}
     <rect
@@ -135,8 +138,11 @@ const MapIcon = () => (
   <svg
     className="w-12 h-12 sm:w-16 sm:h-16 custom-icon"
     viewBox="0 0 48 48"
+    width="48"
+    height="48"
     fill="none"
     aria-label="Map Icon"
+    style={{ display: 'block', margin: '0 auto' }}
   >
     {/* Map Background */}
     <rect
@@ -310,8 +316,11 @@ const AdminIcon = () => (
   <svg
     className="w-12 h-12 sm:w-16 sm:h-16 custom-icon"
     viewBox="0 0 48 48"
+    width="48"
+    height="48"
     fill="none"
     aria-label="Admin Icon"
+    style={{ display: 'block', margin: '0 auto' }}
   >
     {/* Dashboard Background */}
     <rect
@@ -547,7 +556,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/driver-login')}
               >
                 <div className="text-center px-2">
-                  <div className="mb-2 sm:mb-4 animate-pulse icon-container">
+                  <div className="mb-2 sm:mb-4 animate-pulse icon-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <BusIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -585,7 +594,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/student-map')}
               >
                 <div className="text-center px-2">
-                  <div className="mb-2 sm:mb-4 animate-pulse icon-container">
+                  <div className="mb-2 sm:mb-4 animate-pulse icon-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <MapIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -623,7 +632,7 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/admin-login')}
               >
                 <div className="text-center px-2">
-                  <div className="mb-2 sm:mb-4 animate-pulse icon-container">
+                  <div className="mb-2 sm:mb-4 animate-pulse icon-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <AdminIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
