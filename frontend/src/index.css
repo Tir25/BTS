@@ -1,5 +1,5 @@
-/* Import Inter font for premium typography with display=swap for better loading */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap&display=block');
+/* Import Inter font for premium typography */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 /* MapLibre GL CSS */
 @import 'maplibre-gl/dist/maplibre-gl.css';
@@ -15,8 +15,7 @@
     /* Prevent zoom on input focus on iOS */
     -webkit-text-size-adjust: 100%;
     /* Ensure consistent font rendering */
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     /* Prevent layout shifts during font loading */
     font-display: swap;
   }
@@ -36,7 +35,7 @@
     font-family: 'Inter';
     font-display: swap;
     font-weight: 300 900;
-    src: url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap&display=block');
+    src: local('Inter'), url('https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyeMZhrib2Bg-4.ttf') format('truetype');
   }
 
   /* Custom scrollbar for premium feel */
@@ -66,7 +65,7 @@
     
     /* Optimize text rendering */
     * {
-      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
     
     /* Reduce motion for better performance */
@@ -189,7 +188,7 @@ input[type="number"]::placeholder {
   }
 
   /* Emoji icon support */
-  .icon-container:has(span) {
+  .icon-container-with-emoji {
     font-size: inherit;
   }
 
@@ -222,15 +221,13 @@ input[type="number"]::placeholder {
   }
 
   /* Ensure consistent sizing across all browsers */
-  .w-12.h-12,
-  .w-16.h-16,
-  .sm\\:w-16.sm\\:h-16 {
+  .icon-size-md {
     width: 3rem !important;
     height: 3rem !important;
   }
 
   @media (min-width: 640px) {
-    .sm\\:w-16.sm\\:h-16 {
+    .icon-size-lg {
       width: 4rem !important;
       height: 4rem !important;
     }
@@ -269,11 +266,9 @@ input[type="number"]::placeholder {
     }
   }
 
-  /* Fix for Edge and IE */
-  @supports (-ms-ime-align: auto) {
-    .custom-icon {
-      transform: translateZ(0);
-    }
+  /* Fix for Edge - using standard transform instead of MS-specific support */
+  .ms-browser .custom-icon {
+    transform: translateZ(0);
   }
 
   /* Ensure consistent emoji rendering */
