@@ -96,7 +96,10 @@ export interface Route {
   use_custom_starting_point?: boolean;
   custom_starting_point?: string;
   custom_starting_coordinates?: any;
-  arrival_point_type?: 'ganpat_university' | 'custom_arrival' | 'driver_location';
+  arrival_point_type?:
+    | 'ganpat_university'
+    | 'custom_arrival'
+    | 'driver_location';
   starting_point_type?: 'route_origin' | 'custom_starting' | 'driver_location';
   use_custom_origin?: boolean;
   custom_origin_point?: string;

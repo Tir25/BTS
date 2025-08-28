@@ -38,7 +38,9 @@ const DriverDashboard: React.FC = () => {
   const [lastUpdateTime, setLastUpdateTime] = useState<string | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+  const [connectionStatus, setConnectionStatus] = useState<
+    'connected' | 'disconnected' | 'connecting'
+  >('disconnected');
 
   // Monitor busInfo changes for debugging
   useEffect(() => {
@@ -58,7 +60,10 @@ const DriverDashboard: React.FC = () => {
     const updateConnectionStatus = () => {
       if (websocketService.isConnected()) {
         setConnectionStatus('connected');
-      } else if (websocketService.getConnectionState() === 'connecting' || websocketService.getConnectionState() === 'reconnecting') {
+      } else if (
+        websocketService.getConnectionState() === 'connecting' ||
+        websocketService.getConnectionState() === 'reconnecting'
+      ) {
         setConnectionStatus('connecting');
       } else {
         setConnectionStatus('disconnected');
@@ -72,26 +77,37 @@ const DriverDashboard: React.FC = () => {
     const statusInterval = setInterval(updateConnectionStatus, 2000);
 
     const initializeDriverData = async () => {
-
       try {
-        console.log('🚀 Driver Dashboard: Component mounted, starting initialization...');
-        
+        console.log(
+          '🚀 Driver Dashboard: Component mounted, starting initialization...'
+        );
+
         // Get current user session
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
-        console.log('🔑 Session check:', session ? 'Found' : 'Not found', session?.user?.email);
+        console.log(
+          '🔑 Session check:',
+          session ? 'Found' : 'Not found',
+          session?.user?.email
+        );
 
         if (session?.user) {
           console.log('🔌 Driver Dashboard: Initializing...');
 
           // Check for existing bus info first (from DriverLogin)
           const existingAssignment = authService.getCurrentDriverAssignment();
-          console.log('🔍 Checking for existing assignment:', existingAssignment ? 'Found' : 'Not found');
-          
+          console.log(
+            '🔍 Checking for existing assignment:',
+            existingAssignment ? 'Found' : 'Not found'
+          );
+
           if (existingAssignment) {
-            console.log('✅ Driver Dashboard: Using existing assignment from DriverLogin:', existingAssignment);
+            console.log(
+              '✅ Driver Dashboard: Using existing assignment from DriverLogin:',
+              existingAssignment
+            );
             setBusInfo({
               bus_id: existingAssignment.bus_id,
               bus_number: existingAssignment.bus_number,
@@ -101,15 +117,26 @@ const DriverDashboard: React.FC = () => {
               driver_name: existingAssignment.driver_name,
             });
             setIsAuthenticated(true);
-            console.log('✅ Bus info and authentication state set from existing assignment');
+            console.log(
+              '✅ Bus info and authentication state set from existing assignment'
+            );
           } else {
             // Validate driver session using auth service as fallback
-            console.log('🔍 No existing assignment, validating driver session...');
-            const { isValid, assignment } = await authService.validateDriverSession();
-            console.log('🔍 Validation result:', { isValid, assignment: assignment ? 'Found' : 'Not found' });
-            
+            console.log(
+              '🔍 No existing assignment, validating driver session...'
+            );
+            const { isValid, assignment } =
+              await authService.validateDriverSession();
+            console.log('🔍 Validation result:', {
+              isValid,
+              assignment: assignment ? 'Found' : 'Not found',
+            });
+
             if (isValid && assignment) {
-              console.log('✅ Driver Dashboard: Valid session found with assignment:', assignment);
+              console.log(
+                '✅ Driver Dashboard: Valid session found with assignment:',
+                assignment
+              );
               setBusInfo({
                 bus_id: assignment.bus_id,
                 bus_number: assignment.bus_number,
@@ -119,9 +146,13 @@ const DriverDashboard: React.FC = () => {
                 driver_name: assignment.driver_name,
               });
               setIsAuthenticated(true);
-              console.log('✅ Bus info and authentication state set from validation');
+              console.log(
+                '✅ Bus info and authentication state set from validation'
+              );
             } else {
-              console.log('❌ Driver Dashboard: Invalid session or no assignment found');
+              console.log(
+                '❌ Driver Dashboard: Invalid session or no assignment found'
+              );
               return;
             }
           }
@@ -140,7 +171,9 @@ const DriverDashboard: React.FC = () => {
           });
 
           websocketService.socket?.on('disconnect', () => {
-            console.log('🔌 Driver Dashboard: Disconnected from WebSocket server');
+            console.log(
+              '🔌 Driver Dashboard: Disconnected from WebSocket server'
+            );
           });
 
           websocketService.socket?.on('error', (error) => {
@@ -150,7 +183,10 @@ const DriverDashboard: React.FC = () => {
           websocketService.socket?.on(
             'driver:authenticated',
             (data: { driverId: string; busId: string; busInfo: BusInfo }) => {
-              console.log('✅ Driver Dashboard: Authentication successful:', data);
+              console.log(
+                '✅ Driver Dashboard: Authentication successful:',
+                data
+              );
               console.log('🚌 Bus Info received:', data.busInfo);
               setBusInfo(data.busInfo);
               setIsAuthenticated(true);
@@ -182,7 +218,7 @@ const DriverDashboard: React.FC = () => {
             websocketService.socket?.emit('driver:connected', {
               driverId: currentAssignment.driver_id,
               busId: currentAssignment.bus_id,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
             });
           }
 
@@ -202,7 +238,9 @@ const DriverDashboard: React.FC = () => {
             }
           }, 10000);
         } else {
-          console.log('❌ Driver Dashboard: No session found, redirecting to login');
+          console.log(
+            '❌ Driver Dashboard: No session found, redirecting to login'
+          );
           // Redirect to login if no session
           navigate('/driver-login');
         }
@@ -226,7 +264,7 @@ const DriverDashboard: React.FC = () => {
         websocketService.socket.off('driver:locationConfirmed');
       }
     };
-  }, []);
+  }, [busInfo, isAuthenticated, navigate]);
 
   // Initialize map when component mounts
   useEffect(() => {
@@ -397,8 +435,10 @@ const DriverDashboard: React.FC = () => {
       console.log('🔄 Fetching bus info for user:', userId);
 
       // Get current session for authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       // Make API call to get driver bus info
       const response = await fetch(
         `${environment.api.url}/api/admin/drivers/${userId}/bus`,
@@ -406,7 +446,7 @@ const DriverDashboard: React.FC = () => {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token || ''}`,
+            Authorization: `Bearer ${session?.access_token || ''}`,
           },
         }
       );
@@ -424,7 +464,11 @@ const DriverDashboard: React.FC = () => {
         }
       } else {
         const errorText = await response.text();
-        console.error('❌ Failed to fetch bus info from API:', response.status, errorText);
+        console.error(
+          '❌ Failed to fetch bus info from API:',
+          response.status,
+          errorText
+        );
         console.error(`API Error: ${response.status} - ${errorText}`);
       }
     } catch (error) {
@@ -460,14 +504,23 @@ const DriverDashboard: React.FC = () => {
               </h1>
               <div className="space-y-1">
                 <p className="text-white/80 text-sm sm:text-base">
-                  Welcome, <span className="font-semibold text-white">{busInfo?.driver_name}</span>
+                  Welcome,{' '}
+                  <span className="font-semibold text-white">
+                    {busInfo?.driver_name}
+                  </span>
                 </p>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm">
                   <span className="text-blue-300">
-                    🚌 Bus: <span className="font-semibold text-white">{busInfo?.bus_number}</span>
+                    🚌 Bus:{' '}
+                    <span className="font-semibold text-white">
+                      {busInfo?.bus_number}
+                    </span>
                   </span>
                   <span className="text-green-300">
-                    🛣️ Route: <span className="font-semibold text-white">{busInfo?.route_name}</span>
+                    🛣️ Route:{' '}
+                    <span className="font-semibold text-white">
+                      {busInfo?.route_name}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -475,7 +528,9 @@ const DriverDashboard: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={async () => {
-                  const { data: { session } } = await supabase.auth.getSession();
+                  const {
+                    data: { session },
+                  } = await supabase.auth.getSession();
                   if (session?.user?.id) {
                     console.log('🔄 Manual refresh: Fetching bus info...');
                     fetchBusInfoFromAPI(session.user.id);
@@ -502,21 +557,21 @@ const DriverDashboard: React.FC = () => {
             <div className="flex items-center">
               <div
                 className={`w-3 h-3 rounded-full mr-3 ${
-                  connectionStatus === 'connected' 
-                    ? 'bg-green-500' 
-                    : connectionStatus === 'connecting' 
-                    ? 'bg-yellow-500 animate-pulse' 
-                    : 'bg-red-500'
+                  connectionStatus === 'connected'
+                    ? 'bg-green-500'
+                    : connectionStatus === 'connecting'
+                      ? 'bg-yellow-500 animate-pulse'
+                      : 'bg-red-500'
                 }`}
               ></div>
               <div className="min-w-0 flex-1">
                 <h3 className="font-semibold text-white text-sm">Connection</h3>
                 <p className="text-xs text-white/70 truncate">
-                  {connectionStatus === 'connected' 
-                    ? 'Connected' 
-                    : connectionStatus === 'connecting' 
-                    ? 'Connecting...' 
-                    : 'Disconnected'}
+                  {connectionStatus === 'connected'
+                    ? 'Connected'
+                    : connectionStatus === 'connecting'
+                      ? 'Connecting...'
+                      : 'Disconnected'}
                 </p>
               </div>
             </div>
@@ -529,7 +584,9 @@ const DriverDashboard: React.FC = () => {
                 className={`w-3 h-3 rounded-full mr-3 ${isTracking ? 'bg-green-500' : 'bg-gray-400'}`}
               ></div>
               <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-white text-sm">GPS Tracking</h3>
+                <h3 className="font-semibold text-white text-sm">
+                  GPS Tracking
+                </h3>
                 <p className="text-xs text-white/70 truncate">
                   {isTracking ? 'Active' : 'Inactive'}
                 </p>
@@ -543,7 +600,9 @@ const DriverDashboard: React.FC = () => {
               <h3 className="font-semibold text-white text-sm">Updates Sent</h3>
               <p className="text-xl font-bold text-blue-300">{updateCount}</p>
               {lastUpdateTime && (
-                <p className="text-xs text-white/70 truncate">Last: {lastUpdateTime}</p>
+                <p className="text-xs text-white/70 truncate">
+                  Last: {lastUpdateTime}
+                </p>
               )}
             </div>
           </div>
@@ -727,7 +786,9 @@ const DriverDashboard: React.FC = () => {
                             }
                           );
                         } else {
-                          alert('Geolocation is not supported by this browser.');
+                          alert(
+                            'Geolocation is not supported by this browser.'
+                          );
                         }
                       }}
                       className="btn-primary text-xs px-3 py-1"
@@ -791,11 +852,15 @@ const DriverDashboard: React.FC = () => {
                   )}
                   <div className="flex justify-between">
                     <span className="text-white/70 text-sm">Updates Sent:</span>
-                    <span className="font-bold text-blue-300 text-sm">{updateCount}</span>
+                    <span className="font-bold text-blue-300 text-sm">
+                      {updateCount}
+                    </span>
                   </div>
                   {lastUpdateTime && (
                     <div className="flex justify-between">
-                      <span className="text-white/70 text-sm">Last Update:</span>
+                      <span className="text-white/70 text-sm">
+                        Last Update:
+                      </span>
                       <span className="text-white font-medium text-sm">
                         {lastUpdateTime}
                       </span>

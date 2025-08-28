@@ -56,14 +56,20 @@ router.get('/history/:busId', async (req, res) => {
 router.post('/update', async (req, res) => {
     try {
         const { busId, driverId, latitude, longitude, speed, heading } = req.body;
-        if (!busId || !driverId || latitude === undefined || longitude === undefined) {
+        if (!busId ||
+            !driverId ||
+            latitude === undefined ||
+            longitude === undefined) {
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields',
                 message: 'busId, driverId, latitude, and longitude are required',
             });
         }
-        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        if (latitude < -90 ||
+            latitude > 90 ||
+            longitude < -180 ||
+            longitude > 180) {
             return res.status(400).json({
                 success: false,
                 error: 'Invalid coordinates',

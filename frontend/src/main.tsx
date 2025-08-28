@@ -12,7 +12,8 @@ setupConsoleFilter();
 const link = document.createElement('link');
 link.rel = 'preload';
 link.as = 'font';
-link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap';
+link.href =
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap';
 link.crossOrigin = 'anonymous';
 document.head.appendChild(link);
 
@@ -20,5 +21,5 @@ document.head.appendChild(link);
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>,
-)
+  </React.StrictMode>
+);

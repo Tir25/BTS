@@ -201,7 +201,7 @@ router.delete(
 
       // Clear URL from database
       let updateQuery = '';
-      let updateParams: any[] = [];
+      let updateParams: string[] = [];
 
       switch (type) {
         case 'bus':
@@ -243,7 +243,7 @@ router.get(
       const { type, id } = req.params;
 
       let query = '';
-      let params: any[] = [];
+      let params: string[] = [];
 
       switch (type) {
         case 'bus':
@@ -322,7 +322,7 @@ router.get('/signed-url/:type/:id', authenticateUser, async (req, res) => {
     const { type, id } = req.params;
 
     let query = '';
-    let params: any[] = [];
+    let params: string[] = [];
 
     switch (type) {
       case 'bus':

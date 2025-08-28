@@ -41,7 +41,7 @@ export interface SignedUrlResult {
 export class StorageService {
   // Validate file type and size
   static validateFile(
-    file: any,
+    file: { mimetype: string; size: number },
     allowedTypes: string[],
     maxSize: number
   ): FileValidationResult {
@@ -92,7 +92,7 @@ export class StorageService {
 
   // Upload image file
   static async uploadImage(
-    file: any,
+    file: { mimetype: string; size: number; originalname: string; buffer: Buffer },
     folder: string,
     fileName?: string
   ): Promise<UploadResult> {

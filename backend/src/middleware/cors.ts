@@ -1,4 +1,5 @@
 import cors from 'cors';
+import { Request, Response, NextFunction } from 'express';
 import initializeEnvironment from '../config/environment';
 
 // Initialize environment to get CORS configuration
@@ -60,7 +61,11 @@ const corsOptions = {
 export const corsMiddleware = cors(corsOptions);
 
 // Preflight handler for complex requests
-export const handlePreflight = (req: any, res: any, next: any) => {
+export const handlePreflight = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   if (req.method === 'OPTIONS') {
     console.log('🔄 CORS: Handling preflight request');
     res.status(200).end();

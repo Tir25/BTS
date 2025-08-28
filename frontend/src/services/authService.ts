@@ -277,12 +277,15 @@ class AuthService {
         email,
         password,
       });
-      
+
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Authentication timeout')), 5000); // 5s timeout
       });
 
-      const { data, error } = await Promise.race([authPromise, timeoutPromise]) as any;
+      const { data, error } = (await Promise.race([
+        authPromise,
+        timeoutPromise,
+      ])) as any;
 
       if (error) {
         console.error('❌ Sign in error:', error);
@@ -521,21 +524,31 @@ class AuthService {
   }
 
   // Enhanced token validation for API calls with automatic refresh
-  async validateTokenForAPI(): Promise<{ valid: boolean; token: string | null; refreshed: boolean }> {
+  async validateTokenForAPI(): Promise<{
+    valid: boolean;
+    token: string | null;
+    refreshed: boolean;
+  }> {
     let token = this.getAccessToken();
     let refreshed = false;
-    
+
     if (!token) {
       return { valid: false, token: null, refreshed: false };
     }
 
     try {
       // First, try to validate the current token
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser(token);
+
       if (error || !user) {
-        console.log('🔄 Token validation failed, attempting refresh:', error?.message);
-        
+        console.log(
+          '🔄 Token validation failed, attempting refresh:',
+          error?.message
+        );
+
         // Try to refresh the session
         const refreshResult = await this.refreshSession();
         if (refreshResult.success) {
@@ -550,10 +563,16 @@ class AuthService {
 
       // Validate the token again (either original or refreshed)
       if (token) {
-        const { data: { user: validatedUser }, error: validationError } = await supabase.auth.getUser(token);
-        
+        const {
+          data: { user: validatedUser },
+          error: validationError,
+        } = await supabase.auth.getUser(token);
+
         if (validationError || !validatedUser) {
-          console.log('❌ Final token validation failed:', validationError?.message);
+          console.log(
+            '❌ Final token validation failed:',
+            validationError?.message
+          );
           return { valid: false, token: null, refreshed };
         }
 
@@ -789,7 +808,9 @@ class AuthService {
   /**
    * Get driver-bus assignment from database
    */
-  async getDriverBusAssignment(driverId: string): Promise<DriverBusAssignment | null> {
+  async getDriverBusAssignment(
+    driverId: string
+  ): Promise<DriverBusAssignment | null> {
     try {
       // Get bus assignment directly from buses table (matching backend logic)
       const { data: busData, error: busError } = await supabase
@@ -837,7 +858,9 @@ class AuthService {
           .single();
 
         if (!userError && userData) {
-          driverName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || 'Unknown Driver';
+          driverName =
+            `${userData.first_name || ''} ${userData.last_name || ''}`.trim() ||
+            'Unknown Driver';
         }
       }
 
@@ -860,7 +883,9 @@ class AuthService {
   /**
    * Store driver-bus assignment in database
    */
-  async storeDriverBusAssignment(assignment: Omit<DriverBusAssignment, 'created_at' | 'updated_at'>): Promise<boolean> {
+  async storeDriverBusAssignment(
+    assignment: Omit<DriverBusAssignment, 'created_at' | 'updated_at'>
+  ): Promise<boolean> {
     try {
       // Since the backend already has the assignment in the buses table,
       // we just need to store the assignment in memory for the frontend
@@ -869,7 +894,7 @@ class AuthService {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-      
+
       console.log('✅ Driver bus assignment stored in memory successfully');
       return true;
     } catch (error) {
@@ -881,7 +906,7 @@ class AuthService {
   /**
    * Clear driver-bus assignment from database
    */
-  async clearDriverBusAssignment(_driverId: string): Promise<boolean> {
+  async clearDriverBusAssignment(): Promise<boolean> {
     try {
       // Just clear from memory since the backend handles the actual assignment
       this.currentDriverAssignment = null;
@@ -905,8 +930,11 @@ class AuthService {
    */
   async validateSession(): Promise<boolean> {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
       if (error) {
         console.error('❌ Session validation error:', error);
         return false;
@@ -921,17 +949,20 @@ class AuthService {
       const expiresAt = new Date(session.expires_at! * 1000);
       const now = new Date();
       const timeUntilExpiry = expiresAt.getTime() - now.getTime();
-      
+
       // If session expires in less than 5 minutes, refresh it
       if (timeUntilExpiry < 5 * 60 * 1000) {
         console.log('🔄 Session expiring soon, refreshing...');
-        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-        
+        const {
+          data: { session: refreshedSession },
+          error: refreshError,
+        } = await supabase.auth.refreshSession();
+
         if (refreshError) {
           console.error('❌ Session refresh error:', refreshError);
           return false;
         }
-        
+
         if (refreshedSession) {
           this.currentSession = refreshedSession;
           this.currentUser = refreshedSession.user;
@@ -949,7 +980,10 @@ class AuthService {
   /**
    * Check if user has valid driver session
    */
-  async validateDriverSession(): Promise<{ isValid: boolean; assignment: DriverBusAssignment | null }> {
+  async validateDriverSession(): Promise<{
+    isValid: boolean;
+    assignment: DriverBusAssignment | null;
+  }> {
     try {
       // First validate the session
       const isSessionValid = await this.validateSession();
@@ -964,7 +998,9 @@ class AuthService {
       }
 
       // Get driver assignment from database
-      const assignment = await this.getDriverBusAssignment(this.currentUser!.id);
+      const assignment = await this.getDriverBusAssignment(
+        this.currentUser!.id
+      );
       if (!assignment) {
         console.log('❌ No active bus assignment found for driver');
         return { isValid: false, assignment: null };
@@ -985,7 +1021,7 @@ class AuthService {
     try {
       // Clear driver assignment if exists
       if (this.currentUser && this.currentProfile?.role === 'driver') {
-        await this.clearDriverBusAssignment(this.currentUser.id);
+        await this.clearDriverBusAssignment();
       }
 
       // Clear current state

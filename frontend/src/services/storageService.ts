@@ -145,16 +145,13 @@ export class StorageService {
 
       // Ensure we're using the correct backend URL for production
       const baseUrl = API_BASE_URL || environment.api.url;
-      const response = await fetch(
-        `${baseUrl}/storage/upload/driver-photo`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const response = await fetch(`${baseUrl}/storage/upload/driver-photo`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -221,9 +218,7 @@ export class StorageService {
     id: string
   ): Promise<SignedUrlResult> {
     try {
-      const response = await this.makeRequest(
-        `/signed-url/${type}/${id}`
-      );
+      const response = await this.makeRequest(`/signed-url/${type}/${id}`);
 
       if (!response.ok) {
         const errorData = await response.json();

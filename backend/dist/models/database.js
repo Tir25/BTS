@@ -131,7 +131,7 @@ const getTableColumns = async (tableName) => {
       AND table_name = $1 
       ORDER BY ordinal_position;
     `, [tableName]);
-        return result.rows.map(row => row.column_name);
+        return result.rows.map((row) => row.column_name);
     }
     catch (error) {
         console.error(`❌ Error getting columns for table ${tableName}:`, error);

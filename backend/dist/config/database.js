@@ -16,22 +16,24 @@ const poolConfig = {
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
     maxUses: 7500,
-    ssl: environment.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
+    ssl: environment.nodeEnv === 'production'
+        ? { rejectUnauthorized: false }
+        : false,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
 };
 exports.pool = new pg_1.Pool(poolConfig);
-exports.pool.on('error', (err, client) => {
+exports.pool.on('error', (err) => {
     console.error('❌ Unexpected error on idle client', err);
     process.exit(-1);
 });
-exports.pool.on('connect', (client) => {
+exports.pool.on('connect', () => {
     console.log('✅ New database client connected');
 });
-exports.pool.on('acquire', (client) => {
+exports.pool.on('acquire', () => {
     console.log('🔗 Database client acquired from pool');
 });
-exports.pool.on('remove', (client) => {
+exports.pool.on('remove', () => {
     console.log('🔓 Database client removed from pool');
 });
 const checkDatabaseHealth = async () => {
@@ -41,7 +43,7 @@ const checkDatabaseHealth = async () => {
         const result = await client.query('SELECT NOW() as current_time, version() as db_version');
         console.log('✅ Database health check passed:', {
             currentTime: result.rows[0].current_time,
-            version: result.rows[0].db_version.split(' ')[0]
+            version: result.rows[0].db_version.split(' ')[0],
         });
         return { healthy: true };
     }
@@ -79,14 +81,15 @@ const queryWithRetry = async (text, params, maxRetries = 3) => {
             return result;
         }
         catch (error) {
-            lastError = error instanceof Error ? error : new Error('Unknown database error');
+            lastError =
+                error instanceof Error ? error : new Error('Unknown database error');
             console.error(`❌ Database query failed (attempt ${attempt}/${maxRetries}):`, lastError.message);
             if (attempt === maxRetries) {
                 throw lastError;
             }
             const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
             console.log(`⏳ Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+            await new Promise((resolve) => setTimeout(resolve, delay));
         }
     }
     throw lastError;

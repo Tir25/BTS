@@ -47,8 +47,10 @@ export const initializeWebSocket = (io: SocketIOServer) => {
     totalConnections++;
     activeConnections++;
     socket.lastActivity = Date.now();
-    
-    console.log(`🔌 New client connected: ${socket.id} (Total: ${totalConnections}, Active: ${activeConnections})`);
+
+    console.log(
+      `🔌 New client connected: ${socket.id} (Total: ${totalConnections}, Active: ${activeConnections})`
+    );
 
     // Set socket options for better mobile support
     socket.conn.on('packet', ({ type }) => {
@@ -71,18 +73,18 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         const { token } = data;
 
         if (!token) {
-          socket.emit('driver:authentication_failed', { 
+          socket.emit('driver:authentication_failed', {
             message: 'Authentication token required',
-            code: 'MISSING_TOKEN'
+            code: 'MISSING_TOKEN',
           });
           return;
         }
 
         // Validate token format
         if (typeof token !== 'string' || token.length < 10) {
-          socket.emit('driver:authentication_failed', { 
+          socket.emit('driver:authentication_failed', {
             message: 'Invalid token format',
-            code: 'INVALID_TOKEN_FORMAT'
+            code: 'INVALID_TOKEN_FORMAT',
           });
           return;
         }
@@ -94,9 +96,9 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
         if (error || !user) {
           console.error('❌ Authentication error:', error);
-          socket.emit('driver:authentication_failed', { 
+          socket.emit('driver:authentication_failed', {
             message: 'Invalid authentication token',
-            code: 'INVALID_TOKEN'
+            code: 'INVALID_TOKEN',
           });
           return;
         }
@@ -128,7 +130,7 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
         // Allow access if user has driver role in auth metadata, profiles table, or users table
         const hasDriverRole =
-          isDualRoleUser || 
+          isDualRoleUser ||
           (profile && profile.role === 'driver') ||
           (userRecord && userRecord.role === 'driver');
 
@@ -139,13 +141,13 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           isDualRoleUser,
           profileRole: profile?.role,
           userRecordRole: userRecord?.role,
-          hasDriverRole
+          hasDriverRole,
         });
 
         if (!hasDriverRole) {
           socket.emit('driver:authentication_failed', {
             message: 'Access denied. Driver role required.',
-            code: 'INSUFFICIENT_PERMISSIONS'
+            code: 'INSUFFICIENT_PERMISSIONS',
           });
           return;
         }
@@ -155,9 +157,9 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
         if (!busInfo) {
           console.log('❌ No bus assigned to driver:', user.id);
-          socket.emit('driver:authentication_failed', { 
+          socket.emit('driver:authentication_failed', {
             message: 'No bus assigned to driver',
-            code: 'NO_BUS_ASSIGNED'
+            code: 'NO_BUS_ASSIGNED',
           });
           return;
         }
@@ -186,9 +188,9 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         socket.emit('driver:authenticated', authResponse);
       } catch (error) {
         console.error('❌ Authentication error:', error);
-        socket.emit('driver:authentication_failed', { 
+        socket.emit('driver:authentication_failed', {
           message: 'Authentication failed',
-          code: 'AUTH_ERROR'
+          code: 'AUTH_ERROR',
         });
       }
     });
@@ -197,7 +199,7 @@ export const initializeWebSocket = (io: SocketIOServer) => {
     socket.on('driver:locationUpdate', async (data: LocationUpdate) => {
       try {
         socket.lastActivity = Date.now();
-        
+
         console.log('📍 Received location update from driver:', {
           driverId: data.driverId,
           latitude: data.latitude,
@@ -208,26 +210,26 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         });
 
         if (!socket.driverId || !socket.busId || !socket.isAuthenticated) {
-          socket.emit('error', { 
+          socket.emit('error', {
             message: 'Driver not authenticated',
-            code: 'NOT_AUTHENTICATED'
+            code: 'NOT_AUTHENTICATED',
           });
           return;
         }
 
         const validationError = validateLocationData(data);
         if (validationError) {
-          socket.emit('error', { 
+          socket.emit('error', {
             message: validationError,
-            code: 'VALIDATION_ERROR'
+            code: 'VALIDATION_ERROR',
           });
           return;
         }
 
         if (data.driverId !== socket.driverId) {
-          socket.emit('error', { 
+          socket.emit('error', {
             message: 'Unauthorized location update',
-            code: 'UNAUTHORIZED'
+            code: 'UNAUTHORIZED',
           });
           return;
         }
@@ -243,9 +245,9 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         });
 
         if (!savedLocation) {
-          socket.emit('error', { 
+          socket.emit('error', {
             message: 'Failed to save location update',
-            code: 'SAVE_ERROR'
+            code: 'SAVE_ERROR',
           });
           return;
         }
@@ -315,9 +317,9 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         );
       } catch (error) {
         console.error('❌ Location update error:', error);
-        socket.emit('error', { 
+        socket.emit('error', {
           message: 'Failed to process location update',
-          code: 'PROCESSING_ERROR'
+          code: 'PROCESSING_ERROR',
         });
       }
     });
@@ -333,7 +335,9 @@ export const initializeWebSocket = (io: SocketIOServer) => {
     // Enhanced disconnect handling
     socket.on('disconnect', (reason) => {
       activeConnections--;
-      console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason} (Active: ${activeConnections})`);
+      console.log(
+        `🔌 Client disconnected: ${socket.id}, reason: ${reason} (Active: ${activeConnections})`
+      );
 
       // Log additional info for debugging mobile disconnections
       if (reason === 'transport close') {
@@ -346,7 +350,9 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
       // Clean up authenticated driver
       if (socket.isAuthenticated && socket.driverId) {
-        console.log(`🚌 Driver ${socket.driverId} disconnected from bus ${socket.busId}`);
+        console.log(
+          `🚌 Driver ${socket.driverId} disconnected from bus ${socket.busId}`
+        );
       }
     });
 
@@ -357,7 +363,7 @@ export const initializeWebSocket = (io: SocketIOServer) => {
     });
 
     // Activity monitoring
-    socket.onAny((eventName, ...args) => {
+    socket.onAny(() => {
       socket.lastActivity = Date.now();
     });
   });
@@ -366,10 +372,17 @@ export const initializeWebSocket = (io: SocketIOServer) => {
   setInterval(() => {
     const now = Date.now();
     const inactiveThreshold = 5 * 60 * 1000; // 5 minutes
-    
+
     io.sockets.sockets.forEach((socket: AuthenticatedSocket) => {
-      if (socket.lastActivity && (now - socket.lastActivity) > inactiveThreshold) {
-        console.log(`⏰ Inactive socket detected: ${socket.id}, last activity: ${new Date(socket.lastActivity).toISOString()}`);
+      if (
+        socket.lastActivity &&
+        now - socket.lastActivity > inactiveThreshold
+      ) {
+        console.log(
+          `⏰ Inactive socket detected: ${socket.id}, last activity: ${new Date(
+            socket.lastActivity
+          ).toISOString()}`
+        );
       }
     });
   }, 60000); // Check every minute

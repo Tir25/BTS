@@ -1,3 +1,34 @@
+export interface PostGISPoint {
+    type: 'Point';
+    coordinates: [number, number];
+    crs?: {
+        type: 'name';
+        properties: {
+            name: string;
+        };
+    };
+}
+export interface PostGISLineString {
+    type: 'LineString';
+    coordinates: [number, number][];
+    crs?: {
+        type: 'name';
+        properties: {
+            name: string;
+        };
+    };
+}
+export interface PostGISGeometry {
+    type: string;
+    coordinates: unknown;
+    crs?: {
+        type: 'name';
+        properties: {
+            name: string;
+        };
+    };
+}
+export type JSONB = Record<string, unknown>;
 export interface DatabaseUser {
     id: string;
     email: string;

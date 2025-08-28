@@ -387,7 +387,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
       try {
         setConnectionError(null);
         setConnectionStatus('connecting');
-        
+
         // Reset WebSocket service before connecting
         websocketService.reset();
         await websocketService.connect();
@@ -399,7 +399,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         websocketService.onDriverDisconnected(handleDriverDisconnected);
         // Emit student connection event
         websocketService.socket?.emit('student:connect');
-        
+
         websocketService.onStudentConnected(() => {
           console.log('✅ Student connected to WebSocket');
         });

@@ -3,14 +3,22 @@ export const productionConfig = {
   // API Configuration
   api: {
     // These will be set via environment variables in Vercel
-    baseUrl: process.env.VITE_API_URL || 'https://bus-tracking-backend-sxh8.onrender.com',
-    websocketUrl: process.env.VITE_WEBSOCKET_URL || 'wss://bus-tracking-backend-sxh8.onrender.com',
+    baseUrl:
+      process.env.VITE_API_URL ||
+      'https://bus-tracking-backend-sxh8.onrender.com',
+    websocketUrl:
+      process.env.VITE_WEBSOCKET_URL ||
+      'wss://bus-tracking-backend-sxh8.onrender.com',
   },
 
   // Supabase Configuration
   supabase: {
-    url: process.env.VITE_SUPABASE_URL || 'https://gthwmwfwvhyriygpcdlr.supabase.co',
-    anonKey: process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI',
+    url:
+      process.env.VITE_SUPABASE_URL ||
+      'https://gthwmwfwvhyriygpcdlr.supabase.co',
+    anonKey:
+      process.env.VITE_SUPABASE_ANON_KEY ||
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI',
   },
 
   // WebSocket Configuration
@@ -61,9 +69,9 @@ export const isProduction = () => {
   return (
     typeof window !== 'undefined' &&
     (window.location.hostname.includes('vercel.app') ||
-     window.location.hostname.includes('vercel.com') ||
-     window.location.hostname.includes('render.com') ||
-     window.location.hostname.includes('onrender.com'))
+      window.location.hostname.includes('vercel.com') ||
+      window.location.hostname.includes('render.com') ||
+      window.location.hostname.includes('onrender.com'))
   );
 };
 
@@ -71,8 +79,8 @@ export const isDevelopment = () => {
   return (
     typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' ||
-     window.location.hostname === '127.0.0.1' ||
-     window.location.hostname.includes('devtunnels.ms'))
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.includes('devtunnels.ms'))
   );
 };
 

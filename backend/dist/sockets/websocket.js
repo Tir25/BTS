@@ -40,14 +40,14 @@ const initializeWebSocket = (io) => {
                 if (!token) {
                     socket.emit('driver:authentication_failed', {
                         message: 'Authentication token required',
-                        code: 'MISSING_TOKEN'
+                        code: 'MISSING_TOKEN',
                     });
                     return;
                 }
                 if (typeof token !== 'string' || token.length < 10) {
                     socket.emit('driver:authentication_failed', {
                         message: 'Invalid token format',
-                        code: 'INVALID_TOKEN_FORMAT'
+                        code: 'INVALID_TOKEN_FORMAT',
                     });
                     return;
                 }
@@ -56,7 +56,7 @@ const initializeWebSocket = (io) => {
                     console.error('❌ Authentication error:', error);
                     socket.emit('driver:authentication_failed', {
                         message: 'Invalid authentication token',
-                        code: 'INVALID_TOKEN'
+                        code: 'INVALID_TOKEN',
                     });
                     return;
                 }
@@ -83,12 +83,12 @@ const initializeWebSocket = (io) => {
                     isDualRoleUser,
                     profileRole: profile?.role,
                     userRecordRole: userRecord?.role,
-                    hasDriverRole
+                    hasDriverRole,
                 });
                 if (!hasDriverRole) {
                     socket.emit('driver:authentication_failed', {
                         message: 'Access denied. Driver role required.',
-                        code: 'INSUFFICIENT_PERMISSIONS'
+                        code: 'INSUFFICIENT_PERMISSIONS',
                     });
                     return;
                 }
@@ -98,7 +98,7 @@ const initializeWebSocket = (io) => {
                     console.log('❌ No bus assigned to driver:', user.id);
                     socket.emit('driver:authentication_failed', {
                         message: 'No bus assigned to driver',
-                        code: 'NO_BUS_ASSIGNED'
+                        code: 'NO_BUS_ASSIGNED',
                     });
                     return;
                 }
@@ -121,7 +121,7 @@ const initializeWebSocket = (io) => {
                 console.error('❌ Authentication error:', error);
                 socket.emit('driver:authentication_failed', {
                     message: 'Authentication failed',
-                    code: 'AUTH_ERROR'
+                    code: 'AUTH_ERROR',
                 });
             }
         });
@@ -139,7 +139,7 @@ const initializeWebSocket = (io) => {
                 if (!socket.driverId || !socket.busId || !socket.isAuthenticated) {
                     socket.emit('error', {
                         message: 'Driver not authenticated',
-                        code: 'NOT_AUTHENTICATED'
+                        code: 'NOT_AUTHENTICATED',
                     });
                     return;
                 }
@@ -147,14 +147,14 @@ const initializeWebSocket = (io) => {
                 if (validationError) {
                     socket.emit('error', {
                         message: validationError,
-                        code: 'VALIDATION_ERROR'
+                        code: 'VALIDATION_ERROR',
                     });
                     return;
                 }
                 if (data.driverId !== socket.driverId) {
                     socket.emit('error', {
                         message: 'Unauthorized location update',
-                        code: 'UNAUTHORIZED'
+                        code: 'UNAUTHORIZED',
                     });
                     return;
                 }
@@ -170,7 +170,7 @@ const initializeWebSocket = (io) => {
                 if (!savedLocation) {
                     socket.emit('error', {
                         message: 'Failed to save location update',
-                        code: 'SAVE_ERROR'
+                        code: 'SAVE_ERROR',
                     });
                     return;
                 }
@@ -223,7 +223,7 @@ const initializeWebSocket = (io) => {
                 console.error('❌ Location update error:', error);
                 socket.emit('error', {
                     message: 'Failed to process location update',
-                    code: 'PROCESSING_ERROR'
+                    code: 'PROCESSING_ERROR',
                 });
             }
         });
@@ -253,7 +253,7 @@ const initializeWebSocket = (io) => {
             console.error('❌ Socket error:', error);
             socket.lastActivity = Date.now();
         });
-        socket.onAny((eventName, ...args) => {
+        socket.onAny(() => {
             socket.lastActivity = Date.now();
         });
     });
@@ -261,7 +261,8 @@ const initializeWebSocket = (io) => {
         const now = Date.now();
         const inactiveThreshold = 5 * 60 * 1000;
         io.sockets.sockets.forEach((socket) => {
-            if (socket.lastActivity && (now - socket.lastActivity) > inactiveThreshold) {
+            if (socket.lastActivity &&
+                now - socket.lastActivity > inactiveThreshold) {
                 console.log(`⏰ Inactive socket detected: ${socket.id}, last activity: ${new Date(socket.lastActivity).toISOString()}`);
             }
         });

@@ -1,6 +1,41 @@
-import pool, {
-  checkDatabaseHealth,
-} from '../config/database';
+import pool, { checkDatabaseHealth } from '../config/database';
+
+// PostGIS Geometry Types
+export interface PostGISPoint {
+  type: 'Point';
+  coordinates: [number, number]; // [longitude, latitude]
+  crs?: {
+    type: 'name';
+    properties: {
+      name: string;
+    };
+  };
+}
+
+export interface PostGISLineString {
+  type: 'LineString';
+  coordinates: [number, number][]; // Array of [longitude, latitude] pairs
+  crs?: {
+    type: 'name';
+    properties: {
+      name: string;
+    };
+  };
+}
+
+export interface PostGISGeometry {
+  type: string;
+  coordinates: unknown;
+  crs?: {
+    type: 'name';
+    properties: {
+      name: string;
+    };
+  };
+}
+
+// JSONB type for flexible data
+export type JSONB = Record<string, unknown>;
 
 // TypeScript interfaces matching the actual database schema
 export interface DatabaseUser {
@@ -59,8 +94,8 @@ export interface DatabaseRoute {
   id: string;
   name: string;
   description?: string;
-  geom: any; // PostGIS geometry
-  stops?: any; // PostGIS geometry
+  geom: PostGISGeometry; // PostGIS geometry
+  stops?: PostGISGeometry; // PostGIS geometry
   total_distance_m?: number;
   distance_km?: number;
   estimated_duration_minutes?: number;
@@ -74,22 +109,25 @@ export interface DatabaseRoute {
   city?: string;
   custom_destination?: string;
   custom_origin?: string;
-  custom_destination_coordinates?: any;
-  custom_origin_coordinates?: any;
-  destination_coordinates?: any;
-  origin_coordinates?: any;
+  custom_destination_coordinates?: PostGISGeometry;
+  custom_origin_coordinates?: PostGISGeometry;
+  destination_coordinates?: PostGISGeometry;
+  origin_coordinates?: PostGISGeometry;
   use_custom_arrival?: boolean;
   custom_arrival_point?: string;
-  custom_arrival_coordinates?: any;
+  custom_arrival_coordinates?: PostGISGeometry;
   use_custom_starting_point?: boolean;
   custom_starting_point?: string;
-  custom_starting_coordinates?: any;
-  arrival_point_type?: 'ganpat_university' | 'custom_arrival' | 'driver_location';
+  custom_starting_coordinates?: PostGISGeometry;
+  arrival_point_type?:
+    | 'ganpat_university'
+    | 'custom_arrival'
+    | 'driver_location';
   starting_point_type?: 'route_origin' | 'custom_starting' | 'driver_location';
   use_custom_origin?: boolean;
   custom_origin_point?: string;
   origin_point_type?: 'driver_location' | 'custom_origin';
-  bus_stops?: any; // JSONB
+  bus_stops?: Record<string, unknown>; // JSONB
   last_eta_calculation?: string;
   current_eta_minutes?: number;
 }
@@ -97,7 +135,7 @@ export interface DatabaseRoute {
 export interface DatabaseLiveLocation {
   id: string;
   bus_id: string;
-  location: any; // PostGIS Point geometry
+  location: PostGISGeometry; // PostGIS Point geometry
   speed_kmh?: number;
   heading_degrees?: number;
   recorded_at: string;
@@ -237,7 +275,10 @@ export const initializeDatabase = async (): Promise<void> => {
           `CREATE INDEX IF NOT EXISTS idx_routes_geom ON routes USING GIST(geom);`
         );
       } catch (indexError) {
-        console.warn('⚠️ Could not create routes geometry indexes:', indexError);
+        console.warn(
+          '⚠️ Could not create routes geometry indexes:',
+          indexError
+        );
       }
 
       console.log('✅ Database indexes created');
@@ -282,13 +323,16 @@ export const getDatabaseHealth = async (): Promise<unknown> => {
 // Utility function to check if a table exists
 export const tableExists = async (tableName: string): Promise<boolean> => {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
         AND table_name = $1
       );
-    `, [tableName]);
+    `,
+      [tableName]
+    );
     return result.rows[0].exists;
   } catch (error) {
     console.error(`❌ Error checking if table ${tableName} exists:`, error);
@@ -299,14 +343,17 @@ export const tableExists = async (tableName: string): Promise<boolean> => {
 // Utility function to get table columns
 export const getTableColumns = async (tableName: string): Promise<string[]> => {
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT column_name 
       FROM information_schema.columns 
       WHERE table_schema = 'public' 
       AND table_name = $1 
       ORDER BY ordinal_position;
-    `, [tableName]);
-    return result.rows.map(row => row.column_name);
+    `,
+      [tableName]
+    );
+    return result.rows.map((row) => row.column_name);
   } catch (error) {
     console.error(`❌ Error getting columns for table ${tableName}:`, error);
     return [];

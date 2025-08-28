@@ -48,7 +48,9 @@ class ApiService implements IApiService {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        errorData.message || errorData.error || `API request failed: ${response.status} ${response.statusText}`
+        errorData.message ||
+          errorData.error ||
+          `API request failed: ${response.status} ${response.statusText}`
       );
     }
 
@@ -200,7 +202,10 @@ class ApiService implements IApiService {
           timestamp: new Date().toISOString(),
         };
       } else {
-        console.error('❌ Error fetching route info from backend:', response.error);
+        console.error(
+          '❌ Error fetching route info from backend:',
+          response.error
+        );
         return {
           success: false,
           data: null,
@@ -239,7 +244,10 @@ class ApiService implements IApiService {
           timestamp: new Date().toISOString(),
         };
       } else {
-        console.error('❌ Error fetching drivers from backend:', response.error);
+        console.error(
+          '❌ Error fetching drivers from backend:',
+          response.error
+        );
         return {
           success: false,
           data: [],
@@ -277,7 +285,10 @@ class ApiService implements IApiService {
           timestamp: new Date().toISOString(),
         };
       } else {
-        console.error('❌ Error fetching driver info from backend:', response.error);
+        console.error(
+          '❌ Error fetching driver info from backend:',
+          response.error
+        );
         return {
           success: false,
           data: null,
@@ -316,7 +327,10 @@ class ApiService implements IApiService {
           timestamp: new Date().toISOString(),
         };
       } else {
-        console.error('❌ Error fetching live locations from backend:', response.error);
+        console.error(
+          '❌ Error fetching live locations from backend:',
+          response.error
+        );
         return {
           success: false,
           data: [],
@@ -336,7 +350,12 @@ class ApiService implements IApiService {
   async updateLiveLocation(
     busId: string,
     driverId: string,
-    location: { latitude: number; longitude: number; speed?: number; heading?: number }
+    location: {
+      latitude: number;
+      longitude: number;
+      speed?: number;
+      heading?: number;
+    }
   ): Promise<{
     success: boolean;
     data: BusLocation | null;
@@ -369,7 +388,10 @@ class ApiService implements IApiService {
           timestamp: new Date().toISOString(),
         };
       } else {
-        console.error('❌ Error updating live location via backend:', response.error);
+        console.error(
+          '❌ Error updating live location via backend:',
+          response.error
+        );
         return {
           success: false,
           data: null,

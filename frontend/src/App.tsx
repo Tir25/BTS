@@ -10,7 +10,10 @@ import EnhancedStudentMap from './components/EnhancedStudentMap';
 import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import PremiumHomepage from './components/PremiumHomepage';
-import { TransitionProvider, GlobalTransitionWrapper } from './components/transitions';
+import {
+  TransitionProvider,
+  GlobalTransitionWrapper,
+} from './components/transitions';
 
 function App() {
   console.log('🚀 App component is rendering...');
@@ -62,13 +65,15 @@ function App() {
 
       setAuthState({
         isAuthenticated: !!user,
-        user: user ? {
-          id: user.id,
-          email: user.email || '',
-          role: 'student' as const,
-          created_at: user.created_at,
-          updated_at: user.updated_at
-        } : null,
+        user: user
+          ? {
+              id: user.id,
+              email: user.email || '',
+              role: 'student' as const,
+              created_at: user.created_at,
+              updated_at: user.updated_at,
+            }
+          : null,
         loading: false,
       });
     };

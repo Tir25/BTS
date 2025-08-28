@@ -13,6 +13,9 @@ const finalSupabaseServiceRoleKey = environment.supabase.serviceRoleKey;
 export const supabase = createClient(finalSupabaseUrl, finalSupabaseAnonKey);
 
 // Admin client for server-side operations
-export const supabaseAdmin = createClient(finalSupabaseUrl, finalSupabaseServiceRoleKey);
+export const supabaseAdmin = createClient(
+  finalSupabaseUrl,
+  finalSupabaseServiceRoleKey
+);
 
 export default supabase;

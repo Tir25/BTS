@@ -98,9 +98,9 @@ export const getDriverBusInfo = async (
 
     // Then, get the driver profile information from both tables
     let driverName = 'Unknown Driver';
-    
+
     // First try profiles table
-    const { data: profileData, error: profileError } = await supabaseAdmin
+    const { data: profileData } = await supabaseAdmin
       .from('profiles')
       .select('full_name')
       .eq('id', driverId)
@@ -110,14 +110,16 @@ export const getDriverBusInfo = async (
       driverName = profileData.full_name;
     } else {
       // Fallback to users table
-      const { data: userData, error: userError } = await supabaseAdmin
+      const { data: userData } = await supabaseAdmin
         .from('users')
         .select('first_name, last_name')
         .eq('id', driverId)
         .maybeSingle();
 
       if (userData) {
-        driverName = `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || 'Unknown Driver';
+        driverName =
+          `${userData.first_name || ''} ${userData.last_name || ''}`.trim() ||
+          'Unknown Driver';
       }
     }
 

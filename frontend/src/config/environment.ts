@@ -10,7 +10,11 @@ const getApiUrl = () => {
   const currentProtocol = window.location.protocol;
 
   // Fast check for production domains
-  if (currentHost.includes('render.com') || currentHost.includes('vercel.app') || currentHost.includes('vercel.com')) {
+  if (
+    currentHost.includes('render.com') ||
+    currentHost.includes('vercel.app') ||
+    currentHost.includes('vercel.com')
+  ) {
     return 'https://bus-tracking-backend-sxh8.onrender.com';
   }
 
@@ -40,7 +44,11 @@ const getWebSocketUrl = () => {
   const currentProtocol = window.location.protocol;
 
   // Fast check for production domains
-  if (currentHost.includes('render.com') || currentHost.includes('vercel.app') || currentHost.includes('vercel.com')) {
+  if (
+    currentHost.includes('render.com') ||
+    currentHost.includes('vercel.app') ||
+    currentHost.includes('vercel.com')
+  ) {
     return 'wss://bus-tracking-backend-sxh8.onrender.com';
   }
 

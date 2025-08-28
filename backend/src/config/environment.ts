@@ -65,7 +65,10 @@ export const initializeEnvironment = (): EnvironmentConfig => {
     );
 
     if (missingEnvVars.length > 0) {
-      console.error('❌ Missing required environment variables:', missingEnvVars);
+      console.error(
+        '❌ Missing required environment variables:',
+        missingEnvVars
+      );
       console.error(
         '💡 Please check your .env file and ensure all required variables are set'
       );
@@ -76,15 +79,27 @@ export const initializeEnvironment = (): EnvironmentConfig => {
   }
 
   // Provide fallbacks for development
-  const supabaseUrl = process.env.SUPABASE_URL || (isProduction ? '' : 'https://gthwmwfwvhyriygpcdlr.supabase.co');
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || (isProduction ? '' : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI');
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || (isProduction ? '' : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDk3MTQ1NSwiZXhwIjoyMDcwNTQ3NDU1fQ.LuwfYUuGMRQh3Gbc7NQuRCqZxLsS5CrQOd1eMjiWj2o');
+  const supabaseUrl =
+    process.env.SUPABASE_URL ||
+    (isProduction ? '' : 'https://gthwmwfwvhyriygpcdlr.supabase.co');
+  const supabaseAnonKey =
+    process.env.SUPABASE_ANON_KEY ||
+    (isProduction
+      ? ''
+      : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI');
+  const supabaseServiceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    (isProduction
+      ? ''
+      : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDk3MTQ1NSwiZXhwIjoyMDcwNTQ3NDU1fQ.LuwfYUuGMRQh3Gbc7NQuRCqZxLsS5CrQOd1eMjiWj2o');
 
   const config: EnvironmentConfig = {
     port: parseInt(process.env.PORT || '3000'),
     nodeEnv,
     database: {
-      url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/bus_tracking',
+      url:
+        process.env.DATABASE_URL ||
+        'postgresql://postgres:password@localhost:5432/bus_tracking',
       poolMax: parseInt(process.env.DB_POOL_MAX || '20'),
       poolIdleTimeout: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000'),
       poolConnectionTimeout: parseInt(
