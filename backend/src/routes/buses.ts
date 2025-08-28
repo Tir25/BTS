@@ -3,15 +3,30 @@ import { getBusInfo, getAllBuses } from '../services/locationService';
 
 const router = express.Router();
 
-// Get all active buses
+// Get all active buses with optional filtering
 router.get('/', async (req, res) => {
   try {
-    const buses = await getAllBuses();
-    res.json({
-      success: true,
-      data: buses,
-      timestamp: new Date().toISOString(),
-    });
+    const { driver_id } = req.query;
+    
+    if (driver_id) {
+      // Filter buses by driver_id
+      const buses = await getAllBuses();
+      const filteredBuses = buses.filter(bus => bus.assigned_driver_id === driver_id);
+      
+      res.json({
+        success: true,
+        data: filteredBuses,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      // Get all buses
+      const buses = await getAllBuses();
+      res.json({
+        success: true,
+        data: buses,
+        timestamp: new Date().toISOString(),
+      });
+    }
   } catch (error) {
     console.error('❌ Error fetching buses:', error);
     res.status(500).json({

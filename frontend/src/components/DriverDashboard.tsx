@@ -62,9 +62,11 @@ const DriverDashboard: React.FC = () => {
       console.log('🔄 Driver Dashboard: Already initialized, skipping...');
       return;
     }
-    initializationRef.current = true;
 
     console.log('🚀 Driver Dashboard: Starting initialization...');
+    
+    // Set initialization flag immediately to prevent multiple calls
+    initializationRef.current = true;
 
     // Set up connection status monitoring
     const updateConnectionStatus = () => {
@@ -269,7 +271,10 @@ const DriverDashboard: React.FC = () => {
     // Cleanup function
     return () => {
       clearInterval(statusInterval);
+      // Reset initialization flag on cleanup
       initializationRef.current = false;
+      
+      // Clean up WebSocket listeners
       if (websocketService.socket) {
         websocketService.socket.off('connect');
         websocketService.socket.off('disconnect');
@@ -278,16 +283,20 @@ const DriverDashboard: React.FC = () => {
         websocketService.socket.off('driver:authentication_failed');
         websocketService.socket.off('driver:locationConfirmed');
       }
+      
+      console.log('🧹 Driver Dashboard: Cleanup completed');
     };
   }, [navigate]);
 
   // Initialize map when component mounts
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
+      console.log('🗺️ Initializing map...');
       initializeMap();
     }
 
     return () => {
+      console.log('🗺️ Cleaning up map...');
       cleanupMap();
     };
   }, []);
@@ -298,32 +307,54 @@ const DriverDashboard: React.FC = () => {
     const latitude = 23.0225;
     const longitude = 72.5714;
 
-    mapRef.current = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors',
+    // Clean up existing map if it exists
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+
+    try {
+      mapRef.current = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: 'raster',
+              tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+              tileSize: 256,
+              attribution: '© OpenStreetMap contributors',
+            },
           },
+          layers: [
+            {
+              id: 'osm-tiles',
+              type: 'raster',
+              source: 'osm',
+              minzoom: 0,
+              maxzoom: 22,
+            },
+          ],
         },
-        layers: [
-          {
-            id: 'osm-tiles',
-            type: 'raster',
-            source: 'osm',
-            minzoom: 0,
-            maxzoom: 22,
-          },
-        ],
-      },
-      center: [longitude, latitude],
-      zoom: 15,
-      attributionControl: false,
-    });
+        center: [longitude, latitude],
+        zoom: 15,
+        attributionControl: false,
+        preserveDrawingBuffer: true, // Prevent WebGL context loss
+        antialias: true,
+      });
+
+      // Handle WebGL context loss
+      mapRef.current.on('webglcontextlost', () => {
+        console.warn('⚠️ WebGL context lost, attempting to restore...');
+      });
+
+      mapRef.current.on('webglcontextrestored', () => {
+        console.log('✅ WebGL context restored');
+      });
+    } catch (error) {
+      console.error('❌ Error initializing map:', error);
+    }
+  };
 
     const markerElement = document.createElement('div');
     markerElement.className = 'driver-marker';
@@ -438,11 +469,16 @@ const DriverDashboard: React.FC = () => {
   };
 
   const cleanupMap = () => {
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
+    try {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+      markerRef.current = null;
+      console.log('🗺️ Map cleanup completed');
+    } catch (error) {
+      console.error('❌ Error during map cleanup:', error);
     }
-    markerRef.current = null;
   };
 
   const fetchBusInfoFromAPI = async (userId: string) => {
