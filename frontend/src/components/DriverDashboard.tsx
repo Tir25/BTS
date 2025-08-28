@@ -59,9 +59,12 @@ const DriverDashboard: React.FC = () => {
   useEffect(() => {
     // Prevent multiple initializations
     if (initializationRef.current) {
+      console.log('🔄 Driver Dashboard: Already initialized, skipping...');
       return;
     }
     initializationRef.current = true;
+
+    console.log('🚀 Driver Dashboard: Starting initialization...');
 
     // Set up connection status monitoring
     const updateConnectionStatus = () => {
@@ -167,7 +170,11 @@ const DriverDashboard: React.FC = () => {
           // Connect to WebSocket only if not already connected
           if (!websocketService.isConnected()) {
             console.log('🔌 Driver Dashboard: Connecting to WebSocket...');
-            await websocketService.connect();
+            try {
+              await websocketService.connect();
+            } catch (error) {
+              console.warn('⚠️ WebSocket connection failed, will use API fallback:', error);
+            }
           } else {
             console.log('✅ WebSocket already connected');
           }
@@ -231,7 +238,7 @@ const DriverDashboard: React.FC = () => {
 
           // Fallback: Fetch bus information from API if WebSocket fails
           setTimeout(() => {
-            if (!initializationRef.current) {
+            if (!busInfo && !isAuthenticated) {
               console.log('🔄 Fallback: Fetching bus info from API...');
               fetchBusInfoFromAPI(session.user.id);
             }
@@ -239,7 +246,7 @@ const DriverDashboard: React.FC = () => {
 
           // Additional fallback after 10 seconds
           setTimeout(() => {
-            if (!initializationRef.current) {
+            if (!busInfo && !isAuthenticated) {
               console.log('🔄 Second fallback: Fetching bus info from API...');
               fetchBusInfoFromAPI(session.user.id);
             }
@@ -447,9 +454,9 @@ const DriverDashboard: React.FC = () => {
         data: { session },
       } = await supabase.auth.getSession();
 
-      // Make API call to get driver bus info
+      // Make API call to get driver bus info - use the correct endpoint
       const response = await fetch(
-        `${environment.api.url}/api/admin/drivers/${userId}/bus`,
+        `${environment.api.url}/api/buses?driver_id=${userId}`,
         {
           method: 'GET',
           headers: {
@@ -463,7 +470,19 @@ const DriverDashboard: React.FC = () => {
         const data = await response.json();
         console.log('✅ Bus info from API:', data);
 
-        if (data.data?.busInfo) {
+        // Handle the response format from the buses endpoint
+        if (data.success && data.data && Array.isArray(data.data) && data.data.length > 0) {
+          const busData = data.data[0]; // Get the first bus assigned to this driver
+          setBusInfo({
+            bus_id: busData.id,
+            bus_number: busData.number_plate || busData.code,
+            route_id: busData.route_id || '',
+            route_name: busData.route_name || 'Route TBD',
+            driver_id: busData.assigned_driver_id,
+            driver_name: busData.driver_full_name || 'Driver TBD',
+          });
+          setIsAuthenticated(true);
+        } else if (data.data?.busInfo) {
           setBusInfo(data.data.busInfo);
           setIsAuthenticated(true);
         } else if (data.busInfo) {

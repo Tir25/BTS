@@ -198,7 +198,7 @@ const DriverLogin: React.FC = () => {
         );
       };
 
-      // Add timeout for authentication (increased to 30 seconds)
+      // Add timeout for authentication (increased to 60 seconds for better reliability)
       const authTimeout = setTimeout(() => {
         console.error('❌ Driver: Authentication timeout');
         setLoginError('Authentication timeout - please try again');
@@ -211,7 +211,7 @@ const DriverLogin: React.FC = () => {
           'driver:authentication_failed',
           handleAuthenticationFailed
         );
-      }, 30000);
+      }, 60000);
 
       console.log('🔐 Driver: Sending authentication request...');
 
