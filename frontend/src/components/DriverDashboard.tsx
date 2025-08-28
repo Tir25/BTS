@@ -56,6 +56,14 @@ const DriverDashboard: React.FC = () => {
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const initializationRef = useRef(false);
   const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Store event listener references to properly remove them later
+  const eventListenersRef = useRef<{
+    webglcontextlost?: (event: Event) => void;
+    webglcontextrestored?: () => void;
+    error?: (e: any) => void;
+    load?: () => void;
+  }>({});
 
   // Initialize driver data and WebSocket connection when component mounts
   useEffect(() => {
@@ -371,15 +379,17 @@ const DriverDashboard: React.FC = () => {
         antialias: true,
         failIfMajorPerformanceCaveat: false, // Allow fallback rendering
         maxPitch: 60, // Limit pitch to improve performance
-        localIdeographFontFamily: false, // Improve font rendering
+        localIdeographFontFamily: 'sans-serif', // Improve font rendering
         renderWorldCopies: true, // Improve performance at world edges
       });
 
       // Handle WebGL context loss
-      mapRef.current.on('webglcontextlost', (event) => {
+      const handleContextLost = (event: Event) => {
         console.warn('⚠️ WebGL context lost, attempting to restore...');
         // Prevent the default behavior which halts all rendering
-        event.preventDefault();
+        if (event instanceof WebGLContextEvent) {
+          event.preventDefault();
+        }
         
         // Attempt to restore the context after a short delay
         setTimeout(() => {
@@ -392,9 +402,13 @@ const DriverDashboard: React.FC = () => {
             console.error('❌ Failed to restore map context:', error);
           }
         }, 1000);
-      });
+      };
+      
+      // Store the listener reference
+      eventListenersRef.current.webglcontextlost = handleContextLost;
+      mapRef.current.on('webglcontextlost', handleContextLost);
 
-      mapRef.current.on('webglcontextrestored', () => {
+      const handleContextRestored = () => {
         console.log('✅ WebGL context restored');
         // Redraw the map and marker
         if (mapRef.current && markerRef.current) {
@@ -402,7 +416,11 @@ const DriverDashboard: React.FC = () => {
           const currentLngLat = markerRef.current.getLngLat();
           markerRef.current.setLngLat(currentLngLat);
         }
-      });
+      };
+      
+      // Store the listener reference
+      eventListenersRef.current.webglcontextrestored = handleContextRestored;
+      mapRef.current.on('webglcontextrestored', handleContextRestored);
       
       // Create marker
       const markerElement = document.createElement('div');
@@ -421,14 +439,22 @@ const DriverDashboard: React.FC = () => {
         .addTo(mapRef.current);
         
       // Add error handling for tile loading
-      mapRef.current.on('error', (e) => {
+      const handleMapError = (e: any) => {
         console.error('❌ Map error:', e);
-      });
+      };
+      
+      // Store the listener reference
+      eventListenersRef.current.error = handleMapError;
+      mapRef.current.on('error', handleMapError);
       
       // Optimize performance
-      mapRef.current.on('load', () => {
+      const handleMapLoad = () => {
         console.log('✅ Map loaded successfully');
-      });
+      };
+      
+      // Store the listener reference
+      eventListenersRef.current.load = handleMapLoad;
+      mapRef.current.on('load', handleMapLoad);
       
     } catch (error) {
       console.error('❌ Error initializing map:', error);
@@ -582,11 +608,22 @@ const DriverDashboard: React.FC = () => {
     try {
       // Properly remove all event listeners before removing the map
       if (mapRef.current) {
-        // Remove event listeners to prevent memory leaks
-        mapRef.current.off('webglcontextlost');
-        mapRef.current.off('webglcontextrestored');
-        mapRef.current.off('error');
-        mapRef.current.off('load');
+        // Remove all event listeners using the stored references
+        if (eventListenersRef.current.webglcontextlost) {
+          mapRef.current.off('webglcontextlost', eventListenersRef.current.webglcontextlost);
+        }
+        if (eventListenersRef.current.webglcontextrestored) {
+          mapRef.current.off('webglcontextrestored', eventListenersRef.current.webglcontextrestored);
+        }
+        if (eventListenersRef.current.error) {
+          mapRef.current.off('error', eventListenersRef.current.error);
+        }
+        if (eventListenersRef.current.load) {
+          mapRef.current.off('load', eventListenersRef.current.load);
+        }
+        
+        // Clear the event listeners
+        eventListenersRef.current = {};
         
         // Remove the map
         mapRef.current.remove();
