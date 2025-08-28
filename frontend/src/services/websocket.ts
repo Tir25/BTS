@@ -54,10 +54,8 @@ class WebSocketService {
       return;
     }
 
-    if (this.isShuttingDown) {
-      console.log('🔌 WebSocket service is shutting down, cannot connect');
-      return;
-    }
+    // Reset shutting down flag when attempting to connect
+    this.isShuttingDown = false;
 
     try {
       this.connectionState = 'connecting';
@@ -309,6 +307,31 @@ class WebSocketService {
     // Reset state
     this.reconnectAttempts = 0;
     this.reconnectDelay = 1000;
+  }
+
+  // Method to reset the WebSocket service state
+  reset(): void {
+    console.log('🔄 Resetting WebSocket service...');
+    this.isShuttingDown = false;
+    this.connectionState = 'disconnected';
+    this._isConnected = false;
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = 1000;
+    
+    // Clear any existing socket
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+    
+    // Stop any running timers
+    this.stopHeartbeat();
+    this.stopConnectionMonitoring();
+    
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
   }
 
   isConnected(): boolean {
