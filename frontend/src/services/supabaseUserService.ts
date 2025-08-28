@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import { environment } from '../config/environment';
 
 export interface SupabaseUser {
   id: string;
@@ -173,7 +174,7 @@ class SupabaseUserService {
   ): Promise<any> {
     try {
       // Instead of using admin functions, call the backend API
-      const response = await fetch('/api/admin/drivers', {
+      const response = await fetch(`${environment.api.url}/admin/drivers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -204,7 +205,7 @@ class SupabaseUserService {
   async updateUserMetadata(userId: string, metadata: any): Promise<any> {
     try {
       // Instead of using admin functions, call the backend API
-      const response = await fetch(`/api/admin/drivers/${userId}`, {
+      const response = await fetch(`${environment.api.url}/admin/drivers/${userId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

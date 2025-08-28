@@ -653,9 +653,9 @@ const DriverDashboard: React.FC = () => {
         return false;
       }
 
-      // Make API call to get driver bus info - use the correct endpoint
+      // Make API call to get driver bus info - use the correct endpoint without /api prefix
       const response = await fetch(
-        `${environment.api.url}/api/buses?driver_id=${userId}`,
+        `${environment.api.url}/buses?driver_id=${userId}`,
         {
           method: 'GET',
           headers: {
