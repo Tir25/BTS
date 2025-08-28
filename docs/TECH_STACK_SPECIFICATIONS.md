@@ -29,6 +29,12 @@ This document provides a comprehensive overview of the technology stack, softwar
                         └─────────────────┘
 ```
 
+### **Current Deployment URLs**
+- **Frontend**: https://bts-frontend-navy.vercel.app
+- **Backend**: https://bus-tracking-backend-sxh8.onrender.com
+- **WebSocket**: wss://bus-tracking-backend-sxh8.onrender.com
+- **Database**: Supabase (gthwmwfwvhyriygpcdlr.supabase.co)
+
 ---
 
 ## 🎯 **FRONTEND TECHNOLOGY STACK**
@@ -62,6 +68,15 @@ This document provides a comprehensive overview of the technology stack, softwar
 - **Supabase JS 2.39.0** - Backend-as-a-Service integration
 - **RESTful APIs** - HTTP-based data communication
 - **JWT Authentication** - Secure user authentication
+
+### **Frontend Environment Variables**
+```bash
+VITE_SUPABASE_URL=https://gthwmwfwvhyriygpcdlr.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_API_URL=https://bus-tracking-backend-sxh8.onrender.com
+VITE_WEBSOCKET_URL=wss://bus-tracking-backend-sxh8.onrender.com
+VITE_ADMIN_EMAILS=tirthraval27@gmail.com
+```
 
 ---
 
@@ -99,305 +114,253 @@ This document provides a comprehensive overview of the technology stack, softwar
 - **ESLint 8.57.1** - Code linting and quality
 - **Prettier 3.6.2** - Code formatting
 
+### **Backend Environment Variables**
+```bash
+NODE_ENV=production
+PORT=3000
+SUPABASE_URL=https://gthwmwfwvhyriygpcdlr.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+ADMIN_EMAILS=tirthraval27@gmail.com
+```
+
 ---
 
-## 🗄️ **DATABASE TECHNOLOGY STACK**
+## 🗄️ **DATABASE ARCHITECTURE**
 
 ### **Primary Database**
-- **PostgreSQL 16** - Advanced open-source database
-- **PostGIS Extension** - Spatial and geographic objects
-- **Supabase Platform** - Managed PostgreSQL service
+- **Supabase PostgreSQL** - Managed PostgreSQL with PostGIS
+- **Row Level Security (RLS)** - Fine-grained access control
+- **Real-time Subscriptions** - Live data updates
+- **Automatic Backups** - Point-in-time recovery
+
+### **Key Tables**
+- **`users`** - User authentication and profiles
+- **`profiles`** - Extended user information
+- **`buses`** - Fleet management
+- **`routes`** - Route definitions with PostGIS geometry
+- **`live_locations`** - Real-time GPS tracking data
+- **`driver_bus_assignments`** - Driver-bus relationships
 
 ### **Spatial Features**
-- **PostGIS Geometry Types** - Point, LineString, Polygon
-- **Spatial Indexing** - GIST indexes for geographic queries
-- **Geographic Functions** - Distance calculations, route analysis
-- **Coordinate Systems** - WGS84 (EPSG:4326) support
-
-### **Data Types & Features**
-- **UUID Primary Keys** - Globally unique identifiers
-- **JSONB** - Binary JSON for flexible data storage
-- **Timestamps** - Automatic creation and update tracking
-- **Foreign Keys** - Referential integrity constraints
+- **PostGIS Point** - GPS coordinates storage
+- **PostGIS LineString** - Route geometry
+- **Spatial Indexing** - Fast geographic queries
+- **Distance Calculations** - Real-time ETA computation
 
 ---
 
-## 🔧 **DEVELOPMENT TOOLS & CONFIGURATION**
+## 🚀 **DEPLOYMENT & INFRASTRUCTURE**
 
-### **Build Tools**
-- **Vite** - Frontend build tool and dev server
-- **TypeScript Compiler** - Type checking and compilation
-- **ESBuild** - Fast JavaScript bundler
-- **PostCSS** - CSS processing and optimization
+### **Frontend Deployment (Vercel)**
+- **Platform**: Vercel
+- **Build Tool**: Vite
+- **Framework**: React
+- **Domain**: https://bts-frontend-navy.vercel.app
+- **Auto-deployment**: GitHub integration
+- **SSL**: Automatic HTTPS
+
+### **Backend Deployment (Render)**
+- **Platform**: Render
+- **Runtime**: Node.js
+- **Domain**: https://bus-tracking-backend-sxh8.onrender.com
+- **Auto-deployment**: GitHub integration
+- **SSL**: Automatic HTTPS
+- **WebSocket**: Native support
+
+### **Database (Supabase)**
+- **Platform**: Supabase
+- **Database**: PostgreSQL 15
+- **Extensions**: PostGIS, pgcrypto
+- **Backups**: Automatic daily backups
+- **Monitoring**: Built-in analytics
+
+---
+
+## 🔧 **DEVELOPMENT TOOLS**
+
+### **Version Control**
+- **Git** - Distributed version control
+- **GitHub** - Repository hosting and collaboration
+- **GitHub Actions** - CI/CD pipeline (future)
 
 ### **Code Quality**
 - **ESLint** - JavaScript/TypeScript linting
 - **Prettier** - Code formatting
-- **TypeScript ESLint** - TypeScript-specific linting rules
-- **React Hooks ESLint** - React hooks linting
+- **TypeScript** - Static type checking
+- **Husky** - Git hooks (future)
 
 ### **Development Environment**
-- **VS Code** - Primary development IDE
-- **Hot Module Replacement** - Fast development iteration
-- **Source Maps** - Debugging support
-- **Environment Variables** - Configuration management
-
-### **Package Management**
-- **npm** - Node.js package manager
-- **Workspaces** - Monorepo package management
-- **Concurrently** - Parallel script execution
-
----
-
-## 🌐 **DEPLOYMENT & HOSTING**
-
-### **Frontend Deployment**
-- **Vercel** - Static site hosting
-- **Vite Build** - Optimized production builds
-- **CDN** - Global content delivery
-- **Environment Variables** - Runtime configuration
-
-### **Backend Deployment**
-- **Render** - Cloud platform hosting
-- **Node.js Runtime** - Server-side execution
-- **Environment Configuration** - Production settings
-- **Auto-scaling** - Traffic-based scaling
-
-### **Database Hosting**
-- **Supabase** - Managed PostgreSQL service
-- **Automatic Backups** - Data protection
-- **Connection Pooling** - Performance optimization
-- **SSL Encryption** - Secure data transmission
+- **VS Code** - Primary IDE
+- **Node.js 18+** - Runtime environment
+- **npm** - Package manager
+- **Postman** - API testing
 
 ---
 
 ## 📱 **MOBILE & RESPONSIVE DESIGN**
 
-### **Mobile Support**
-- **Responsive Design** - Mobile-first approach
-- **Touch-friendly UI** - Mobile-optimized interactions
-- **Progressive Web App** - App-like experience
-- **Offline Capabilities** - Service worker support
+### **Responsive Framework**
+- **Tailwind CSS** - Mobile-first responsive design
+- **CSS Grid & Flexbox** - Modern layout systems
+- **Viewport Units** - Dynamic sizing
 
-### **Cross-Platform Compatibility**
-- **Modern Browsers** - Chrome, Firefox, Safari, Edge
-- **Mobile Browsers** - iOS Safari, Android Chrome
-- **Tablet Support** - iPad, Android tablets
-- **Desktop Support** - Windows, macOS, Linux
+### **Mobile Optimization**
+- **Touch-friendly UI** - Optimized for mobile devices
+- **Progressive Web App** - Offline capabilities
+- **Service Workers** - Caching and background sync
+- **WebSocket Reconnection** - Robust mobile connectivity
 
 ---
 
-## 🔒 **SECURITY SPECIFICATIONS**
+## 🔒 **SECURITY FEATURES**
 
 ### **Authentication & Authorization**
-- **JWT Tokens** - Secure session management
-- **Role-based Access Control** - User permission system
-- **Supabase Auth** - Managed authentication service
-- **Session Management** - Secure user sessions
-
-### **Data Protection**
-- **HTTPS/SSL** - Encrypted data transmission
-- **CORS Policies** - Cross-origin security
-- **Rate Limiting** - API abuse prevention
-- **Input Validation** - Data sanitization
+- **Supabase Auth** - Secure user authentication
+- **JWT Tokens** - Stateless session management
+- **Row Level Security** - Database-level access control
+- **Role-based Access** - User role management
 
 ### **API Security**
-- **Helmet Headers** - Security HTTP headers
-- **Request Validation** - Input data validation
-- **Error Handling** - Secure error responses
-- **Logging** - Security event tracking
+- **CORS Protection** - Cross-origin request control
+- **Rate Limiting** - API abuse prevention
+- **Input Validation** - Data sanitization
+- **Helmet.js** - Security headers
 
----
-
-## 📊 **PERFORMANCE SPECIFICATIONS**
-
-### **Frontend Performance**
-- **Vite Build Optimization** - Fast loading times
-- **Code Splitting** - Lazy loading of components
-- **Image Optimization** - Compressed assets
-- **Caching Strategies** - Browser and CDN caching
-
-### **Backend Performance**
-- **Connection Pooling** - Database connection optimization
-- **Caching** - Redis-like caching strategies
-- **Compression** - Gzip response compression
-- **Load Balancing** - Traffic distribution
-
-### **Database Performance**
-- **Spatial Indexing** - Geographic query optimization
-- **Query Optimization** - Efficient SQL queries
-- **Connection Pooling** - Database connection management
-- **Read Replicas** - Scalable read operations
-
----
-
-## 🔄 **REAL-TIME FEATURES**
-
-### **WebSocket Communication**
-- **Socket.IO** - Real-time bidirectional communication
-- **Event-driven Architecture** - Scalable real-time updates
-- **Connection Management** - Automatic reconnection
-- **Room-based Broadcasting** - Targeted message delivery
-
-### **Real-time Data**
-- **Live Location Updates** - GPS coordinate streaming
-- **ETA Calculations** - Real-time arrival estimates
-- **Status Updates** - Bus and driver status changes
-- **Emergency Alerts** - Instant notification system
-
----
-
-## 📈 **SCALABILITY SPECIFICATIONS**
-
-### **Horizontal Scaling**
-- **Stateless Backend** - Session-independent design
-- **Load Balancing** - Traffic distribution
-- **Database Sharding** - Data distribution strategy
-- **CDN Integration** - Global content delivery
-
-### **Vertical Scaling**
-- **Resource Optimization** - Memory and CPU efficiency
-- **Database Optimization** - Query and index optimization
-- **Caching Layers** - Multi-level caching strategy
-- **Connection Pooling** - Resource management
-
----
-
-## 🧪 **TESTING & QUALITY ASSURANCE**
-
-### **Code Quality**
-- **TypeScript** - Static type checking
-- **ESLint** - Code quality enforcement
-- **Prettier** - Consistent code formatting
-- **Git Hooks** - Pre-commit quality checks
-
-### **Development Testing**
-- **Type Checking** - TypeScript compilation
-- **Linting** - Code style and quality
-- **Build Testing** - Production build verification
-- **Environment Testing** - Configuration validation
-
----
-
-## 📋 **ENVIRONMENT SPECIFICATIONS**
-
-### **Development Environment**
-- **Node.js 18+** - JavaScript runtime
-- **npm 9+** - Package manager
-- **Git** - Version control
-- **VS Code** - Development IDE
-
-### **Production Environment**
-- **Node.js 18+** - Server runtime
-- **PostgreSQL 16** - Database server
-- **PostGIS 3.4+** - Spatial extension
-- **SSL Certificates** - Security certificates
-
-### **Browser Requirements**
-- **ES2020 Support** - Modern JavaScript features
-- **WebSocket Support** - Real-time communication
-- **Geolocation API** - Location services
-- **Service Worker** - Offline capabilities
-
----
-
-## 🔧 **CONFIGURATION MANAGEMENT**
-
-### **Environment Variables**
-- **Development** - Local development settings
-- **Production** - Production deployment settings
-- **Staging** - Testing environment settings
-- **Secrets Management** - Secure credential storage
-
-### **Build Configuration**
-- **Vite Config** - Frontend build settings
-- **TypeScript Config** - Type checking settings
-- **ESLint Config** - Code quality rules
-- **Tailwind Config** - CSS framework settings
-
----
-
-## 📚 **API SPECIFICATIONS**
-
-### **RESTful APIs**
-- **HTTP Methods** - GET, POST, PUT, DELETE
-- **JSON Responses** - Standardized data format
-- **Status Codes** - HTTP response codes
-- **Error Handling** - Consistent error responses
-
-### **WebSocket Events**
-- **Location Updates** - Real-time GPS data
-- **Status Changes** - Bus and driver status
-- **Authentication** - User session management
-- **Emergency Alerts** - Critical notifications
-
----
-
-## 🎯 **BUSINESS LOGIC SPECIFICATIONS**
-
-### **Core Features**
-- **Real-time Tracking** - Live bus location monitoring
-- **Route Management** - Bus route planning and optimization
-- **User Management** - Driver and student accounts
-- **Analytics** - Performance and usage metrics
-
-### **Advanced Features**
-- **ETA Calculations** - Arrival time predictions
-- **Geographic Analysis** - Route optimization
-- **Historical Data** - Past trip analysis
-- **Reporting** - Performance reports and insights
+### **Data Protection**
+- **HTTPS Only** - Encrypted data transmission
+- **Environment Variables** - Secure configuration
+- **Database Encryption** - At-rest data protection
+- **Regular Backups** - Data recovery
 
 ---
 
 ## 📊 **MONITORING & ANALYTICS**
 
-### **Performance Monitoring**
-- **Response Times** - API performance tracking
-- **Error Rates** - System reliability metrics
-- **User Activity** - Usage pattern analysis
-- **System Health** - Infrastructure monitoring
+### **Application Monitoring**
+- **Render Logs** - Backend application logs
+- **Vercel Analytics** - Frontend performance metrics
+- **Supabase Dashboard** - Database monitoring
+- **Error Tracking** - Real-time error reporting
 
-### **Business Analytics**
-- **Route Efficiency** - Performance optimization
-- **User Engagement** - Feature usage analysis
-- **Operational Metrics** - Fleet management insights
-- **Predictive Analytics** - Future planning data
-
----
-
-## 🔮 **FUTURE TECHNOLOGY ROADMAP**
-
-### **Planned Upgrades**
-- **GraphQL** - Flexible API querying
-- **Redis Caching** - Performance optimization
-- **Docker Containerization** - Deployment standardization
-- **Kubernetes Orchestration** - Scalable deployment
-
-### **Advanced Features**
-- **Machine Learning** - Predictive analytics
-- **IoT Integration** - Sensor data collection
-- **Mobile Apps** - Native mobile applications
-- **Voice Integration** - Voice-activated features
+### **Performance Metrics**
+- **Page Load Times** - Frontend performance
+- **API Response Times** - Backend performance
+- **Database Query Performance** - Query optimization
+- **WebSocket Connection Health** - Real-time monitoring
 
 ---
 
-## 📋 **COMPLIANCE & STANDARDS**
+## 🔄 **CI/CD PIPELINE**
 
-### **Coding Standards**
-- **TypeScript Strict Mode** - Type safety enforcement
-- **ESLint Rules** - Code quality standards
-- **Git Workflow** - Version control practices
-- **Documentation** - Code documentation standards
+### **Current Deployment Flow**
+1. **Code Push** → GitHub repository
+2. **Auto-deploy** → Render (Backend)
+3. **Auto-deploy** → Vercel (Frontend)
+4. **Health Check** → Verify deployment
 
-### **Security Standards**
-- **OWASP Guidelines** - Web application security
-- **Data Protection** - Privacy compliance
-- **Encryption Standards** - Data security protocols
-- **Access Control** - Authorization standards
+### **Future Enhancements**
+- **GitHub Actions** - Automated testing
+- **Docker Containers** - Containerized deployment
+- **Staging Environment** - Pre-production testing
+- **Rollback Capabilities** - Quick deployment reversal
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: January 2025  
-**System Status**: Production Ready  
-**Technology Stack**: Modern & Scalable
+## 📈 **SCALABILITY CONSIDERATIONS**
+
+### **Current Architecture**
+- **Stateless Backend** - Horizontal scaling ready
+- **CDN Integration** - Global content delivery
+- **Database Optimization** - Indexed queries
+- **Caching Strategy** - Redis integration (future)
+
+### **Future Scalability**
+- **Microservices** - Service decomposition
+- **Load Balancing** - Traffic distribution
+- **Database Sharding** - Data partitioning
+- **Message Queues** - Asynchronous processing
+
+---
+
+## 🛠️ **MAINTENANCE & UPDATES**
+
+### **Dependency Management**
+- **Regular Updates** - Security patches
+- **Version Locking** - Stable dependencies
+- **Breaking Changes** - Careful migration
+- **Testing Strategy** - Automated testing
+
+### **Backup Strategy**
+- **Database Backups** - Daily automated backups
+- **Code Backups** - GitHub repository
+- **Configuration Backups** - Environment variables
+- **Recovery Procedures** - Documented processes
+
+---
+
+## 📚 **DOCUMENTATION**
+
+### **Technical Documentation**
+- **API Documentation** - RESTful endpoints
+- **Database Schema** - Table structures
+- **Deployment Guide** - Setup instructions
+- **Troubleshooting** - Common issues
+
+### **User Documentation**
+- **User Manuals** - Feature guides
+- **Admin Guides** - Management procedures
+- **Developer Guides** - Integration help
+- **FAQ** - Common questions
+
+---
+
+## 🎯 **PERFORMANCE TARGETS**
+
+### **Response Times**
+- **API Endpoints**: < 200ms average
+- **WebSocket Latency**: < 100ms
+- **Page Load**: < 2 seconds
+- **Database Queries**: < 50ms
+
+### **Availability**
+- **Uptime Target**: 99.9%
+- **Error Rate**: < 0.1%
+- **Recovery Time**: < 5 minutes
+- **Backup Frequency**: Daily
+
+---
+
+## 🔮 **FUTURE ROADMAP**
+
+### **Short-term Goals**
+- **Mobile App** - Native iOS/Android
+- **Advanced Analytics** - Business intelligence
+- **Multi-language Support** - Internationalization
+- **Enhanced Security** - 2FA, SSO
+
+### **Long-term Vision**
+- **AI Integration** - Predictive analytics
+- **IoT Integration** - Smart sensors
+- **Blockchain** - Immutable records
+- **Machine Learning** - Route optimization
+
+---
+
+## 📞 **SUPPORT & CONTACT**
+
+### **Technical Support**
+- **GitHub Issues** - Bug reports and feature requests
+- **Documentation** - Comprehensive guides
+- **Community** - Developer forums
+- **Email Support** - Direct contact
+
+### **Project Information**
+- **Repository**: https://github.com/tirthraval27/bus-tracking-system
+- **Live Demo**: https://bts-frontend-navy.vercel.app
+- **Documentation**: Project docs folder
+- **License**: MIT License
+
+---
+
+*This document is maintained and updated regularly to reflect the current state of the Bus Tracking System.*

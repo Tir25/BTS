@@ -6,8 +6,13 @@ The University Bus Tracking System API provides RESTful endpoints for managing b
 
 ## Base URL
 
-- **Development**: `http://localhost:3001`
-- **Production**: `https://your-domain.com`
+- **Development**: `http://localhost:3000`
+- **Production**: `https://bus-tracking-backend-sxh8.onrender.com`
+
+## WebSocket URL
+
+- **Development**: `ws://localhost:3000`
+- **Production**: `wss://bus-tracking-backend-sxh8.onrender.com`
 
 ## Authentication
 
@@ -39,7 +44,7 @@ Error responses:
 }
 ```
 
-## Endpoints
+## REST API Endpoints
 
 ### Authentication
 
@@ -100,15 +105,28 @@ Get current user information.
 }
 ```
 
-### Bus Management
+### Health Check
 
-#### GET /buses
-Get all buses with optional filtering.
+#### GET /health
+Check API health status.
 
-**Query Parameters:**
-- `active` (boolean): Filter by active status
-- `route_id` (string): Filter by route
-- `driver_id` (string): Filter by assigned driver
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "timestamp": "2024-01-15T10:30:00Z",
+    "uptime": 3600,
+    "version": "1.0.0"
+  }
+}
+```
+
+### Buses
+
+#### GET /api/buses
+Get all buses.
 
 **Response:**
 ```json
@@ -118,29 +136,21 @@ Get all buses with optional filtering.
     {
       "id": "bus-id",
       "code": "BUS001",
-      "number_plate": "ABC123",
+      "name": "Bus 1",
+      "number_plate": "GJ-01-AB-1234",
       "capacity": 50,
-      "model": "Mercedes-Benz",
-      "year": 2020,
+      "model": "Tata Starbus",
+      "year": 2023,
       "is_active": true,
-      "bus_image_url": "https://...",
-      "driver": {
-        "id": "driver-id",
-        "first_name": "John",
-        "last_name": "Doe",
-        "email": "driver@example.com"
-      },
-      "route": {
-        "id": "route-id",
-        "name": "Campus Route 1"
-      }
+      "assigned_driver_id": "driver-id",
+      "route_id": "route-id"
     }
   ]
 }
 ```
 
-#### GET /buses/:id
-Get specific bus by ID.
+#### GET /api/buses/:busId
+Get specific bus information.
 
 **Response:**
 ```json
@@ -149,81 +159,22 @@ Get specific bus by ID.
   "data": {
     "id": "bus-id",
     "code": "BUS001",
-    "number_plate": "ABC123",
+    "name": "Bus 1",
+    "number_plate": "GJ-01-AB-1234",
     "capacity": 50,
-    "model": "Mercedes-Benz",
-    "year": 2020,
+    "model": "Tata Starbus",
+    "year": 2023,
     "is_active": true,
-    "bus_image_url": "https://...",
-    "created_at": "2024-01-01T00:00:00Z",
-    "updated_at": "2024-01-01T00:00:00Z"
+    "assigned_driver_id": "driver-id",
+    "route_id": "route-id"
   }
 }
 ```
 
-#### POST /buses
-Create a new bus.
+### Routes
 
-**Request Body:**
-```json
-{
-  "code": "BUS001",
-  "number_plate": "ABC123",
-  "capacity": 50,
-  "model": "Mercedes-Benz",
-  "year": 2020,
-  "assigned_driver_id": "driver-id",
-  "route_id": "route-id"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "new-bus-id",
-    "code": "BUS001",
-    "number_plate": "ABC123",
-    "capacity": 50,
-    "model": "Mercedes-Benz",
-    "year": 2020,
-    "is_active": true,
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-}
-```
-
-#### PUT /buses/:id
-Update an existing bus.
-
-**Request Body:**
-```json
-{
-  "code": "BUS001-UPDATED",
-  "capacity": 60,
-  "is_active": false
-}
-```
-
-#### DELETE /buses/:id
-Delete a bus.
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Bus deleted successfully"
-}
-```
-
-### Route Management
-
-#### GET /routes
+#### GET /api/routes
 Get all routes.
-
-**Query Parameters:**
-- `active` (boolean): Filter by active status
 
 **Response:**
 ```json
@@ -232,59 +183,77 @@ Get all routes.
   "data": [
     {
       "id": "route-id",
-      "name": "Campus Route 1",
+      "name": "Route 1",
       "description": "Main campus route",
-      "stops": {
-        "type": "LineString",
-        "coordinates": [[lng1, lat1], [lng2, lat2]]
-      },
-      "distance_km": 5.2,
-      "estimated_duration_minutes": 15,
-      "is_active": true
+      "distance_km": 15.5,
+      "estimated_duration_minutes": 45,
+      "is_active": true,
+      "origin": "Main Campus",
+      "destination": "City Center"
     }
   ]
 }
 ```
 
-#### GET /routes/:id
-Get specific route by ID.
+#### GET /api/routes/:routeId
+Get specific route information.
 
-#### POST /routes
-Create a new route.
-
-**Request Body:**
+**Response:**
 ```json
 {
-  "name": "New Route",
-  "description": "Route description",
-  "coordinates": [[lng1, lat1], [lng2, lat2]],
-  "distance_km": 5.2,
-  "estimated_duration_minutes": 15
+  "success": true,
+  "data": {
+    "id": "route-id",
+    "name": "Route 1",
+    "description": "Main campus route",
+    "distance_km": 15.5,
+    "estimated_duration_minutes": 45,
+    "is_active": true,
+    "origin": "Main Campus",
+    "destination": "City Center",
+    "stops": {
+      "type": "LineString",
+      "coordinates": [[72.8777, 19.0760], [72.8778, 19.0761]]
+    }
+  }
 }
 ```
 
-#### PUT /routes/:id
-Update an existing route.
+### Location Updates
 
-#### DELETE /routes/:id
-Delete a route.
-
-### Location Management
-
-#### POST /location/update
+#### POST /api/location/update
 Update bus location (for drivers).
 
 **Request Body:**
 ```json
 {
   "bus_id": "bus-id",
-  "latitude": 40.7128,
-  "longitude": -74.0060,
-  "timestamp": "2024-01-01T12:00:00Z"
+  "latitude": 19.0760,
+  "longitude": 72.8777,
+  "speed_kmh": 35,
+  "heading_degrees": 180
 }
 ```
 
-#### GET /location/bus/:id
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "location-id",
+    "bus_id": "bus-id",
+    "location": {
+      "type": "Point",
+      "coordinates": [72.8777, 19.0760]
+    },
+    "speed_kmh": 35,
+    "heading_degrees": 180,
+    "recorded_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+#### GET /api/location/bus/:busId
 Get current location of a specific bus.
 
 **Response:**
@@ -292,276 +261,236 @@ Get current location of a specific bus.
 {
   "success": true,
   "data": {
+    "id": "location-id",
     "bus_id": "bus-id",
-    "latitude": 40.7128,
-    "longitude": -74.0060,
-    "timestamp": "2024-01-01T12:00:00Z",
-    "route_id": "route-id",
-    "eta_minutes": 5
-  }
-}
-```
-
-#### GET /location/route/:id
-Get all bus locations for a specific route.
-
-### User Management
-
-#### GET /users
-Get all users (admin only).
-
-**Query Parameters:**
-- `role` (string): Filter by user role
-- `active` (boolean): Filter by active status
-
-#### POST /users
-Create a new user (admin only).
-
-**Request Body:**
-```json
-{
-  "email": "newuser@example.com",
-  "password": "your_secure_password",
-  "first_name": "John",
-  "last_name": "Doe",
-  "role": "driver",
-  "phone": "+1234567890"
-}
-```
-
-#### PUT /users/:id
-Update user information.
-
-#### DELETE /users/:id
-Delete a user (admin only).
-
-### File Management
-
-#### POST /storage/upload
-Upload a file to storage.
-
-**Request:**
-- Content-Type: `multipart/form-data`
-- Body: File data
-
-**Query Parameters:**
-- `type` (string): "image" or "document"
-- `folder` (string): Storage folder
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "url": "https://storage-url/file.jpg",
-    "fileName": "file.jpg",
-    "filePath": "folder/file.jpg"
-  }
-}
-```
-
-#### GET /storage/files
-List files in storage.
-
-**Query Parameters:**
-- `folder` (string): Folder to list
-- `type` (string): File type filter
-
-#### DELETE /storage/files/:path
-Delete a file from storage.
-
-### Analytics
-
-#### GET /analytics/overview
-Get system overview statistics.
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "totalBuses": 10,
-    "activeBuses": 8,
-    "totalRoutes": 5,
-    "activeRoutes": 4,
-    "totalDrivers": 12,
-    "activeDrivers": 10,
-    "averageDelay": 2.5
-  }
-}
-```
-
-#### GET /analytics/bus-usage
-Get bus usage statistics.
-
-**Query Parameters:**
-- `start_date` (string): Start date (YYYY-MM-DD)
-- `end_date` (string): End date (YYYY-MM-DD)
-
-### Health Check
-
-#### GET /health
-Basic health check.
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "status": "healthy",
-    "timestamp": "2024-01-01T12:00:00Z",
-    "uptime": 3600
-  }
-}
-```
-
-#### GET /health/detailed
-Detailed health check with database status.
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "status": "healthy",
-    "timestamp": "2024-01-01T12:00:00Z",
-    "uptime": 3600,
-    "database": {
-      "healthy": true,
-      "responseTime": 15
+    "location": {
+      "type": "Point",
+      "coordinates": [72.8777, 19.0760]
     },
-    "memory": {
-      "used": 512,
-      "total": 1024
-    }
+    "speed_kmh": 35,
+    "heading_degrees": 180,
+    "recorded_at": "2024-01-15T10:30:00Z"
   }
 }
 ```
 
-## WebSocket Events
+#### GET /api/location/all
+Get current locations of all active buses.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "location-id",
+      "bus_id": "bus-id",
+      "location": {
+        "type": "Point",
+        "coordinates": [72.8777, 19.0760]
+      },
+      "speed_kmh": 35,
+      "heading_degrees": 180,
+      "recorded_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+## WebSocket API
 
 ### Connection
-Connect to WebSocket at `ws://localhost:3001` (or `wss://` for production).
 
-### Authentication
-Send authentication event:
-```json
-{
-  "type": "auth",
-  "token": "jwt-token-here"
-}
-```
+Connect to the WebSocket server:
 
-### Events
+```javascript
+import { io } from 'socket.io-client';
 
-#### location_update
-Real-time bus location updates.
-
-**Data:**
-```json
-{
-  "bus_id": "bus-id",
-  "latitude": 40.7128,
-  "longitude": -74.0060,
-  "timestamp": "2024-01-01T12:00:00Z",
-  "route_id": "route-id",
-  "eta_minutes": 5
-}
-```
-
-#### bus_status_change
-Bus status changes.
-
-**Data:**
-```json
-{
-  "bus_id": "bus-id",
-  "status": "active|inactive|maintenance",
-  "timestamp": "2024-01-01T12:00:00Z"
-}
-```
-
-#### route_update
-Route information updates.
-
-**Data:**
-```json
-{
-  "route_id": "route-id",
-  "name": "Updated Route Name",
-  "stops": {
-    "type": "LineString",
-    "coordinates": [[lng1, lat1], [lng2, lat2]]
+const socket = io('wss://bus-tracking-backend-sxh8.onrender.com', {
+  transports: ['websocket'],
+  query: {
+    clientType: 'driver', // or 'student'
+    version: '1.0.0'
   }
-}
+});
 ```
 
-## Error Codes
+### Authentication Events
 
-| Code | Description |
-|------|-------------|
-| 400 | Bad Request - Invalid input data |
-| 401 | Unauthorized - Authentication required |
-| 403 | Forbidden - Insufficient permissions |
-| 404 | Not Found - Resource not found |
-| 409 | Conflict - Resource already exists |
-| 422 | Unprocessable Entity - Validation error |
-| 500 | Internal Server Error - Server error |
+#### Driver Authentication
+
+**Emit:**
+```javascript
+socket.emit('driver:authenticate', {
+  token: 'jwt-token-here'
+});
+```
+
+**Listen:**
+```javascript
+// Success
+socket.on('driver:authenticated', (data) => {
+  console.log('Driver authenticated:', data);
+  // data contains: { driverId, busId, busInfo }
+});
+
+// Failure
+socket.on('driver:authentication_failed', (error) => {
+  console.error('Authentication failed:', error);
+});
+```
+
+#### Student Connection
+
+**Emit:**
+```javascript
+socket.emit('student:connect');
+```
+
+**Listen:**
+```javascript
+socket.on('student:connected', (data) => {
+  console.log('Student connected:', data);
+});
+```
+
+### Real-time Events
+
+#### Bus Location Updates
+
+**Listen for location updates:**
+```javascript
+socket.on('bus:locationUpdate', (locationData) => {
+  console.log('Bus location update:', locationData);
+  // locationData contains: { busId, latitude, longitude, speed, heading, timestamp }
+});
+```
+
+#### Bus Arriving Notifications
+
+**Listen for bus arriving:**
+```javascript
+socket.on('bus:arriving', (data) => {
+  console.log('Bus arriving:', data);
+  // data contains: { busId, routeId, location, timestamp }
+});
+```
+
+### Driver Events
+
+#### Send Location Update
+
+**Emit location update:**
+```javascript
+socket.emit('driver:locationUpdate', {
+  driverId: 'driver-id',
+  latitude: 19.0760,
+  longitude: 72.8777,
+  timestamp: new Date().toISOString(),
+  speed: 35,
+  heading: 180
+});
+```
+
+**Listen for confirmation:**
+```javascript
+socket.on('driver:locationConfirmed', (data) => {
+  console.log('Location update confirmed:', data);
+  // data contains: { timestamp, locationId }
+});
+```
+
+### Connection Management
+
+#### Connection Status
+
+```javascript
+// Check connection status
+console.log('Connected:', socket.connected);
+
+// Listen for connection events
+socket.on('connect', () => {
+  console.log('Connected to server');
+});
+
+socket.on('disconnect', (reason) => {
+  console.log('Disconnected:', reason);
+});
+
+socket.on('connect_error', (error) => {
+  console.error('Connection error:', error);
+});
+```
+
+#### Heartbeat
+
+```javascript
+// Send ping
+socket.emit('ping');
+
+// Listen for pong
+socket.on('pong', () => {
+  console.log('Received pong from server');
+});
+```
+
+## Error Handling
+
+### HTTP Error Codes
+
+- `400` - Bad Request
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `500` - Internal Server Error
+
+### WebSocket Error Handling
+
+```javascript
+socket.on('error', (error) => {
+  console.error('Socket error:', error);
+});
+
+socket.on('connect_error', (error) => {
+  console.error('Connection error:', error);
+});
+```
 
 ## Rate Limiting
 
-API requests are rate-limited to prevent abuse:
-- **Window**: 15 minutes
-- **Limit**: 100 requests per window
-- **Headers**: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- **API Requests**: 100 requests per minute per IP
+- **Authentication**: 10 requests per minute per IP
+- **WebSocket Connections**: 5 connections per minute per IP
 
-## Pagination
+## CORS Configuration
 
-List endpoints support pagination:
+The API supports the following origins:
+- `https://bts-frontend-navy.vercel.app`
+- `https://*.onrender.com`
+- `https://*.vercel.app`
+- `http://localhost:5173` (development)
 
-**Query Parameters:**
-- `page` (number): Page number (default: 1)
-- `limit` (number): Items per page (default: 20, max: 100)
+## Environment Variables
 
-**Response Headers:**
-- `X-Total-Count`: Total number of items
-- `X-Page-Count`: Total number of pages
+### Required Environment Variables
 
-## File Upload Limits
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `NODE_ENV` | Environment mode | `production` |
+| `PORT` | Server port | `3000` |
+| `SUPABASE_URL` | Supabase project URL | `https://gthwmwfwvhyriygpcdlr.supabase.co` |
+| `SUPABASE_ANON_KEY` | Supabase anonymous key | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
 
-- **Images**: 5MB max, formats: JPEG, PNG, WebP
-- **Documents**: 10MB max, formats: PDF, JPEG, PNG
+## Support
 
-## Development
+For API issues:
+1. Check the response status codes
+2. Verify authentication tokens
+3. Check environment variables
+4. Review WebSocket connection status
 
-### Testing the API
-
-Use tools like Postman, curl, or any HTTP client:
-
-```bash
-# Login
-curl -X POST http://localhost:3001/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"password"}'
-
-# Get buses (with token)
-curl -X GET http://localhost:3001/buses \
-  -H "Authorization: Bearer <token>"
-```
-
-### WebSocket Testing
-
-Use tools like wscat or browser WebSocket API:
-
-```javascript
-const ws = new WebSocket('ws://localhost:3001');
-ws.onopen = () => {
-  ws.send(JSON.stringify({
-    type: 'auth',
-    token: 'your-jwt-token'
-  }));
-};
-ws.onmessage = (event) => {
-  console.log('Received:', JSON.parse(event.data));
-};
-```
+For additional help:
+- [Project GitHub Issues](https://github.com/tirthraval27/bus-tracking-system/issues)
+- [Socket.IO Documentation](https://socket.io/docs/)
+- [Supabase Documentation](https://supabase.com/docs)
