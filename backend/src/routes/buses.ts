@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
     if (driver_id) {
       // Filter buses by driver_id
       const buses = await getAllBuses();
-      const filteredBuses = buses.filter(bus => bus.assigned_driver_id === driver_id);
+      const filteredBuses = buses.filter(bus => bus.driver_id === driver_id || bus.assigned_driver_id === driver_id);
       
       res.json({
         success: true,

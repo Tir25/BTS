@@ -67,44 +67,67 @@ class WebSocketService {
 
       // Get WebSocket URL with fallback
       const wsUrl = environment.api.websocketUrl;
-      console.log('🔌 WebSocket URL:', wsUrl);
+      
+      // Check if WebSocket URL is valid before attempting connection
+      if (!wsUrl || typeof wsUrl !== 'string' || !wsUrl.startsWith('ws')) {
+        throw new Error(`Invalid WebSocket URL: ${wsUrl}`);
+      }
+      
+      // Network connection check
+      if (!navigator.onLine) {
+        throw new Error('No network connection available');
+      }
 
       // Enhanced Socket.IO configuration for production with improved stability
       this.socket = io(wsUrl, {
         transports: ['websocket', 'polling'], // Prefer WebSocket, fallback to polling
         upgrade: true,
         rememberUpgrade: true,
-        timeout: 15000, // Increased timeout for better stability
+        timeout: 20000, // Increased timeout for better stability on slow networks
         forceNew: true,
-        reconnection: true, // Enable automatic reconnection
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
+        reconnection: false, // We handle reconnection manually for better control
         autoConnect: false,
         query: {
-          clientType: 'driver',
+          clientType: 'student', // Changed from driver to student for student map
           version: '1.0.0',
           timestamp: Date.now().toString(),
-        },
-        extraHeaders: {
-          'User-Agent': 'BusTrackingDriver/1.0.0',
+          deviceInfo: `${navigator.platform}|${navigator.userAgent.substring(0, 100)}`,
         },
       });
 
-      // Set up connection timeout
-      this.connectionTimeout = setTimeout(() => {
+      // Set up connection timeout with progressive checks
+      const timeoutCheck = (timeout: number) => {
         if (this.connectionState === 'connecting') {
-          console.error('❌ WebSocket connection timeout');
-          this.handleError(new Error('Connection timeout'));
+          if (timeout >= 15000) {
+            console.error('❌ WebSocket connection timeout');
+            this.handleError(new Error('Connection timeout'));
+          } else {
+            console.log(`⏳ Still connecting... (${timeout / 1000}s)`);
+            this.connectionTimeout = setTimeout(() => timeoutCheck(timeout + 5000), 5000);
+          }
         }
-      }, 15000); // 15 seconds timeout
+      };
+      
+      this.connectionTimeout = setTimeout(() => timeoutCheck(5000), 5000);
 
-      // Set up event listeners
+      // Set up event listeners with enhanced error information
       this.socket.on('connect', this.handleConnect);
       this.socket.on('disconnect', this.handleDisconnect);
-      this.socket.on('connect_error', this.handleError);
+      this.socket.on('connect_error', (error: Error) => {
+        console.error('❌ Connection error details:', {
+          message: error.message,
+          context: {
+            url: wsUrl,
+            online: navigator.onLine,
+            connectionState: this.connectionState,
+          }
+        });
+        this.handleError(error);
+      });
       this.socket.on('error', this.handleError);
       this.socket.on('reconnect', this.handleReconnect);
+      
+      // Additional event listeners for better debugging
       this.socket.on('reconnect_attempt', (attemptNumber) => {
         console.log(`🔄 Reconnection attempt ${attemptNumber}`);
       });
@@ -113,6 +136,11 @@ class WebSocketService {
       });
       this.socket.on('reconnect_failed', () => {
         console.error('❌ Reconnection failed after all attempts');
+      });
+      this.socket.io.on('packet', (packet: any) => {
+        if (packet && packet.type && packet.type.toString() === 'error') {
+          console.error('❌ Socket.IO packet error:', packet.data);
+        }
       });
 
       // Connect to server
@@ -214,18 +242,37 @@ class WebSocketService {
       `🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
     );
 
-    // Exponential backoff with jitter
-    const delay = Math.min(
-      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) +
-        Math.random() * 1000,
-      this.maxReconnectDelay
-    );
+    // Enhanced exponential backoff with jitter
+    // Base delay increases exponentially with each attempt
+    // Add randomized jitter to prevent thundering herd problem
+    const baseDelay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    const jitter = Math.random() * baseDelay * 0.5; // 0-50% jitter
+    const delay = Math.min(baseDelay + jitter, this.maxReconnectDelay);
 
-    setTimeout(() => {
-      if (!this.isShuttingDown) {
-        this.connect();
-      }
-    }, delay);
+    // Implement mobile network detection for more aggressive reconnection
+    // Use navigator.connection if available (not standard in all browsers)
+    const connection = (navigator as any).connection;
+    const isMobileNetwork = connection ? 
+      ['slow-2g', '2g', '3g'].includes(connection.effectiveType) : 
+      false;
+
+    if (isMobileNetwork && this.reconnectAttempts > 3) {
+      // For mobile networks, add additional delay to conserve battery
+      const mobileDelay = delay * 1.5;
+      console.log('📱 Mobile network detected, adjusting reconnection strategy');
+      
+      setTimeout(() => {
+        if (!this.isShuttingDown) {
+          this.connect();
+        }
+      }, mobileDelay);
+    } else {
+      setTimeout(() => {
+        if (!this.isShuttingDown) {
+          this.connect();
+        }
+      }, delay);
+    }
   }
 
   private startHeartbeat(): void {

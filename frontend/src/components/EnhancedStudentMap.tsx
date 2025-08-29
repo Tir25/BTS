@@ -13,7 +13,12 @@ import { apiService } from '../services/api';
 import { authService } from '../services/authService';
 import GlassyCard from './ui/GlassyCard';
 import './StudentMap.css';
-import { Route } from '../types';
+import { Route, Bus } from '../types';
+import logger from '../utils/logger';
+import performance from '../utils/performance';
+
+// Create a component-specific logger
+const log = logger.createLogger('🗺️');
 
 interface EnhancedStudentMapProps {
   className?: string;
@@ -51,27 +56,25 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   // Load routes from API
   const loadRoutes = useCallback(async () => {
     try {
-      console.log('🔄 Loading routes from backend API...');
+      log.info('Loading routes from backend API...');
       const response = await apiService.getRoutes();
       if (response.success && response.data) {
-        console.log(
-          '✅ Routes loaded from backend:',
-          response.data.length,
-          'routes'
+        log.info(
+          `Routes loaded from backend: ${response.data.length} routes`
         );
         setRoutes(response.data as unknown as Route[]);
 
         // Log route details for debugging
         response.data.forEach((route: Route) => {
-          console.log(
-            `📍 Route: ${route.name} (ID: ${route.id}) - Active: ${route.is_active}`
+          log.debug(
+            `Route: ${route.name} (ID: ${route.id}) - Active: ${route.is_active}`
           );
         });
       } else {
-        console.error('❌ Failed to load routes:', response);
+        log.error('Failed to load routes:', response);
       }
     } catch (error) {
-      console.error('❌ Error loading routes:', error);
+      log.error('Error loading routes:', error);
     }
   }, []);
 
@@ -91,7 +94,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         }
         addedRoutes.current.delete(routeId);
       } catch (error) {
-        console.warn(`⚠️ Error removing route ${route.name}:`, error);
+        log.warn(`Error removing route ${route.name}:`, error);
       }
     });
   }, [routes]);
@@ -100,13 +103,13 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   const addRoutesToMap = useCallback(() => {
     if (!map.current || routes.length === 0) return;
 
-    console.log('🗺️ Adding routes to map:', routes.length, 'routes');
+    log.info(`Adding routes to map: ${routes.length} routes`);
 
     routes.forEach((route, index) => {
       const routeId = `route-${route.id}`;
 
       if (addedRoutes.current.has(routeId) || map.current!.getSource(routeId)) {
-        console.log(`🗺️ Route ${routeId} already exists, skipping...`);
+        log.debug(`Route ${routeId} already exists, skipping...`);
         return;
       }
 
@@ -140,17 +143,17 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
           },
         });
 
-        console.log(`🗺️ Added route ${route.name} to map`);
+        log.debug(`Added route ${route.name} to map`);
         addedRoutes.current.add(routeId);
       } catch (error) {
-        console.warn(`⚠️ Error adding route ${route.name}:`, error);
+        log.warn(`Error adding route ${route.name}:`, error);
       }
     });
   }, [routes]);
 
-  // Update bus marker on map
+  // Update bus marker on map with throttling for better performance
   const updateBusMarker = useCallback(
-    (location: BusLocation) => {
+    performance.useThrottle((location: BusLocation) => {
       if (!map.current) return;
 
       const { busId, latitude, longitude, speed } = location;
@@ -158,76 +161,110 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 
       if (!bus) return;
 
+      // Create marker if it doesn't exist
       if (!markers.current[busId]) {
+        // Create marker element with optimized DOM structure
         const el = document.createElement('div');
         el.className = 'bus-marker';
+        
+        // Use innerHTML once to reduce DOM operations
         el.innerHTML = `
-        <div class="bus-marker-pin">
-          <div class="bus-marker-icon">🚌</div>
-          <div class="bus-marker-pulse"></div>
-        </div>
-        <div class="bus-marker-content">
-          <div class="bus-number">${bus.busNumber}</div>
-          <div class="bus-speed">${speed ? `${speed} km/h` : 'N/A'}</div>
-          <div class="bus-eta">${location.eta ? `ETA: ${location.eta.estimated_arrival_minutes} min` : 'ETA: N/A'}</div>
-        </div>
-      `;
+          <div class="bus-marker-pin">
+            <div class="bus-marker-icon">🚌</div>
+            <div class="bus-marker-pulse"></div>
+          </div>
+          <div class="bus-marker-content">
+            <div class="bus-number">${bus.busNumber}</div>
+            <div class="bus-speed">${speed ? `${speed} km/h` : 'N/A'}</div>
+            <div class="bus-eta">${location.eta ? `ETA: ${location.eta.estimated_arrival_minutes} min` : 'ETA: N/A'}</div>
+          </div>
+        `;
 
+        // Create marker with optimized options
         const marker = new maplibregl.Marker({
           element: el,
           anchor: 'center',
+          // MapLibre doesn't support animate option
         })
           .setLngLat([longitude, latitude])
           .addTo(map.current);
 
+        // Create popup with memoized content
+        const popupContent = `
+          <div class="bus-popup">
+            <div class="bus-popup-header">
+              <h3>🚌 Bus ${bus.busNumber}</h3>
+              <div class="bus-status ${isConnected ? 'online' : 'offline'}">
+                ${isConnected ? '🟢 Online' : '🔴 Offline'}
+              </div>
+            </div>
+            <div class="bus-popup-content">
+              <div class="bus-info">
+                <p><strong>Driver:</strong> ${bus.driverName || 'N/A'}</p>
+                <p><strong>Route:</strong> ${bus.routeName || 'N/A'}</p>
+                <p><strong>Speed:</strong> ${speed ? `${speed} km/h` : 'N/A'}</p>
+                <p><strong>Last Update:</strong> ${new Date(location.timestamp).toLocaleTimeString()}</p>
+              </div>
+            </div>
+          </div>
+        `;
+        
         const popup = new maplibregl.Popup({
           offset: 25,
           className: 'bus-popup-container',
-        }).setHTML(`
-        <div class="bus-popup">
-          <div class="bus-popup-header">
-            <h3>🚌 Bus ${bus.busNumber}</h3>
-            <div class="bus-status ${isConnected ? 'online' : 'offline'}">
-              ${isConnected ? '🟢 Online' : '🔴 Offline'}
-            </div>
-          </div>
-          <div class="bus-popup-content">
-            <div class="bus-info">
-              <p><strong>Driver:</strong> ${bus.driverName || 'N/A'}</p>
-              <p><strong>Route:</strong> ${bus.routeName || 'N/A'}</p>
-              <p><strong>Speed:</strong> ${speed ? `${speed} km/h` : 'N/A'}</p>
-              <p><strong>Last Update:</strong> ${new Date(location.timestamp).toLocaleTimeString()}</p>
-            </div>
-          </div>
-        </div>
-      `);
+          // Limit popup size for better performance
+          maxWidth: '300px',
+          // Disable close button to reduce DOM elements
+          closeButton: false,
+        }).setHTML(popupContent);
 
         marker.setPopup(popup);
         markers.current[busId] = marker;
       } else {
+        // Update existing marker - only update position for better performance
         markers.current[busId].setLngLat([longitude, latitude]);
 
+        // Only update popup if it's open to save resources
         const popup = markers.current[busId].getPopup();
-        popup.setHTML(`
-        <div class="bus-popup">
-          <div class="bus-popup-header">
-            <h3>🚌 Bus ${bus.busNumber}</h3>
-            <div class="bus-status ${isConnected ? 'online' : 'offline'}">
-              ${isConnected ? '🟢 Online' : '🔴 Offline'}
+        if (popup.isOpen()) {
+          popup.setHTML(`
+            <div class="bus-popup">
+              <div class="bus-popup-header">
+                <h3>🚌 Bus ${bus.busNumber}</h3>
+                <div class="bus-status ${isConnected ? 'online' : 'offline'}">
+                  ${isConnected ? '🟢 Online' : '🔴 Offline'}
+                </div>
+              </div>
+              <div class="bus-popup-content">
+                <div class="bus-info">
+                  <p><strong>Driver:</strong> ${bus.driverName || 'N/A'}</p>
+                  <p><strong>Route:</strong> ${bus.routeName || 'N/A'}</p>
+                  <p><strong>Speed:</strong> ${speed ? `${speed} km/h` : 'N/A'}</p>
+                  <p><strong>Last Update:</strong> ${new Date(location.timestamp).toLocaleTimeString()}</p>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="bus-popup-content">
-            <div class="bus-info">
-              <p><strong>Driver:</strong> ${bus.driverName || 'N/A'}</p>
-              <p><strong>Route:</strong> ${bus.routeName || 'N/A'}</p>
-              <p><strong>Speed:</strong> ${speed ? `${speed} km/h` : 'N/A'}</p>
-              <p><strong>Last Update:</strong> ${new Date(location.timestamp).toLocaleTimeString()}</p>
-            </div>
-          </div>
-        </div>
-      `);
+          `);
+        }
+        
+        // Update bus speed display if element exists
+        try {
+          const markerEl = markers.current[busId].getElement();
+          const speedEl = markerEl.querySelector('.bus-speed');
+          if (speedEl) {
+            speedEl.textContent = speed ? `${speed} km/h` : 'N/A';
+          }
+          
+          // Update ETA display if element exists
+          const etaEl = markerEl.querySelector('.bus-eta');
+          if (etaEl && location.eta) {
+            etaEl.textContent = `ETA: ${location.eta.estimated_arrival_minutes} min`;
+          }
+        } catch (e) {
+          // Silently handle DOM errors
+        }
       }
-    },
+    }, 500), // Throttle updates to 500ms for better performance
     [isConnected]
   );
 
@@ -267,7 +304,12 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   // Handle bus location updates
   const handleBusLocationUpdate = useCallback(
     (location: BusLocation) => {
-      console.log('📍 Bus location update:', location);
+      log.debug('Bus location update received', {
+        busId: location.busId,
+        lat: location.latitude,
+        lng: location.longitude,
+        speed: location.speed
+      });
 
       setLastBusLocations((prev) => ({
         ...prev,
@@ -281,14 +323,14 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 
   const handleDriverConnected = useCallback(
     (data: { driverId: string; busId: string; timestamp: string }) => {
-      console.log('🚌 Driver connected:', data);
+      log.info(`Driver connected: ${data.driverId} with bus ${data.busId}`);
     },
     []
   );
 
   const handleDriverDisconnected = useCallback(
     (data: { driverId: string; busId: string; timestamp: string }) => {
-      console.log('🚌 Driver disconnected:', data);
+      log.info(`Driver disconnected: ${data.driverId} with bus ${data.busId}`);
       removeBusMarker(data.busId);
     },
     [removeBusMarker]
@@ -301,7 +343,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
       location: [number, number];
       timestamp: string;
     }) => {
-      console.log('🚌 Bus arriving:', data);
+      log.info(`Bus ${data.busId} arriving at route ${data.routeId}`);
     },
     []
   );
@@ -312,7 +354,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
       return;
     }
 
-    console.log('🗺️ Initializing map...');
+    log.info('Initializing map...');
     isMapInitialized.current = true;
 
     map.current = new maplibregl.Map({
@@ -358,22 +400,54 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
 
     map.current.once('load', () => {
-      console.log('🗺️ Map loaded successfully');
+      log.info('Map loaded successfully');
       setIsLoading(false);
       loadRoutes();
     });
 
     map.current.on('error', (e) => {
-      console.error('❌ Map error:', e);
+      log.error('Map error:', e);
     });
 
+    // Return a proper cleanup function to prevent memory leaks
     return () => {
+      // Clean up map markers first
+      if (markers.current) {
+        Object.values(markers.current).forEach(marker => {
+          if (marker) {
+            // Remove popup first to prevent memory leaks
+            const popup = marker.getPopup();
+            if (popup) {
+              popup.remove();
+            }
+            // Then remove the marker
+            marker.remove();
+          }
+        });
+        markers.current = {};
+      }
+      
+      // Remove route sources and layers
       if (map.current) {
+        // Clean up all added routes
+        addedRoutes.current.forEach(routeId => {
+          try {
+            if (map.current?.getLayer(routeId)) {
+              map.current.removeLayer(routeId);
+            }
+            if (map.current?.getSource(routeId)) {
+              map.current.removeSource(routeId);
+            }
+          } catch (error) {
+            console.warn(`⚠️ Error removing route ${routeId}:`, error);
+          }
+        });
+        addedRoutes.current.clear();
+        
+        // Remove the map instance
         map.current.remove();
         map.current = null;
         isMapInitialized.current = false;
-        addedRoutes.current.clear();
-        markers.current = {};
       }
     };
   }, [loadRoutes]);
@@ -382,6 +456,10 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout;
     let statusInterval: NodeJS.Timeout;
+    let busLoadingTimeout: NodeJS.Timeout;
+    
+    // Track event listeners for proper cleanup
+    const eventListeners = new Map<string, Function>();
 
     const connectWebSocket = async () => {
       try {
@@ -390,24 +468,51 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 
         // Reset WebSocket service before connecting
         websocketService.reset();
+        log.info('Connecting to WebSocket server...');
         await websocketService.connect();
         setIsConnected(true);
         setConnectionStatus('connected');
+        log.info('WebSocket connected successfully');
 
-        websocketService.onBusLocationUpdate(handleBusLocationUpdate);
-        websocketService.onDriverConnected(handleDriverConnected);
-        websocketService.onDriverDisconnected(handleDriverDisconnected);
+        // Register event listeners and store references for cleanup
+        const registerListener = (event: string, callback: Function) => {
+          eventListeners.set(event, callback);
+          return callback;
+        };
+
+        // Register all event listeners
+        websocketService.onBusLocationUpdate(
+          registerListener('bus:locationUpdate', handleBusLocationUpdate) as any
+        );
+        
+        websocketService.onDriverConnected(
+          registerListener('driver:connected', handleDriverConnected) as any
+        );
+        
+        websocketService.onDriverDisconnected(
+          registerListener('driver:disconnected', handleDriverDisconnected) as any
+        );
+        
         // Emit student connection event
-        websocketService.socket?.emit('student:connect');
+        if (websocketService.socket) {
+          websocketService.socket.emit('student:connect');
+          log.debug('Emitted student:connect event');
+        }
 
-        websocketService.onStudentConnected(() => {
-          console.log('✅ Student connected to WebSocket');
-        });
-        websocketService.onBusArriving(handleBusArriving);
+        websocketService.onStudentConnected(
+          registerListener('student:connected', () => {
+            log.info('Student connected to WebSocket');
+          }) as any
+        );
+        
+        websocketService.onBusArriving(
+          registerListener('bus:arriving', handleBusArriving) as any
+        );
 
         const checkConnectionStatus = () => {
           const status = websocketService.getConnectionStatus();
           if (!status && connectionStatus === 'connected') {
+            log.warn('WebSocket connection lost, updating UI state');
             setConnectionStatus('disconnected');
             setIsConnected(false);
           }
@@ -417,20 +522,26 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 
         const loadBuses = async () => {
           try {
-            while (!authService.isInitialized()) {
+            // Avoid infinite loop with timeout
+            let authInitAttempts = 0;
+            const maxAuthAttempts = 50; // 5 seconds max wait
+            
+            while (!authService.isInitialized() && authInitAttempts < maxAuthAttempts) {
               await new Promise((resolve) => setTimeout(resolve, 100));
+              authInitAttempts++;
             }
 
+            log.info('Loading initial bus data from API');
             const response = await apiService.getAllBuses();
             if (response.success && response.data) {
-              console.log(
-                '📊 Initial bus data from API:',
-                response.data.length,
-                'buses'
-              );
+              log.info(`Initial bus data from API: ${response.data.length} buses`);
 
-              response.data.forEach((apiBus: any) => {
-                const busId = apiBus.bus_id || apiBus.id;
+              // Clear existing buses first to prevent stale data
+              busService.clearBuses();
+              
+              // Process bus data
+              response.data.forEach((apiBus: Bus) => {
+                const busId = apiBus.id;
                 if (busId) {
                   busService.syncBusFromAPI(busId, apiBus);
                 }
@@ -438,25 +549,23 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 
               const updatedBuses = busService.getAllBuses();
               setBuses(updatedBuses);
-              console.log(
-                '✅ Initial buses loaded and synced:',
-                response.data.length
-              );
+              log.info(`Initial buses loaded and synced: ${response.data.length}`);
             }
           } catch (error) {
-            console.error('❌ Error loading initial buses:', error);
+            log.error('Error loading initial buses:', error);
           }
         };
 
-        loadBuses();
+        // Use timeout to prevent memory leaks if component unmounts during async operation
+        busLoadingTimeout = setTimeout(() => loadBuses(), 0);
       } catch (error) {
-        console.error('❌ WebSocket connection failed:', error);
+        log.error('WebSocket connection failed:', error);
         setConnectionError('Failed to connect to real-time updates');
         setIsConnected(false);
         setConnectionStatus('disconnected');
 
         reconnectTimeout = setTimeout(() => {
-          console.log('🔄 Retrying WebSocket connection...');
+          log.info('Retrying WebSocket connection...');
           setConnectionStatus('reconnecting');
           connectWebSocket();
         }, 5000);
@@ -465,13 +574,28 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 
     connectWebSocket();
 
+    // Comprehensive cleanup function
     return () => {
+      // Clear all timeouts and intervals
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
       }
       if (statusInterval) {
         clearInterval(statusInterval);
       }
+      if (busLoadingTimeout) {
+        clearTimeout(busLoadingTimeout);
+      }
+      
+      // Remove all registered event listeners
+      if (websocketService.socket) {
+        eventListeners.forEach((_, event) => {
+          websocketService.off(event);
+        });
+        eventListeners.clear();
+      }
+      
+      // Disconnect WebSocket
       websocketService.disconnect();
     };
   }, [
@@ -481,20 +605,28 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
     handleDriverDisconnected,
   ]);
 
-  // Get filtered buses based on selected route
-  const filteredBuses = useMemo(() => {
+  // Get filtered buses based on selected route with deep memoization
+  const filteredBuses: BusInfo[] = performance.useMemoDeep(() => {
     if (selectedRoute === 'all') {
       return buses;
     }
 
+    // Create a route lookup map for faster access
+    const routeMap = new Map();
+    routes.forEach(route => {
+      routeMap.set(route.name, route);
+    });
+
+    // Filter buses with optimized lookup
     return buses.filter((bus) => {
-      const busRoute = routes.find((route) => route.name === bus.routeName);
+      const busRoute = routeMap.get(bus.routeName);
       return busRoute && busRoute.id === selectedRoute;
     });
   }, [buses, selectedRoute, routes]);
 
-  // Get unique routes for filter
+  // Get unique routes for filter with optimized memoization
   const availableRoutes = useMemo(() => {
+    // Only extract needed properties for better performance
     return routes.map((route: Route) => ({
       id: route.id,
       name: route.name,
@@ -504,14 +636,34 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 
   // Add routes to map when routes are loaded
   useEffect(() => {
-    if (routes.length > 0 && map.current && map.current.isStyleLoaded()) {
-      removeRoutesFromMap();
-      addRoutesToMap();
+    // Only add routes when map is fully loaded and routes are available
+    if (routes.length > 0 && map.current) {
+      // Check if map is loaded, if not wait for it
+      if (!map.current.isStyleLoaded()) {
+        const onStyleLoad = () => {
+          removeRoutesFromMap();
+          addRoutesToMap();
+          // Remove the event listener after execution
+          map.current?.off('styledata', onStyleLoad);
+        };
+        
+        // Add event listener for when the style is loaded
+        map.current.on('styledata', onStyleLoad);
+      } else {
+        // Map is already loaded, add routes immediately
+        removeRoutesFromMap();
+        addRoutesToMap();
+      }
     }
 
+    // Cleanup function
     return () => {
       if (map.current) {
+        // Remove all routes from map
         removeRoutesFromMap();
+        
+        // Remove any pending event listeners
+        map.current.off('styledata', () => {});
       }
     };
   }, [routes, addRoutesToMap, removeRoutesFromMap]);
@@ -735,7 +887,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
                         </p>
                       </div>
                     ) : (
-                      filteredBuses.map((bus) => {
+                      filteredBuses.map((bus: BusInfo) => {
                         const location = lastBusLocations[bus.busId];
                         return (
                           <motion.div
