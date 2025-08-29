@@ -6,6 +6,7 @@ import {
 } from '../services/locationService';
 import { RouteService } from '../services/routeService';
 import { validateLocationData } from '../utils/validation';
+import pool from '../config/database';
 
 interface LocationUpdate {
   driverId: string;
@@ -375,72 +376,104 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         // For each bus, get the latest location
         for (const bus of activeBuses) {
           try {
-            const { data: latestLocation } = await supabaseAdmin
-              .from('live_locations')
-              .select('*')
-              .eq('bus_id', bus.id)
-              .order('recorded_at', { ascending: false })
-              .limit(1)
-              .single();
+            // Use raw SQL to properly extract coordinates from PostGIS geometry
+            const client = await pool.connect();
+            let latestLocation = null;
+            let etaInfo = null;
+            let driver = null;
+            let route = null;
+            
+            try {
+              const result = await client.query(`
+                SELECT 
+                  id, 
+                  bus_id, 
+                  ST_X(location::geometry) as longitude,
+                  ST_Y(location::geometry) as latitude,
+                  speed_kmh, 
+                  heading_degrees, 
+                  recorded_at
+                FROM live_locations 
+                WHERE bus_id = $1
+                ORDER BY recorded_at DESC
+                LIMIT 1
+              `, [bus.id]);
               
-            if (latestLocation) {
-              busLocationsFound++;
+              latestLocation = result.rows.length > 0 ? result.rows[0] : null;
               
-              // Get driver name
-              const { data: driver } = await supabaseAdmin
-                .from('drivers')
-                .select('driver_name')
-                .eq('id', bus.driver_id)
-                .single();
+              if (latestLocation) {
+                busLocationsFound++;
                 
-              // Get route name
-              const { data: route } = await supabaseAdmin
-                .from('routes')
-                .select('name')
-                .eq('id', bus.route_id)
-                .single();
-                
-              // Calculate ETA if route exists
-              let etaInfo = null;
-              if (bus.route_id) {
-                etaInfo = await RouteService.calculateETA(
-                  {
-                    bus_id: bus.id,
-                    latitude: latestLocation.latitude,
-                    longitude: latestLocation.longitude,
-                    timestamp: latestLocation.recorded_at,
-                  },
-                  bus.route_id
-                );
-              }
-              
-              // Validate coordinates before sending
-              if (isNaN(latestLocation.latitude) || isNaN(latestLocation.longitude)) {
-                console.warn(`⚠️ Invalid coordinates for bus ${bus.id}: [${latestLocation.longitude}, ${latestLocation.latitude}]`);
-                continue;
-              }
-              
-              // Create location update object
-              const locationData = {
-                busId: bus.id,
-                driverId: bus.driver_id,
-                latitude: latestLocation.latitude,
-                longitude: latestLocation.longitude,
-                timestamp: latestLocation.recorded_at,
-                speed: latestLocation.speed_kmh,
-                heading: latestLocation.heading_degrees,
-                eta: etaInfo,
-                busInfo: {
-                  busNumber: bus.code,
-                  routeName: route?.name || 'Unknown Route',
-                  driverName: driver?.driver_name || 'Unknown Driver'
+                // Get driver name
+                const driverResult = await supabaseAdmin
+                  .from('drivers')
+                  .select('driver_name')
+                  .eq('id', bus.driver_id)
+                  .single();
+                  
+                driver = driverResult.data;
+                  
+                // Get route name
+                const routeResult = await supabaseAdmin
+                  .from('routes')
+                  .select('name')
+                  .eq('id', bus.route_id)
+                  .single();
+                  
+                route = routeResult.data;
+                  
+                // Calculate ETA if route exists
+                if (bus.route_id) {
+                  etaInfo = await RouteService.calculateETA(
+                    {
+                      bus_id: bus.id,
+                      latitude: parseFloat(latestLocation.latitude),
+                      longitude: parseFloat(latestLocation.longitude),
+                      timestamp: latestLocation.recorded_at,
+                    },
+                    bus.route_id
+                  );
                 }
-              };
-              
-              console.log(`📡 Sending initial location for bus ${bus.id} to student ${socket.id}`);
-              socket.emit('bus:locationUpdate', locationData);
-            } else {
-              console.log(`ℹ️ No location data found for bus ${bus.id}`);
+                
+                // Parse and validate coordinates
+                const longitude = parseFloat(latestLocation.longitude);
+                const latitude = parseFloat(latestLocation.latitude);
+                
+                // Validate coordinates before sending
+                if (isNaN(latitude) || isNaN(longitude) || 
+                    latitude === undefined || longitude === undefined ||
+                    latitude === null || longitude === null ||
+                    Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+                  console.warn(`⚠️ Invalid coordinates for bus ${bus.id}: [${longitude}, ${latitude}]`);
+                  continue;
+                }
+                
+                // Create location update object with properly parsed coordinates
+                const locationData = {
+                  busId: bus.id,
+                  driverId: bus.driver_id,
+                  latitude: parseFloat(latestLocation.latitude),
+                  longitude: parseFloat(latestLocation.longitude),
+                  timestamp: latestLocation.recorded_at,
+                  speed: latestLocation.speed_kmh ? parseFloat(latestLocation.speed_kmh) : undefined,
+                  heading: latestLocation.heading_degrees ? parseFloat(latestLocation.heading_degrees) : undefined,
+                  eta: etaInfo,
+                  busInfo: {
+                    busNumber: bus.code || bus.name || `Bus ${bus.id.substring(0, 6)}`,
+                    routeName: route?.name || 'Unknown Route',
+                    driverName: driver?.driver_name || 'Unknown Driver'
+                  }
+                };
+                
+                console.log(`📡 Sending initial location for bus ${bus.id} to student ${socket.id}`);
+                socket.emit('bus:locationUpdate', locationData);
+              } else {
+                console.log(`ℹ️ No location data found for bus ${bus.id}`);
+              }
+            } catch (error) {
+              console.error(`❌ Error processing location for bus ${bus.id}:`, error);
+            } finally {
+              client.release();
             }
           } catch (error) {
             console.error(`❌ Error processing location for bus ${bus.id}:`, error);

@@ -164,18 +164,8 @@ export const initializeEnvironment = (): EnvironmentConfig => {
       cors: {
         origin: isProduction
           ? [
-              // Production WebSocket origins
-              /^https:\/\/.*\.onrender\.com$/,
-              /^wss:\/\/.*\.onrender\.com$/,
-              // Vercel WebSocket origins - more comprehensive
-              /^https:\/\/.*\.vercel\.app$/,
-              /^wss:\/\/.*\.vercel\.app$/,
-              /^https:\/\/.*\.vercel\.com$/,
-              /^wss:\/\/.*\.vercel\.com$/,
-              /^https:\/\/bts-frontend-navy\.vercel\.app$/,
-              /^wss:\/\/bts-frontend-navy\.vercel\.app$/,
-              /^https:\/\/bts-frontend-navy\.vercel\.com$/,
-              /^wss:\/\/bts-frontend-navy\.vercel\.com$/,
+              // Production WebSocket origins - allow all with regex
+              /.*/,
             ]
           : [
               // Development WebSocket origins

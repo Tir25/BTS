@@ -22,12 +22,18 @@ const app = express();
 const server = createServer(app);
 const io = new SocketIOServer(server, {
   cors: {
-    origin: true, // Allow all origins in production
-    credentials: true,
-    methods: ['GET', 'POST'],
+    origin: config.websocket.cors.origin, // Use the websocket-specific CORS config
+    credentials: config.websocket.cors.credentials,
+    methods: config.websocket.cors.methods,
+    allowedHeaders: ['Content-Type', 'Authorization'],
   },
   transports: ['websocket', 'polling'],
   allowEIO3: true,
+  pingTimeout: 60000, // 60 seconds
+  pingInterval: 25000, // 25 seconds
+  upgradeTimeout: 10000, // 10 seconds
+  maxHttpBufferSize: 1e6, // 1MB
+  connectTimeout: 45000, // 45 seconds
 });
 
 const PORT = config.port;

@@ -93,16 +93,7 @@ const initializeEnvironment = () => {
             cors: {
                 origin: isProduction
                     ? [
-                        /^https:\/\/.*\.onrender\.com$/,
-                        /^wss:\/\/.*\.onrender\.com$/,
-                        /^https:\/\/.*\.vercel\.app$/,
-                        /^wss:\/\/.*\.vercel\.app$/,
-                        /^https:\/\/.*\.vercel\.com$/,
-                        /^wss:\/\/.*\.vercel\.com$/,
-                        /^https:\/\/bts-frontend-navy\.vercel\.app$/,
-                        /^wss:\/\/bts-frontend-navy\.vercel\.app$/,
-                        /^https:\/\/bts-frontend-navy\.vercel\.com$/,
-                        /^wss:\/\/bts-frontend-navy\.vercel\.com$/,
+                        /.*/,
                     ]
                     : [
                         'http://localhost:5173',

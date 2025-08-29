@@ -24,12 +24,18 @@ const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
 const io = new socket_io_1.Server(server, {
     cors: {
-        origin: true,
-        credentials: true,
-        methods: ['GET', 'POST'],
+        origin: config.websocket.cors.origin,
+        credentials: config.websocket.cors.credentials,
+        methods: config.websocket.cors.methods,
+        allowedHeaders: ['Content-Type', 'Authorization'],
     },
     transports: ['websocket', 'polling'],
     allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    upgradeTimeout: 10000,
+    maxHttpBufferSize: 1e6,
+    connectTimeout: 45000,
 });
 const PORT = config.port;
 app.use((0, helmet_1.default)());

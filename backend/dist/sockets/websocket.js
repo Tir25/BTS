@@ -1,10 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeWebSocket = void 0;
 const supabase_1 = require("../config/supabase");
 const locationService_1 = require("../services/locationService");
 const routeService_1 = require("../services/routeService");
 const validation_1 = require("../utils/validation");
+const database_1 = __importDefault(require("../config/database"));
 const initializeWebSocket = (io) => {
     console.log('🔌 WebSocket server initialized');
     io.engine.opts.pingTimeout = 60000;
@@ -264,58 +268,85 @@ const initializeWebSocket = (io) => {
                 let busLocationsFound = 0;
                 for (const bus of activeBuses) {
                     try {
-                        const { data: latestLocation } = await supabase_1.supabaseAdmin
-                            .from('live_locations')
-                            .select('*')
-                            .eq('bus_id', bus.id)
-                            .order('recorded_at', { ascending: false })
-                            .limit(1)
-                            .single();
-                        if (latestLocation) {
-                            busLocationsFound++;
-                            const { data: driver } = await supabase_1.supabaseAdmin
-                                .from('drivers')
-                                .select('driver_name')
-                                .eq('id', bus.driver_id)
-                                .single();
-                            const { data: route } = await supabase_1.supabaseAdmin
-                                .from('routes')
-                                .select('name')
-                                .eq('id', bus.route_id)
-                                .single();
-                            let etaInfo = null;
-                            if (bus.route_id) {
-                                etaInfo = await routeService_1.RouteService.calculateETA({
-                                    bus_id: bus.id,
-                                    latitude: latestLocation.latitude,
-                                    longitude: latestLocation.longitude,
-                                    timestamp: latestLocation.recorded_at,
-                                }, bus.route_id);
-                            }
-                            if (isNaN(latestLocation.latitude) || isNaN(latestLocation.longitude)) {
-                                console.warn(`⚠️ Invalid coordinates for bus ${bus.id}: [${latestLocation.longitude}, ${latestLocation.latitude}]`);
-                                continue;
-                            }
-                            const locationData = {
-                                busId: bus.id,
-                                driverId: bus.driver_id,
-                                latitude: latestLocation.latitude,
-                                longitude: latestLocation.longitude,
-                                timestamp: latestLocation.recorded_at,
-                                speed: latestLocation.speed_kmh,
-                                heading: latestLocation.heading_degrees,
-                                eta: etaInfo,
-                                busInfo: {
-                                    busNumber: bus.code,
-                                    routeName: route?.name || 'Unknown Route',
-                                    driverName: driver?.driver_name || 'Unknown Driver'
+                        const client = await database_1.default.connect();
+                        let latestLocation = null;
+                        let etaInfo = null;
+                        let driver = null;
+                        let route = null;
+                        try {
+                            const result = await client.query(`
+                SELECT 
+                  id, 
+                  bus_id, 
+                  ST_X(location::geometry) as longitude,
+                  ST_Y(location::geometry) as latitude,
+                  speed_kmh, 
+                  heading_degrees, 
+                  recorded_at
+                FROM live_locations 
+                WHERE bus_id = $1
+                ORDER BY recorded_at DESC
+                LIMIT 1
+              `, [bus.id]);
+                            latestLocation = result.rows.length > 0 ? result.rows[0] : null;
+                            if (latestLocation) {
+                                busLocationsFound++;
+                                const driverResult = await supabase_1.supabaseAdmin
+                                    .from('drivers')
+                                    .select('driver_name')
+                                    .eq('id', bus.driver_id)
+                                    .single();
+                                driver = driverResult.data;
+                                const routeResult = await supabase_1.supabaseAdmin
+                                    .from('routes')
+                                    .select('name')
+                                    .eq('id', bus.route_id)
+                                    .single();
+                                route = routeResult.data;
+                                if (bus.route_id) {
+                                    etaInfo = await routeService_1.RouteService.calculateETA({
+                                        bus_id: bus.id,
+                                        latitude: parseFloat(latestLocation.latitude),
+                                        longitude: parseFloat(latestLocation.longitude),
+                                        timestamp: latestLocation.recorded_at,
+                                    }, bus.route_id);
                                 }
-                            };
-                            console.log(`📡 Sending initial location for bus ${bus.id} to student ${socket.id}`);
-                            socket.emit('bus:locationUpdate', locationData);
+                                const longitude = parseFloat(latestLocation.longitude);
+                                const latitude = parseFloat(latestLocation.latitude);
+                                if (isNaN(latitude) || isNaN(longitude) ||
+                                    latitude === undefined || longitude === undefined ||
+                                    latitude === null || longitude === null ||
+                                    Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+                                    console.warn(`⚠️ Invalid coordinates for bus ${bus.id}: [${longitude}, ${latitude}]`);
+                                    continue;
+                                }
+                                const locationData = {
+                                    busId: bus.id,
+                                    driverId: bus.driver_id,
+                                    latitude: parseFloat(latestLocation.latitude),
+                                    longitude: parseFloat(latestLocation.longitude),
+                                    timestamp: latestLocation.recorded_at,
+                                    speed: latestLocation.speed_kmh ? parseFloat(latestLocation.speed_kmh) : undefined,
+                                    heading: latestLocation.heading_degrees ? parseFloat(latestLocation.heading_degrees) : undefined,
+                                    eta: etaInfo,
+                                    busInfo: {
+                                        busNumber: bus.code || bus.name || `Bus ${bus.id.substring(0, 6)}`,
+                                        routeName: route?.name || 'Unknown Route',
+                                        driverName: driver?.driver_name || 'Unknown Driver'
+                                    }
+                                };
+                                console.log(`📡 Sending initial location for bus ${bus.id} to student ${socket.id}`);
+                                socket.emit('bus:locationUpdate', locationData);
+                            }
+                            else {
+                                console.log(`ℹ️ No location data found for bus ${bus.id}`);
+                            }
                         }
-                        else {
-                            console.log(`ℹ️ No location data found for bus ${bus.id}`);
+                        catch (error) {
+                            console.error(`❌ Error processing location for bus ${bus.id}:`, error);
+                        }
+                        finally {
+                            client.release();
                         }
                     }
                     catch (error) {
