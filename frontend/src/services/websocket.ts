@@ -186,6 +186,9 @@ class WebSocketService {
       this.connectionTimeout = null;
     }
 
+    // Re-register all event listeners after connection
+    this.reRegisterEventListeners();
+
     // Start heartbeat and connection monitoring
     this.startHeartbeat();
     this.startConnectionMonitoring();
@@ -386,6 +389,9 @@ class WebSocketService {
       this.connectionTimeout = null;
     }
 
+    // Clear all event listeners
+    this.clearAllEventListeners();
+
     // Disconnect socket
     if (this.socket) {
       this.socket.disconnect();
@@ -517,31 +523,99 @@ class WebSocketService {
   // Event listener methods
   onBusLocationUpdate(callback: (location: BusLocation) => void): void {
     this.busLocationListeners.push(callback);
-    this.socket?.on('bus:locationUpdate', callback);
+    if (this.socket) {
+      this.socket.on('bus:locationUpdate', callback);
+    }
   }
 
   onDriverConnected(callback: (data: any) => void): void {
     this.driverConnectedListeners.push(callback);
-    this.socket?.on('driver:connected', callback);
+    if (this.socket) {
+      this.socket.on('driver:connected', callback);
+    }
   }
 
   onDriverDisconnected(callback: (data: any) => void): void {
     this.driverDisconnectedListeners.push(callback);
-    this.socket?.on('driver:disconnected', callback);
+    if (this.socket) {
+      this.socket.on('driver:disconnected', callback);
+    }
   }
 
   onStudentConnected(callback: () => void): void {
     this.studentConnectedListeners.push(callback);
-    this.socket?.on('student:connected', callback);
+    if (this.socket) {
+      this.socket.on('student:connected', callback);
+    }
   }
 
   onBusArriving(callback: (data: any) => void): void {
     this.busArrivingListeners.push(callback);
-    this.socket?.on('bus:arriving', callback);
+    if (this.socket) {
+      this.socket.on('bus:arriving', callback);
+    }
   }
 
   off(event: string): void {
     this.socket?.off(event);
+  }
+
+  // Re-register all event listeners after connection
+  private reRegisterEventListeners(): void {
+    if (!this.socket) return;
+
+    console.log('🔄 Re-registering event listeners...');
+
+    // Re-register bus location update listeners
+    this.busLocationListeners.forEach(callback => {
+      this.socket!.on('bus:locationUpdate', callback);
+    });
+
+    // Re-register driver connected listeners
+    this.driverConnectedListeners.forEach(callback => {
+      this.socket!.on('driver:connected', callback);
+    });
+
+    // Re-register driver disconnected listeners
+    this.driverDisconnectedListeners.forEach(callback => {
+      this.socket!.on('driver:disconnected', callback);
+    });
+
+    // Re-register student connected listeners
+    this.studentConnectedListeners.forEach(callback => {
+      this.socket!.on('student:connected', callback);
+    });
+
+    // Re-register bus arriving listeners
+    this.busArrivingListeners.forEach(callback => {
+      this.socket!.on('bus:arriving', callback);
+    });
+
+    console.log(`🔄 Re-registered ${this.busLocationListeners.length} bus location listeners`);
+  }
+
+  // Clear all event listeners
+  private clearAllEventListeners(): void {
+    if (!this.socket) return;
+
+    console.log('🧹 Clearing all event listeners...');
+
+    // Clear all event listeners from socket
+    this.socket.off('bus:locationUpdate');
+    this.socket.off('driver:connected');
+    this.socket.off('driver:disconnected');
+    this.socket.off('student:connected');
+    this.socket.off('bus:arriving');
+    this.socket.off('error');
+    this.socket.off('connect');
+    this.socket.off('disconnect');
+    this.socket.off('connect_error');
+    this.socket.off('reconnect');
+    this.socket.off('reconnect_attempt');
+    this.socket.off('reconnect_error');
+    this.socket.off('reconnect_failed');
+
+    console.log('✅ All event listeners cleared');
   }
 
   // Enhanced method to get connection statistics
