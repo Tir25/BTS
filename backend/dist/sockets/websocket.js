@@ -236,6 +236,106 @@ const initializeWebSocket = (io) => {
                 timestamp: new Date().toISOString()
             });
         });
+        socket.on('student:requestBusLocations', async () => {
+            try {
+                socket.lastActivity = Date.now();
+                console.log(`📍 Student ${socket.id} requested initial bus locations`);
+                const { data: activeBuses, error: busError } = await supabase_1.supabaseAdmin
+                    .from('buses')
+                    .select('id, code, name, route_id, driver_id')
+                    .eq('is_active', true);
+                if (busError) {
+                    console.error('❌ Error fetching active buses:', busError);
+                    socket.emit('student:error', {
+                        message: 'Failed to fetch active buses',
+                        code: 'FETCH_ERROR'
+                    });
+                    return;
+                }
+                if (!activeBuses || activeBuses.length === 0) {
+                    console.log('ℹ️ No active buses found for student request');
+                    socket.emit('student:noBusesAvailable', {
+                        message: 'No active buses available',
+                        timestamp: new Date().toISOString()
+                    });
+                    return;
+                }
+                console.log(`🚌 Found ${activeBuses.length} active buses`);
+                let busLocationsFound = 0;
+                for (const bus of activeBuses) {
+                    try {
+                        const { data: latestLocation } = await supabase_1.supabaseAdmin
+                            .from('live_locations')
+                            .select('*')
+                            .eq('bus_id', bus.id)
+                            .order('recorded_at', { ascending: false })
+                            .limit(1)
+                            .single();
+                        if (latestLocation) {
+                            busLocationsFound++;
+                            const { data: driver } = await supabase_1.supabaseAdmin
+                                .from('drivers')
+                                .select('driver_name')
+                                .eq('id', bus.driver_id)
+                                .single();
+                            const { data: route } = await supabase_1.supabaseAdmin
+                                .from('routes')
+                                .select('name')
+                                .eq('id', bus.route_id)
+                                .single();
+                            let etaInfo = null;
+                            if (bus.route_id) {
+                                etaInfo = await routeService_1.RouteService.calculateETA({
+                                    bus_id: bus.id,
+                                    latitude: latestLocation.latitude,
+                                    longitude: latestLocation.longitude,
+                                    timestamp: latestLocation.recorded_at,
+                                }, bus.route_id);
+                            }
+                            if (isNaN(latestLocation.latitude) || isNaN(latestLocation.longitude)) {
+                                console.warn(`⚠️ Invalid coordinates for bus ${bus.id}: [${latestLocation.longitude}, ${latestLocation.latitude}]`);
+                                continue;
+                            }
+                            const locationData = {
+                                busId: bus.id,
+                                driverId: bus.driver_id,
+                                latitude: latestLocation.latitude,
+                                longitude: latestLocation.longitude,
+                                timestamp: latestLocation.recorded_at,
+                                speed: latestLocation.speed_kmh,
+                                heading: latestLocation.heading_degrees,
+                                eta: etaInfo,
+                                busInfo: {
+                                    busNumber: bus.code,
+                                    routeName: route?.name || 'Unknown Route',
+                                    driverName: driver?.driver_name || 'Unknown Driver'
+                                }
+                            };
+                            console.log(`📡 Sending initial location for bus ${bus.id} to student ${socket.id}`);
+                            socket.emit('bus:locationUpdate', locationData);
+                        }
+                        else {
+                            console.log(`ℹ️ No location data found for bus ${bus.id}`);
+                        }
+                    }
+                    catch (error) {
+                        console.error(`❌ Error processing location for bus ${bus.id}:`, error);
+                    }
+                }
+                socket.emit('student:initialLocationsComplete', {
+                    totalBuses: activeBuses.length,
+                    locationsFound: busLocationsFound,
+                    timestamp: new Date().toISOString()
+                });
+            }
+            catch (error) {
+                console.error('❌ Error processing initial bus locations request:', error);
+                socket.emit('student:error', {
+                    message: 'Failed to process bus locations',
+                    code: 'PROCESSING_ERROR'
+                });
+            }
+        });
         socket.on('disconnect', (reason) => {
             activeConnections--;
             console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason} (Active: ${activeConnections})`);

@@ -142,9 +142,40 @@ class WebSocketService {
         console.log('👥 Another student joined:', data);
       });
       
+      this.socket.on('student:noBusesAvailable', (data: any) => {
+        console.warn('⚠️ No buses available:', data);
+      });
+      
+      this.socket.on('student:initialLocationsComplete', (data: any) => {
+        console.log('📊 Initial locations complete:', data);
+      });
+      
+      this.socket.on('student:error', (error: any) => {
+        console.error('❌ Student error:', error);
+      });
+      
       // Bus location update listener
       this.socket.on('bus:locationUpdate', (location: BusLocation) => {
-        console.log('📍 Bus location update received:', location);
+        // Validate location data before processing
+        if (!location || !location.busId) {
+          console.error('❌ Invalid bus location data received:', location);
+          return;
+        }
+        
+        // Validate coordinates
+        if (isNaN(location.latitude) || isNaN(location.longitude) || 
+            location.latitude === undefined || location.longitude === undefined ||
+            location.latitude === null || location.longitude === null) {
+          console.warn(`⚠️ Invalid coordinates for bus ${location.busId}: [${location.longitude}, ${location.latitude}]`);
+          return;
+        }
+        
+        console.log('📍 Bus location update received:', {
+          busId: location.busId,
+          coords: [location.longitude, location.latitude],
+          time: new Date(location.timestamp).toLocaleTimeString()
+        });
+        
         this.busLocationListeners.forEach(listener => listener(location));
       });
       
@@ -595,6 +626,19 @@ class WebSocketService {
     this.busArrivingListeners.forEach(callback => {
       this.socket!.on('bus:arriving', callback);
     });
+    
+    // Set up additional student-specific event handlers
+    this.socket.on('student:noBusesAvailable', (data: any) => {
+      console.warn('⚠️ No buses available:', data);
+    });
+    
+    this.socket.on('student:initialLocationsComplete', (data: any) => {
+      console.log('📊 Initial locations complete:', data);
+    });
+    
+    this.socket.on('student:error', (error: any) => {
+      console.error('❌ Student error:', error);
+    });
 
     console.log(`🔄 Re-registered ${this.busLocationListeners.length} bus location listeners`);
   }
@@ -610,6 +654,10 @@ class WebSocketService {
     this.socket.off('driver:connected');
     this.socket.off('driver:disconnected');
     this.socket.off('student:connected');
+    this.socket.off('student:joined');
+    this.socket.off('student:noBusesAvailable');
+    this.socket.off('student:initialLocationsComplete');
+    this.socket.off('student:error');
     this.socket.off('bus:arriving');
     this.socket.off('error');
     this.socket.off('connect');
