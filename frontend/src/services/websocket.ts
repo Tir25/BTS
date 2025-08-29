@@ -14,11 +14,6 @@ export interface BusLocation {
     distance_remaining: number;
     is_near_stop: boolean;
   };
-  busInfo?: {
-    busNumber: string;
-    routeName: string;
-    driverName: string;
-  };
 }
 
 class WebSocketService {
@@ -72,120 +67,44 @@ class WebSocketService {
 
       // Get WebSocket URL with fallback
       const wsUrl = environment.api.websocketUrl;
-      
-      // Check if WebSocket URL is valid before attempting connection
-      if (!wsUrl || typeof wsUrl !== 'string' || !wsUrl.startsWith('ws')) {
-        throw new Error(`Invalid WebSocket URL: ${wsUrl}`);
-      }
-      
-      // Network connection check
-      if (!navigator.onLine) {
-        throw new Error('No network connection available');
-      }
+      console.log('🔌 WebSocket URL:', wsUrl);
 
       // Enhanced Socket.IO configuration for production with improved stability
       this.socket = io(wsUrl, {
         transports: ['websocket', 'polling'], // Prefer WebSocket, fallback to polling
         upgrade: true,
         rememberUpgrade: true,
-        timeout: 20000, // Increased timeout for better stability on slow networks
+        timeout: 15000, // Increased timeout for better stability
         forceNew: true,
-        reconnection: false, // We handle reconnection manually for better control
+        reconnection: true, // Enable automatic reconnection
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
         autoConnect: false,
         query: {
-          clientType: 'student', // Changed from driver to student for student map
+          clientType: 'driver',
           version: '1.0.0',
           timestamp: Date.now().toString(),
-          deviceInfo: `${navigator.platform}|${navigator.userAgent.substring(0, 100)}`,
+        },
+        extraHeaders: {
+          'User-Agent': 'BusTrackingDriver/1.0.0',
         },
       });
 
-      // Set up connection timeout with progressive checks
-      const timeoutCheck = (timeout: number) => {
+      // Set up connection timeout
+      this.connectionTimeout = setTimeout(() => {
         if (this.connectionState === 'connecting') {
-          if (timeout >= 15000) {
-            console.error('❌ WebSocket connection timeout');
-            this.handleError(new Error('Connection timeout'));
-          } else {
-            console.log(`⏳ Still connecting... (${timeout / 1000}s)`);
-            this.connectionTimeout = setTimeout(() => timeoutCheck(timeout + 5000), 5000);
-          }
+          console.error('❌ WebSocket connection timeout');
+          this.handleError(new Error('Connection timeout'));
         }
-      };
-      
-      this.connectionTimeout = setTimeout(() => timeoutCheck(5000), 5000);
+      }, 15000); // 15 seconds timeout
 
-      // Set up event listeners with enhanced error information
+      // Set up event listeners
       this.socket.on('connect', this.handleConnect);
       this.socket.on('disconnect', this.handleDisconnect);
-      this.socket.on('connect_error', (error: Error) => {
-        console.error('❌ Connection error details:', {
-          message: error.message,
-          context: {
-            url: wsUrl,
-            online: navigator.onLine,
-            connectionState: this.connectionState,
-          }
-        });
-        this.handleError(error);
-      });
+      this.socket.on('connect_error', this.handleError);
       this.socket.on('error', this.handleError);
       this.socket.on('reconnect', this.handleReconnect);
-      
-      // Student-specific event listeners
-      this.socket.on('student:connected', (data: any) => {
-        console.log('✅ Student connection confirmed:', data);
-        this.studentConnectedListeners.forEach(listener => listener());
-      });
-      
-      this.socket.on('student:joined', (data: any) => {
-        console.log('👥 Another student joined:', data);
-      });
-      
-      this.socket.on('student:noBusesAvailable', (data: any) => {
-        console.warn('⚠️ No buses available:', data);
-      });
-      
-      this.socket.on('student:initialLocationsComplete', (data: any) => {
-        console.log('📊 Initial locations complete:', data);
-      });
-      
-      this.socket.on('student:error', (error: any) => {
-        console.error('❌ Student error:', error);
-      });
-      
-      // Bus location update listener
-      this.socket.on('bus:locationUpdate', (location: BusLocation) => {
-        // Validate location data before processing
-        if (!location || !location.busId) {
-          console.error('❌ Invalid bus location data received:', location);
-          return;
-        }
-        
-        // Validate coordinates
-        if (isNaN(location.latitude) || isNaN(location.longitude) || 
-            location.latitude === undefined || location.longitude === undefined ||
-            location.latitude === null || location.longitude === null) {
-          console.warn(`⚠️ Invalid coordinates for bus ${location.busId}: [${location.longitude}, ${location.latitude}]`);
-          return;
-        }
-        
-        console.log('📍 Bus location update received:', {
-          busId: location.busId,
-          coords: [location.longitude, location.latitude],
-          time: new Date(location.timestamp).toLocaleTimeString()
-        });
-        
-        this.busLocationListeners.forEach(listener => listener(location));
-      });
-      
-      // Bus arriving listener
-      this.socket.on('bus:arriving', (data: any) => {
-        console.log('🚌 Bus arriving:', data);
-        this.busArrivingListeners.forEach(listener => listener(data));
-      });
-      
-      // Additional event listeners for better debugging
       this.socket.on('reconnect_attempt', (attemptNumber) => {
         console.log(`🔄 Reconnection attempt ${attemptNumber}`);
       });
@@ -194,11 +113,6 @@ class WebSocketService {
       });
       this.socket.on('reconnect_failed', () => {
         console.error('❌ Reconnection failed after all attempts');
-      });
-      this.socket.io.on('packet', (packet: any) => {
-        if (packet && packet.type && packet.type.toString() === 'error') {
-          console.error('❌ Socket.IO packet error:', packet.data);
-        }
       });
 
       // Connect to server
@@ -222,15 +136,12 @@ class WebSocketService {
       this.connectionTimeout = null;
     }
 
-    // Re-register all event listeners after connection
-    this.reRegisterEventListeners();
-
     // Start heartbeat and connection monitoring
     this.startHeartbeat();
     this.startConnectionMonitoring();
 
-    // Emit student connection event
-    this.socket?.emit('student:connect', {
+    // Emit connection event
+    this.socket?.emit('driver:connected', {
       timestamp: new Date().toISOString(),
       clientInfo: {
         userAgent: navigator.userAgent,
@@ -303,37 +214,18 @@ class WebSocketService {
       `🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
     );
 
-    // Enhanced exponential backoff with jitter
-    // Base delay increases exponentially with each attempt
-    // Add randomized jitter to prevent thundering herd problem
-    const baseDelay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    const jitter = Math.random() * baseDelay * 0.5; // 0-50% jitter
-    const delay = Math.min(baseDelay + jitter, this.maxReconnectDelay);
+    // Exponential backoff with jitter
+    const delay = Math.min(
+      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) +
+        Math.random() * 1000,
+      this.maxReconnectDelay
+    );
 
-    // Implement mobile network detection for more aggressive reconnection
-    // Use navigator.connection if available (not standard in all browsers)
-    const connection = (navigator as any).connection;
-    const isMobileNetwork = connection ? 
-      ['slow-2g', '2g', '3g'].includes(connection.effectiveType) : 
-      false;
-
-    if (isMobileNetwork && this.reconnectAttempts > 3) {
-      // For mobile networks, add additional delay to conserve battery
-      const mobileDelay = delay * 1.5;
-      console.log('📱 Mobile network detected, adjusting reconnection strategy');
-      
-      setTimeout(() => {
-        if (!this.isShuttingDown) {
-          this.connect();
-        }
-      }, mobileDelay);
-    } else {
-      setTimeout(() => {
-        if (!this.isShuttingDown) {
-          this.connect();
-        }
-      }, delay);
-    }
+    setTimeout(() => {
+      if (!this.isShuttingDown) {
+        this.connect();
+      }
+    }, delay);
   }
 
   private startHeartbeat(): void {
@@ -424,9 +316,6 @@ class WebSocketService {
       clearTimeout(this.connectionTimeout);
       this.connectionTimeout = null;
     }
-
-    // Clear all event listeners
-    this.clearAllEventListeners();
 
     // Disconnect socket
     if (this.socket) {
@@ -559,116 +448,31 @@ class WebSocketService {
   // Event listener methods
   onBusLocationUpdate(callback: (location: BusLocation) => void): void {
     this.busLocationListeners.push(callback);
-    if (this.socket) {
-      this.socket.on('bus:locationUpdate', callback);
-    }
+    this.socket?.on('bus:locationUpdate', callback);
   }
 
   onDriverConnected(callback: (data: any) => void): void {
     this.driverConnectedListeners.push(callback);
-    if (this.socket) {
-      this.socket.on('driver:connected', callback);
-    }
+    this.socket?.on('driver:connected', callback);
   }
 
   onDriverDisconnected(callback: (data: any) => void): void {
     this.driverDisconnectedListeners.push(callback);
-    if (this.socket) {
-      this.socket.on('driver:disconnected', callback);
-    }
+    this.socket?.on('driver:disconnected', callback);
   }
 
   onStudentConnected(callback: () => void): void {
     this.studentConnectedListeners.push(callback);
-    if (this.socket) {
-      this.socket.on('student:connected', callback);
-    }
+    this.socket?.on('student:connected', callback);
   }
 
   onBusArriving(callback: (data: any) => void): void {
     this.busArrivingListeners.push(callback);
-    if (this.socket) {
-      this.socket.on('bus:arriving', callback);
-    }
+    this.socket?.on('bus:arriving', callback);
   }
 
   off(event: string): void {
     this.socket?.off(event);
-  }
-
-  // Re-register all event listeners after connection
-  private reRegisterEventListeners(): void {
-    if (!this.socket) return;
-
-    console.log('🔄 Re-registering event listeners...');
-
-    // Re-register bus location update listeners
-    this.busLocationListeners.forEach(callback => {
-      this.socket!.on('bus:locationUpdate', callback);
-    });
-
-    // Re-register driver connected listeners
-    this.driverConnectedListeners.forEach(callback => {
-      this.socket!.on('driver:connected', callback);
-    });
-
-    // Re-register driver disconnected listeners
-    this.driverDisconnectedListeners.forEach(callback => {
-      this.socket!.on('driver:disconnected', callback);
-    });
-
-    // Re-register student connected listeners
-    this.studentConnectedListeners.forEach(callback => {
-      this.socket!.on('student:connected', callback);
-    });
-
-    // Re-register bus arriving listeners
-    this.busArrivingListeners.forEach(callback => {
-      this.socket!.on('bus:arriving', callback);
-    });
-    
-    // Set up additional student-specific event handlers
-    this.socket.on('student:noBusesAvailable', (data: any) => {
-      console.warn('⚠️ No buses available:', data);
-    });
-    
-    this.socket.on('student:initialLocationsComplete', (data: any) => {
-      console.log('📊 Initial locations complete:', data);
-    });
-    
-    this.socket.on('student:error', (error: any) => {
-      console.error('❌ Student error:', error);
-    });
-
-    console.log(`🔄 Re-registered ${this.busLocationListeners.length} bus location listeners`);
-  }
-
-  // Clear all event listeners
-  private clearAllEventListeners(): void {
-    if (!this.socket) return;
-
-    console.log('🧹 Clearing all event listeners...');
-
-    // Clear all event listeners from socket
-    this.socket.off('bus:locationUpdate');
-    this.socket.off('driver:connected');
-    this.socket.off('driver:disconnected');
-    this.socket.off('student:connected');
-    this.socket.off('student:joined');
-    this.socket.off('student:noBusesAvailable');
-    this.socket.off('student:initialLocationsComplete');
-    this.socket.off('student:error');
-    this.socket.off('bus:arriving');
-    this.socket.off('error');
-    this.socket.off('connect');
-    this.socket.off('disconnect');
-    this.socket.off('connect_error');
-    this.socket.off('reconnect');
-    this.socket.off('reconnect_attempt');
-    this.socket.off('reconnect_error');
-    this.socket.off('reconnect_failed');
-
-    console.log('✅ All event listeners cleared');
   }
 
   // Enhanced method to get connection statistics
