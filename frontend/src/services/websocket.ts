@@ -14,6 +14,11 @@ export interface BusLocation {
     distance_remaining: number;
     is_near_stop: boolean;
   };
+  busInfo?: {
+    busNumber: string;
+    routeName: string;
+    driverName: string;
+  };
 }
 
 class WebSocketService {

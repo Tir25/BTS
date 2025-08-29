@@ -227,6 +227,41 @@ class BusService implements IBusService {
       this.buses[busId].eta = eta;
     }
   }
+  
+  // Update bus info from WebSocket
+  updateBusInfo(busId: string, info: {
+    busNumber?: string;
+    routeName?: string;
+    driverName?: string;
+  }): void {
+    // Create bus if it doesn't exist
+    if (!this.buses[busId]) {
+      this.buses[busId] = {
+        busId,
+        busNumber: info.busNumber || `Bus ${busId}`,
+        routeName: info.routeName || 'Route TBD',
+        driverName: info.driverName || 'Driver TBD',
+        currentLocation: {
+          busId,
+          driverId: '', // Will be updated when location data arrives
+          latitude: 0,
+          longitude: 0,
+          timestamp: new Date().toISOString(),
+        },
+      };
+    } else {
+      // Update existing bus info
+      if (info.busNumber) {
+        this.buses[busId].busNumber = info.busNumber;
+      }
+      if (info.routeName) {
+        this.buses[busId].routeName = info.routeName;
+      }
+      if (info.driverName) {
+        this.buses[busId].driverName = info.driverName;
+      }
+    }
+  }
 
   // Get buses near a specific location
   getBusesNearLocation(

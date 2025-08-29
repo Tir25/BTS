@@ -304,12 +304,34 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   // Handle bus location updates
   const handleBusLocationUpdate = useCallback(
     (location: BusLocation) => {
-      log.debug('Bus location update received', {
+      log.info('Bus location update received', {
         busId: location.busId,
         lat: location.latitude,
         lng: location.longitude,
-        speed: location.speed
+        speed: location.speed,
+        timestamp: new Date(location.timestamp).toLocaleTimeString()
       });
+
+      // Update bus info if busInfo is included in the location update
+      if (location.busInfo) {
+        busService.updateBusInfo(location.busId, {
+          busNumber: location.busInfo.busNumber,
+          routeName: location.busInfo.routeName,
+          driverName: location.busInfo.driverName
+        });
+        
+        // Update buses state to reflect the new bus
+        setBuses((prevBuses) => {
+          const existingBus = prevBuses.find(bus => bus.busId === location.busId);
+          if (!existingBus) {
+            const newBus = busService.getBus(location.busId);
+            if (newBus) {
+              return [...prevBuses, newBus];
+            }
+          }
+          return prevBuses;
+        });
+      }
 
       setLastBusLocations((prev) => ({
         ...prev,
@@ -493,15 +515,28 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
           registerListener('driver:disconnected', handleDriverDisconnected) as any
         );
         
-        // Emit student connection event
+        // Emit student connection event with proper data format
         if (websocketService.socket) {
-          websocketService.socket.emit('student:connect');
-          log.debug('Emitted student:connect event');
+          websocketService.socket.emit('student:connect', {
+            timestamp: new Date().toISOString(),
+            clientInfo: {
+              userAgent: navigator.userAgent,
+              platform: navigator.platform,
+              language: navigator.language,
+            },
+          });
+          log.debug('Emitted student:connect event with client info');
         }
 
         websocketService.onStudentConnected(
           registerListener('student:connected', () => {
             log.info('Student connected to WebSocket');
+            
+            // Request initial bus locations after successful connection
+            if (websocketService.socket) {
+              log.info('Requesting initial bus locations');
+              websocketService.socket.emit('student:requestBusLocations');
+            }
           }) as any
         );
         
