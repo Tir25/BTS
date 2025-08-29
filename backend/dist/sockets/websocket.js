@@ -12,10 +12,6 @@ const initializeWebSocket = (io) => {
     io.engine.opts.upgradeTimeout = 10000;
     io.engine.opts.maxHttpBufferSize = 1e6;
     io.engine.opts.allowEIO3 = true;
-    io.engine.opts.cors = {
-        origin: true,
-        credentials: true,
-    };
     let totalConnections = 0;
     let activeConnections = 0;
     io.on('connection', async (socket) => {
@@ -227,11 +223,18 @@ const initializeWebSocket = (io) => {
                 });
             }
         });
-        socket.on('student:connect', () => {
+        socket.on('student:connect', (data) => {
             socket.lastActivity = Date.now();
             socket.join('students');
-            console.log(`✅ Student connected: ${socket.id}`);
-            socket.emit('student:connected', { timestamp: new Date().toISOString() });
+            console.log(`✅ Student connected: ${socket.id}`, data);
+            socket.emit('student:connected', {
+                timestamp: new Date().toISOString(),
+                message: 'Student connected successfully'
+            });
+            socket.broadcast.to('students').emit('student:joined', {
+                studentId: socket.id,
+                timestamp: new Date().toISOString()
+            });
         });
         socket.on('disconnect', (reason) => {
             activeConnections--;

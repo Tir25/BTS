@@ -23,7 +23,13 @@ const config = (0, environment_1.initializeEnvironment)();
 const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
 const io = new socket_io_1.Server(server, {
-    cors: config.websocket.cors,
+    cors: {
+        origin: true,
+        credentials: true,
+        methods: ['GET', 'POST'],
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
 });
 const PORT = config.port;
 app.use((0, helmet_1.default)());

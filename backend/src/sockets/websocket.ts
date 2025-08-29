@@ -34,10 +34,6 @@ export const initializeWebSocket = (io: SocketIOServer) => {
   io.engine.opts.upgradeTimeout = 10000; // 10 seconds
   io.engine.opts.maxHttpBufferSize = 1e6; // 1MB
   io.engine.opts.allowEIO3 = true; // Allow Engine.IO v3 clients
-  io.engine.opts.cors = {
-    origin: true, // Allow all origins (handled by CORS middleware)
-    credentials: true,
-  };
 
   // Connection monitoring
   let totalConnections = 0;
@@ -325,11 +321,22 @@ export const initializeWebSocket = (io: SocketIOServer) => {
     });
 
     // Enhanced student connection
-    socket.on('student:connect', () => {
+    socket.on('student:connect', (data: any) => {
       socket.lastActivity = Date.now();
       socket.join('students');
-      console.log(`✅ Student connected: ${socket.id}`);
-      socket.emit('student:connected', { timestamp: new Date().toISOString() });
+      console.log(`✅ Student connected: ${socket.id}`, data);
+      
+      // Send current bus locations to the student
+      socket.emit('student:connected', { 
+        timestamp: new Date().toISOString(),
+        message: 'Student connected successfully'
+      });
+      
+      // Broadcast student connection to other clients
+      socket.broadcast.to('students').emit('student:joined', {
+        studentId: socket.id,
+        timestamp: new Date().toISOString()
+      });
     });
 
     // Enhanced disconnect handling

@@ -127,6 +127,28 @@ class WebSocketService {
       this.socket.on('error', this.handleError);
       this.socket.on('reconnect', this.handleReconnect);
       
+      // Student-specific event listeners
+      this.socket.on('student:connected', (data: any) => {
+        console.log('✅ Student connection confirmed:', data);
+        this.studentConnectedListeners.forEach(listener => listener());
+      });
+      
+      this.socket.on('student:joined', (data: any) => {
+        console.log('👥 Another student joined:', data);
+      });
+      
+      // Bus location update listener
+      this.socket.on('bus:locationUpdate', (location: BusLocation) => {
+        console.log('📍 Bus location update received:', location);
+        this.busLocationListeners.forEach(listener => listener(location));
+      });
+      
+      // Bus arriving listener
+      this.socket.on('bus:arriving', (data: any) => {
+        console.log('🚌 Bus arriving:', data);
+        this.busArrivingListeners.forEach(listener => listener(data));
+      });
+      
       // Additional event listeners for better debugging
       this.socket.on('reconnect_attempt', (attemptNumber) => {
         console.log(`🔄 Reconnection attempt ${attemptNumber}`);
@@ -168,8 +190,8 @@ class WebSocketService {
     this.startHeartbeat();
     this.startConnectionMonitoring();
 
-    // Emit connection event
-    this.socket?.emit('driver:connected', {
+    // Emit student connection event
+    this.socket?.emit('student:connect', {
       timestamp: new Date().toISOString(),
       clientInfo: {
         userAgent: navigator.userAgent,

@@ -21,7 +21,13 @@ const config = initializeEnvironment();
 const app = express();
 const server = createServer(app);
 const io = new SocketIOServer(server, {
-  cors: config.websocket.cors,
+  cors: {
+    origin: true, // Allow all origins in production
+    credentials: true,
+    methods: ['GET', 'POST'],
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
 });
 
 const PORT = config.port;
