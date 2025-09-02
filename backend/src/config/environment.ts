@@ -116,28 +116,20 @@ export const initializeEnvironment = (): EnvironmentConfig => {
     cors: {
       allowedOrigins: isProduction
         ? [
-            // Production origins - Vercel frontend (specific)
+            // Specific frontend domains
             'https://bts-frontend-navy.vercel.app',
             'https://bts-frontend-navy.vercel.com',
-            // Render domains
+            // Platform domains
             /^https:\/\/.*\.onrender\.com$/,
-            /^https:\/\/.*\.render\.com$/,
-            // Generic Vercel domains
             /^https:\/\/.*\.vercel\.app$/,
             /^https:\/\/.*\.vercel\.com$/,
           ]
         : [
-            // Development origins
+            // Development
             'http://localhost:5173',
-            'http://localhost:3000',
             'http://127.0.0.1:5173',
+            'http://localhost:3000',
             'http://127.0.0.1:3000',
-            // VS Code tunnel origins - more restrictive
-            /^https:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
-            /^wss:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
-            // Network access for cross-laptop testing
-            /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
-            /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
           ],
       credentials: true,
     },

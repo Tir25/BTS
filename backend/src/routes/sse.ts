@@ -3,87 +3,22 @@ import { authenticateUser } from '../middleware/auth';
 
 const router = express.Router();
 
-// Handle preflight OPTIONS request for SSE
-router.options('/', (req, res) => {
-  const origin = req.headers.origin;
-  
-  // Ultra-permissive CORS for Firefox development
-  let corsOrigin = '*'; // Allow all origins for Firefox compatibility
-  
-  // Only restrict in production
-  if (process.env.NODE_ENV === 'production') {
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:3000',
-      'https://bts-frontend-navy.vercel.app',
-      'https://bts-frontend-navy.vercel.com'
-    ];
-    
-    if (origin && allowedOrigins.includes(origin)) {
-      corsOrigin = origin;
-    } else if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
-      corsOrigin = origin;
-    }
-  }
-  
-  // Set ultra-permissive CORS headers for Firefox
-  res.header('Access-Control-Allow-Origin', corsOrigin);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
-  res.header('Access-Control-Allow-Headers', '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Max-Age', '86400');
-  res.header('X-Content-Type-Options', 'nosniff');
-  res.header('X-Frame-Options', 'DENY');
-  res.header('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.header('Cross-Origin-Opener-Policy', 'unsafe-none');
-  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.status(200).end();
+// Handle preflight OPTIONS request for SSE using global CORS middleware
+router.options('/', (_req, res) => {
+  return res.sendStatus(204);
 });
 
 // SSE endpoint for real-time updates
 router.get('/', (req, res) => {
-  // Set SSE headers with ultra-permissive CORS for Firefox
-  const origin = req.headers.origin;
-  
-  // Ultra-permissive CORS for Firefox development
-  let corsOrigin = '*'; // Allow all origins for Firefox compatibility
-  
-  // Only restrict in production
-  if (process.env.NODE_ENV === 'production') {
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:3000',
-      'https://bts-frontend-navy.vercel.app',
-      'https://bts-frontend-navy.vercel.com'
-    ];
-    
-    if (origin && allowedOrigins.includes(origin)) {
-      corsOrigin = origin;
-    } else if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
-      corsOrigin = origin;
-    }
-  }
-  
-  // Set ultra-permissive CORS headers for Firefox
+  // Set SSE headers (CORS handled by global middleware)
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': corsOrigin,
-    'Access-Control-Allow-Headers': '*',
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
-    'Cross-Origin-Embedder-Policy': 'unsafe-none',
-    'Cross-Origin-Opener-Policy': 'unsafe-none',
-    'Cross-Origin-Resource-Policy': 'cross-origin',
   });
 
   // Send initial connection message

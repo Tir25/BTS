@@ -50,10 +50,12 @@ const corsOptions = {
       isAllowed = true;
     }
     
-    // Ultra-permissive fallback for development
+    // Ultra-permissive fallback for development: allow localhost only
     if (!isAllowed && process.env.NODE_ENV !== 'production') {
-      console.log(`🦊 CORS: Development mode - allowing all origins: ${origin}`);
-      isAllowed = true;
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        console.log(`🧪 CORS: Dev mode - allowing localhost origin: ${origin}`);
+        isAllowed = true;
+      }
     }
 
     if (isAllowed) {
@@ -67,7 +69,7 @@ const corsOptions = {
     }
   },
   credentials: true,
-  optionsSuccessStatus: 200,
+  optionsSuccessStatus: 204,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
     'Origin',
