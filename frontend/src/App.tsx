@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { apiService } from './services/api';
+import { useAuthStore } from './stores/useAuthStore';
+import { useHealthCheck } from './hooks/useApiQueries';
 import { authService } from './services/authService';
-import { HealthResponse, User } from './types';
 import DriverInterface from './components/DriverInterface';
 import DriverLogin from './components/DriverLogin';
 import DriverDashboard from './components/DriverDashboard';
-import EnhancedStudentMap from './components/EnhancedStudentMap';
+// Lazy load the optimized student map for better performance
+const OptimizedStudentMap = React.lazy(() => import('./components/OptimizedStudentMapLazy'));
 import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import PremiumHomepage from './components/PremiumHomepage';
@@ -15,67 +16,39 @@ import {
   GlobalTransitionWrapper,
 } from './components/transitions';
 
+// Import error handling and resilience components
+import { ErrorBoundary, NetworkStatus } from './components/error';
+import { resilientApiService } from './services/resilience';
+
 function App() {
   console.log('🚀 App component is rendering...');
 
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authState, setAuthState] = useState<{
-    isAuthenticated: boolean;
-    user: User | null;
-    loading: boolean;
-  }>({
-    isAuthenticated: false,
-    user: null,
-    loading: true,
-  });
+  // Zustand auth store
+  const {
+    loading: authLoading,
+    error: authError,
+    setUser,
+    setLoading,
+    setError,
+  } = useAuthStore();
 
-  useEffect(() => {
-    const checkHealth = async () => {
-      try {
-        setLoading(true);
-
-        // Wait for auth service to be initialized before making API calls
-        while (!authService.isInitialized()) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-
-        const healthData = await apiService.getHealth();
-        setHealth(healthData);
-        setError(null);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Failed to connect to backend'
-        );
-        setHealth(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkHealth();
-  }, []);
+  // React Query health check
+  const { data: health, isLoading: healthLoading, error: healthError } = useHealthCheck();
 
   // Global auth state listener
   useEffect(() => {
     const updateAuthState = () => {
-      const user = authService.getCurrentUser();
-      // const profile = authService.getCurrentProfile(); // Unused variable
+      const currentUser = authService.getCurrentUser();
 
-      setAuthState({
-        isAuthenticated: !!user,
-        user: user
-          ? {
-              id: user.id,
-              email: user.email || '',
-              role: 'student' as const,
-              created_at: user.created_at,
-              updated_at: user.updated_at,
-            }
-          : null,
-        loading: false,
-      });
+      setUser(currentUser ? {
+        id: currentUser.id,
+        email: currentUser.email || '',
+        role: 'student' as const,
+        created_at: currentUser.created_at,
+        updated_at: currentUser.updated_at,
+      } : null);
+      
+      setLoading(false);
     };
 
     // Set up auth state listener
@@ -87,7 +60,16 @@ function App() {
     return () => {
       authService.removeAuthStateChangeListener();
     };
-  }, []);
+  }, [setUser, setLoading]);
+
+  // Handle health check errors
+  useEffect(() => {
+    if (healthError) {
+      setError('Failed to connect to backend');
+    } else {
+      setError(null);
+    }
+  }, [healthError, setError]);
 
   // Legacy Homepage (for backward compatibility)
   const LegacyHomePage = () => (
@@ -98,183 +80,121 @@ function App() {
             🚍 University Bus Tracking System
           </h1>
 
-          <div className="space-y-6">
-            {loading && (
-              <div className="text-center">
-                <div className="loading-spinner mx-auto"></div>
-                <p className="text-white/70 mt-4">
-                  Checking backend connection...
-                </p>
-              </div>
-            )}
-
-            {error && (
-              <div className="bg-red-500/20 backdrop-blur-sm border border-red-400/30 rounded-xl p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg
-                      className="h-5 w-5 text-red-400"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-300">
-                      Connection Error
-                    </h3>
-                    <p className="text-sm text-red-200 mt-1">{error}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {health && (
-              <div className="bg-green-500/20 backdrop-blur-sm border border-green-400/30 rounded-xl p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg
-                      className="h-5 w-5 text-green-400"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-300">
-                      Backend Connected
-                    </h3>
-                    <div className="text-sm text-green-200 mt-1 space-y-1">
-                      <p>
-                        <strong>Status:</strong> {health.status}
-                      </p>
-                      <p>
-                        <strong>Database:</strong>{' '}
-                        {health.services?.database?.status || 'Unknown'}
-                      </p>
-                      <p>
-                        <strong>Environment:</strong> {health.environment}
-                      </p>
-                      <p>
-                        <strong>Timestamp:</strong>{' '}
-                        {new Date(health.timestamp).toLocaleString()}
-                      </p>
-                      {health.services?.database?.details && (
-                        <div className="mt-2 text-xs">
-                          <p>
-                            <strong>PostgreSQL:</strong>{' '}
-                            {health.services.database.details.details
-                              ?.postgresVersion || 'Unknown'}
-                          </p>
-                          <p>
-                            <strong>Pool Status:</strong>{' '}
-                            {`Total: ${health.services.database.details.details?.poolSize || 0}, Idle: ${health.services.database.details.details?.idleCount || 0}, Waiting: ${health.services.database.details.details?.waitingCount || 0}`}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="text-center text-sm text-white/60 mt-6">
-              <p>Phase 5: Admin Panel & Analytics Dashboard ✅</p>
-              <p className="mt-1">
-                Role-based access control, analytics charts, and system
-                management
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Driver Interface */}
+            <Link
+              to="/driver-login"
+              className="card-glass p-6 text-center hover:scale-105 transition-transform duration-300"
+            >
+              <div className="text-4xl mb-4">🚌</div>
+              <h2 className="text-xl font-semibold mb-2">Driver Interface</h2>
+              <p className="text-white/70">
+                Real-time location sharing & navigation
               </p>
-              {authState.isAuthenticated && (
-                <p className="mt-2 text-green-400">
-                  ✅ Authenticated as:{' '}
-                  {authState.user?.full_name || authState.user?.email}
-                </p>
-              )}
-            </div>
+            </Link>
 
-            {/* Navigation Links */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
-              <Link to="/driver" className="btn-primary text-center block">
-                🚌 Driver Interface
-              </Link>
+            {/* Student Map */}
+            <Link
+              to="/student-map"
+              className="card-glass p-6 text-center hover:scale-105 transition-transform duration-300"
+            >
+              <div className="text-4xl mb-4">🗺️</div>
+              <h2 className="text-xl font-semibold mb-2">Student Map</h2>
+              <p className="text-white/70">
+                Live bus tracking & route information
+              </p>
+            </Link>
 
-              <Link to="/student" className="btn-primary text-center block">
-                👨‍🎓 Student Map (Live Tracking)
-              </Link>
-
-              <Link to="/admin" className="btn-primary text-center block">
-                👨‍💼 Admin Panel (Phase 5)
-              </Link>
-
-              <Link
-                to="/premium-demo"
-                className="btn-secondary text-center block"
-              >
-                ✨ Premium UI Demo
-              </Link>
-            </div>
+            {/* Admin Panel */}
+            <Link
+              to="/admin-login"
+              className="card-glass p-6 text-center hover:scale-105 transition-transform duration-300"
+            >
+              <div className="text-4xl mb-4">⚙️</div>
+              <h2 className="text-xl font-semibold mb-2">Admin Panel</h2>
+              <p className="text-white/70">
+                Fleet management & analytics dashboard
+              </p>
+            </Link>
           </div>
+
+          {/* Health Status */}
+          {health && (
+            <div className="mt-8 p-4 bg-green-500/20 border border-green-400/30 rounded-xl">
+              <p className="text-green-200 text-center">
+                ✅ Backend Status: {health.status}
+              </p>
+            </div>
+          )}
+
+          {authError && (
+            <div className="mt-4 p-4 bg-red-500/20 border border-red-400/30 rounded-xl">
+              <p className="text-red-200 text-center">{authError}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 
-  // 404 Not Found Component
-  const NotFound = () => (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
-      <div className="max-w-md w-full mx-auto text-center">
-        <div className="card-glass p-8">
-          <h1 className="text-6xl font-bold gradient-text mb-4">404</h1>
-          <h2 className="text-2xl font-semibold text-white mb-4">
-            Page Not Found
-          </h2>
-          <p className="text-white/70 mb-6">
-            The page you're looking for doesn't exist.
-          </p>
-          <Link to="/" className="btn-primary inline-block">
-            Go Back Home
-          </Link>
+  // Loading state
+  if (authLoading || healthLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="loading-spinner mx-auto mb-4" />
+          <p className="text-white">Loading application...</p>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
-    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <TransitionProvider>
-        <GlobalTransitionWrapper>
-          <Routes>
-            {/* New Premium Homepage */}
-            <Route path="/" element={<PremiumHomepage />} />
+    <ErrorBoundary>
+      <Router>
+        <NetworkStatus onNetworkChange={(isOnline) => {
+          console.log(`🌐 Network status changed: ${isOnline ? 'Online' : 'Offline'}`);
+        }} />
+        <TransitionProvider>
+          <GlobalTransitionWrapper>
+            <Routes>
+              {/* Homepage Routes */}
+              <Route path="/" element={<PremiumHomepage />} />
+              <Route path="/legacy" element={<LegacyHomePage />} />
 
-            {/* Legacy Routes */}
-            <Route path="/legacy" element={<LegacyHomePage />} />
-            <Route path="/driver" element={<DriverInterface />} />
-            <Route path="/student" element={<EnhancedStudentMap />} />
-            <Route path="/admin" element={<AdminDashboard />} />
+              {/* Driver Routes */}
+              <Route path="/driver-login" element={<DriverLogin />} />
+              <Route path="/driver-dashboard" element={<DriverDashboard />} />
+              <Route path="/driver-interface" element={<DriverInterface />} />
 
-            {/* New Navigation Routes */}
-            <Route path="/driver-login" element={<DriverLogin />} />
-            <Route path="/driver-dashboard" element={<DriverDashboard />} />
-            <Route path="/student-map" element={<EnhancedStudentMap />} />
-            <Route path="/admin-login" element={<AdminLogin />} />
-            <Route path="/admin-dashboard" element={<AdminDashboard />} />
+              {/* Student Routes */}
+              <Route 
+                path="/student-map" 
+                element={
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                      <div className="text-center">
+                        <div className="loading-spinner mx-auto mb-4" />
+                        <p className="text-white text-lg">Loading Student Map...</p>
+                      </div>
+                    </div>
+                  }>
+                    <OptimizedStudentMap />
+                  </Suspense>
+                } 
+              />
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </GlobalTransitionWrapper>
-      </TransitionProvider>
-    </Router>
+              {/* Admin Routes */}
+              <Route path="/admin-login" element={<AdminLogin />} />
+              <Route path="/admin-dashboard" element={<AdminDashboard />} />
+
+              {/* Fallback */}
+              <Route path="*" element={<PremiumHomepage />} />
+            </Routes>
+          </GlobalTransitionWrapper>
+        </TransitionProvider>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

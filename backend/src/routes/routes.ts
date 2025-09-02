@@ -23,6 +23,43 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get routes within viewport (spatial query) - MUST come before /:routeId
+router.get('/viewport', async (req, res) => {
+  try {
+    const { minLng, minLat, maxLng, maxLat } = req.query;
+
+    if (!minLng || !minLat || !maxLng || !maxLat) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing viewport parameters',
+        message: 'minLng, minLat, maxLng, maxLat are required',
+      });
+    }
+
+    const viewport = {
+      minLng: parseFloat(minLng as string),
+      minLat: parseFloat(minLat as string),
+      maxLng: parseFloat(maxLng as string),
+      maxLat: parseFloat(maxLat as string),
+    };
+
+    const routes = await RouteService.getRoutesInViewport(viewport);
+
+    return res.json({
+      success: true,
+      data: routes,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('❌ Error fetching routes in viewport:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch routes in viewport',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Get specific route with GeoJSON data
 router.get('/:routeId', async (req, res) => {
   try {

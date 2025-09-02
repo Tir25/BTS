@@ -14,7 +14,7 @@ const poolConfig = {
     connectionString: getDatabaseUrl(),
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000,
     maxUses: 7500,
     ssl: environment.nodeEnv === 'production'
         ? { rejectUnauthorized: false }
@@ -25,7 +25,6 @@ const poolConfig = {
 exports.pool = new pg_1.Pool(poolConfig);
 exports.pool.on('error', (err) => {
     console.error('❌ Unexpected error on idle client', err);
-    process.exit(-1);
 });
 exports.pool.on('connect', () => {
     console.log('✅ New database client connected');

@@ -316,4 +316,41 @@ export class RouteService {
       return null;
     }
   }
+
+  static async getRoutesInViewport(viewport: {
+    minLng: number;
+    minLat: number;
+    maxLng: number;
+    maxLat: number;
+  }): Promise<RouteWithGeoJSON[]> {
+    try {
+      const query = `
+        SELECT 
+          id, name, description,
+          ST_AsGeoJSON(stops)::json as stops,
+          distance_km, estimated_duration_minutes,
+          route_map_url, city,
+          is_active, created_at, updated_at
+        FROM routes 
+        WHERE is_active = true 
+        AND ST_Intersects(
+          stops, 
+          ST_MakeEnvelope($1, $2, $3, $4, 4326)
+        )
+        ORDER BY name;
+      `;
+      
+      const result = await pool.query(query, [
+        viewport.minLng,
+        viewport.minLat,
+        viewport.maxLng,
+        viewport.maxLat,
+      ]);
+      
+      return result.rows;
+    } catch (error) {
+      console.error('❌ Error fetching routes in viewport:', error);
+      return [];
+    }
+  }
 }

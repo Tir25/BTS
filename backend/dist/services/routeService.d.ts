@@ -53,6 +53,12 @@ export declare class RouteService {
         is_active: boolean;
     }>): Promise<Route | null>;
     static deleteRoute(routeId: string): Promise<Route | null>;
+    static getRoutesInViewport(viewport: {
+        minLng: number;
+        minLat: number;
+        maxLng: number;
+        maxLat: number;
+    }): Promise<RouteWithGeoJSON[]>;
 }
 export {};
 //# sourceMappingURL=routeService.d.ts.map

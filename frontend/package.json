@@ -16,13 +16,16 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "@tanstack/react-query": "^5.85.5",
+    "@tanstack/react-query-devtools": "^5.85.5",
     "framer-motion": "^10.16.16",
     "leaflet": "^1.9.4",
     "maplibre-gl": "^3.6.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.1",
-    "socket.io-client": "^4.7.4"
+    "socket.io-client": "^4.7.4",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.8",

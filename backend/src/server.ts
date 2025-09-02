@@ -10,6 +10,7 @@ import routeRoutes from './routes/routes';
 import adminRoutes from './routes/admin';
 import storageRoutes from './routes/storage';
 import locationRoutes from './routes/locations';
+import sseRoutes from './routes/sse';
 import { initializeDatabase, testDatabaseConnection } from './models/database';
 import { closeDatabasePool } from './config/database';
 import { initializeEnvironment } from './config/environment';
@@ -47,6 +48,7 @@ app.use('/buses', busRoutes);
 app.use('/routes', routeRoutes);
 app.use('/storage', storageRoutes);
 app.use('/locations', locationRoutes);
+app.use('/sse', sseRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -64,6 +66,7 @@ app.get('/', (req, res) => {
       routes: '/routes',
       storage: '/storage',
       locations: '/locations',
+      sse: '/sse',
     },
   });
 });
@@ -82,6 +85,7 @@ app.use('*', (req, res) => {
       '/admin',
       '/storage',
       '/locations',
+      '/sse',
     ],
   });
 });

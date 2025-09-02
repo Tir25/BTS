@@ -7,7 +7,6 @@ const express_1 = __importDefault(require("express"));
 const auth_1 = require("../middleware/auth");
 const locationService_1 = require("../services/locationService");
 const router = express_1.default.Router();
-router.use(auth_1.authenticateUser);
 router.get('/current', async (req, res) => {
     try {
         const locations = await (0, locationService_1.getCurrentBusLocations)();
@@ -26,7 +25,62 @@ router.get('/current', async (req, res) => {
         });
     }
 });
-router.get('/history/:busId', async (req, res) => {
+router.get('/viewport', async (req, res) => {
+    try {
+        const { minLng, minLat, maxLng, maxLat } = req.query;
+        if (!minLng || !minLat || !maxLng || !maxLat) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing viewport parameters',
+                message: 'minLng, minLat, maxLng, maxLat are required',
+            });
+        }
+        const viewport = {
+            minLng: parseFloat(minLng),
+            minLat: parseFloat(minLat),
+            maxLng: parseFloat(maxLng),
+            maxLat: parseFloat(maxLat),
+        };
+        const locations = await (0, locationService_1.getCurrentBusLocations)();
+        const locationsInViewport = locations.filter(location => {
+            const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
+            if (!pointMatch)
+                return false;
+            const [longitude, latitude] = pointMatch[1].split(' ').map(Number);
+            return (latitude >= viewport.minLat &&
+                latitude <= viewport.maxLat &&
+                longitude >= viewport.minLng &&
+                longitude <= viewport.maxLng);
+        });
+        const formattedLocations = locationsInViewport.map(location => {
+            const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
+            const [longitude, latitude] = pointMatch ? pointMatch[1].split(' ').map(Number) : [0, 0];
+            return {
+                busId: location.bus_id,
+                driverId: location.driver_id,
+                latitude,
+                longitude,
+                timestamp: location.timestamp,
+                speed: location.speed,
+                heading: location.heading,
+            };
+        });
+        return res.json({
+            success: true,
+            data: formattedLocations,
+            timestamp: new Date().toISOString(),
+        });
+    }
+    catch (error) {
+        console.error('❌ Error fetching locations in viewport:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to fetch locations in viewport',
+            message: error instanceof Error ? error.message : 'Unknown error',
+        });
+    }
+});
+router.get('/history/:busId', auth_1.authenticateUser, async (req, res) => {
     try {
         const { busId } = req.params;
         const { startTime, endTime } = req.query;
@@ -53,7 +107,7 @@ router.get('/history/:busId', async (req, res) => {
         });
     }
 });
-router.post('/update', async (req, res) => {
+router.post('/update', auth_1.authenticateUser, async (req, res) => {
     try {
         const { busId, driverId, latitude, longitude, speed, heading } = req.body;
         if (!busId ||

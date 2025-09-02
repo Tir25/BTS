@@ -19,11 +19,7 @@ export interface BusLocation {
 class WebSocketService {
   public socket: Socket | null = null;
   private _isConnected: boolean = false;
-  private connectionState:
-    | 'disconnected'
-    | 'connecting'
-    | 'connected'
-    | 'reconnecting' = 'disconnected';
+  private connectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' = 'disconnected';
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 10;
   private reconnectDelay: number = 1000;
@@ -58,8 +54,11 @@ class WebSocketService {
       return;
     }
 
-    // Reset shutting down flag when attempting to connect
-    this.isShuttingDown = false;
+    // Reset shutting down flag if we're trying to connect again
+    if (this.isShuttingDown) {
+      console.log('🔄 Resetting WebSocket service state for reconnection');
+      this.isShuttingDown = false;
+    }
 
     try {
       this.connectionState = 'connecting';
@@ -113,10 +112,14 @@ class WebSocketService {
       });
       this.socket.on('reconnect_failed', () => {
         console.error('❌ Reconnection failed after all attempts');
+        // Reset state to allow manual reconnection
+        this.isShuttingDown = false;
+        this.connectionState = 'disconnected';
       });
 
       // Connect to server
       this.socket.connect();
+
     } catch (error) {
       console.error('❌ WebSocket connection error:', error);
       this.handleError(error);
@@ -140,15 +143,27 @@ class WebSocketService {
     this.startHeartbeat();
     this.startConnectionMonitoring();
 
-    // Emit connection event
-    this.socket?.emit('driver:connected', {
-      timestamp: new Date().toISOString(),
-      clientInfo: {
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-        language: navigator.language,
-      },
-    });
+    // Emit connection event based on client type
+    const clientType = this.socket?.io?.opts?.query?.clientType || 'student';
+    if (clientType === 'driver') {
+      this.socket?.emit('driver:connected', {
+        timestamp: new Date().toISOString(),
+        clientInfo: {
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          language: navigator.language,
+        },
+      });
+    } else {
+      this.socket?.emit('student:connect', {
+        timestamp: new Date().toISOString(),
+        clientInfo: {
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          language: navigator.language,
+        },
+      });
+    }
   }
 
   private handleDisconnect(reason: string): void {
@@ -175,7 +190,7 @@ class WebSocketService {
 
   private handleError(error: any): void {
     console.error('❌ WebSocket error:', error);
-
+    
     // Clear connection timeout
     if (this.connectionTimeout) {
       clearTimeout(this.connectionTimeout);
@@ -188,10 +203,7 @@ class WebSocketService {
     }
 
     // Attempt reconnection for network errors
-    if (
-      error.type === 'TransportError' ||
-      error.type === 'TransportOpenError'
-    ) {
+    if (error.type === 'TransportError' || error.type === 'TransportOpenError') {
       this.handleReconnect();
     }
   }
@@ -210,14 +222,11 @@ class WebSocketService {
     this.connectionState = 'reconnecting';
     this.reconnectAttempts++;
 
-    console.log(
-      `🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
-    );
+    console.log(`🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
     // Exponential backoff with jitter
     const delay = Math.min(
-      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) +
-        Math.random() * 1000,
+      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) + Math.random() * 1000,
       this.maxReconnectDelay
     );
 
@@ -274,28 +283,18 @@ class WebSocketService {
     const isConnected = this.socket.connected;
     const timeSinceLastHeartbeat = Date.now() - this.lastHeartbeat;
 
-    console.log(
-      `🔍 Connection monitor: Connected=${isConnected}, Last heartbeat=${timeSinceLastHeartbeat}ms ago`
-    );
+    console.log(`🔍 Connection monitor: Connected=${isConnected}, Last heartbeat=${timeSinceLastHeartbeat}ms ago`);
 
     // If socket thinks it's connected but we haven't received a heartbeat in 60 seconds, consider it disconnected
-    if (
-      isConnected &&
-      timeSinceLastHeartbeat > 60000 &&
-      this.lastHeartbeat > 0
-    ) {
-      console.warn(
-        '⚠️ Connection monitor: No heartbeat received, forcing reconnection'
-      );
+    if (isConnected && timeSinceLastHeartbeat > 60000 && this.lastHeartbeat > 0) {
+      console.warn('⚠️ Connection monitor: No heartbeat received, forcing reconnection');
       this.socket.disconnect();
       this.handleReconnect();
     }
 
     // Update internal state
     if (this._isConnected !== isConnected) {
-      console.log(
-        `🔄 Connection state changed: ${this._isConnected} -> ${isConnected}`
-      );
+      console.log(`🔄 Connection state changed: ${this._isConnected} -> ${isConnected}`);
       this._isConnected = isConnected;
       this.connectionState = isConnected ? 'connected' : 'disconnected';
     }
@@ -328,40 +327,38 @@ class WebSocketService {
     this.reconnectDelay = 1000;
   }
 
-  // Method to reset the WebSocket service state
-  reset(): void {
-    console.log('🔄 Resetting WebSocket service...');
-    this.isShuttingDown = false;
+  // Soft disconnect for cleanup that allows reconnection
+  softDisconnect(): void {
+    console.log('🔌 Soft disconnecting WebSocket...');
     this.connectionState = 'disconnected';
     this._isConnected = false;
-    this.reconnectAttempts = 0;
-    this.reconnectDelay = 1000;
 
-    // Clear any existing socket
+    // Stop heartbeat
+    this.stopHeartbeat();
+    this.stopConnectionMonitoring();
+
+    // Clear connection timeout
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
+
+    // Disconnect socket but don't set isShuttingDown
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
 
-    // Stop any running timers
-    this.stopHeartbeat();
-    this.stopConnectionMonitoring();
-
-    if (this.connectionTimeout) {
-      clearTimeout(this.connectionTimeout);
-      this.connectionTimeout = null;
-    }
+    // Reset reconnection attempts to allow reconnection
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = 1000;
   }
 
   isConnected(): boolean {
     return this._isConnected && this.socket?.connected === true;
   }
 
-  getConnectionState():
-    | 'disconnected'
-    | 'connecting'
-    | 'connected'
-    | 'reconnecting' {
+  getConnectionState(): 'disconnected' | 'connecting' | 'connected' | 'reconnecting' {
     return this.connectionState;
   }
 
@@ -369,26 +366,23 @@ class WebSocketService {
     return this._isConnected;
   }
 
-  authenticateAsDriver(
-    token: string,
-    callbacks?: {
-      onSuccess?: (data: any) => void;
-      onFailure?: (error: any) => void;
-      onError?: (error: any) => void;
-    }
-  ): void {
+  authenticateAsDriver(token: string, callbacks?: {
+    onSuccess?: (data: any) => void;
+    onFailure?: (error: any) => void;
+    onError?: (error: any) => void;
+  }): void {
     console.log('🔐 Driver: Starting authentication process...');
     console.log('🔐 Socket connected:', this.isConnected());
     console.log('🔐 Socket state:', this.getConnectionState());
-
+    
     if (this.socket && this.isConnected()) {
       console.log('🔐 Driver: Sending authentication request...');
-
+      
       // Remove any existing listeners to prevent duplicates
       this.socket.off('driver:authenticated');
       this.socket.off('driver:authentication_failed');
       this.socket.off('error');
-
+      
       // Set up authentication response listeners BEFORE sending the request
       this.socket.once('driver:authenticated', (data) => {
         console.log('✅ Driver: Authentication successful:', data);
@@ -396,32 +390,29 @@ class WebSocketService {
           callbacks.onSuccess(data);
         }
       });
-
+      
       this.socket.once('driver:authentication_failed', (error) => {
         console.error('❌ Driver: Authentication failed:', error);
         if (callbacks?.onFailure) {
           callbacks.onFailure(error);
         }
       });
-
+      
       this.socket.once('error', (error) => {
         console.error('❌ Driver: Socket error during authentication:', error);
         if (callbacks?.onError) {
           callbacks.onError(error);
         }
       });
-
+      
       // Send the authentication request
       this.socket.emit('driver:authenticate', { token });
-      console.log(
-        '📤 Authentication request sent with token length:',
-        token.length
-      );
+      console.log('📤 Authentication request sent with token length:', token.length);
     } else {
       console.error('❌ Driver: Cannot authenticate - socket not connected');
       console.error('❌ Socket object:', !!this.socket);
       console.error('❌ Connection state:', this.getConnectionState());
-
+      
       if (callbacks?.onError) {
         callbacks.onError(new Error('Socket not connected'));
       }
@@ -497,12 +488,11 @@ class WebSocketService {
   // Health check method
   async healthCheck(): Promise<{ healthy: boolean; details: any }> {
     const stats = this.getConnectionStats();
-
-    const healthy =
-      this.isConnected() &&
-      this.connectionState === 'connected' &&
-      stats.lastHeartbeat > 0 &&
-      Date.now() - stats.lastHeartbeat < 60000; // Last heartbeat within 1 minute
+    
+    const healthy = this.isConnected() && 
+                   this.connectionState === 'connected' && 
+                   stats.lastHeartbeat > 0 &&
+                   (Date.now() - stats.lastHeartbeat) < 60000; // Last heartbeat within 1 minute
 
     return {
       healthy,
@@ -511,8 +501,19 @@ class WebSocketService {
         socketExists: !!this.socket,
         socketConnected: this.socket?.connected,
         isShuttingDown: this.isShuttingDown,
-      },
+      }
     };
+  }
+
+  // Reset WebSocket service state for reconnection
+  resetState(): void {
+    console.log('🔄 Resetting WebSocket service state...');
+    this.isShuttingDown = false;
+    this.connectionState = 'disconnected';
+    this._isConnected = false;
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = 1000;
+    this.lastHeartbeat = 0;
   }
 }
 

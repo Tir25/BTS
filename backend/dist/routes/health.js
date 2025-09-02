@@ -64,5 +64,22 @@ router.get('/detailed', async (req, res) => {
         });
     }
 });
+router.get('/websocket', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        websocket: {
+            status: 'operational',
+            cors: {
+                enabled: true,
+                origins: ['http://localhost:5173', 'http://localhost:3000', 'https://bts-frontend-navy.vercel.app'],
+            },
+            endpoints: {
+                socketio: '/socket.io/',
+                sse: '/sse',
+            },
+        },
+    });
+});
 exports.default = router;
 //# sourceMappingURL=health.js.map

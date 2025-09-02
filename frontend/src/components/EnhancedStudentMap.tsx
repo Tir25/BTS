@@ -382,14 +382,16 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout;
     let statusInterval: NodeJS.Timeout;
+    let reconnectAttempts = 0;
 
     const connectWebSocket = async () => {
       try {
         setConnectionError(null);
         setConnectionStatus('connecting');
-
-        // Reset WebSocket service before connecting
-        websocketService.reset();
+        
+        // Reset WebSocket service state before connecting
+        websocketService.resetState();
+        
         await websocketService.connect();
         setIsConnected(true);
         setConnectionStatus('connected');
@@ -399,7 +401,12 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         websocketService.onDriverDisconnected(handleDriverDisconnected);
         // Emit student connection event
         websocketService.socket?.emit('student:connect');
-
+        
+        // Set client type for student connection
+        if (websocketService.socket?.io?.opts?.query) {
+          websocketService.socket.io.opts.query.clientType = 'student';
+        }
+        
         websocketService.onStudentConnected(() => {
           console.log('✅ Student connected to WebSocket');
         });
@@ -455,11 +462,16 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         setIsConnected(false);
         setConnectionStatus('disconnected');
 
+        // Retry connection with exponential backoff
+        const retryDelay = Math.min(5000 * Math.pow(2, Math.min(reconnectAttempts, 3)), 30000);
+        console.log(`🔄 Retrying WebSocket connection in ${retryDelay}ms...`);
+        
+        reconnectAttempts++;
         reconnectTimeout = setTimeout(() => {
           console.log('🔄 Retrying WebSocket connection...');
           setConnectionStatus('reconnecting');
           connectWebSocket();
-        }, 5000);
+        }, retryDelay);
       }
     };
 
@@ -472,7 +484,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
       if (statusInterval) {
         clearInterval(statusInterval);
       }
-      websocketService.disconnect();
+      websocketService.softDisconnect();
     };
   }, [
     handleBusArriving,

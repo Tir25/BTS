@@ -13,7 +13,7 @@ const poolConfig = {
   connectionString: getDatabaseUrl(),
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+  connectionTimeoutMillis: 10000, // Increased to 10 seconds for better reliability
   maxUses: 7500, // Close (and replace) a connection after it has been used 7500 times
   ssl:
     environment.nodeEnv === 'production'
@@ -30,7 +30,8 @@ export const pool = new Pool(poolConfig);
 // Enhanced error handling for the pool
 pool.on('error', (err: Error) => {
   console.error('❌ Unexpected error on idle client', err);
-  process.exit(-1);
+  // Don't exit the process, just log the error
+  // This prevents the entire application from crashing due to database issues
 });
 
 pool.on('connect', () => {

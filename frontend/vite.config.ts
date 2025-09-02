@@ -14,11 +14,22 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     // Optimize CSS to prevent layout shifts
-    cssCodeSplit: false,
+    cssCodeSplit: true,
     // Ensure assets are properly handled
     assetsInlineLimit: 4096,
     rollupOptions: {
       output: {
+        // Manual chunk splitting for better performance
+        manualChunks: {
+          // Vendor chunks
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-router': ['react-router-dom'],
+          'vendor-animations': ['framer-motion'],
+          'vendor-maps': ['maplibre-gl'],
+          'vendor-websocket': ['socket.io-client'],
+          'vendor-state': ['zustand', '@tanstack/react-query'],
+          'vendor-ui': ['@supabase/supabase-js'],
+        },
         // Ensure consistent asset naming
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name.split('.');
@@ -37,6 +48,8 @@ export default defineConfig({
     },
     // Optimize for production - simplified minification
     minify: 'esbuild',
+    // Increase chunk size warning limit
+    chunkSizeWarningLimit: 1000,
   },
   // Ensure proper asset handling
   assetsInclude: [

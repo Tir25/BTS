@@ -25,6 +25,38 @@ router.get('/', async (req, res) => {
         });
     }
 });
+router.get('/viewport', async (req, res) => {
+    try {
+        const { minLng, minLat, maxLng, maxLat } = req.query;
+        if (!minLng || !minLat || !maxLng || !maxLat) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing viewport parameters',
+                message: 'minLng, minLat, maxLng, maxLat are required',
+            });
+        }
+        const viewport = {
+            minLng: parseFloat(minLng),
+            minLat: parseFloat(minLat),
+            maxLng: parseFloat(maxLng),
+            maxLat: parseFloat(maxLat),
+        };
+        const routes = await routeService_1.RouteService.getRoutesInViewport(viewport);
+        return res.json({
+            success: true,
+            data: routes,
+            timestamp: new Date().toISOString(),
+        });
+    }
+    catch (error) {
+        console.error('❌ Error fetching routes in viewport:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to fetch routes in viewport',
+            message: error instanceof Error ? error.message : 'Unknown error',
+        });
+    }
+});
 router.get('/:routeId', async (req, res) => {
     try {
         const { routeId } = req.params;

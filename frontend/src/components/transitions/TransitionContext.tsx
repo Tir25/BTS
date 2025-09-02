@@ -38,24 +38,20 @@ export const TransitionProvider: React.FC<TransitionProviderProps> = ({
   useEffect(() => {
     // Determine transition based on route changes
     if (
-      pathname === '/' &&
-      (pathname.includes('login') ||
-        pathname.includes('admin-login') ||
-        pathname.includes('driver-login'))
+      pathname.includes('login') ||
+      pathname.includes('admin-login') ||
+      pathname.includes('driver-login')
     ) {
       setCurrentTransition('homepage-to-login');
     } else if (
-      pathname === '/' &&
-      (pathname.includes('student') || pathname.includes('student-map'))
+      pathname.includes('student') || 
+      pathname.includes('student-map')
     ) {
       setCurrentTransition('homepage-to-map');
     } else if (
-      (pathname.includes('login') ||
-        pathname.includes('admin-login') ||
-        pathname.includes('driver-login')) &&
-      (pathname.includes('dashboard') ||
-        pathname.includes('admin') ||
-        pathname.includes('driver-dashboard'))
+      pathname.includes('dashboard') ||
+      pathname.includes('admin') ||
+      pathname.includes('driver-dashboard')
     ) {
       setCurrentTransition('login-to-dashboard');
     } else {

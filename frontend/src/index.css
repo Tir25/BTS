@@ -12,11 +12,14 @@
     font-family: 'Inter', system-ui, sans-serif;
     scroll-behavior: smooth;
     /* Prevent zoom on input focus on iOS */
-    -webkit-text-size-adjust: 100%;
+    /* -webkit-text-size-adjust: 100%; - Removed for browser compatibility */
     /* Ensure consistent font rendering */
     text-rendering: optimizeLegibility;
     /* Prevent layout shifts during font loading */
-    font-display: swap;
+    /* font-display: swap; - Removed for browser compatibility */
+    
+    /* Suppress CSS parsing warnings for MapLibre GL styles */
+    /* These warnings are expected and can be safely ignored */
   }
   
   body {
@@ -32,10 +35,14 @@
   /* Font loading optimization to prevent layout shifts */
   @font-face {
     font-family: 'Inter';
-    font-display: swap;
+    /* font-display: swap; - Removed for browser compatibility */
     font-weight: 300 900;
     src: local('Inter'), url('https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyeMZhrib2Bg-4.ttf') format('truetype');
   }
+  
+  /* Suppress MapLibre GL CSS warnings - these are expected */
+  /* The -ms-high-contrast and -moz-focus-inner warnings are from MapLibre GL */
+  /* and are part of the library's accessibility features */
 
   /* Custom scrollbar for premium feel */
   ::-webkit-scrollbar {
@@ -71,6 +78,33 @@
     .animate-pulse {
       animation-duration: 3s;
     }
+  }
+
+  /* Fix user-select CSS parsing issues with better browser compatibility */
+  .maplibregl-canvas-container.maplibregl-interactive,
+  .maplibregl-ctrl-group button.maplibregl-ctrl-compass {
+    cursor: grab;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+  }
+
+  .maplibregl-canvas-container.maplibregl-interactive.maplibregl-track-pointer {
+    cursor: pointer;
+  }
+
+  .maplibregl-canvas-container.maplibregl-interactive:active,
+  .maplibregl-ctrl-group button.maplibregl-ctrl-compass:active {
+    cursor: grabbing;
+  }
+
+  .maplibregl-map .maplibregl-popup-track-pointer * {
+    pointer-events: none;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
   }
 
   /* Input field styling to ensure text visibility */
@@ -278,7 +312,7 @@ input[type="number"]::placeholder {
   /* Prevent any font loading issues from affecting icons */
   .custom-icon,
   .icon-container {
-    font-display: swap;
+    /* font-display: swap; - Removed for browser compatibility */
   }
 
   /* Global Transition Styles */
@@ -323,7 +357,7 @@ input[type="number"]::placeholder {
 
   /* Prevent content jumping during font loading */
   .font-loading-fix {
-    font-display: swap;
+    /* font-display: swap; - Removed for browser compatibility */
     font-synthesis: none;
   }
 
@@ -549,6 +583,381 @@ input[type="number"]::placeholder {
 /* Custom bus icon animations */
 .custom-bus-icon {
   animation: pulse-glow 2s infinite;
+}
+
+/* Bus clustering styles */
+.bus-cluster-marker {
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.bus-cluster-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  animation: cluster-pulse 2s infinite;
+}
+
+.bus-cluster-icon {
+  font-size: 16px;
+  color: white;
+  z-index: 2;
+}
+
+.bus-cluster-count {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid white;
+  min-width: 16px;
+  text-align: center;
+}
+
+.bus-cluster-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  border: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: cluster-pulse-ring 2s infinite;
+  opacity: 0.6;
+}
+
+@keyframes cluster-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+  }
+}
+
+@keyframes cluster-pulse-ring {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+/* Bus cluster popup styles */
+.bus-cluster-popup-container {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  color: white;
+  font-family: 'Inter', sans-serif;
+}
+
+.bus-cluster-popup {
+  padding: 12px;
+  min-width: 200px;
+}
+
+.bus-cluster-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.bus-cluster-popup-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+.bus-cluster-count {
+  background: #ef4444;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+
+.bus-cluster-popup-content {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+/* Enhanced bus marker styles */
+.bus-marker {
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.bus-marker:hover {
+  transform: scale(1.1);
+  z-index: 1000;
+}
+
+.bus-marker-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  animation: bus-pulse 2s infinite;
+}
+
+.bus-marker-icon {
+  font-size: 14px;
+  color: white;
+  z-index: 2;
+}
+
+.bus-marker-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  border: 2px solid #10b981;
+  border-radius: 50%;
+  animation: bus-pulse-ring 2s infinite;
+  opacity: 0.6;
+}
+
+@keyframes bus-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.6);
+  }
+}
+
+@keyframes bus-pulse-ring {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Bus marker content (tooltip) */
+.bus-marker-content {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.bus-marker:hover .bus-marker-content {
+  opacity: 1;
+  visibility: visible;
+}
+
+.bus-number {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3b82f6;
+  margin-bottom: 2px;
+}
+
+.bus-speed {
+  font-size: 10px;
+  color: #10b981;
+  margin-bottom: 2px;
+}
+
+.bus-eta {
+  font-size: 10px;
+  color: #f59e0b;
+}
+
+/* Enhanced popup styles */
+.bus-popup-container {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  color: white;
+  font-family: 'Inter', sans-serif;
+}
+
+.bus-popup {
+  padding: 16px;
+  min-width: 250px;
+}
+
+.bus-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.bus-popup-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+.bus-status {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.bus-status.online {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.bus-status.offline {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.bus-popup-content {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.bus-info p {
+  margin: 4px 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.bus-info strong {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+/* Spatial optimization indicators */
+.spatial-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  color: #3b82f6;
+  font-weight: 500;
+  z-index: 1000;
+}
+
+/* Performance optimizations */
+.map-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.map-container canvas {
+  image-rendering: optimizeSpeed;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: optimize-contrast;
+  image-rendering: pixelated;
+}
+
+/* Spatial controls panel */
+.spatial-controls {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 200px;
+}
+
+.spatial-controls h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #3b82f6;
+}
+
+.spatial-controls button {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.spatial-controls button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.spatial-stats {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(59, 130, 246, 0.2);
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
 }
 
 /* Map controls styling */

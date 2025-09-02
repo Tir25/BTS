@@ -15,6 +15,7 @@ const routes_1 = __importDefault(require("./routes/routes"));
 const admin_1 = __importDefault(require("./routes/admin"));
 const storage_1 = __importDefault(require("./routes/storage"));
 const locations_1 = __importDefault(require("./routes/locations"));
+const sse_1 = __importDefault(require("./routes/sse"));
 const database_1 = require("./models/database");
 const database_2 = require("./config/database");
 const environment_1 = require("./config/environment");
@@ -23,19 +24,7 @@ const config = (0, environment_1.initializeEnvironment)();
 const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
 const io = new socket_io_1.Server(server, {
-    cors: {
-        origin: config.websocket.cors.origin,
-        credentials: config.websocket.cors.credentials,
-        methods: config.websocket.cors.methods,
-        allowedHeaders: ['Content-Type', 'Authorization'],
-    },
-    transports: ['websocket', 'polling'],
-    allowEIO3: true,
-    pingTimeout: 60000,
-    pingInterval: 25000,
-    upgradeTimeout: 10000,
-    maxHttpBufferSize: 1e6,
-    connectTimeout: 45000,
+    cors: config.websocket.cors,
 });
 const PORT = config.port;
 app.use((0, helmet_1.default)());
@@ -50,6 +39,7 @@ app.use('/buses', buses_1.default);
 app.use('/routes', routes_1.default);
 app.use('/storage', storage_1.default);
 app.use('/locations', locations_1.default);
+app.use('/sse', sse_1.default);
 app.get('/', (req, res) => {
     res.json({
         message: 'University Bus Tracking System API',
@@ -65,6 +55,7 @@ app.get('/', (req, res) => {
             routes: '/routes',
             storage: '/storage',
             locations: '/locations',
+            sse: '/sse',
         },
     });
 });
@@ -81,6 +72,7 @@ app.use('*', (req, res) => {
             '/admin',
             '/storage',
             '/locations',
+            '/sse',
         ],
     });
 });
