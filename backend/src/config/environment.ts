@@ -167,15 +167,19 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               // Production WebSocket origins
               /^https:\/\/.*\.onrender\.com$/,
               /^wss:\/\/.*\.onrender\.com$/,
-              // Vercel WebSocket origins - more comprehensive
+              // Vercel WebSocket origins - comprehensive coverage
               /^https:\/\/.*\.vercel\.app$/,
               /^wss:\/\/.*\.vercel\.app$/,
               /^https:\/\/.*\.vercel\.com$/,
               /^wss:\/\/.*\.vercel\.com$/,
-              /^https:\/\/bts-frontend-navy\.vercel\.app$/,
-              /^wss:\/\/bts-frontend-navy\.vercel\.app$/,
-              /^https:\/\/bts-frontend-navy\.vercel\.com$/,
-              /^wss:\/\/bts-frontend-navy\.vercel\.com$/,
+              // Specific frontend URLs
+              'https://bts-frontend-navy.vercel.app',
+              'wss://bts-frontend-navy.vercel.app',
+              'https://bts-frontend-navy.vercel.com',
+              'wss://bts-frontend-navy.vercel.com',
+              // Additional common origins
+              'https://localhost:5173',
+              'wss://localhost:5173',
             ]
           : [
               // Development WebSocket origins

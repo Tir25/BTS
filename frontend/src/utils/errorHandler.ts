@@ -1,6 +1,6 @@
 // Comprehensive Error Handler for Real-time Services
 export interface ErrorContext {
-  service: 'websocket' | 'supabase' | 'sse' | 'api';
+  service: 'websocket' | 'supabase' | 'sse' | 'api' | 'ui' | 'map' | 'network';
   operation: string;
   timestamp: string;
   userAgent: string;

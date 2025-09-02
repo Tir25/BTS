@@ -81,12 +81,12 @@ class WebSocketService {
         reconnectionDelayMax: 5000,
         autoConnect: false,
         query: {
-          clientType: 'driver',
+          clientType: 'student', // Default to student for map interface
           version: '1.0.0',
           timestamp: Date.now().toString(),
         },
         extraHeaders: {
-          'User-Agent': 'BusTrackingDriver/1.0.0',
+          'User-Agent': 'BusTrackingStudent/1.0.0',
         },
       });
 
@@ -514,6 +514,14 @@ class WebSocketService {
     this.reconnectAttempts = 0;
     this.reconnectDelay = 1000;
     this.lastHeartbeat = 0;
+  }
+
+  // Set client type dynamically
+  setClientType(clientType: 'student' | 'driver' | 'admin'): void {
+    if (this.socket?.io?.opts?.query) {
+      this.socket.io.opts.query.clientType = clientType;
+    }
+    console.log(`🔄 Client type set to: ${clientType}`);
   }
 }
 

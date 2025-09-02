@@ -6,8 +6,8 @@ import { authService } from './services/authService';
 import DriverInterface from './components/DriverInterface';
 import DriverLogin from './components/DriverLogin';
 import DriverDashboard from './components/DriverDashboard';
-// Lazy load the optimized student map for better performance
-const OptimizedStudentMap = React.lazy(() => import('./components/OptimizedStudentMapLazy'));
+// Lazy load the enhanced student map for better performance
+const EnhancedStudentMap = React.lazy(() => import('./components/EnhancedStudentMap'));
 import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import PremiumHomepage from './components/PremiumHomepage';
@@ -16,9 +16,8 @@ import {
   GlobalTransitionWrapper,
 } from './components/transitions';
 
-// Import error handling and resilience components
+// Import error handling components
 import { ErrorBoundary, NetworkStatus } from './components/error';
-import { resilientApiService } from './services/resilience';
 
 function App() {
   console.log('🚀 App component is rendering...');
@@ -179,7 +178,7 @@ function App() {
                       </div>
                     </div>
                   }>
-                    <OptimizedStudentMap />
+                    <EnhancedStudentMap />
                   </Suspense>
                 } 
               />

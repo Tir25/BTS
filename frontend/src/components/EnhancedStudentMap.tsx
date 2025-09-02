@@ -389,6 +389,9 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         setConnectionError(null);
         setConnectionStatus('connecting');
         
+        // Set client type for student map
+        websocketService.setClientType('student');
+        
         // Reset WebSocket service state before connecting
         websocketService.resetState();
         
@@ -403,9 +406,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         websocketService.socket?.emit('student:connect');
         
         // Set client type for student connection
-        if (websocketService.socket?.io?.opts?.query) {
-          websocketService.socket.io.opts.query.clientType = 'student';
-        }
+        websocketService.setClientType('student');
         
         websocketService.onStudentConnected(() => {
           console.log('✅ Student connected to WebSocket');

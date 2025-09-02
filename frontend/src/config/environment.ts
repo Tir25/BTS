@@ -25,12 +25,17 @@ const getApiUrl = () => {
   }
 
   // PRIORITY 4: Network IP (cross-laptop) - OPTIMIZED
-  if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+  if (currentHost !== 'localhost' && currentHost !== '127.0.0.1' && currentHost !== '0.0.0.0') {
     return `http://${currentHost}:3000`;
   }
 
-  // PRIORITY 5: Localhost - FAST PATH
-  return 'http://localhost:3000';
+  // PRIORITY 5: Development - only for actual development
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3000';
+  }
+
+  // FALLBACK: Production backend for any other case
+  return 'https://bus-tracking-backend-sxh8.onrender.com';
 };
 
 const getWebSocketUrl = () => {
@@ -60,12 +65,17 @@ const getWebSocketUrl = () => {
   }
 
   // PRIORITY 4: Network IP (cross-laptop) - OPTIMIZED
-  if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+  if (currentHost !== 'localhost' && currentHost !== '127.0.0.1' && currentHost !== '0.0.0.0') {
     return `ws://${currentHost}:3000`;
   }
 
-  // PRIORITY 5: Localhost - FAST PATH
-  return 'ws://localhost:3000';
+  // PRIORITY 5: Development - only for actual development
+  if (import.meta.env.DEV) {
+    return 'ws://localhost:3000';
+  }
+
+  // FALLBACK: Production backend for any other case
+  return 'wss://bus-tracking-backend-sxh8.onrender.com';
 };
 
 // Create a dynamic environment object that evaluates URLs at runtime

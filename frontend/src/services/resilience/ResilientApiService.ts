@@ -66,14 +66,14 @@ class ResilientApiService {
         retryOnFailure ? () => this.getFallbackData<T>(endpoint) : undefined
       );
 
-      // Store successful responses in offline storage
-      if (result.success && useOfflineStorage) {
-        await this.storeInOfflineStorage(endpoint, result.data);
+      // Store successful responses in offline storage (result is T, not ApiResponse)
+      if (useOfflineStorage && result) {
+        await this.storeInOfflineStorage(endpoint, result);
       }
 
       return {
         success: true,
-        data: result.data,
+        data: result,
         timestamp: new Date().toISOString(),
       };
 
@@ -115,9 +115,9 @@ class ResilientApiService {
   private async executeRequest<T>(
     url: string,
     method: string,
-    data?: any,
-    headers: Record<string, string> = {},
-    timeout: number = this.defaultTimeout,
+    data: any,
+    headers: Record<string, string>,
+    timeout: number,
     requestId: string
   ): Promise<T> {
     const controller = new AbortController();
@@ -158,13 +158,17 @@ class ResilientApiService {
 
   // Get fallback data with exponential backoff
   private async getFallbackData<T>(endpoint: string): Promise<T> {
-    return standardBackoff.execute(async () => {
+    const result = await standardBackoff.execute(async () => {
       const cachedData = await this.getFromOfflineStorage(endpoint);
       if (cachedData) {
         return cachedData;
       }
       throw new Error('No fallback data available');
     });
+    if (result.success && result.result) {
+      return result.result;
+    }
+    throw new Error('No fallback data available');
   }
 
   // Offline storage methods
