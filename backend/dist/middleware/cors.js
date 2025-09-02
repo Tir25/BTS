@@ -66,6 +66,7 @@ const corsOptions = {
         'X-Client-Version',
         'Cache-Control',
         'Pragma',
+        'X-Request-ID',
     ],
     exposedHeaders: [
         'X-Total-Count',
@@ -84,7 +85,7 @@ const handlePreflight = (req, res, next) => {
         }
         res.header('Access-Control-Allow-Origin', corsOrigin);
         res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Client-Info, X-Client-Version, Cache-Control, Pragma');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Client-Info, X-Client-Version, Cache-Control, Pragma, X-Request-ID');
         res.header('Access-Control-Allow-Credentials', 'true');
         res.header('Access-Control-Max-Age', '86400');
         res.header('X-Content-Type-Options', 'nosniff');

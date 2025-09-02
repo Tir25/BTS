@@ -54,12 +54,10 @@ const initializeEnvironment = () => {
         cors: {
             allowedOrigins: isProduction
                 ? [
+                    'https://bts-frontend-navy.vercel.app',
+                    'https://bts-frontend-navy.vercel.com',
                     /^https:\/\/.*\.onrender\.com$/,
                     /^https:\/\/.*\.render\.com$/,
-                    /^https:\/\/.*\.vercel\.app$/,
-                    /^https:\/\/.*\.vercel\.com$/,
-                    /^https:\/\/bts-frontend-navy\.vercel\.app$/,
-                    /^https:\/\/bts-frontend-navy\.vercel\.com$/,
                     /^https:\/\/.*\.vercel\.app$/,
                     /^https:\/\/.*\.vercel\.com$/,
                 ]
@@ -93,16 +91,16 @@ const initializeEnvironment = () => {
             cors: {
                 origin: isProduction
                     ? [
+                        'https://bts-frontend-navy.vercel.app',
+                        'wss://bts-frontend-navy.vercel.app',
+                        'https://bts-frontend-navy.vercel.com',
+                        'wss://bts-frontend-navy.vercel.com',
                         /^https:\/\/.*\.onrender\.com$/,
                         /^wss:\/\/.*\.onrender\.com$/,
                         /^https:\/\/.*\.vercel\.app$/,
                         /^wss:\/\/.*\.vercel\.app$/,
                         /^https:\/\/.*\.vercel\.com$/,
                         /^wss:\/\/.*\.vercel\.com$/,
-                        /^https:\/\/bts-frontend-navy\.vercel\.app$/,
-                        /^wss:\/\/bts-frontend-navy\.vercel\.app$/,
-                        /^https:\/\/bts-frontend-navy\.vercel\.com$/,
-                        /^wss:\/\/bts-frontend-navy\.vercel\.com$/,
                     ]
                     : [
                         'http://localhost:5173',

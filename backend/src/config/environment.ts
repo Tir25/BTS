@@ -116,15 +116,13 @@ export const initializeEnvironment = (): EnvironmentConfig => {
     cors: {
       allowedOrigins: isProduction
         ? [
-            // Production origins - Render domains
+            // Production origins - Vercel frontend (specific)
+            'https://bts-frontend-navy.vercel.app',
+            'https://bts-frontend-navy.vercel.com',
+            // Render domains
             /^https:\/\/.*\.onrender\.com$/,
             /^https:\/\/.*\.render\.com$/,
-            // Vercel domains - more comprehensive
-            /^https:\/\/.*\.vercel\.app$/,
-            /^https:\/\/.*\.vercel\.com$/,
-            /^https:\/\/bts-frontend-navy\.vercel\.app$/,
-            /^https:\/\/bts-frontend-navy\.vercel\.com$/,
-            // Allow all Vercel subdomains
+            // Generic Vercel domains
             /^https:\/\/.*\.vercel\.app$/,
             /^https:\/\/.*\.vercel\.com$/,
           ]
@@ -164,22 +162,19 @@ export const initializeEnvironment = (): EnvironmentConfig => {
       cors: {
         origin: isProduction
           ? [
-              // Production WebSocket origins
-              /^https:\/\/.*\.onrender\.com$/,
-              /^wss:\/\/.*\.onrender\.com$/,
-              // Vercel WebSocket origins - comprehensive coverage
-              /^https:\/\/.*\.vercel\.app$/,
-              /^wss:\/\/.*\.vercel\.app$/,
-              /^https:\/\/.*\.vercel\.com$/,
-              /^wss:\/\/.*\.vercel\.com$/,
-              // Specific frontend URLs
+              // Production WebSocket origins - Vercel frontend
               'https://bts-frontend-navy.vercel.app',
               'wss://bts-frontend-navy.vercel.app',
               'https://bts-frontend-navy.vercel.com',
               'wss://bts-frontend-navy.vercel.com',
-              // Additional common origins
-              'https://localhost:5173',
-              'wss://localhost:5173',
+              // Render domains
+              /^https:\/\/.*\.onrender\.com$/,
+              /^wss:\/\/.*\.onrender\.com$/,
+              // Generic Vercel domains
+              /^https:\/\/.*\.vercel\.app$/,
+              /^wss:\/\/.*\.vercel\.app$/,
+              /^https:\/\/.*\.vercel\.com$/,
+              /^wss:\/\/.*\.vercel\.com$/,
             ]
           : [
               // Development WebSocket origins
@@ -191,9 +186,7 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               'ws://127.0.0.1:3000',
               'ws://localhost:5173',
               'ws://127.0.0.1:5173',
-              // Vite dev server origins
-              'http://localhost:5173',
-              'ws://localhost:5173',
+
               // VS Code tunnel origins
               /^https:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
               /^wss:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
