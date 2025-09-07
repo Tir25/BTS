@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive WebSocket Test - Student Map</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            font-weight: bold;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .warning { background: #fff3cd; color: #856404; }
+        pre {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .metric {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 Comprehensive WebSocket Test - Student Map</h1>
+        <p>This test verifies all WebSocket functionality used by the student live map.</p>
+
+        <div class="test-section">
+            <h2>📊 Connection Metrics</h2>
+            <div class="metrics">
+                <div class="metric">
+                    <div class="metric-value" id="connectionStatus">Disconnected</div>
+                    <div>Connection Status</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="messageCount">0</div>
+                    <div>Messages Received</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="locationUpdates">0</div>
+                    <div>Location Updates</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="connectionTime">0s</div>
+                    <div>Connection Time</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔌 WebSocket Connection Test</h2>
+            <p>Status: <span id="websocketStatus" class="status info">Not Connected</span></p>
+            <button onclick="connectWebSocket()">Connect WebSocket</button>
+            <button onclick="disconnectWebSocket()">Disconnect</button>
+            <button onclick="testReconnection()">Test Reconnection</button>
+            <pre id="websocketLog">WebSocket connection log will appear here...</pre>
+        </div>
+
+        <div class="test-section">
+            <h2>📍 Bus Location Updates Test</h2>
+            <p>Status: <span id="locationStatus" class="status info">Waiting for updates...</span></p>
+            <p>Last Update: <span id="lastLocationUpdate" class="info">None</span></p>
+            <pre id="locationLog">Bus location updates will appear here...</pre>
+        </div>
+
+        <div class="test-section">
+            <h2>🚌 Driver Connection Events Test</h2>
+            <p>Status: <span id="driverStatus" class="status info">Waiting for events...</span></p>
+            <pre id="driverLog">Driver connection events will appear here...</pre>
+        </div>
+
+        <div class="test-section">
+            <h2>🎯 Event Testing</h2>
+            <button onclick="emitStudentConnect()">Emit Student Connect</button>
+            <button onclick="emitTestLocation()">Emit Test Location</button>
+            <button onclick="clearLogs()">Clear All Logs</button>
+            <pre id="eventLog">Event testing log will appear here...</pre>
+        </div>
+
+        <div class="test-section">
+            <h2>🔍 Error Handling Test</h2>
+            <button onclick="testInvalidData()">Test Invalid Data</button>
+            <button onclick="testNetworkError()">Test Network Error</button>
+            <pre id="errorLog">Error handling tests will appear here...</pre>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3000';
+        const WEBSOCKET_URL = 'ws://localhost:3000';
+        
+        let socket = null;
+        let messageCount = 0;
+        let locationUpdateCount = 0;
+        let connectionStartTime = null;
+        let connectionInterval = null;
+
+        function updateMetrics() {
+            document.getElementById('messageCount').textContent = messageCount;
+            document.getElementById('locationUpdates').textContent = locationUpdateCount;
+            
+            if (connectionStartTime) {
+                const elapsed = Math.floor((Date.now() - connectionStartTime) / 1000);
+                document.getElementById('connectionTime').textContent = `${elapsed}s`;
+            }
+        }
+
+        function logMessage(logId, message, type = 'info') {
+            const logElement = document.getElementById(logId);
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            logElement.textContent += logEntry;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function updateStatus(statusId, message, type = 'info') {
+            const statusElement = document.getElementById(statusId);
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        function connectWebSocket() {
+            if (socket && socket.connected) {
+                logMessage('websocketLog', '⚠️ WebSocket already connected', 'warning');
+                return;
+            }
+
+            updateStatus('websocketStatus', 'Connecting...', 'info');
+            logMessage('websocketLog', '🔌 Attempting to connect to WebSocket...');
+
+            socket = io(WEBSOCKET_URL, {
+                transports: ['websocket', 'polling'],
+                forceNew: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                timeout: 15000,
+                query: { clientType: 'student' }
+            });
+
+            socket.on('connect', () => {
+                connectionStartTime = Date.now();
+                updateStatus('websocketStatus', 'Connected', 'success');
+                updateStatus('connectionStatus', 'Connected', 'success');
+                logMessage('websocketLog', '✅ WebSocket Connected Successfully!');
+                logMessage('websocketLog', `🔗 Socket ID: ${socket.id}`);
+                logMessage('websocketLog', `🌐 Transport: ${socket.io.engine.transport.name}`);
+                
+                // Start connection time tracking
+                connectionInterval = setInterval(updateMetrics, 1000);
+                
+                // Emit student connection event
+                socket.emit('student:connect', {
+                    timestamp: new Date().toISOString(),
+                    clientInfo: {
+                        userAgent: navigator.userAgent,
+                        platform: navigator.platform,
+                        language: navigator.language,
+                    },
+                });
+                logMessage('eventLog', '📤 Emitted student:connect event');
+            });
+
+            socket.on('disconnect', (reason) => {
+                updateStatus('websocketStatus', 'Disconnected', 'error');
+                updateStatus('connectionStatus', 'Disconnected', 'error');
+                logMessage('websocketLog', `❌ WebSocket Disconnected: ${reason}`);
+                
+                if (connectionInterval) {
+                    clearInterval(connectionInterval);
+                    connectionInterval = null;
+                }
+            });
+
+            socket.on('connect_error', (error) => {
+                updateStatus('websocketStatus', 'Connection Error', 'error');
+                logMessage('websocketLog', `❌ WebSocket Connection Error: ${error.message}`);
+                logMessage('errorLog', `Connection Error: ${error.message}`, 'error');
+            });
+
+            socket.on('student:connected', (data) => {
+                logMessage('websocketLog', `✅ Student Connected Response: ${JSON.stringify(data)}`);
+                updateStatus('locationStatus', 'Ready for location updates', 'success');
+            });
+
+            socket.on('bus:locationUpdate', (data) => {
+                messageCount++;
+                locationUpdateCount++;
+                updateMetrics();
+                
+                logMessage('locationLog', `📍 Bus Location Update:`, 'info');
+                logMessage('locationLog', `   Bus ID: ${data.busId}`);
+                logMessage('locationLog', `   Driver ID: ${data.driverId}`);
+                logMessage('locationLog', `   Location: ${data.latitude}, ${data.longitude}`);
+                logMessage('locationLog', `   Speed: ${data.speed || 'N/A'} km/h`);
+                logMessage('locationLog', `   Heading: ${data.heading || 'N/A'}°`);
+                logMessage('locationLog', `   Timestamp: ${new Date(data.timestamp).toLocaleString()}`);
+                
+                if (data.eta) {
+                    logMessage('locationLog', `   ETA: ${data.eta.next_stop} - ${data.eta.distance_remaining}m`);
+                }
+                
+                document.getElementById('lastLocationUpdate').textContent = 
+                    `Bus ${data.busId} at ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}`;
+            });
+
+            socket.on('driver:connected', (data) => {
+                messageCount++;
+                updateMetrics();
+                
+                logMessage('driverLog', `🚌 Driver Connected:`, 'info');
+                logMessage('driverLog', `   Driver ID: ${data.driverId}`);
+                logMessage('driverLog', `   Bus ID: ${data.busId}`);
+                logMessage('driverLog', `   Timestamp: ${new Date(data.timestamp).toLocaleString()}`);
+                
+                updateStatus('driverStatus', 'Driver Connected', 'success');
+            });
+
+            socket.on('driver:disconnected', (data) => {
+                messageCount++;
+                updateMetrics();
+                
+                logMessage('driverLog', `🚫 Driver Disconnected:`, 'info');
+                logMessage('driverLog', `   Driver ID: ${data.driverId}`);
+                logMessage('driverLog', `   Bus ID: ${data.busId}`);
+                logMessage('driverLog', `   Timestamp: ${new Date(data.timestamp).toLocaleString()}`);
+                
+                updateStatus('driverStatus', 'Driver Disconnected', 'warning');
+            });
+
+            socket.on('error', (error) => {
+                messageCount++;
+                updateMetrics();
+                
+                logMessage('errorLog', `🚨 WebSocket Error: ${error.message || JSON.stringify(error)}`, 'error');
+                logMessage('websocketLog', `🚨 WebSocket Error: ${error.message || JSON.stringify(error)}`, 'error');
+            });
+
+            socket.on('bus:arriving', (data) => {
+                messageCount++;
+                updateMetrics();
+                
+                logMessage('locationLog', `🚌 Bus Arriving: ${JSON.stringify(data)}`, 'info');
+            });
+        }
+
+        function disconnectWebSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                logMessage('websocketLog', '🔌 WebSocket manually disconnected');
+                
+                if (connectionInterval) {
+                    clearInterval(connectionInterval);
+                    connectionInterval = null;
+                }
+            }
+        }
+
+        function testReconnection() {
+            logMessage('websocketLog', '🔄 Testing reconnection...');
+            disconnectWebSocket();
+            setTimeout(() => {
+                connectWebSocket();
+            }, 2000);
+        }
+
+        function emitStudentConnect() {
+            if (socket && socket.connected) {
+                socket.emit('student:connect', {
+                    timestamp: new Date().toISOString(),
+                    test: true
+                });
+                logMessage('eventLog', '📤 Emitted student:connect event (test)');
+            } else {
+                logMessage('eventLog', '❌ Cannot emit event - WebSocket not connected', 'error');
+            }
+        }
+
+        function emitTestLocation() {
+            if (socket && socket.connected) {
+                const testLocation = {
+                    busId: 'test-bus-001',
+                    driverId: 'test-driver-001',
+                    latitude: 40.7128 + (Math.random() - 0.5) * 0.01,
+                    longitude: -74.0060 + (Math.random() - 0.5) * 0.01,
+                    timestamp: new Date().toISOString(),
+                    speed: Math.floor(Math.random() * 60),
+                    heading: Math.floor(Math.random() * 360)
+                };
+                
+                socket.emit('test:locationUpdate', testLocation);
+                logMessage('eventLog', '📤 Emitted test location update');
+                logMessage('eventLog', `   Location: ${testLocation.latitude}, ${testLocation.longitude}`);
+            } else {
+                logMessage('eventLog', '❌ Cannot emit event - WebSocket not connected', 'error');
+            }
+        }
+
+        function testInvalidData() {
+            if (socket && socket.connected) {
+                const invalidData = {
+                    busId: null,
+                    driverId: undefined,
+                    latitude: 'invalid',
+                    longitude: 'invalid',
+                    timestamp: 'invalid-date'
+                };
+                
+                socket.emit('test:invalidData', invalidData);
+                logMessage('errorLog', '📤 Emitted invalid data for error handling test');
+            } else {
+                logMessage('errorLog', '❌ Cannot test - WebSocket not connected', 'error');
+            }
+        }
+
+        function testNetworkError() {
+            logMessage('errorLog', '🌐 Simulating network error by disconnecting...');
+            disconnectWebSocket();
+            setTimeout(() => {
+                logMessage('errorLog', '🔄 Attempting reconnection after network error...');
+                connectWebSocket();
+            }, 3000);
+        }
+
+        function clearLogs() {
+            document.getElementById('websocketLog').textContent = '';
+            document.getElementById('locationLog').textContent = '';
+            document.getElementById('driverLog').textContent = '';
+            document.getElementById('eventLog').textContent = '';
+            document.getElementById('errorLog').textContent = '';
+            
+            messageCount = 0;
+            locationUpdateCount = 0;
+            updateMetrics();
+            
+            logMessage('eventLog', '🧹 All logs cleared');
+        }
+
+        // Auto-connect on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            logMessage('websocketLog', '🚀 WebSocket test page loaded');
+            logMessage('websocketLog', '📋 Ready to test WebSocket functionality');
+            
+            // Start metrics update
+            setInterval(updateMetrics, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -55,7 +55,12 @@ interface RouteData {
   origin_coordinates?: {
     coordinates: [number, number];
   };
-  bus_stops?: any[];
+  bus_stops?: Array<{
+    id: string;
+    name: string;
+    location: string;
+    stop_order: number;
+  }>;
   current_eta_minutes?: number;
   last_eta_calculation?: string;
   stops?: GeoJSON.LineString;
@@ -218,9 +223,9 @@ class AdminApiService {
     return result;
   }
 
-  async getAssignedDrivers(): Promise<ApiResponse<any[]>> {
+  async getAssignedDrivers(): Promise<ApiResponse<DriverData[]>> {
     console.log('🚌 Fetching assigned drivers...');
-    const result = await this.makeRequest<any[]>('/assigned-drivers');
+    const result = await this.makeRequest<DriverData[]>('/assigned-drivers');
     console.log(
       '🚌 Assigned drivers result:',
       result.success
@@ -325,7 +330,12 @@ class AdminApiService {
       custom_destination_coordinates?: [number, number];
       custom_origin?: string;
       custom_origin_coordinates?: [number, number];
-      bus_stops?: any[];
+      bus_stops?: Array<{
+        id: string;
+        name: string;
+        location: string;
+        stop_order: number;
+      }>;
       stops?: GeoJSON.LineString;
     }>
   ): Promise<ApiResponse<RouteData>> {

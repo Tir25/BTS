@@ -92,7 +92,12 @@ export class StorageService {
 
   // Upload image file
   static async uploadImage(
-    file: { mimetype: string; size: number; originalname: string; buffer: Buffer },
+    file: {
+      mimetype: string;
+      size: number;
+      originalname: string;
+      buffer: Buffer;
+    },
     folder: string,
     fileName?: string
   ): Promise<UploadResult> {
@@ -150,7 +155,12 @@ export class StorageService {
 
   // Upload document file
   static async uploadDocument(
-    file: any,
+    file: {
+      originalname: string;
+      mimetype: string;
+      size: number;
+      buffer: Buffer;
+    },
     folder: string,
     fileName?: string
   ): Promise<UploadResult> {
@@ -254,9 +264,18 @@ export class StorageService {
   }
 
   // Get file info
-  static async getFileInfo(
-    filePath: string
-  ): Promise<{ success: boolean; info?: any; error?: string }> {
+  static async getFileInfo(filePath: string): Promise<{
+    success: boolean;
+    info?: Array<{
+      name: string;
+      id: string;
+      updated_at: string;
+      created_at: string;
+      last_accessed_at: string;
+      metadata: Record<string, unknown>;
+    }>;
+    error?: string;
+  }> {
     try {
       const { data, error } = await supabaseAdmin.storage
         .from('bus-tracking-media')
@@ -280,9 +299,18 @@ export class StorageService {
   }
 
   // List files in a folder
-  static async listFiles(
-    folder: string
-  ): Promise<{ success: boolean; data?: any[]; error?: string }> {
+  static async listFiles(folder: string): Promise<{
+    success: boolean;
+    data?: Array<{
+      name: string;
+      id: string;
+      updated_at: string;
+      created_at: string;
+      last_accessed_at: string;
+      metadata: Record<string, unknown>;
+    }>;
+    error?: string;
+  }> {
     try {
       const { data, error } = await supabaseAdmin.storage
         .from('bus-tracking-media')

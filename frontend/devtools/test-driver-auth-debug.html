@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Authentication Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .form-group {
+            margin: 10px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Driver Authentication Debug Test</h1>
+        <p>This test verifies that driver authentication is working correctly and location updates are being sent.</p>
+        
+        <div class="status info">
+            <strong>Test Purpose:</strong> Debug driver authentication and location update flow to identify why bus locations are not appearing on student map.
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🔧 Test Controls</h2>
+        <button onclick="startDriverAuthTest()">🚀 Start Driver Auth Test</button>
+        <button onclick="testLocationUpdate()">📍 Test Location Update</button>
+        <button onclick="clearLog()">🗑️ Clear Log</button>
+    </div>
+
+    <div class="container">
+        <h2>📝 Test Configuration</h2>
+        <div class="form-group">
+            <label for="driverEmail">Driver Email:</label>
+            <input type="email" id="driverEmail" value="driver@example.com" placeholder="Enter driver email">
+        </div>
+        <div class="form-group">
+            <label for="driverPassword">Driver Password:</label>
+            <input type="password" id="driverPassword" value="password123" placeholder="Enter driver password">
+        </div>
+        <div class="form-group">
+            <label for="testLatitude">Test Latitude:</label>
+            <input type="number" id="testLatitude" value="23.0225" step="0.000001" placeholder="Enter test latitude">
+        </div>
+        <div class="form-group">
+            <label for="testLongitude">Test Longitude:</label>
+            <input type="number" id="testLongitude" value="72.5714" step="0.000001" placeholder="Enter test longitude">
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📊 Test Status</h2>
+        <div id="testStatus" class="status info">Ready to start tests</div>
+    </div>
+
+    <div class="container">
+        <h2>📝 Test Log</h2>
+        <div id="log" class="log">Test log will appear here...\n</div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script>
+        let driverSocket = null;
+        let isAuthenticated = false;
+        let authData = null;
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('log');
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('testStatus');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = 'Test log cleared...\n';
+        }
+
+        async function startDriverAuthTest() {
+            log('🚀 Starting driver authentication test...');
+            updateStatus('Testing driver authentication...', 'info');
+            
+            try {
+                // Step 1: Connect as driver
+                await connectAsDriver();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Step 2: Authenticate
+                await authenticateDriver();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Step 3: Test location update
+                await testLocationUpdate();
+                
+                if (isAuthenticated) {
+                    updateStatus('✅ Driver authentication test completed successfully!', 'success');
+                    log('🎉 Driver authentication test completed successfully!');
+                } else {
+                    updateStatus('❌ Driver authentication test failed', 'error');
+                    log('❌ Driver authentication test failed');
+                }
+            } catch (error) {
+                log(`❌ Test failed with error: ${error.message}`);
+                updateStatus('❌ Test failed', 'error');
+            }
+        }
+
+        async function connectAsDriver() {
+            log('🔌 Connecting as driver...');
+            
+            return new Promise((resolve, reject) => {
+                try {
+                    driverSocket = io('ws://localhost:3000', {
+                        transports: ['websocket', 'polling'],
+                        query: {
+                            clientType: 'driver',
+                            version: '1.0.0',
+                            timestamp: Date.now().toString()
+                        }
+                    });
+
+                    driverSocket.on('connect', () => {
+                        log('✅ Driver socket connected');
+                        log(`📡 Socket ID: ${driverSocket.id}`);
+                        resolve();
+                    });
+
+                    driverSocket.on('connect_error', (error) => {
+                        log(`❌ Driver connection error: ${error.message}`);
+                        reject(new Error('Connection failed'));
+                    });
+
+                    driverSocket.on('error', (error) => {
+                        log(`❌ Driver socket error: ${JSON.stringify(error)}`);
+                    });
+
+                    // Timeout after 10 seconds
+                    setTimeout(() => {
+                        if (!driverSocket || !driverSocket.connected) {
+                            log('⏰ Driver connection timeout');
+                            reject(new Error('Connection timeout'));
+                        }
+                    }, 10000);
+
+                } catch (error) {
+                    log(`❌ Driver connection test error: ${error.message}`);
+                    reject(error);
+                }
+            });
+        }
+
+        async function authenticateDriver() {
+            log('🔐 Authenticating driver...');
+            
+            return new Promise((resolve, reject) => {
+                try {
+                    if (!driverSocket || !driverSocket.connected) {
+                        log('❌ Driver socket not connected, cannot authenticate');
+                        reject(new Error('Socket not connected'));
+                        return;
+                    }
+
+                    // Mock authentication data (in real app, this would come from Supabase)
+                    const mockAuthData = {
+                        token: 'mock-jwt-token',
+                        user: {
+                            id: 'test-driver-id',
+                            email: document.getElementById('driverEmail').value,
+                            role: 'driver'
+                        },
+                        busInfo: {
+                            bus_id: 'test-bus-001',
+                            bus_number: 'BUS-001',
+                            route_id: 'test-route-001',
+                            route_name: 'Test Route',
+                            driver_id: 'test-driver-id',
+                            driver_name: 'Test Driver'
+                        }
+                    };
+
+                    log(`📤 Sending authentication request: ${JSON.stringify(mockAuthData, null, 2)}`);
+
+                    driverSocket.emit('driver:authenticate', mockAuthData);
+
+                    // Listen for authentication response
+                    driverSocket.on('driver:authenticated', (data) => {
+                        log(`✅ Driver authentication successful: ${JSON.stringify(data)}`);
+                        isAuthenticated = true;
+                        authData = data;
+                        resolve();
+                    });
+
+                    driverSocket.on('driver:authentication_failed', (error) => {
+                        log(`❌ Driver authentication failed: ${JSON.stringify(error)}`);
+                        reject(new Error('Authentication failed'));
+                    });
+
+                    driverSocket.on('error', (error) => {
+                        log(`❌ Authentication error: ${JSON.stringify(error)}`);
+                        reject(new Error('Authentication error'));
+                    });
+
+                    // Timeout after 10 seconds
+                    setTimeout(() => {
+                        if (!isAuthenticated) {
+                            log('⏰ Authentication timeout');
+                            reject(new Error('Authentication timeout'));
+                        }
+                    }, 10000);
+
+                } catch (error) {
+                    log(`❌ Driver authentication test error: ${error.message}`);
+                    reject(error);
+                }
+            });
+        }
+
+        async function testLocationUpdate() {
+            log('📍 Testing location update...');
+            
+            return new Promise((resolve) => {
+                try {
+                    if (!driverSocket || !driverSocket.connected || !isAuthenticated) {
+                        log('❌ Driver not authenticated, cannot send location update');
+                        resolve();
+                        return;
+                    }
+
+                    const latitude = parseFloat(document.getElementById('testLatitude').value);
+                    const longitude = parseFloat(document.getElementById('testLongitude').value);
+
+                    const locationData = {
+                        driverId: authData?.driverId || 'test-driver-id',
+                        latitude: latitude,
+                        longitude: longitude,
+                        timestamp: new Date().toISOString(),
+                        speed: 25.5,
+                        heading: 45.0
+                    };
+
+                    log(`📤 Sending location update: ${JSON.stringify(locationData, null, 2)}`);
+
+                    driverSocket.emit('driver:locationUpdate', locationData);
+
+                    // Listen for any response or confirmation
+                    driverSocket.on('location:updated', (data) => {
+                        log(`✅ Location update confirmed: ${JSON.stringify(data)}`);
+                    });
+
+                    driverSocket.on('error', (error) => {
+                        log(`❌ Location update error: ${JSON.stringify(error)}`);
+                    });
+
+                    // Wait a bit to see if there are any responses
+                    setTimeout(() => {
+                        log('✅ Location update sent (no error received)');
+                        resolve();
+                    }, 2000);
+
+                } catch (error) {
+                    log(`❌ Location update test error: ${error.message}`);
+                    resolve();
+                }
+            });
+        }
+
+        // Initialize test
+        log('🔐 Driver Authentication Debug Test Client loaded');
+        log('🔍 This test will verify driver authentication and location update flow');
+        log('📝 The test includes: Driver connection, Authentication, and Location updates');
+    </script>
+</body>
+</html>

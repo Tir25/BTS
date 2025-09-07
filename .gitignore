@@ -121,3 +121,7 @@ test-results.xml
 
 # Vite
 .vite/
+
+# Development tools
+# Note: devtools directory is intentionally NOT ignored to preserve development and testing files
+# frontend/devtools/ contains test and debug files that are not part of the production build

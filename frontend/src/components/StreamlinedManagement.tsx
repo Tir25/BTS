@@ -72,6 +72,34 @@ interface Route {
   updated_at?: string;
 }
 
+// Conversion function to transform RouteData to Route
+const convertRouteDataToRoute = (routeData: any): Route => {
+  return {
+    id: routeData.id,
+    name: routeData.name,
+    description: routeData.description || '',
+    distance_km: routeData.distance_km || 0,
+    estimated_duration_minutes: routeData.estimated_duration_minutes || 0,
+    is_active: routeData.is_active,
+    city: routeData.city,
+    origin: routeData.custom_origin,
+    destination: routeData.custom_destination,
+    custom_destination: routeData.custom_destination,
+    custom_origin: routeData.custom_origin,
+    destination_coordinates: routeData.destination_coordinates,
+    origin_coordinates: routeData.origin_coordinates,
+    bus_stops: routeData.bus_stops?.map((stop: any) => ({
+      name: stop.name,
+      coordinates: [0, 0], // Default coordinates, should be parsed from location string
+      address: stop.location,
+    })),
+    current_eta_minutes: routeData.current_eta_minutes,
+    last_eta_calculation: routeData.last_eta_calculation,
+    created_at: routeData.created_at,
+    updated_at: routeData.updated_at,
+  };
+};
+
 export default function StreamlinedManagement() {
   const [activeTab, setActiveTab] = useState<'buses' | 'drivers' | 'routes'>(
     'buses'
@@ -210,7 +238,7 @@ export default function StreamlinedManagement() {
         //     cityType: typeof route.city,
         //   }))
         // );
-        setRoutes(routesResult.data);
+        setRoutes(routesResult.data.map(convertRouteDataToRoute));
       }
 
       // console.log('✅ Core data loaded successfully');
@@ -247,29 +275,39 @@ export default function StreamlinedManagement() {
       if (result.success && result.data) {
         // Additional frontend deduplication as safety measure
         const uniqueAssignedDriversMap = new Map();
-        result.data.forEach((driver: AssignedDriver) => {
-          const idKey = driver.driver_id;
+        (result.data as any[]).forEach(
+          (driver: {
+            driver_id: string;
+            driver_email?: string;
+            driver_name?: string;
+            bus_id?: string;
+            bus_code?: string;
+            number_plate?: string;
+            route_name?: string;
+          }) => {
+            const idKey = driver.driver_id;
 
-          if (!uniqueAssignedDriversMap.has(idKey)) {
-            // First time seeing this ID
-            uniqueAssignedDriversMap.set(idKey, driver);
-          } else {
-            // We already have this ID, check if we should replace it
-            const existing = uniqueAssignedDriversMap.get(idKey);
-
-            // Prefer the entry with email over null email
-            if (!existing.driver_email && driver.driver_email) {
+            if (!uniqueAssignedDriversMap.has(idKey)) {
+              // First time seeing this ID
               uniqueAssignedDriversMap.set(idKey, driver);
-            }
-            // If both have emails, prefer the one with more complete data
-            else if (existing.driver_email && driver.driver_email) {
-              // Keep the existing one unless the new one has more complete data
-              if (!existing.driver_name && driver.driver_name) {
+            } else {
+              // We already have this ID, check if we should replace it
+              const existing = uniqueAssignedDriversMap.get(idKey);
+
+              // Prefer the entry with email over null email
+              if (!existing.driver_email && driver.driver_email) {
                 uniqueAssignedDriversMap.set(idKey, driver);
+              }
+              // If both have emails, prefer the one with more complete data
+              else if (existing.driver_email && driver.driver_email) {
+                // Keep the existing one unless the new one has more complete data
+                if (!existing.driver_name && driver.driver_name) {
+                  uniqueAssignedDriversMap.set(idKey, driver);
+                }
               }
             }
           }
-        });
+        );
         const uniqueAssignedDrivers = Array.from(
           uniqueAssignedDriversMap.values()
         );
@@ -293,7 +331,7 @@ export default function StreamlinedManagement() {
 
     // Check for duplicates before submitting
     const existingBus = buses.find(
-      (bus) =>
+      bus =>
         bus.code === busForm.code || bus.number_plate === busForm.number_plate
     );
 
@@ -339,7 +377,7 @@ export default function StreamlinedManagement() {
     try {
       const result = await adminApiService.deleteBus(busId);
       if (result.success) {
-        setBuses(buses.filter((bus) => bus.id !== busId));
+        setBuses(buses.filter(bus => bus.id !== busId));
         setSuccessMessage('Bus deleted successfully!');
         setTimeout(() => setSuccessMessage(null), 3000);
       } else {
@@ -362,7 +400,7 @@ export default function StreamlinedManagement() {
       });
       if (result.success && result.data) {
         setBuses(
-          buses.map((bus) =>
+          buses.map(bus =>
             bus.id === busId ? { ...bus, route_id: routeId } : bus
           )
         );
@@ -422,7 +460,7 @@ export default function StreamlinedManagement() {
 
     // Check if email already exists in current drivers list
     const existingDriver = drivers.find(
-      (driver) => driver.email === createDriverForm.email
+      driver => driver.email === createDriverForm.email
     );
 
     if (existingDriver) {
@@ -570,9 +608,9 @@ export default function StreamlinedManagement() {
       const result = await adminApiService.deleteDriver(driverId);
       if (result.success && result.data) {
         // Remove driver from local state
-        setDrivers(drivers.filter((driver) => driver.id !== driverId));
+        setDrivers(drivers.filter(driver => driver.id !== driverId));
         setAssignedDrivers(
-          assignedDrivers.filter((assigned) => assigned.driver_id !== driverId)
+          assignedDrivers.filter(assigned => assigned.driver_id !== driverId)
         );
 
         setSuccessMessage(
@@ -628,7 +666,7 @@ export default function StreamlinedManagement() {
 
       const result = await adminApiService.createRoute(routeData);
       if (result.success && result.data) {
-        setRoutes([...routes, result.data]);
+        setRoutes([...routes, convertRouteDataToRoute(result.data)]);
         setRouteForm({
           name: '',
           description: '',
@@ -661,7 +699,7 @@ export default function StreamlinedManagement() {
     try {
       const result = await adminApiService.deleteRoute(routeId);
       if (result.success) {
-        setRoutes(routes.filter((route) => route.id !== routeId));
+        setRoutes(routes.filter(route => route.id !== routeId));
         setSuccessMessage('Route deleted successfully!');
         setTimeout(() => setSuccessMessage(null), 3000);
       } else {
@@ -676,7 +714,7 @@ export default function StreamlinedManagement() {
 
   const getRouteName = (routeId?: string) => {
     if (!routeId) return 'Not Assigned';
-    const route = routes.find((r) => r.id === routeId);
+    const route = routes.find(r => r.id === routeId);
     if (!route) return 'Unknown Route';
 
     // Format: City → Destination
@@ -704,7 +742,7 @@ export default function StreamlinedManagement() {
 
   const getDriverName = (driverId?: string) => {
     if (!driverId) return 'Not Assigned';
-    const driver = drivers.find((d) => d.id === driverId);
+    const driver = drivers.find(d => d.id === driverId);
     return driver
       ? `${driver.first_name} ${driver.last_name}`
       : 'Unknown Driver';
@@ -732,7 +770,7 @@ export default function StreamlinedManagement() {
 
   const getBusPlate = (busId?: string) => {
     if (!busId) return 'Not Assigned';
-    const bus = buses.find((b) => b.id === busId);
+    const bus = buses.find(b => b.id === busId);
     return bus ? bus.number_plate : 'Unknown Bus';
   };
 
@@ -789,7 +827,7 @@ export default function StreamlinedManagement() {
       const result = await adminApiService.updateBus(selectedBus.id, busForm);
       if (result.success && result.data) {
         setBuses(
-          buses.map((bus) => (bus.id === selectedBus.id ? result.data! : bus))
+          buses.map(bus => (bus.id === selectedBus.id ? result.data! : bus))
         );
         setShowBusDetails(false);
         setEditingBus(false);
@@ -827,8 +865,10 @@ export default function StreamlinedManagement() {
       );
       if (result.success && result.data) {
         setRoutes(
-          routes.map((route) =>
-            route.id === selectedRoute.id ? result.data! : route
+          routes.map(route =>
+            route.id === selectedRoute.id
+              ? convertRouteDataToRoute(result.data!)
+              : route
           )
         );
         setShowRouteDetails(false);
@@ -970,7 +1010,7 @@ export default function StreamlinedManagement() {
                       type="text"
                       required
                       value={busForm.code}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({ ...busForm, code: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -985,7 +1025,7 @@ export default function StreamlinedManagement() {
                       type="text"
                       required
                       value={busForm.number_plate}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({ ...busForm, number_plate: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1000,7 +1040,7 @@ export default function StreamlinedManagement() {
                       type="number"
                       required
                       value={busForm.capacity}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({
                           ...busForm,
                           capacity: parseInt(e.target.value),
@@ -1017,7 +1057,7 @@ export default function StreamlinedManagement() {
                     <input
                       type="text"
                       value={busForm.model}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({ ...busForm, model: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1031,7 +1071,7 @@ export default function StreamlinedManagement() {
                     <input
                       type="number"
                       value={busForm.year}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({
                           ...busForm,
                           year: parseInt(e.target.value),
@@ -1046,7 +1086,7 @@ export default function StreamlinedManagement() {
                     <input
                       type="checkbox"
                       checked={busForm.is_active}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({ ...busForm, is_active: e.target.checked })
                       }
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -1099,7 +1139,7 @@ export default function StreamlinedManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {buses.map((bus) => (
+                  {buses.map(bus => (
                     <tr key={bus.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         {/* <input
@@ -1134,7 +1174,7 @@ export default function StreamlinedManagement() {
                           {bus.route_id
                             ? (() => {
                                 const route = routes.find(
-                                  (r) => r.id === bus.route_id
+                                  r => r.id === bus.route_id
                                 );
                                 return route?.city || 'Not specified';
                               })()
@@ -1178,7 +1218,7 @@ export default function StreamlinedManagement() {
                             </button>
                           </div>
                           <select
-                            onChange={(e) =>
+                            onChange={e =>
                               handleAssignRouteToBus(bus.id!, e.target.value)
                             }
                             value={bus.route_id || ''}
@@ -1187,7 +1227,7 @@ export default function StreamlinedManagement() {
                             <option value="" className="text-gray-900">
                               Select Route
                             </option>
-                            {routes.map((route) => (
+                            {routes.map(route => (
                               <option
                                 key={route.id}
                                 value={route.id}
@@ -1252,15 +1292,13 @@ export default function StreamlinedManagement() {
                     <select
                       required
                       value={selectedSupabaseDriver}
-                      onChange={(e) =>
-                        setSelectedSupabaseDriver(e.target.value)
-                      }
+                      onChange={e => setSelectedSupabaseDriver(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                     >
                       <option value="" className="text-gray-900">
                         Choose a driver...
                       </option>
-                      {drivers.map((driver) => (
+                      {drivers.map(driver => (
                         <option
                           key={driver.id}
                           value={driver.id}
@@ -1285,7 +1323,7 @@ export default function StreamlinedManagement() {
                     <select
                       required
                       value={driverForm.assigned_bus_id || ''}
-                      onChange={(e) =>
+                      onChange={e =>
                         setDriverForm({
                           ...driverForm,
                           assigned_bus_id: e.target.value || '',
@@ -1296,7 +1334,7 @@ export default function StreamlinedManagement() {
                       <option value="" className="text-gray-900">
                         Choose a bus...
                       </option>
-                      {buses.map((bus) => (
+                      {buses.map(bus => (
                         <option
                           key={bus.id}
                           value={bus.id}
@@ -1365,7 +1403,7 @@ export default function StreamlinedManagement() {
                         type="email"
                         required
                         value={createDriverForm.email}
-                        onChange={(e) =>
+                        onChange={e =>
                           setCreateDriverForm({
                             ...createDriverForm,
                             email: e.target.value,
@@ -1384,7 +1422,7 @@ export default function StreamlinedManagement() {
                         type="text"
                         required
                         value={createDriverForm.first_name}
-                        onChange={(e) =>
+                        onChange={e =>
                           setCreateDriverForm({
                             ...createDriverForm,
                             first_name: e.target.value,
@@ -1403,7 +1441,7 @@ export default function StreamlinedManagement() {
                         type="text"
                         required
                         value={createDriverForm.last_name}
-                        onChange={(e) =>
+                        onChange={e =>
                           setCreateDriverForm({
                             ...createDriverForm,
                             last_name: e.target.value,
@@ -1421,7 +1459,7 @@ export default function StreamlinedManagement() {
                       <input
                         type="tel"
                         value={createDriverForm.phone}
-                        onChange={(e) =>
+                        onChange={e =>
                           setCreateDriverForm({
                             ...createDriverForm,
                             phone: e.target.value,
@@ -1441,7 +1479,7 @@ export default function StreamlinedManagement() {
                           type={showPassword ? 'text' : 'password'}
                           required
                           value={createDriverForm.password}
-                          onChange={(e) => {
+                          onChange={e => {
                             console.log(
                               'Password input changed:',
                               e.target.value
@@ -1451,7 +1489,7 @@ export default function StreamlinedManagement() {
                               password: e.target.value,
                             });
                           }}
-                          onFocus={(e) => {
+                          onFocus={e => {
                             console.log('Password field focused');
                             e.target.select();
                           }}
@@ -1483,7 +1521,7 @@ export default function StreamlinedManagement() {
                           type={showConfirmPassword ? 'text' : 'password'}
                           required
                           value={createDriverForm.confirm_password}
-                          onChange={(e) => {
+                          onChange={e => {
                             console.log(
                               'Confirm password input changed:',
                               e.target.value
@@ -1493,7 +1531,7 @@ export default function StreamlinedManagement() {
                               confirm_password: e.target.value,
                             });
                           }}
-                          onFocus={(e) => {
+                          onFocus={e => {
                             console.log('Confirm password field focused');
                             e.target.select();
                           }}
@@ -1645,7 +1683,7 @@ export default function StreamlinedManagement() {
               </div>
               {drivers.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {drivers.map((driver) => (
+                  {drivers.map(driver => (
                     <div
                       key={driver.id}
                       className="bg-white p-3 rounded border"
@@ -1704,7 +1742,7 @@ export default function StreamlinedManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {drivers.map((driver) => (
+                  {drivers.map(driver => (
                     <tr key={driver.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         {/* <input
@@ -1739,7 +1777,7 @@ export default function StreamlinedManagement() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <select
-                          onChange={(e) =>
+                          onChange={e =>
                             handleAssignBusToDriver(driver.id, e.target.value)
                           }
                           value={driver.assigned_bus_id || ''}
@@ -1748,7 +1786,7 @@ export default function StreamlinedManagement() {
                           <option value="" className="text-gray-900">
                             Select Bus
                           </option>
-                          {buses.map((bus) => (
+                          {buses.map(bus => (
                             <option
                               key={bus.id}
                               value={bus.id}
@@ -1821,7 +1859,7 @@ export default function StreamlinedManagement() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {assignedDrivers.map((assignedDriver) => (
+                    {assignedDrivers.map(assignedDriver => (
                       <tr
                         key={assignedDriver.driver_id}
                         className="hover:bg-gray-50"
@@ -1865,7 +1903,7 @@ export default function StreamlinedManagement() {
                           <button
                             onClick={() => {
                               const driver = drivers.find(
-                                (d) => d.id === assignedDriver.driver_id
+                                d => d.id === assignedDriver.driver_id
                               );
                               if (driver) {
                                 handleDeleteDriver(
@@ -1933,7 +1971,7 @@ export default function StreamlinedManagement() {
                       type="text"
                       required
                       value={routeForm.name}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({ ...routeForm, name: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1948,7 +1986,7 @@ export default function StreamlinedManagement() {
                       type="text"
                       required
                       value={routeForm.city}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({ ...routeForm, city: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1964,7 +2002,7 @@ export default function StreamlinedManagement() {
                       required
                       step="0.1"
                       value={routeForm.distance_km}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({
                           ...routeForm,
                           distance_km: e.target.value,
@@ -1982,7 +2020,7 @@ export default function StreamlinedManagement() {
                       type="number"
                       required
                       value={routeForm.estimated_duration_minutes}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({
                           ...routeForm,
                           estimated_duration_minutes: e.target.value,
@@ -1996,7 +2034,7 @@ export default function StreamlinedManagement() {
                     <input
                       type="checkbox"
                       checked={routeForm.is_active}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({
                           ...routeForm,
                           is_active: e.target.checked,
@@ -2013,7 +2051,7 @@ export default function StreamlinedManagement() {
                   </label>
                   <textarea
                     value={routeForm.description}
-                    onChange={(e) =>
+                    onChange={e =>
                       setRouteForm({
                         ...routeForm,
                         description: e.target.value,
@@ -2125,7 +2163,7 @@ export default function StreamlinedManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {routes.map((route) => (
+                  {routes.map(route => (
                     <tr key={route.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         {/* <input
@@ -2253,7 +2291,7 @@ export default function StreamlinedManagement() {
                       type="text"
                       required
                       value={busForm.code}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({ ...busForm, code: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2267,7 +2305,7 @@ export default function StreamlinedManagement() {
                       type="text"
                       required
                       value={busForm.number_plate}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({ ...busForm, number_plate: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2281,7 +2319,7 @@ export default function StreamlinedManagement() {
                       type="number"
                       required
                       value={busForm.capacity}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({
                           ...busForm,
                           capacity: parseInt(e.target.value),
@@ -2298,7 +2336,7 @@ export default function StreamlinedManagement() {
                     <input
                       type="text"
                       value={busForm.model}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({ ...busForm, model: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2311,7 +2349,7 @@ export default function StreamlinedManagement() {
                     <input
                       type="number"
                       value={busForm.year}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({
                           ...busForm,
                           year: parseInt(e.target.value),
@@ -2326,7 +2364,7 @@ export default function StreamlinedManagement() {
                     <input
                       type="checkbox"
                       checked={busForm.is_active}
-                      onChange={(e) =>
+                      onChange={e =>
                         setBusForm({ ...busForm, is_active: e.target.checked })
                       }
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -2469,7 +2507,7 @@ export default function StreamlinedManagement() {
                       type="text"
                       required
                       value={routeForm.name}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({ ...routeForm, name: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2483,7 +2521,7 @@ export default function StreamlinedManagement() {
                       type="text"
                       required
                       value={routeForm.city}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({ ...routeForm, city: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2498,7 +2536,7 @@ export default function StreamlinedManagement() {
                       required
                       step="0.1"
                       value={routeForm.distance_km}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({
                           ...routeForm,
                           distance_km: e.target.value,
@@ -2516,7 +2554,7 @@ export default function StreamlinedManagement() {
                       type="number"
                       required
                       value={routeForm.estimated_duration_minutes}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({
                           ...routeForm,
                           estimated_duration_minutes: e.target.value,
@@ -2530,7 +2568,7 @@ export default function StreamlinedManagement() {
                     <input
                       type="checkbox"
                       checked={routeForm.is_active}
-                      onChange={(e) =>
+                      onChange={e =>
                         setRouteForm({
                           ...routeForm,
                           is_active: e.target.checked,
@@ -2547,7 +2585,7 @@ export default function StreamlinedManagement() {
                   </label>
                   <textarea
                     value={routeForm.description}
-                    onChange={(e) =>
+                    onChange={e =>
                       setRouteForm({
                         ...routeForm,
                         description: e.target.value,

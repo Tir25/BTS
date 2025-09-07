@@ -6,15 +6,31 @@ export const queryKeys = {
   health: ['health'],
   routes: ['routes'],
   route: (id: string) => ['route', id],
-  routesInViewport: (bounds: [[number, number], [number, number]]) => ['routes', 'viewport', bounds],
+  routesInViewport: (bounds: [[number, number], [number, number]]) => [
+    'routes',
+    'viewport',
+    bounds,
+  ],
   buses: ['buses'],
   bus: (id: string) => ['bus', id],
-  busesInViewport: (bounds: [[number, number], [number, number]]) => ['buses', 'viewport', bounds],
+  busesInViewport: (bounds: [[number, number], [number, number]]) => [
+    'buses',
+    'viewport',
+    bounds,
+  ],
   drivers: ['drivers'],
   driver: (id: string) => ['driver', id],
   liveLocations: ['liveLocations'],
-  liveLocationsInViewport: (bounds: [[number, number], [number, number]]) => ['liveLocations', 'viewport', bounds],
-  busClusters: (bounds: [[number, number], [number, number]], zoom: number) => ['busClusters', bounds, zoom],
+  liveLocationsInViewport: (bounds: [[number, number], [number, number]]) => [
+    'liveLocations',
+    'viewport',
+    bounds,
+  ],
+  busClusters: (bounds: [[number, number], [number, number]], zoom: number) => [
+    'busClusters',
+    bounds,
+    zoom,
+  ],
 } as const;
 
 // Health check query
@@ -46,7 +62,10 @@ export const useRoutes = () => {
 };
 
 // Optimized routes query for viewport
-export const useRoutesInViewport = (bounds: [[number, number], [number, number]], enabled = true) => {
+export const useRoutesInViewport = (
+  bounds: [[number, number], [number, number]],
+  enabled = true
+) => {
   return useQuery({
     queryKey: queryKeys.routesInViewport(bounds),
     queryFn: () => apiService.getRoutesInViewport(bounds),
@@ -79,7 +98,10 @@ export const useBuses = () => {
 };
 
 // Optimized buses query for viewport
-export const useBusesInViewport = (bounds: [[number, number], [number, number]], enabled = true) => {
+export const useBusesInViewport = (
+  bounds: [[number, number], [number, number]],
+  enabled = true
+) => {
   return useQuery({
     queryKey: queryKeys.busesInViewport(bounds),
     queryFn: () => apiService.getBusesInViewport(bounds),
@@ -133,7 +155,10 @@ export const useLiveLocations = () => {
 };
 
 // Optimized live locations query for viewport
-export const useLiveLocationsInViewport = (bounds: [[number, number], [number, number]], enabled = true) => {
+export const useLiveLocationsInViewport = (
+  bounds: [[number, number], [number, number]],
+  enabled = true
+) => {
   return useQuery({
     queryKey: queryKeys.liveLocationsInViewport(bounds),
     queryFn: () => apiService.getLiveLocationsInViewport(bounds),
@@ -145,7 +170,11 @@ export const useLiveLocationsInViewport = (bounds: [[number, number], [number, n
 };
 
 // Bus clusters query
-export const useBusClusters = (bounds: [[number, number], [number, number]], zoom: number, enabled = true) => {
+export const useBusClusters = (
+  bounds: [[number, number], [number, number]],
+  zoom: number,
+  enabled = true
+) => {
   return useQuery({
     queryKey: queryKeys.busClusters(bounds, zoom),
     queryFn: () => apiService.getBusClusters(bounds, zoom),
@@ -159,7 +188,7 @@ export const useBusClusters = (bounds: [[number, number], [number, number]], zoo
 // Mutations
 export const useUpdateLiveLocation = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: ({
       busId,
@@ -175,13 +204,13 @@ export const useUpdateLiveLocation = () => {
         heading?: number;
       };
     }) => apiService.updateLiveLocation(busId, driverId, location),
-    
+
     onSuccess: () => {
       // Invalidate and refetch live locations
       queryClient.invalidateQueries({ queryKey: queryKeys.liveLocations });
     },
-    
-    onError: (error) => {
+
+    onError: error => {
       console.error('Failed to update live location:', error);
     },
   });

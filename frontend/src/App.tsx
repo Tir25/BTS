@@ -1,16 +1,9 @@
-import React, { useEffect, Suspense } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useAuthStore } from './stores/useAuthStore';
 import { useHealthCheck } from './hooks/useApiQueries';
 import { authService } from './services/authService';
-import DriverInterface from './components/DriverInterface';
-import DriverLogin from './components/DriverLogin';
-import DriverDashboard from './components/DriverDashboard';
-// Lazy load the enhanced student map for better performance
-const EnhancedStudentMap = React.lazy(() => import('./components/EnhancedStudentMap'));
-import AdminDashboard from './components/AdminDashboard';
-import AdminLogin from './components/AdminLogin';
-import PremiumHomepage from './components/PremiumHomepage';
+import { createLazyComponent } from './utils/lazyLoading';
 import {
   TransitionProvider,
   GlobalTransitionWrapper,
@@ -18,6 +11,42 @@ import {
 
 // Import error handling components
 import { ErrorBoundary, NetworkStatus } from './components/error';
+
+// Lazy load all large components for better performance
+const DriverInterface = createLazyComponent(
+  () => import('./components/DriverInterface'),
+  () => <div className="loading-spinner mx-auto mb-4" />
+);
+
+const DriverLogin = createLazyComponent(
+  () => import('./components/DriverLogin'),
+  () => <div className="loading-spinner mx-auto mb-4" />
+);
+
+const DriverDashboard = createLazyComponent(
+  () => import('./components/DriverDashboard'),
+  () => <div className="loading-spinner mx-auto mb-4" />
+);
+
+const EnhancedStudentMap = createLazyComponent(
+  () => import('./components/EnhancedStudentMap'),
+  () => <div className="loading-spinner mx-auto mb-4" />
+);
+
+const AdminDashboard = createLazyComponent(
+  () => import('./components/AdminDashboard'),
+  () => <div className="loading-spinner mx-auto mb-4" />
+);
+
+const AdminLogin = createLazyComponent(
+  () => import('./components/AdminLogin'),
+  () => <div className="loading-spinner mx-auto mb-4" />
+);
+
+const PremiumHomepage = createLazyComponent(
+  () => import('./components/PremiumHomepage'),
+  () => <div className="loading-spinner mx-auto mb-4" />
+);
 
 function App() {
   console.log('🚀 App component is rendering...');
@@ -32,21 +61,29 @@ function App() {
   } = useAuthStore();
 
   // React Query health check
-  const { data: health, isLoading: healthLoading, error: healthError } = useHealthCheck();
+  const {
+    data: health,
+    isLoading: healthLoading,
+    error: healthError,
+  } = useHealthCheck();
 
   // Global auth state listener
   useEffect(() => {
     const updateAuthState = () => {
       const currentUser = authService.getCurrentUser();
 
-      setUser(currentUser ? {
-        id: currentUser.id,
-        email: currentUser.email || '',
-        role: 'student' as const,
-        created_at: currentUser.created_at,
-        updated_at: currentUser.updated_at,
-      } : null);
-      
+      setUser(
+        currentUser
+          ? {
+              id: currentUser.id,
+              email: currentUser.email || '',
+              role: 'student' as const,
+              created_at: currentUser.created_at,
+              updated_at: currentUser.updated_at,
+            }
+          : null
+      );
+
       setLoading(false);
     };
 
@@ -151,9 +188,13 @@ function App() {
   return (
     <ErrorBoundary>
       <Router>
-        <NetworkStatus onNetworkChange={(isOnline) => {
-          console.log(`🌐 Network status changed: ${isOnline ? 'Online' : 'Offline'}`);
-        }} />
+        <NetworkStatus
+          onNetworkChange={isOnline => {
+            console.log(
+              `🌐 Network status changed: ${isOnline ? 'Online' : 'Offline'}`
+            );
+          }}
+        />
         <TransitionProvider>
           <GlobalTransitionWrapper>
             <Routes>
@@ -167,21 +208,7 @@ function App() {
               <Route path="/driver-interface" element={<DriverInterface />} />
 
               {/* Student Routes */}
-              <Route 
-                path="/student-map" 
-                element={
-                  <Suspense fallback={
-                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
-                      <div className="text-center">
-                        <div className="loading-spinner mx-auto mb-4" />
-                        <p className="text-white text-lg">Loading Student Map...</p>
-                      </div>
-                    </div>
-                  }>
-                    <EnhancedStudentMap />
-                  </Suspense>
-                } 
-              />
+              <Route path="/student-map" element={<EnhancedStudentMap />} />
 
               {/* Admin Routes */}
               <Route path="/admin-login" element={<AdminLogin />} />

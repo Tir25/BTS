@@ -3,9 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.initializeDatabase = exports.queryWithRetry = exports.closeDatabasePool = exports.checkDatabaseHealth = exports.pool = void 0;
+exports.shutdownDatabase = exports.getOptimizationStats = exports.analyzeQuery = exports.executePreparedStatement = exports.executeOptimizedQuery = exports.initializeDatabase = exports.queryWithRetry = exports.closeDatabasePool = exports.checkDatabaseHealth = exports.pool = void 0;
 const pg_1 = require("pg");
 const environment_1 = __importDefault(require("./environment"));
+const ConnectionPoolOptimizer_1 = require("../services/ConnectionPoolOptimizer");
+const QueryOptimizer_1 = require("../services/QueryOptimizer");
 const environment = (0, environment_1.default)();
 const getDatabaseUrl = () => {
     return environment.database.url;
@@ -91,7 +93,10 @@ const queryWithRetry = async (text, params, maxRetries = 3) => {
             await new Promise((resolve) => setTimeout(resolve, delay));
         }
     }
-    throw lastError;
+    if (lastError) {
+        throw lastError;
+    }
+    throw new Error('Query failed after all retry attempts');
 };
 exports.queryWithRetry = queryWithRetry;
 const initializeDatabase = async () => {
@@ -101,7 +106,11 @@ const initializeDatabase = async () => {
         if (!health.healthy) {
             throw new Error(`Database health check failed: ${health.error}`);
         }
-        console.log('✅ Database initialized successfully');
+        ConnectionPoolOptimizer_1.connectionPoolOptimizer.startMonitoring(30000);
+        QueryOptimizer_1.queryOptimizer.prepareStatement('get_bus_by_id', 'SELECT * FROM buses WHERE id = $1');
+        QueryOptimizer_1.queryOptimizer.prepareStatement('get_route_by_id', 'SELECT * FROM routes WHERE id = $1');
+        QueryOptimizer_1.queryOptimizer.prepareStatement('get_live_locations', 'SELECT * FROM live_locations WHERE recorded_at > NOW() - INTERVAL \'5 minutes\'');
+        console.log('✅ Database initialized successfully with optimizations');
     }
     catch (error) {
         console.error('❌ Failed to initialize database:', error);
@@ -109,5 +118,39 @@ const initializeDatabase = async () => {
     }
 };
 exports.initializeDatabase = initializeDatabase;
+const executeOptimizedQuery = async (query, params = [], client) => {
+    return QueryOptimizer_1.queryOptimizer.executeOptimizedQuery(query, params, client);
+};
+exports.executeOptimizedQuery = executeOptimizedQuery;
+const executePreparedStatement = async (statementName, params = [], client) => {
+    return QueryOptimizer_1.queryOptimizer.executePreparedStatement(statementName, params, client);
+};
+exports.executePreparedStatement = executePreparedStatement;
+const analyzeQuery = async (query, params = []) => {
+    return QueryOptimizer_1.queryOptimizer.analyzeQuery(query, params);
+};
+exports.analyzeQuery = analyzeQuery;
+const getOptimizationStats = () => {
+    return {
+        queryOptimizer: QueryOptimizer_1.queryOptimizer.getOptimizationStats(),
+        connectionPool: ConnectionPoolOptimizer_1.connectionPoolOptimizer.getMetrics(),
+        queryCache: QueryOptimizer_1.queryOptimizer.getOptimizationStats(),
+    };
+};
+exports.getOptimizationStats = getOptimizationStats;
+const shutdownDatabase = async () => {
+    try {
+        console.log('🔄 Shutting down database with optimizations...');
+        ConnectionPoolOptimizer_1.connectionPoolOptimizer.stopMonitoring();
+        QueryOptimizer_1.queryOptimizer.clear();
+        await (0, exports.closeDatabasePool)();
+        console.log('✅ Database shutdown completed');
+    }
+    catch (error) {
+        console.error('❌ Error during database shutdown:', error);
+        throw error;
+    }
+};
+exports.shutdownDatabase = shutdownDatabase;
 exports.default = exports.pool;
 //# sourceMappingURL=database.js.map

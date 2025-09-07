@@ -28,7 +28,12 @@ export declare class StorageService {
         originalname: string;
         buffer: Buffer;
     }, folder: string, fileName?: string): Promise<UploadResult>;
-    static uploadDocument(file: any, folder: string, fileName?: string): Promise<UploadResult>;
+    static uploadDocument(file: {
+        originalname: string;
+        mimetype: string;
+        size: number;
+        buffer: Buffer;
+    }, folder: string, fileName?: string): Promise<UploadResult>;
     static createSignedUrl(filePath: string, expiresIn?: number): Promise<SignedUrlResult>;
     static deleteFile(filePath: string): Promise<{
         success: boolean;
@@ -36,12 +41,26 @@ export declare class StorageService {
     }>;
     static getFileInfo(filePath: string): Promise<{
         success: boolean;
-        info?: any;
+        info?: Array<{
+            name: string;
+            id: string;
+            updated_at: string;
+            created_at: string;
+            last_accessed_at: string;
+            metadata: Record<string, unknown>;
+        }>;
         error?: string;
     }>;
     static listFiles(folder: string): Promise<{
         success: boolean;
-        data?: any[];
+        data?: Array<{
+            name: string;
+            id: string;
+            updated_at: string;
+            created_at: string;
+            last_accessed_at: string;
+            metadata: Record<string, unknown>;
+        }>;
         error?: string;
     }>;
     static extractFilePathFromUrl(url: string): string | null;

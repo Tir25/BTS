@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
+import { Map, Marker, NavigationControl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { GANPAT_UNIVERSITY } from '../utils/coordinates';
 
@@ -25,8 +25,8 @@ const MapSelector: React.FC<MapSelectorProps> = ({
   // Prevent multiple instances
   const instanceId = React.useRef(Math.random().toString(36).substr(2, 9));
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<maplibregl.Map | null>(null);
-  const marker = useRef<maplibregl.Marker | null>(null);
+  const map = useRef<Map | null>(null);
+  const marker = useRef<Marker | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<{
     name: string;
@@ -49,7 +49,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
     );
 
     // Initialize map
-    map.current = new maplibregl.Map({
+    map.current = new Map({
       container: mapContainer.current,
       style: {
         version: 8,
@@ -87,10 +87,10 @@ const MapSelector: React.FC<MapSelectorProps> = ({
 
       try {
         // Add navigation controls
-        map.current?.addControl(new maplibregl.NavigationControl());
+        map.current?.addControl(new NavigationControl());
 
         // Add marker at default center
-        marker.current = new maplibregl.Marker({
+        marker.current = new Marker({
           draggable: true,
           color: '#3B82F6',
         })
@@ -132,14 +132,14 @@ const MapSelector: React.FC<MapSelectorProps> = ({
     });
 
     // Handle map errors
-    map.current.on('error', (e) => {
+    map.current.on('error', e => {
       console.error('❌ Map error:', e);
       setMapError('Map failed to load');
       setIsMapLoading(false);
     });
 
     // Handle map clicks
-    map.current.on('click', (e) => {
+    map.current.on('click', e => {
       const coordinates: [number, number] = [e.lngLat.lng, e.lngLat.lat];
       marker.current?.setLngLat(coordinates);
 
@@ -297,7 +297,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder={searchPlaceholder}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"

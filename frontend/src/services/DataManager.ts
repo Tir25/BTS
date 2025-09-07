@@ -1,6 +1,7 @@
 import { IBusService, BusInfo } from './interfaces/IBusService';
 import { IApiService } from './interfaces/IApiService';
 import { BusLocation } from './interfaces/IWebSocketService';
+import { Bus } from '../types';
 
 export interface Route {
   id: string;
@@ -57,8 +58,8 @@ export class DataManager {
         console.log('📊 Initial bus data from API:', response.data.length);
 
         // Sync each bus with the bus service
-        response.data.forEach((apiBus: any) => {
-          const busId = apiBus.bus_id || apiBus.id;
+        response.data.forEach((apiBus: Bus) => {
+          const busId = apiBus.id;
           if (busId) {
             const existingBus = this.busService.getBus(busId);
             if (existingBus) {

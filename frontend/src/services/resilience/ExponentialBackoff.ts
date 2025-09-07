@@ -50,7 +50,7 @@ class ExponentialBackoff {
         };
       } catch (error) {
         this.attemptCount++;
-        
+
         if (this.attemptCount >= this.config.maxAttempts) {
           return {
             success: false,
@@ -61,13 +61,19 @@ class ExponentialBackoff {
         }
 
         const delay = this.calculateDelay();
-        
+
         if (onRetry) {
-          onRetry(this.attemptCount, delay, error instanceof Error ? error : new Error(String(error)));
+          onRetry(
+            this.attemptCount,
+            delay,
+            error instanceof Error ? error : new Error(String(error))
+          );
         }
 
-        console.log(`🔄 Retry attempt ${this.attemptCount}/${this.config.maxAttempts} in ${delay}ms`);
-        
+        console.log(
+          `🔄 Retry attempt ${this.attemptCount}/${this.config.maxAttempts} in ${delay}ms`
+        );
+
         await this.sleep(delay);
       }
     }
@@ -83,7 +89,8 @@ class ExponentialBackoff {
   // Calculate delay for current attempt
   private calculateDelay(): number {
     const baseDelay = Math.min(
-      this.config.initialDelay * Math.pow(this.config.multiplier, this.attemptCount - 1),
+      this.config.initialDelay *
+        Math.pow(this.config.multiplier, this.attemptCount - 1),
       this.config.maxDelay
     );
 
@@ -94,7 +101,7 @@ class ExponentialBackoff {
     // Add jitter to prevent thundering herd
     const jitterRange = baseDelay * this.config.jitterFactor;
     const jitter = (Math.random() - 0.5) * jitterRange;
-    
+
     return Math.max(0, baseDelay + jitter);
   }
 

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross-Laptop Connection Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .test-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #ffd700;
+            border-bottom: 2px solid #ffd700;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.success {
+            background: rgba(46, 204, 113, 0.3);
+            border: 1px solid #2ecc71;
+            color: #2ecc71;
+        }
+        .status.error {
+            background: rgba(231, 76, 60, 0.3);
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+        }
+        .status.info {
+            background: rgba(52, 152, 219, 0.3);
+            border: 1px solid #3498db;
+            color: #3498db;
+        }
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        .url-display {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            word-break: break-all;
+        }
+        .log {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Cross-Laptop Connection Test</h1>
+        
+        <!-- Current Environment -->
+        <div class="test-section">
+            <h2>📍 Current Environment</h2>
+            <div class="url-display">
+                <strong>Hostname:</strong> <span id="hostname">Loading...</span><br>
+                <strong>Full URL:</strong> <span id="fullUrl">Loading...</span><br>
+                <strong>Expected Backend:</strong> <span id="expectedBackend">Loading...</span>
+            </div>
+        </div>
+
+        <!-- Connection Test -->
+        <div class="test-section">
+            <h2>🔌 Connection Test</h2>
+            <button onclick="testConnection()">Test Backend Connection</button>
+            <button onclick="testWebSocket()">Test WebSocket</button>
+            <button onclick="clearLogs()">Clear Logs</button>
+            <div id="connectionStatus" class="status" style="display: none;"></div>
+            <div id="testLog" class="log"></div>
+        </div>
+
+        <!-- Quick Fix -->
+        <div class="test-section">
+            <h2>🔧 Quick Fix</h2>
+            <p>If the connection test fails, try these URLs directly:</p>
+            <div class="url-display" id="quickFixUrls">Loading...</div>
+            <button onclick="openMainApp()">Open Main App</button>
+            <button onclick="openDebugTool()">Open Debug Tool</button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            detectEnvironment();
+            generateQuickFixUrls();
+            log('🌐 Cross-Laptop Connection Test initialized');
+        });
+
+        // Detect current environment
+        function detectEnvironment() {
+            const hostname = window.location.hostname;
+            const fullUrl = window.location.href;
+            const expectedBackend = hostname === 'localhost' || hostname === '127.0.0.1' 
+                ? 'http://localhost:3000' 
+                : `http://${hostname}:3000`;
+
+            document.getElementById('hostname').textContent = hostname;
+            document.getElementById('fullUrl').textContent = fullUrl;
+            document.getElementById('expectedBackend').textContent = expectedBackend;
+
+            log(`📍 Environment detected - Hostname: ${hostname}`);
+            log(`📍 Expected backend: ${expectedBackend}`);
+        }
+
+        // Generate quick fix URLs
+        function generateQuickFixUrls() {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            
+            const urls = [
+                `Main App: ${protocol}//${hostname}:5173/`,
+                `Backend API: http://${hostname}:3000/`,
+                `Health Check: http://${hostname}:3000/health`,
+                `Debug Tool: ${protocol}//${hostname}:5173/debug-network-config.html`,
+                `Network Test: ${protocol}//${hostname}:5173/network-test-client.html`
+            ];
+
+            document.getElementById('quickFixUrls').textContent = urls.join('\n');
+        }
+
+        // Test backend connection
+        async function testConnection() {
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'status info';
+            statusDiv.textContent = 'Testing backend connection...';
+
+            const hostname = window.location.hostname;
+            const backendUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
+                ? 'http://localhost:3000' 
+                : `http://${hostname}:3000`;
+
+            try {
+                log(`🔍 Testing backend connection: ${backendUrl}/health`);
+                
+                const response = await fetch(`${backendUrl}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    mode: 'cors'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = '✅ Backend connection successful!';
+                    log(`✅ Backend connection successful: ${JSON.stringify(data)}`);
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = `❌ Backend connection failed: ${error.message}`;
+                log(`❌ Backend connection failed: ${error.message}`);
+                
+                // Provide troubleshooting info
+                log('🔧 Troubleshooting:');
+                log('1. Make sure the backend server is running on the host laptop');
+                log('2. Check if both laptops are on the same Wi-Fi network');
+                log('3. Verify the host laptop IP address is correct');
+                log('4. Check firewall settings on the host laptop');
+            }
+        }
+
+        // Test WebSocket connection
+        function testWebSocket() {
+            const hostname = window.location.hostname;
+            const wsUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
+                ? 'ws://localhost:3000' 
+                : `ws://${hostname}:3000`;
+
+            try {
+                log(`🔌 Testing WebSocket connection: ${wsUrl}`);
+                
+                const socket = new WebSocket(wsUrl);
+                
+                socket.onopen = function() {
+                    log('✅ WebSocket connection successful');
+                    socket.close();
+                };
+                
+                socket.onerror = function(error) {
+                    log(`❌ WebSocket connection failed: ${error}`);
+                };
+                
+                socket.onclose = function() {
+                    log('🔌 WebSocket connection closed');
+                };
+                
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    if (socket.readyState === WebSocket.CONNECTING) {
+                        socket.close();
+                        log('❌ WebSocket connection timeout');
+                    }
+                }, 10000);
+                
+            } catch (error) {
+                log(`❌ WebSocket test error: ${error.message}`);
+            }
+        }
+
+        // Open main app
+        function openMainApp() {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            const mainAppUrl = `${protocol}//${hostname}:5173/`;
+            log(`🌐 Opening main app: ${mainAppUrl}`);
+            window.open(mainAppUrl, '_blank');
+        }
+
+        // Open debug tool
+        function openDebugTool() {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            const debugUrl = `${protocol}//${hostname}:5173/debug-network-config.html`;
+            log(`🔍 Opening debug tool: ${debugUrl}`);
+            window.open(debugUrl, '_blank');
+        }
+
+        // Logging function
+        function log(message) {
+            const logElement = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        // Clear logs
+        function clearLogs() {
+            document.getElementById('testLog').textContent = '';
+        }
+    </script>
+</body>
+</html>

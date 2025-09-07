@@ -2,12 +2,12 @@ import { BusLocation } from '../types';
 
 interface WorkerResponse {
   type: string;
-  data: any;
+  data: Record<string, unknown>;
 }
 
 class WorkerService {
   private worker: Worker | null = null;
-  private callbacks: Map<string, (data: any) => void> = new Map();
+  private callbacks: Map<string, (...args: any[]) => void> = new Map();
   private isSupported: boolean;
 
   constructor() {
@@ -33,7 +33,7 @@ class WorkerService {
         }
       };
 
-      this.worker.onerror = (error) => {
+      this.worker.onerror = error => {
         console.error('❌ Worker error:', error);
       };
     } catch (error) {
@@ -54,7 +54,7 @@ class WorkerService {
       return this.calculateSpeedFallback(lat1, lon1, lat2, lon2, timeDiffMs);
     }
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       this.callbacks.set('SPEED_CALCULATED', resolve);
       this.worker!.postMessage({
         type: 'CALCULATE_SPEED',
@@ -74,10 +74,14 @@ class WorkerService {
     is_near_stop: boolean;
   }> {
     if (!this.isSupported || !this.worker) {
-      return this.calculateETAFallback(currentLocation, destination, averageSpeed);
+      return this.calculateETAFallback(
+        currentLocation,
+        destination,
+        averageSpeed
+      );
     }
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       this.callbacks.set('ETA_CALCULATED', resolve);
       this.worker!.postMessage({
         type: 'CALCULATE_ETA',
@@ -95,8 +99,11 @@ class WorkerService {
       return this.calculateDistanceFallback(point1, point2);
     }
 
-    return new Promise((resolve) => {
-      this.callbacks.set('DISTANCE_CALCULATED', resolve);
+    return new Promise(resolve => {
+      this.callbacks.set(
+        'DISTANCE_CALCULATED',
+        resolve as (value: unknown) => void
+      );
       this.worker!.postMessage({
         type: 'CALCULATE_DISTANCE',
         data: { point1, point2 },
@@ -131,7 +138,10 @@ class WorkerService {
     is_near_stop: boolean;
   } {
     const distance = this.calculateDistanceFallback(
-      { latitude: currentLocation.latitude, longitude: currentLocation.longitude },
+      {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+      },
       destination
     );
 

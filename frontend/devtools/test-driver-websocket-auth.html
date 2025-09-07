@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver WebSocket Authentication Test</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .warning { background: #fff3cd; color: #856404; }
+        pre {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Driver WebSocket Authentication Test</h1>
+        <p>This page tests the driver WebSocket authentication flow to ensure location updates are properly broadcast to student maps.</p>
+        
+        <div class="test-section">
+            <h2>1. Connection Status</h2>
+            <p>Status: <span id="connectionStatus" class="status info">Disconnected</span></p>
+            <p>Socket ID: <span id="socketId" class="info">N/A</span></p>
+            <button onclick="connectWebSocket()">Connect WebSocket</button>
+            <button onclick="disconnectWebSocket()">Disconnect</button>
+        </div>
+
+        <div class="test-section">
+            <h2>2. Authentication Test</h2>
+            <p>Authentication Status: <span id="authStatus" class="status info">Not Authenticated</span></p>
+            <p>Driver ID: <span id="driverId" class="info">N/A</span></p>
+            <p>Bus ID: <span id="busId" class="info">N/A</span></p>
+            <button onclick="testAuthentication()" id="authBtn" disabled>Test Authentication</button>
+            <button onclick="sendTestLocation()" id="locationBtn" disabled>Send Test Location</button>
+        </div>
+
+        <div class="test-section">
+            <h2>3. Event Log</h2>
+            <pre id="eventLog">Waiting for events...</pre>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+
+        <div class="test-section">
+            <h2>4. Instructions</h2>
+            <ol>
+                <li>Click "Connect WebSocket" to establish connection</li>
+                <li>Click "Test Authentication" to authenticate as driver</li>
+                <li>If authentication succeeds, click "Send Test Location" to send a test location update</li>
+                <li>Check the student map on another laptop to see if the location appears</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const WEBSOCKET_URL = 'ws://localhost:3000';
+        let socket;
+        let isAuthenticated = false;
+
+        function getTimeString() {
+            const now = new Date();
+            return now.toLocaleTimeString();
+        }
+
+        function log(message, type = 'info') {
+            const logElement = document.getElementById('eventLog');
+            const timestamp = getTimeString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            logElement.textContent += logEntry;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('eventLog').textContent = 'Log cleared...\n';
+        }
+
+        function updateStatus(id, text, className) {
+            const element = document.getElementById(id);
+            element.textContent = text;
+            element.className = `status ${className}`;
+        }
+
+        function connectWebSocket() {
+            if (socket && socket.connected) {
+                log('Already connected. Disconnecting first...');
+                socket.disconnect();
+            }
+
+            updateStatus('connectionStatus', 'Connecting...', 'info');
+            log('🔄 Attempting to connect to WebSocket...');
+
+            socket = io(WEBSOCKET_URL, {
+                transports: ['websocket', 'polling'],
+                forceNew: true,
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                query: { 
+                    clientType: 'driver',
+                    version: '1.0.0',
+                    timestamp: Date.now().toString()
+                }
+            });
+
+            socket.on('connect', () => {
+                updateStatus('connectionStatus', 'Connected', 'success');
+                document.getElementById('socketId').textContent = socket.id;
+                document.getElementById('authBtn').disabled = false;
+                log('✅ WebSocket Connected! Socket ID: ' + socket.id);
+                
+                // Emit driver:connected event
+                socket.emit('driver:connected', {
+                    timestamp: new Date().toISOString(),
+                    clientInfo: {
+                        userAgent: navigator.userAgent,
+                        platform: navigator.platform,
+                        language: navigator.language,
+                    },
+                });
+                log('📤 Emitted driver:connected event');
+            });
+
+            socket.on('disconnect', (reason) => {
+                updateStatus('connectionStatus', 'Disconnected', 'error');
+                document.getElementById('socketId').textContent = 'N/A';
+                document.getElementById('authBtn').disabled = true;
+                document.getElementById('locationBtn').disabled = true;
+                log('❌ WebSocket Disconnected: ' + reason);
+                isAuthenticated = false;
+                updateStatus('authStatus', 'Not Authenticated', 'info');
+            });
+
+            socket.on('connect_error', (error) => {
+                updateStatus('connectionStatus', 'Connection Error', 'error');
+                log('❌ WebSocket Connection Error: ' + error.message);
+            });
+
+            socket.on('driver:connected', (data) => {
+                log('✅ Driver Connected Response: ' + JSON.stringify(data));
+            });
+
+            socket.on('driver:authenticated', (data) => {
+                updateStatus('authStatus', 'Authenticated', 'success');
+                document.getElementById('driverId').textContent = data.driverId || 'N/A';
+                document.getElementById('busId').textContent = data.busId || 'N/A';
+                document.getElementById('locationBtn').disabled = false;
+                isAuthenticated = true;
+                log('✅ Driver Authentication Successful: ' + JSON.stringify(data));
+            });
+
+            socket.on('driver:authentication_failed', (error) => {
+                updateStatus('authStatus', 'Authentication Failed', 'error');
+                document.getElementById('locationBtn').disabled = true;
+                isAuthenticated = false;
+                log('❌ Driver Authentication Failed: ' + JSON.stringify(error));
+            });
+
+            socket.on('driver:locationConfirmed', (data) => {
+                log('✅ Location Update Confirmed: ' + JSON.stringify(data));
+            });
+
+            socket.on('error', (error) => {
+                log('🚨 WebSocket Error: ' + JSON.stringify(error));
+            });
+
+            socket.on('pong', (data) => {
+                log('💓 Pong received: ' + JSON.stringify(data));
+            });
+        }
+
+        function disconnectWebSocket() {
+            if (socket && socket.connected) {
+                socket.disconnect();
+                log('🔌 Manually disconnected WebSocket');
+            } else {
+                log('WebSocket is not connected');
+            }
+        }
+
+        function testAuthentication() {
+            if (!socket || !socket.connected) {
+                log('❌ Cannot authenticate - WebSocket not connected');
+                return;
+            }
+
+            // For testing, we'll use a mock token
+            // In real implementation, this would come from the auth service
+            const mockToken = 'mock_driver_token_for_testing';
+            
+            log('🔐 Attempting driver authentication...');
+            socket.emit('driver:authenticate', { token: mockToken });
+            log('📤 Authentication request sent');
+        }
+
+        function sendTestLocation() {
+            if (!socket || !socket.connected || !isAuthenticated) {
+                log('❌ Cannot send location - WebSocket not connected or not authenticated');
+                return;
+            }
+
+            // Send a test location update
+            const testLocation = {
+                driverId: document.getElementById('driverId').textContent || 'test_driver',
+                busId: document.getElementById('busId').textContent || 'test_bus',
+                latitude: 23.0225 + (Math.random() - 0.5) * 0.01, // Random location near Ahmedabad
+                longitude: 72.5714 + (Math.random() - 0.5) * 0.01,
+                timestamp: new Date().toISOString(),
+                speed: Math.random() * 50, // Random speed 0-50 km/h
+                heading: Math.random() * 360 // Random heading 0-360 degrees
+            };
+
+            log('📍 Sending test location update: ' + JSON.stringify(testLocation));
+            socket.emit('driver:locationUpdate', testLocation);
+        }
+
+        // Auto-connect on page load
+        window.addEventListener('load', () => {
+            log('🚀 Driver WebSocket Authentication Test loaded');
+            log('📋 Ready to test driver authentication flow');
+        });
+    </script>
+</body>
+</html>

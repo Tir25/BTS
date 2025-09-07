@@ -1,45 +1,46 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAllBuses = exports.getBusInfo = exports.getBusLocationHistory = exports.getCurrentBusLocations = exports.getDriverBusInfo = exports.saveLocationUpdate = void 0;
 const supabase_1 = require("../config/supabase");
-const database_1 = __importDefault(require("../config/database"));
+const performanceMiddleware_1 = require("../middleware/performanceMiddleware");
+const database_1 = require("../config/database");
 const saveLocationUpdate = async (data) => {
-    try {
-        const point = `POINT(${data.longitude} ${data.latitude})`;
-        const query = `
-      INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
-      VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
-      RETURNING id, bus_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
-    `;
-        const result = await database_1.default.query(query, [
-            data.busId,
-            point,
-            data.speed,
-            data.heading,
-            data.timestamp,
-        ]);
-        if (result.rows.length === 0) {
-            console.error('❌ Error saving location: No rows returned');
+    const trackPerformance = (0, performanceMiddleware_1.databasePerformanceMiddleware)('saveLocationUpdate');
+    return trackPerformance(async () => {
+        try {
+            const point = `POINT(${data.longitude} ${data.latitude})`;
+            const query = `
+        INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
+        VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
+        RETURNING id, bus_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
+      `;
+            const result = await database_1.pool.query(query, [
+                data.busId,
+                point,
+                data.speed,
+                data.heading,
+                data.timestamp,
+            ]);
+            if (result.rows.length === 0) {
+                console.error('❌ Error saving location: No rows returned');
+                return null;
+            }
+            const savedLocation = result.rows[0];
+            return {
+                id: savedLocation.id,
+                driver_id: data.driverId,
+                bus_id: savedLocation.bus_id,
+                location: savedLocation.location,
+                timestamp: savedLocation.recorded_at,
+                speed: savedLocation.speed_kmh,
+                heading: savedLocation.heading_degrees,
+            };
+        }
+        catch (error) {
+            console.error('❌ Error in saveLocationUpdate:', error);
             return null;
         }
-        const savedLocation = result.rows[0];
-        return {
-            id: savedLocation.id,
-            driver_id: data.driverId,
-            bus_id: savedLocation.bus_id,
-            location: savedLocation.location,
-            timestamp: savedLocation.recorded_at,
-            speed: savedLocation.speed_kmh,
-            heading: savedLocation.heading_degrees,
-        };
-    }
-    catch (error) {
-        console.error('❌ Error in saveLocationUpdate:', error);
-        return null;
-    }
+    });
 };
 exports.saveLocationUpdate = saveLocationUpdate;
 const getDriverBusInfo = async (driverId) => {
@@ -124,7 +125,7 @@ const getCurrentBusLocations = async () => {
       WHERE recorded_at >= NOW() - INTERVAL '5 minutes'
       ORDER BY recorded_at DESC;
     `;
-        const result = await database_1.default.query(query);
+        const result = await database_1.pool.query(query);
         return result.rows.map((row) => ({
             id: row.id,
             driver_id: '',
@@ -157,7 +158,7 @@ const getBusLocationHistory = async (busId, startTime, endTime) => {
         AND recorded_at <= $3
       ORDER BY recorded_at ASC;
     `;
-        const result = await database_1.default.query(query, [busId, startTime, endTime]);
+        const result = await database_1.pool.query(query, [busId, startTime, endTime]);
         return result.rows.map((row) => ({
             id: row.id,
             driver_id: '',

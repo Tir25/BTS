@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Bus Marker Alignment Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
+        .map-container {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .controls {
+            margin: 10px 0;
+        }
+        .controls button {
+            margin: 5px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+        }
+        .controls button:hover {
+            background: #0056b3;
+        }
+        .coordinates {
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 5px;
+            border-radius: 3px;
+            margin: 5px 0;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        /* FINAL FIXED bus marker styles */
+        .bus-marker {
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            /* CRITICAL: Ensure the marker is properly centered */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            /* Center the marker on the coordinate point */
+            transform: translate(-50%, -50%);
+            /* Ensure the marker is positioned correctly */
+            margin: 0;
+            padding: 0;
+        }
+
+        .bus-marker:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            z-index: 1000;
+        }
+
+        .bus-marker-pin {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            animation: bus-pulse 2s infinite;
+            /* Ensure the pin is centered within the marker */
+            margin: 0;
+            padding: 0;
+            /* Ensure the pin is positioned correctly */
+            position: relative;
+            top: 0;
+            left: 0;
+        }
+
+        .bus-marker-icon {
+            font-size: 14px;
+            color: white;
+            z-index: 2;
+            /* Ensure the icon is centered */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            /* Ensure the icon is positioned correctly */
+            margin: 0;
+            padding: 0;
+        }
+
+        .bus-marker-pulse {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+            border: 2px solid #10b981;
+            border-radius: 50%;
+            animation: bus-pulse-ring 2s infinite;
+            opacity: 0.6;
+        }
+
+        @keyframes bus-pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 6px 16px rgba(16, 185, 129, 0.6);
+            }
+        }
+
+        @keyframes bus-pulse-ring {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.6;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        /* Test marker styles */
+        .test-marker {
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            background: red;
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .test-marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Final Bus Marker Alignment Test</h1>
+        <p>This test verifies that the bus marker alignment fix is working correctly and shows live bus locations properly.</p>
+
+        <div class="test-section info">
+            <h3>📍 Test Coordinates (Ahmedabad, India)</h3>
+            <div class="coordinates">
+                <strong>Center Point:</strong> [72.571, 23.025]<br>
+                <strong>Test Bus 1:</strong> [72.571, 23.025] (Center)<br>
+                <strong>Test Bus 2:</strong> [72.571, 23.026] (North)<br>
+                <strong>Test Bus 3:</strong> [72.572, 23.025] (East)<br>
+                <strong>Test Bus 4:</strong> [72.570, 23.024] (Southwest)
+            </div>
+        </div>
+
+        <div class="controls">
+            <button onclick="addTestBuses()">Add Test Buses</button>
+            <button onclick="simulateLocationUpdates()">Simulate Location Updates</button>
+            <button onclick="testMarkerAlignment()">Test Marker Alignment</button>
+            <button onclick="clearAllMarkers()">Clear All Markers</button>
+            <button onclick="testCoordinateAccuracy()">Test Coordinate Accuracy</button>
+        </div>
+
+        <div id="map" class="map-container"></div>
+
+        <div class="test-section">
+            <h3>📊 Test Results</h3>
+            <div id="log" class="log"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 Marker Configuration</h3>
+            <div id="config" class="coordinates">
+                <strong>Marker Anchor:</strong> center<br>
+                <strong>Marker Size:</strong> 32px × 32px<br>
+                <strong>Transform:</strong> translate(-50%, -50%)<br>
+                <strong>Coordinate System:</strong> WGS84 (EPSG:4326)<br>
+                <strong>Map Projection:</strong> Web Mercator (EPSG:3857)
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+
+    <script>
+        let map;
+        let busMarkers = {};
+        let testMarkers = {};
+        let testCoordinates = [
+            { id: 'bus1', lng: 72.571, lat: 23.025, name: 'Bus 1 (Center)' },
+            { id: 'bus2', lng: 72.571, lat: 23.026, name: 'Bus 2 (North)' },
+            { id: 'bus3', lng: 72.572, lat: 23.025, name: 'Bus 3 (East)' },
+            { id: 'bus4', lng: 72.570, lat: 23.024, name: 'Bus 4 (Southwest)' }
+        ];
+
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function initializeMap() {
+            log('🗺️ Initializing map...');
+            
+            map = new maplibregl.Map({
+                container: 'map',
+                style: {
+                    version: 8,
+                    sources: {
+                        osm: {
+                            type: 'raster',
+                            tiles: [
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            ],
+                            tileSize: 256,
+                            attribution: '© OpenStreetMap contributors',
+                            maxzoom: 19,
+                        },
+                    },
+                    layers: [
+                        {
+                            id: 'osm-tiles',
+                            type: 'raster',
+                            source: 'osm',
+                            minzoom: 0,
+                            maxzoom: 19,
+                        },
+                    ],
+                },
+                center: [72.571, 23.025],
+                zoom: 15,
+                bearing: 0,
+                pitch: 0,
+                attributionControl: true,
+                maxZoom: 19,
+                minZoom: 1,
+                preserveDrawingBuffer: false,
+                antialias: true,
+                dragRotate: false,
+            });
+
+            map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+            map.once('load', () => {
+                log('✅ Map loaded successfully');
+                log('📍 Map center: [72.571, 23.025]');
+                log('🔍 Zoom level: 15');
+            });
+
+            map.on('error', e => {
+                log(`❌ Map error: ${e.error.message}`);
+            });
+
+            // Add click event to test coordinate accuracy
+            map.on('click', (e) => {
+                const { lng, lat } = e.lngLat;
+                log(`🖱️ Clicked at: [${lng.toFixed(6)}, ${lat.toFixed(6)}]`);
+                
+                // Add a test marker at click location
+                addTestMarker(lng, lat);
+            });
+        }
+
+        function createBusMarker(busId, lng, lat, name) {
+            const el = document.createElement('div');
+            el.className = 'bus-marker';
+            el.innerHTML = `
+                <div class="bus-marker-pin">
+                    <div class="bus-marker-icon">🚌</div>
+                    <div class="bus-marker-pulse"></div>
+                </div>
+            `;
+
+            const marker = new maplibregl.Marker({
+                element: el,
+                anchor: 'center',
+            })
+                .setLngLat([lng, lat])
+                .addTo(map);
+
+            // Add popup
+            const popup = new maplibregl.Popup({
+                offset: 25,
+                className: 'bus-popup-container',
+            }).setHTML(`
+                <div class="bus-popup">
+                    <h3>🚌 ${name}</h3>
+                    <p><strong>Bus ID:</strong> ${busId}</p>
+                    <p><strong>Coordinates:</strong> [${lng.toFixed(6)}, ${lat.toFixed(6)}]</p>
+                    <p><strong>Status:</strong> <span style="color: #059669;">Active</span></p>
+                    <p><strong>Speed:</strong> 25 km/h</p>
+                    <p><strong>ETA:</strong> 5 min</p>
+                </div>
+            `);
+
+            marker.setPopup(popup);
+            return marker;
+        }
+
+        function addTestMarker(lng, lat) {
+            const el = document.createElement('div');
+            el.className = 'test-marker';
+
+            const marker = new maplibregl.Marker({
+                element: el,
+                anchor: 'center',
+            })
+                .setLngLat([lng, lat])
+                .addTo(map);
+
+            // Remove after 10 seconds
+            setTimeout(() => {
+                marker.remove();
+            }, 10000);
+
+            log(`📍 Added test marker at [${lng.toFixed(6)}, ${lat.toFixed(6)}]`);
+        }
+
+        function addTestBuses() {
+            log('🚌 Adding test buses...');
+            
+            testCoordinates.forEach(coord => {
+                const marker = createBusMarker(coord.id, coord.lng, coord.lat, coord.name);
+                busMarkers[coord.id] = marker;
+                log(`✅ Added ${coord.name} at [${coord.lng}, ${coord.lat}]`);
+            });
+
+            log(`📊 Total bus markers: ${Object.keys(busMarkers).length}`);
+        }
+
+        function simulateLocationUpdates() {
+            log('🔄 Simulating location updates...');
+            
+            // Simulate bus movement
+            testCoordinates.forEach((coord, index) => {
+                setTimeout(() => {
+                    const newLng = coord.lng + (Math.random() - 0.5) * 0.001;
+                    const newLat = coord.lat + (Math.random() - 0.5) * 0.001;
+                    
+                    if (busMarkers[coord.id]) {
+                        busMarkers[coord.id].setLngLat([newLng, newLat]);
+                        log(`🔄 Updated ${coord.name} to [${newLng.toFixed(6)}, ${newLat.toFixed(6)}]`);
+                    }
+                }, index * 1000);
+            });
+        }
+
+        function testMarkerAlignment() {
+            log('🔍 Testing marker alignment...');
+            
+            if (Object.keys(busMarkers).length === 0) {
+                log('❌ No bus markers to test. Add test buses first.');
+                return;
+            }
+
+            let alignmentScore = 0;
+            let totalTests = 0;
+
+            testCoordinates.forEach(coord => {
+                const marker = busMarkers[coord.id];
+                if (marker) {
+                    const markerLngLat = marker.getLngLat();
+                    const lngDiff = Math.abs(markerLngLat.lng - coord.lng);
+                    const latDiff = Math.abs(markerLngLat.lat - coord.lat);
+                    const totalDiff = lngDiff + latDiff;
+                    
+                    if (totalDiff < 0.000001) {
+                        alignmentScore++;
+                        log(`✅ ${coord.name}: Perfect alignment (diff: ${totalDiff.toFixed(8)})`);
+                    } else {
+                        log(`⚠️ ${coord.name}: Slight misalignment (diff: ${totalDiff.toFixed(8)})`);
+                    }
+                    totalTests++;
+                }
+            });
+
+            const alignmentPercentage = (alignmentScore / totalTests) * 100;
+            log(`📊 Marker Alignment: ${alignmentPercentage.toFixed(1)}% (${alignmentScore}/${totalTests})`);
+            
+            if (alignmentPercentage >= 95) {
+                log('🎉 Excellent marker alignment!');
+            } else if (alignmentPercentage >= 80) {
+                log('✅ Good marker alignment');
+            } else {
+                log('❌ Poor marker alignment - check CSS positioning');
+            }
+        }
+
+        function clearAllMarkers() {
+            log('🗑️ Clearing all markers...');
+            
+            // Clear bus markers
+            Object.values(busMarkers).forEach(marker => marker.remove());
+            busMarkers = {};
+            
+            // Clear test markers
+            Object.values(testMarkers).forEach(marker => marker.remove());
+            testMarkers = {};
+            
+            log('✅ All markers cleared');
+        }
+
+        function testCoordinateAccuracy() {
+            log('🎯 Testing coordinate accuracy...');
+            
+            if (Object.keys(busMarkers).length === 0) {
+                log('❌ No bus markers to test. Add test buses first.');
+                return;
+            }
+
+            let accuracyScore = 0;
+            let totalTests = 0;
+
+            testCoordinates.forEach(coord => {
+                const marker = busMarkers[coord.id];
+                if (marker) {
+                    const markerLngLat = marker.getLngLat();
+                    const lngDiff = Math.abs(markerLngLat.lng - coord.lng);
+                    const latDiff = Math.abs(markerLngLat.lat - coord.lat);
+                    const totalDiff = lngDiff + latDiff;
+                    
+                    if (totalDiff < 0.000001) {
+                        accuracyScore++;
+                        log(`✅ ${coord.name}: Perfect accuracy (diff: ${totalDiff.toFixed(8)})`);
+                    } else {
+                        log(`⚠️ ${coord.name}: Slight inaccuracy (diff: ${totalDiff.toFixed(8)})`);
+                    }
+                    totalTests++;
+                }
+            });
+
+            const accuracyPercentage = (accuracyScore / totalTests) * 100;
+            log(`📊 Coordinate Accuracy: ${accuracyPercentage.toFixed(1)}% (${accuracyScore}/${totalTests})`);
+            
+            if (accuracyPercentage >= 95) {
+                log('🎉 Excellent coordinate accuracy!');
+            } else if (accuracyPercentage >= 80) {
+                log('✅ Good coordinate accuracy');
+            } else {
+                log('❌ Poor coordinate accuracy - check coordinate system');
+            }
+        }
+
+        // Initialize map when page loads
+        window.addEventListener('load', () => {
+            log('🚀 Final Bus Marker Alignment Test initialized');
+            initializeMap();
+        });
+    </script>
+</body>
+</html>

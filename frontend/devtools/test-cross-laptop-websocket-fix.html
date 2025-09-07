@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross-Laptop WebSocket Connection Test - Fixed</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .log-container {
+            height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 3px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .log-time {
+            color: #6c757d;
+            margin-right: 5px;
+        }
+        .log-error { color: #dc3545; }
+        .log-success { color: #28a745; }
+        .log-info { color: #17a2b8; }
+        .log-warning { color: #ffc107; }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0069d9;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .details {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .network-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .test-section {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .test-section h4 {
+            margin-top: 0;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Cross-Laptop WebSocket Connection Test - Fixed</h1>
+        <p><strong>Purpose:</strong> Test WebSocket connection from another laptop to verify the cross-laptop fix is working.</p>
+        
+        <div class="network-info">
+            <div>
+                <h3>📊 Network Information</h3>
+                <div id="network-details" class="details">Loading network information...</div>
+            </div>
+            <div>
+                <h3>🔌 Connection Status</h3>
+                <div id="connection-status" class="status error">Disconnected</div>
+                <div id="connection-details" class="details">Not connected</div>
+            </div>
+        </div>
+        
+        <div>
+            <button id="connect-btn">Connect to WebSocket</button>
+            <button id="disconnect-btn" disabled>Disconnect</button>
+            <button id="test-student-btn" disabled>Test Student Connection</button>
+            <button id="test-location-btn" disabled>Test Location Update</button>
+            <button id="clear-log-btn">Clear Log</button>
+        </div>
+        
+        <div class="test-section">
+            <h4>🧪 Connection Tests</h4>
+            <div id="connection-tests" class="log-container"></div>
+        </div>
+        
+        <div class="test-section">
+            <h4>📍 Location Update Tests</h4>
+            <div id="location-tests" class="log-container"></div>
+        </div>
+        
+        <div class="test-section">
+            <h4>📋 Full Event Log</h4>
+            <div id="log" class="log-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const testStudentBtn = document.getElementById('test-student-btn');
+        const testLocationBtn = document.getElementById('test-location-btn');
+        const clearLogBtn = document.getElementById('clear-log-btn');
+        const logContainer = document.getElementById('log');
+        const connectionTestsContainer = document.getElementById('connection-tests');
+        const locationTestsContainer = document.getElementById('location-tests');
+        const connectionStatus = document.getElementById('connection-status');
+        const connectionDetails = document.getElementById('connection-details');
+        const networkDetails = document.getElementById('network-details');
+        
+        // Socket.IO instance
+        let socket = null;
+        let connectionAttempts = 0;
+        let maxAttempts = 5;
+        
+        // Get current time formatted for logs
+        function getTimeString() {
+            const now = new Date();
+            return now.toLocaleTimeString();
+        }
+        
+        // Add log entry to specific container
+        function logToContainer(container, message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            
+            const time = document.createElement('span');
+            time.className = 'log-time';
+            time.textContent = `[${getTimeString()}]`;
+            
+            entry.appendChild(time);
+            entry.appendChild(document.createTextNode(` ${message}`));
+            
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // Add log entry to main log
+        function log(message, type = 'info') {
+            logToContainer(logContainer, message, type);
+        }
+        
+        // Clear all logs
+        function clearLog() {
+            logContainer.innerHTML = '';
+            connectionTestsContainer.innerHTML = '';
+            locationTestsContainer.innerHTML = '';
+            log('🚀 Cross-laptop WebSocket test page loaded');
+            log('🔍 Testing the fixed cross-laptop connection');
+        }
+        
+        // Update connection status
+        function updateStatus(connected) {
+            if (connected) {
+                connectionStatus.textContent = 'Connected';
+                connectionStatus.className = 'status success';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                testStudentBtn.disabled = false;
+                testLocationBtn.disabled = false;
+            } else {
+                connectionStatus.textContent = 'Disconnected';
+                connectionStatus.className = 'status error';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                testStudentBtn.disabled = true;
+                testLocationBtn.disabled = true;
+                connectionDetails.textContent = 'Not connected';
+            }
+        }
+        
+        // Update connection details
+        function updateConnectionDetails() {
+            if (!socket) {
+                connectionDetails.textContent = 'Not connected';
+                return;
+            }
+            
+            const details = {
+                id: socket.id || 'Not available',
+                connected: socket.connected,
+                transport: socket.io.engine.transport.name,
+                hostname: socket.io.uri,
+                namespace: socket.nsp,
+                timestamp: new Date().toISOString()
+            };
+            
+            connectionDetails.textContent = JSON.stringify(details, null, 2);
+        }
+        
+        // Display network information
+        function displayNetworkInfo() {
+            const info = {
+                currentHost: window.location.hostname,
+                currentPort: window.location.port,
+                currentProtocol: window.location.protocol,
+                userAgent: navigator.userAgent,
+                isLocalhost: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
+                isNetworkIP: window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1',
+                detectedBackendURL: getBackendURL(),
+                detectedWebSocketURL: getWebSocketURL()
+            };
+            
+            networkDetails.textContent = JSON.stringify(info, null, 2);
+        }
+        
+        // Get backend URL based on current hostname
+        function getBackendURL() {
+            const currentHost = window.location.hostname;
+            
+            if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+                return 'http://localhost:3000';
+            } else {
+                return `http://${currentHost}:3000`;
+            }
+        }
+        
+        // Get WebSocket URL based on current hostname
+        function getWebSocketURL() {
+            const currentHost = window.location.hostname;
+            
+            if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+                return 'ws://localhost:3000';
+            } else {
+                return `ws://${currentHost}:3000`;
+            }
+        }
+        
+        // Connect to Socket.IO server
+        function connect() {
+            if (socket) return;
+            
+            connectionAttempts++;
+            log(`🔄 Attempting to connect (attempt ${connectionAttempts}/${maxAttempts})...`);
+            logToContainer(connectionTestsContainer, `🔄 Connection attempt ${connectionAttempts}`, 'info');
+            
+            const backendURL = getBackendURL();
+            const wsURL = getWebSocketURL();
+            
+            log(`🔌 Backend URL: ${backendURL}`);
+            log(`🔌 WebSocket URL: ${wsURL}`);
+            
+            try {
+                // Create socket with enhanced configuration
+                socket = io(backendURL, {
+                    transports: ['polling', 'websocket'],
+                    reconnection: true,
+                    reconnectionAttempts: maxAttempts,
+                    reconnectionDelay: 2000,
+                    timeout: 10000,
+                    forceNew: true,
+                    autoConnect: true
+                });
+                
+                // Connection events
+                socket.on('connect', () => {
+                    log('✅ WebSocket Connected Successfully!', 'success');
+                    logToContainer(connectionTestsContainer, '✅ Connection established', 'success');
+                    updateStatus(true);
+                    updateConnectionDetails();
+                    connectionAttempts = 0; // Reset on successful connection
+                });
+                
+                socket.on('connect_error', (error) => {
+                    log(`❌ Connection error: ${error.message}`, 'error');
+                    logToContainer(connectionTestsContainer, `❌ Connection failed: ${error.message}`, 'error');
+                    
+                    if (connectionAttempts >= maxAttempts) {
+                        log('❌ Max connection attempts reached. Please check your network configuration.', 'error');
+                        updateStatus(false);
+                    }
+                });
+                
+                socket.on('disconnect', (reason) => {
+                    log(`❌ Disconnected: ${reason}`, 'error');
+                    logToContainer(connectionTestsContainer, `❌ Disconnected: ${reason}`, 'error');
+                    updateStatus(false);
+                });
+                
+                socket.on('error', (error) => {
+                    log(`❌ Socket error: ${error.message}`, 'error');
+                    logToContainer(connectionTestsContainer, `❌ Socket error: ${error.message}`, 'error');
+                });
+                
+                // Student-specific events
+                socket.on('student:connected', (data) => {
+                    log(`📚 Student Connected: ${JSON.stringify(data)}`, 'success');
+                    logToContainer(connectionTestsContainer, '📚 Student connection confirmed', 'success');
+                });
+                
+                socket.on('bus:location', (data) => {
+                    log(`🚌 Bus Location Update: ${JSON.stringify(data)}`, 'success');
+                    logToContainer(locationTestsContainer, `🚌 Location: ${data.latitude}, ${data.longitude}`, 'success');
+                });
+                
+                socket.on('driver:connected', (data) => {
+                    log(`👨‍💼 Driver Connected: ${JSON.stringify(data)}`, 'info');
+                    logToContainer(connectionTestsContainer, '👨‍💼 Driver connection detected', 'info');
+                });
+                
+                socket.on('driver:disconnected', (data) => {
+                    log(`👨‍💼 Driver Disconnected: ${JSON.stringify(data)}`, 'warning');
+                    logToContainer(connectionTestsContainer, '👨‍💼 Driver disconnected', 'warning');
+                });
+                
+                // Test events
+                socket.on('pong', (data) => {
+                    log(`💓 Pong received: ${JSON.stringify(data)}`, 'success');
+                    logToContainer(connectionTestsContainer, '💓 Ping-pong test successful', 'success');
+                });
+                
+                // Connect
+                socket.connect();
+                
+            } catch (error) {
+                log(`❌ Error creating socket: ${error.message}`, 'error');
+                logToContainer(connectionTestsContainer, `❌ Socket creation failed: ${error.message}`, 'error');
+                updateStatus(false);
+            }
+        }
+        
+        // Disconnect from Socket.IO server
+        function disconnect() {
+            if (!socket) return;
+            
+            log('🔌 Disconnecting...');
+            logToContainer(connectionTestsContainer, '🔌 Manual disconnect initiated', 'info');
+            socket.disconnect();
+            socket = null;
+            updateStatus(false);
+        }
+        
+        // Test student connection
+        function testStudentConnection() {
+            if (!socket || !socket.connected) return;
+            
+            log('📚 Testing student connection...');
+            logToContainer(connectionTestsContainer, '📚 Emitting student:connect event', 'info');
+            socket.emit('student:connect', {
+                timestamp: new Date().toISOString(),
+                clientType: 'student',
+                test: true
+            });
+        }
+        
+        // Test location update
+        function testLocationUpdate() {
+            if (!socket || !socket.connected) return;
+            
+            log('📍 Testing location update...');
+            logToContainer(locationTestsContainer, '📍 Emitting test location update', 'info');
+            
+            // Send a test location update
+            socket.emit('driver:location', {
+                latitude: 40.716791438697825,
+                longitude: -74.00671616755756,
+                speed: 35.5,
+                heading: 45,
+                timestamp: new Date().toISOString(),
+                busId: 'test-bus-001',
+                driverId: 'test-driver-001'
+            });
+        }
+        
+        // Event listeners
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+        testStudentBtn.addEventListener('click', testStudentConnection);
+        testLocationBtn.addEventListener('click', testLocationUpdate);
+        clearLogBtn.addEventListener('click', clearLog);
+        
+        // Initialize
+        clearLog();
+        displayNetworkInfo();
+        
+        // Auto-connect after 1 second
+        setTimeout(() => {
+            log('🚀 Auto-connecting in 1 second...');
+            setTimeout(connect, 1000);
+        }, 1000);
+    </script>
+</body>
+</html>

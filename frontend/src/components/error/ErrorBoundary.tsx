@@ -25,8 +25,8 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): Partial<State> {
-    return { 
-      hasError: true, 
+    return {
+      hasError: true,
       error,
       errorId: `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     };
@@ -34,10 +34,14 @@ class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log error with context
-    logError(error, {
-      service: 'ui',
-      operation: 'component-error',
-    }, 'high');
+    logError(
+      error,
+      {
+        service: 'ui',
+        operation: 'component-error',
+      },
+      'high'
+    );
 
     this.setState({ errorInfo });
 
@@ -89,9 +93,11 @@ class ErrorBoundary extends Component<Props, State> {
         url: window.location.href,
         timestamp: new Date().toISOString(),
       });
-      
+
       // Show feedback to user
-      alert('Thank you for reporting this error. We will investigate and fix it.');
+      alert(
+        'Thank you for reporting this error. We will investigate and fix it.'
+      );
     }
   };
 
@@ -117,19 +123,33 @@ class ErrorBoundary extends Component<Props, State> {
               {/* Error Header */}
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  <svg
+                    className="w-8 h-8 text-red-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                    />
                   </svg>
                 </div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">
                   Oops! Something went wrong
                 </h1>
                 <p className="text-gray-600 mb-4">
-                  We're sorry, but something unexpected happened. Our team has been notified.
+                  We're sorry, but something unexpected happened. Our team has
+                  been notified.
                 </p>
                 {errorId && (
                   <p className="text-sm text-gray-500 mb-4">
-                    Error ID: <code className="bg-gray-100 px-2 py-1 rounded">{errorId}</code>
+                    Error ID:{' '}
+                    <code className="bg-gray-100 px-2 py-1 rounded">
+                      {errorId}
+                    </code>
                   </p>
                 )}
               </div>
@@ -157,7 +177,9 @@ class ErrorBoundary extends Component<Props, State> {
                     )}
                     {errorInfo?.componentStack && (
                       <div>
-                        <strong className="text-red-600">Component Stack:</strong>
+                        <strong className="text-red-600">
+                          Component Stack:
+                        </strong>
                         <pre className="text-xs text-gray-800 mt-1 p-2 bg-white rounded border overflow-x-auto max-h-32">
                           {errorInfo.componentStack}
                         </pre>
@@ -175,14 +197,14 @@ class ErrorBoundary extends Component<Props, State> {
                 >
                   🔄 Try Again
                 </button>
-                
+
                 <button
                   onClick={this.handleGoHome}
                   className="flex-1 bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
                 >
                   🏠 Go Home
                 </button>
-                
+
                 <button
                   onClick={this.handleReportError}
                   className="flex-1 bg-red-600 text-white py-3 px-6 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"

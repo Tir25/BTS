@@ -7,14 +7,14 @@ import { environment } from '../../config/environment';
 export interface ApiRequestConfig {
   endpoint: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  data?: any;
+  data?: Record<string, unknown>;
   headers?: Record<string, string>;
   timeout?: number;
   useOfflineStorage?: boolean;
   retryOnFailure?: boolean;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = Record<string, unknown>> {
   success: boolean;
   data?: T;
   error?: string;
@@ -30,8 +30,10 @@ class ResilientApiService {
     this.baseUrl = baseUrl || environment.api.url;
   }
 
-  // Main request method with full resilience
-  async request<T>(config: ApiRequestConfig): Promise<ApiResponse<T>> {
+  // Main request method with circuit breaker, retry logic, and offline storage
+  async request<T extends Record<string, unknown> = Record<string, unknown>>(
+    config: ApiRequestConfig
+  ): Promise<ApiResponse<T>> {
     const {
       endpoint,
       method = 'GET',
@@ -53,7 +55,7 @@ class ResilientApiService {
           console.log(`📦 Serving cached data for ${endpoint}`);
           return {
             success: true,
-            data: cachedData,
+            data: cachedData as T,
             fromCache: true,
             timestamp: new Date().toISOString(),
           };
@@ -62,7 +64,15 @@ class ResilientApiService {
 
       // Execute request with circuit breaker and exponential backoff
       const result = await apiCircuitBreaker.execute(
-        () => this.executeRequest<T>(url, method, data, headers, timeout, requestId),
+        () =>
+          this.executeRequest<T>(
+            url,
+            method,
+            data || {},
+            headers,
+            timeout,
+            requestId
+          ),
         retryOnFailure ? () => this.getFallbackData<T>(endpoint) : undefined
       );
 
@@ -76,36 +86,59 @@ class ResilientApiService {
         data: result,
         timestamp: new Date().toISOString(),
       };
-
     } catch (error) {
       // Log error with context
-      logError(error, {
-        service: 'api',
-        operation: `${method.toLowerCase()}-${endpoint}`,
-      }, 'medium');
+      logError(
+        error,
+        {
+          service: 'api',
+          operation: `${method.toLowerCase()}-${endpoint}`,
+        },
+        'medium'
+      );
 
       // Try to get fallback data from offline storage
       if (useOfflineStorage) {
-        const fallbackData = await this.getFromOfflineStorage(endpoint);
-        if (fallbackData) {
-          console.log(`📦 Using fallback data for ${endpoint}`);
-          return {
-            success: true,
-            data: fallbackData,
-            fromCache: true,
-            timestamp: new Date().toISOString(),
-          };
+        try {
+          const fallbackData = await this.getFromOfflineStorage(endpoint);
+          if (fallbackData) {
+            console.log(`📦 Using fallback data for ${endpoint}`);
+            return {
+              success: true,
+              data: fallbackData as T,
+              fromCache: true,
+              timestamp: new Date().toISOString(),
+            };
+          }
+        } catch (fallbackError) {
+          console.warn(`⚠️ Failed to get fallback data for ${endpoint}:`, fallbackError);
         }
       }
 
       // Queue failed requests for later sync (for non-GET requests)
-      if (method !== 'GET' && useOfflineStorage) {
-        await this.queueForSync(method, endpoint, data);
+      if (method !== 'GET' && useOfflineStorage && data) {
+        try {
+          await this.queueForSync(method, endpoint, data);
+        } catch (queueError) {
+          console.warn(`⚠️ Failed to queue request for sync:`, queueError);
+        }
+      }
+
+      // Provide a more helpful error message
+      let errorMessage = 'Request failed';
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          errorMessage = 'Network connection error. Please check your internet connection and try again.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else {
+          errorMessage = error.message;
+        }
       }
 
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Request failed',
+        error: errorMessage,
         timestamp: new Date().toISOString(),
       };
     }
@@ -115,7 +148,7 @@ class ResilientApiService {
   private async executeRequest<T>(
     url: string,
     method: string,
-    data: any,
+    data: Record<string, unknown>,
     headers: Record<string, string>,
     timeout: number,
     requestId: string
@@ -144,35 +177,50 @@ class ResilientApiService {
       return await response.json();
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           throw new Error('Request timeout');
         }
         throw error;
       }
-      
+
       throw new Error('Unknown error occurred');
     }
   }
 
   // Get fallback data with exponential backoff
-  private async getFallbackData<T>(endpoint: string): Promise<T> {
-    const result = await standardBackoff.execute(async () => {
-      const cachedData = await this.getFromOfflineStorage(endpoint);
-      if (cachedData) {
-        return cachedData;
+  private async getFallbackData<T extends Record<string, unknown>>(
+    endpoint: string
+  ): Promise<T> {
+    try {
+      const result = await standardBackoff.execute(async () => {
+        const cachedData = await this.getFromOfflineStorage(endpoint);
+        if (cachedData) {
+          return cachedData as T;
+        }
+        throw new Error('No fallback data available');
+      });
+      
+      if (result.success && result.result) {
+        return result.result as T;
       }
-      throw new Error('No fallback data available');
-    });
-    if (result.success && result.result) {
-      return result.result;
+      
+      // If no fallback data is available, provide a meaningful error
+      throw new Error(`No cached data available for ${endpoint}. Please check your internet connection and try again.`);
+    } catch (error) {
+      // Provide a more helpful error message
+      if (error instanceof Error && error.message.includes('No fallback data available')) {
+        throw new Error(`No cached data available for ${endpoint}. Please check your internet connection and try again.`);
+      }
+      throw error;
     }
-    throw new Error('No fallback data available');
   }
 
   // Offline storage methods
-  private async getFromOfflineStorage(endpoint: string): Promise<any | null> {
+  private async getFromOfflineStorage(
+    endpoint: string
+  ): Promise<Record<string, unknown> | null> {
     try {
       const dataType = this.getDataTypeFromEndpoint(endpoint);
       const id = this.getStorageId(endpoint);
@@ -183,7 +231,10 @@ class ResilientApiService {
     }
   }
 
-  private async storeInOfflineStorage(endpoint: string, data: any): Promise<void> {
+  private async storeInOfflineStorage(
+    endpoint: string,
+    data: Record<string, unknown>
+  ): Promise<void> {
     try {
       const dataType = this.getDataTypeFromEndpoint(endpoint);
       const id = this.getStorageId(endpoint);
@@ -193,10 +244,14 @@ class ResilientApiService {
     }
   }
 
-  private async queueForSync(method: string, endpoint: string, data: any): Promise<void> {
+  private async queueForSync(
+    method: string,
+    endpoint: string,
+    data: Record<string, unknown>
+  ): Promise<void> {
     try {
-      const operation = method === 'DELETE' ? 'delete' : 
-                      method === 'PUT' ? 'update' : 'create';
+      const operation =
+        method === 'DELETE' ? 'delete' : method === 'PUT' ? 'update' : 'create';
       await offlineStorage.addToSyncQueue(operation, endpoint, data);
     } catch (error) {
       console.warn('Failed to queue request for sync:', error);
@@ -204,7 +259,9 @@ class ResilientApiService {
   }
 
   // Helper methods
-  private getDataTypeFromEndpoint(endpoint: string): 'bus' | 'route' | 'location' | 'driver' | 'user' {
+  private getDataTypeFromEndpoint(
+    endpoint: string
+  ): 'bus' | 'route' | 'location' | 'driver' | 'user' {
     if (endpoint.includes('/buses')) return 'bus';
     if (endpoint.includes('/routes')) return 'route';
     if (endpoint.includes('/locations')) return 'location';
@@ -220,7 +277,10 @@ class ResilientApiService {
   }
 
   // Convenience methods for common operations
-  async get<T>(endpoint: string, config?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
+  async get<T extends Record<string, unknown>>(
+    endpoint: string,
+    config?: Partial<ApiRequestConfig>
+  ): Promise<ApiResponse<T>> {
     return this.request<T>({
       endpoint,
       method: 'GET',
@@ -228,7 +288,11 @@ class ResilientApiService {
     });
   }
 
-  async post<T>(endpoint: string, data: any, config?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
+  async post<T extends Record<string, unknown>>(
+    endpoint: string,
+    data: Record<string, unknown>,
+    config?: Partial<ApiRequestConfig>
+  ): Promise<ApiResponse<T>> {
     return this.request<T>({
       endpoint,
       method: 'POST',
@@ -237,7 +301,11 @@ class ResilientApiService {
     });
   }
 
-  async put<T>(endpoint: string, data: any, config?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
+  async put<T extends Record<string, unknown>>(
+    endpoint: string,
+    data: Record<string, unknown>,
+    config?: Partial<ApiRequestConfig>
+  ): Promise<ApiResponse<T>> {
     return this.request<T>({
       endpoint,
       method: 'PUT',
@@ -246,7 +314,10 @@ class ResilientApiService {
     });
   }
 
-  async delete<T>(endpoint: string, config?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
+  async delete<T extends Record<string, unknown>>(
+    endpoint: string,
+    config?: Partial<ApiRequestConfig>
+  ): Promise<ApiResponse<T>> {
     return this.request<T>({
       endpoint,
       method: 'DELETE',
@@ -255,7 +326,9 @@ class ResilientApiService {
   }
 
   // Health check with resilience
-  async healthCheck(): Promise<ApiResponse<{ status: string; timestamp: string }>> {
+  async healthCheck(): Promise<
+    ApiResponse<{ status: string; timestamp: string }>
+  > {
     return this.get('/health', {
       timeout: 5000,
       retryOnFailure: true,

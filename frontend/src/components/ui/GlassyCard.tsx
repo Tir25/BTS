@@ -82,11 +82,11 @@ const GlassyCard: React.FC<GlassyCardProps> = ({
 };
 
 // Specialized card variants
-export const InfoCard: React.FC<GlassyCardProps> = (props) => (
+export const InfoCard: React.FC<GlassyCardProps> = props => (
   <GlassyCard variant="premium" glow={true} {...props} />
 );
 
-export const ActionCard: React.FC<GlassyCardProps> = (props) => (
+export const ActionCard: React.FC<GlassyCardProps> = props => (
   <GlassyCard
     variant="default"
     hover={true}
@@ -95,7 +95,7 @@ export const ActionCard: React.FC<GlassyCardProps> = (props) => (
   />
 );
 
-export const PremiumCard: React.FC<GlassyCardProps> = (props) => (
+export const PremiumCard: React.FC<GlassyCardProps> = props => (
   <GlassyCard variant="ultra" glow={true} hover={true} {...props} />
 );
 

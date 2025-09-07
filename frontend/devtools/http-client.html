@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP Test Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .log-container {
+            height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 3px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .log-time {
+            color: #6c757d;
+            margin-right: 5px;
+        }
+        .log-error { color: #dc3545; }
+        .log-success { color: #28a745; }
+        .log-info { color: #17a2b8; }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0069d9;
+        }
+        .details {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 HTTP Test Client</h1>
+        <p><strong>Test Purpose:</strong> This is a simple HTTP client to test basic connectivity.</p>
+        <p><strong>Target Server:</strong> <span id="server-url">http://127.0.0.1:8000</span></p>
+        
+        <div>
+            <button id="health-btn">Test Health Endpoint</button>
+            <button id="test-btn">Test Test Endpoint</button>
+            <button id="clear-log-btn">Clear Log</button>
+        </div>
+        
+        <h3>Log:</h3>
+        <div id="log" class="log-container"></div>
+        
+        <h3>Response:</h3>
+        <div id="response-details" class="details">No response yet</div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const healthBtn = document.getElementById('health-btn');
+        const testBtn = document.getElementById('test-btn');
+        const clearLogBtn = document.getElementById('clear-log-btn');
+        const logContainer = document.getElementById('log');
+        const responseDetails = document.getElementById('response-details');
+        const serverUrl = document.getElementById('server-url');
+        
+        // Get current time formatted for logs
+        function getTimeString() {
+            const now = new Date();
+            return now.toLocaleTimeString();
+        }
+        
+        // Add log entry
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            
+            const time = document.createElement('span');
+            time.className = 'log-time';
+            time.textContent = `[${getTimeString()}]`;
+            
+            entry.appendChild(time);
+            entry.appendChild(document.createTextNode(` ${message}`));
+            
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        // Clear log
+        function clearLog() {
+            logContainer.innerHTML = '';
+            log('🚀 HTTP test client loaded.');
+            log('🔍 This client tests basic HTTP connectivity.');
+            responseDetails.textContent = 'No response yet';
+        }
+        
+        // Make HTTP request
+        async function makeRequest(endpoint) {
+            // For Firefox, use 127.0.0.1 instead of localhost
+            const isFirefox = navigator.userAgent.includes('Firefox');
+            const host = isFirefox ? '127.0.0.1' : 'localhost';
+            const url = `http://${host}:8000${endpoint}`;
+            
+            serverUrl.textContent = url;
+            log(`🔄 Making request to: ${url}`);
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'HTTPTestClient/1.0'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                log(`✅ Request successful!`, 'success');
+                responseDetails.textContent = JSON.stringify(data, null, 2);
+                return data;
+            } catch (error) {
+                log(`❌ Request failed: ${error.message}`, 'error');
+                responseDetails.textContent = `Error: ${error.message}`;
+                return null;
+            }
+        }
+        
+        // Test health endpoint
+        async function testHealth() {
+            log('🏥 Testing health endpoint...');
+            await makeRequest('/health');
+        }
+        
+        // Test test endpoint
+        async function testTest() {
+            log('🧪 Testing test endpoint...');
+            await makeRequest('/test');
+        }
+        
+        // Event listeners
+        healthBtn.addEventListener('click', testHealth);
+        testBtn.addEventListener('click', testTest);
+        clearLogBtn.addEventListener('click', clearLog);
+        
+        // Initialize
+        clearLog();
+    </script>
+</body>
+</html>

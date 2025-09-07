@@ -51,13 +51,13 @@ router.get('/viewport', async (req, res) => {
     };
 
     const locations = await getCurrentBusLocations();
-    
+
     // Filter locations within viewport
-    const locationsInViewport = locations.filter(location => {
+    const locationsInViewport = locations.filter((location) => {
       // Parse PostGIS Point format: "POINT(longitude latitude)"
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
       if (!pointMatch) return false;
-      
+
       const [longitude, latitude] = pointMatch[1].split(' ').map(Number);
       return (
         latitude >= viewport.minLat &&
@@ -68,10 +68,12 @@ router.get('/viewport', async (req, res) => {
     });
 
     // Convert to frontend-friendly format
-    const formattedLocations = locationsInViewport.map(location => {
+    const formattedLocations = locationsInViewport.map((location) => {
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
-      const [longitude, latitude] = pointMatch ? pointMatch[1].split(' ').map(Number) : [0, 0];
-      
+      const [longitude, latitude] = pointMatch
+        ? pointMatch[1].split(' ').map(Number)
+        : [0, 0];
+
       return {
         busId: location.bus_id,
         driverId: location.driver_id,
@@ -118,14 +120,14 @@ router.get('/history/:busId', authenticateUser, async (req, res) => {
       endTime as string
     );
 
-    res.json({
+    return res.json({
       success: true,
       data: locations,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error('❌ Error fetching location history:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to fetch location history',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -187,7 +189,7 @@ router.post('/update', authenticateUser, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: savedLocation,
       message: 'Location updated successfully',
@@ -195,7 +197,7 @@ router.post('/update', authenticateUser, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error updating location:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update location',
       message: error instanceof Error ? error.message : 'Unknown error',

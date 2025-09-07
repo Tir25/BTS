@@ -1,10 +1,11 @@
-import maplibregl from 'maplibre-gl';
+import { Map, Marker, Popup, NavigationControl, LngLatBounds, StyleSpecification } from 'maplibre-gl';
 import { IMapService, IMapConfiguration } from './interfaces/IMapService';
 import { BusLocation } from './interfaces/IWebSocketService';
+import { Route } from '../types';
 
 export class MapService implements IMapService {
-  private map: maplibregl.Map | null = null;
-  private markers: { [busId: string]: maplibregl.Marker } = {};
+  private map: Map | null = null;
+  private markers: { [busId: string]: Marker } = {};
   private isInitializedFlag = false;
 
   private readonly defaultConfig: IMapConfiguration = {
@@ -47,9 +48,9 @@ export class MapService implements IMapService {
 
     console.log('🗺️ Initializing MapService...');
 
-    this.map = new maplibregl.Map({
+    this.map = new Map({
       container,
-      style: this.defaultConfig.style,
+      style: this.defaultConfig.style as StyleSpecification,
       center: this.defaultConfig.center,
       zoom: this.defaultConfig.zoom,
       bearing: 0,
@@ -63,7 +64,7 @@ export class MapService implements IMapService {
     });
 
     // Add navigation controls
-    this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    this.map.addControl(new NavigationControl(), 'top-right');
 
     // Handle map load event
     this.map.once('load', () => {
@@ -72,12 +73,12 @@ export class MapService implements IMapService {
     });
 
     // Handle map errors
-    this.map.on('error', (e) => {
+    this.map.on('error', e => {
       console.error('❌ Map error:', e);
     });
   }
 
-  addRoute(routeId: string, routeData: any): void {
+  addRoute(routeId: string, routeData: Route): void {
     if (!this.map || !this.map.isStyleLoaded()) {
       console.warn('🗺️ Map not ready for route addition');
       return;
@@ -156,7 +157,7 @@ export class MapService implements IMapService {
       </div>
     `;
 
-    const marker = new maplibregl.Marker({
+    const marker = new Marker({
       element: el,
       anchor: 'center',
     })
@@ -164,7 +165,7 @@ export class MapService implements IMapService {
       .addTo(this.map);
 
     // Add enhanced popup
-    const popup = new maplibregl.Popup({
+    const popup = new Popup({
       offset: 25,
       className: 'bus-popup-container',
     }).setHTML(this.createPopupHTML(busId, location));
@@ -234,8 +235,8 @@ export class MapService implements IMapService {
       });
     } else if (locations.length > 1) {
       // Multiple buses - fit all in view
-      const bounds = new maplibregl.LngLatBounds();
-      locations.forEach((location) => {
+      const bounds = new LngLatBounds();
+      locations.forEach(location => {
         bounds.extend([location.longitude, location.latitude]);
       });
 

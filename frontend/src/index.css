@@ -84,10 +84,10 @@
   .maplibregl-canvas-container.maplibregl-interactive,
   .maplibregl-ctrl-group button.maplibregl-ctrl-compass {
     cursor: grab;
-    -webkit-user-select: none !important;
-    -moz-user-select: none !important;
-    -ms-user-select: none !important;
-    user-select: none !important;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
   }
 
   .maplibregl-canvas-container.maplibregl-interactive.maplibregl-track-pointer {
@@ -101,10 +101,10 @@
 
   .maplibregl-map .maplibregl-popup-track-pointer * {
     pointer-events: none;
-    -webkit-user-select: none !important;
-    -moz-user-select: none !important;
-    -ms-user-select: none !important;
-    user-select: none !important;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
   }
 
   /* Input field styling to ensure text visibility */
@@ -706,15 +706,26 @@ input[type="number"]::placeholder {
   line-height: 1.4;
 }
 
-/* Enhanced bus marker styles */
+/* Enhanced bus marker styles - FIXED ALIGNMENT */
 .bus-marker {
   position: relative;
   cursor: pointer;
   transition: all 0.3s ease;
+  /* CRITICAL: Ensure the marker is properly centered */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  /* Center the marker on the coordinate point */
+  transform: translate(-50%, -50%);
+  /* Ensure the marker is positioned correctly */
+  margin: 0;
+  padding: 0;
 }
 
 .bus-marker:hover {
-  transform: scale(1.1);
+  transform: translate(-50%, -50%) scale(1.1);
   z-index: 1000;
 }
 
@@ -730,12 +741,28 @@ input[type="number"]::placeholder {
   border-radius: 50%;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
   animation: bus-pulse 2s infinite;
+  /* Ensure the pin is centered within the marker */
+  margin: 0;
+  padding: 0;
+  /* Ensure the pin is positioned correctly */
+  position: relative;
+  top: 0;
+  left: 0;
 }
 
 .bus-marker-icon {
   font-size: 14px;
   color: white;
   z-index: 2;
+  /* Ensure the icon is centered */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  /* Ensure the icon is positioned correctly */
+  margin: 0;
+  padding: 0;
 }
 
 .bus-marker-pulse {

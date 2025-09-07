@@ -1,5 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import initializeEnvironment from './environment';
+import { connectionPoolOptimizer } from '../services/ConnectionPoolOptimizer';
+import { queryOptimizer } from '../services/QueryOptimizer';
 
 const environment = initializeEnvironment();
 
@@ -94,7 +96,7 @@ export const queryWithRetry = async (
   params?: unknown[],
   maxRetries = 3
 ): Promise<unknown> => {
-  let lastError: Error;
+  let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -122,7 +124,11 @@ export const queryWithRetry = async (
     }
   }
 
-  throw lastError!;
+  if (lastError) {
+    throw lastError;
+  }
+
+  throw new Error('Query failed after all retry attempts');
 };
 
 // Initialize database connection on module load
@@ -135,9 +141,82 @@ export const initializeDatabase = async (): Promise<void> => {
       throw new Error(`Database health check failed: ${health.error}`);
     }
 
-    console.log('✅ Database initialized successfully');
+    // Start connection pool monitoring
+    connectionPoolOptimizer.startMonitoring(30000); // Monitor every 30 seconds
+    
+    // Prepare common statements
+    queryOptimizer.prepareStatement(
+      'get_bus_by_id',
+      'SELECT * FROM buses WHERE id = $1'
+    );
+    
+    queryOptimizer.prepareStatement(
+      'get_route_by_id',
+      'SELECT * FROM routes WHERE id = $1'
+    );
+    
+    queryOptimizer.prepareStatement(
+      'get_live_locations',
+      'SELECT * FROM live_locations WHERE recorded_at > NOW() - INTERVAL \'5 minutes\''
+    );
+
+    console.log('✅ Database initialized successfully with optimizations');
   } catch (error) {
     console.error('❌ Failed to initialize database:', error);
+    throw error;
+  }
+};
+
+// Optimized query functions
+export const executeOptimizedQuery = async <T>(
+  query: string,
+  params: any[] = [],
+  client?: PoolClient
+): Promise<T> => {
+  return queryOptimizer.executeOptimizedQuery<T>(query, params, client);
+};
+
+export const executePreparedStatement = async <T>(
+  statementName: string,
+  params: any[] = [],
+  client?: PoolClient
+): Promise<T> => {
+  return queryOptimizer.executePreparedStatement<T>(statementName, params, client);
+};
+
+export const analyzeQuery = async (
+  query: string,
+  params: any[] = []
+) => {
+  return queryOptimizer.analyzeQuery(query, params);
+};
+
+// Get optimization statistics
+export const getOptimizationStats = () => {
+  return {
+    queryOptimizer: queryOptimizer.getOptimizationStats(),
+    connectionPool: connectionPoolOptimizer.getMetrics(),
+    queryCache: queryOptimizer.getOptimizationStats(),
+  };
+};
+
+// Graceful shutdown with optimizations
+export const shutdownDatabase = async (): Promise<void> => {
+  try {
+    console.log('🔄 Shutting down database with optimizations...');
+    
+    // Stop monitoring
+    connectionPoolOptimizer.stopMonitoring();
+    
+    // Clear caches and prepared statements
+    queryOptimizer.clear();
+    
+    // Close pool
+    await closeDatabasePool();
+    
+    console.log('✅ Database shutdown completed');
+  } catch (error) {
+    console.error('❌ Error during database shutdown:', error);
     throw error;
   }
 };

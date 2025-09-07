@@ -1,22 +1,52 @@
 import { authService } from './authService';
 import { HealthResponse, Bus, Route, Driver, BusLocation } from '../types';
-import { environment } from '../config/environment';
 import { resilientApiService } from './resilience/ResilientApiService';
 import { logError } from '../utils/errorHandler';
-
-const API_BASE_URL = environment.api.url;
+import { environment } from '../config/environment';
 
 import { IApiService } from './interfaces/IApiService';
 
 class ApiService implements IApiService {
-  private baseUrl: string;
+  constructor(_baseUrl?: string) {
+    // baseUrl parameter is kept for interface compatibility but not used
+    // We use getBaseUrl() method for dynamic URL detection
+  }
 
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+  // Get the current base URL (for runtime detection)
+  private getBaseUrl(): string {
+    // Production: always use configured API URL
+    if (import.meta.env.PROD) {
+      const apiUrl = environment.api.url;
+      // Minimal sanity guard
+      if (!apiUrl) {
+        throw new Error('API base URL is not configured in production environment');
+      }
+      return apiUrl;
+    }
+
+    // Development: preserve smart heuristics for LAN/dev-tunnels
+    const currentHost = window.location.hostname;
+
+    if (
+      currentHost !== 'localhost' &&
+      currentHost !== '127.0.0.1' &&
+      currentHost !== '0.0.0.0' &&
+      !currentHost.includes('devtunnels.ms')
+    ) {
+      const networkUrl = `http://${currentHost}:3000`;
+      console.log(`🌐 Network access detected - using hostname: ${currentHost}`);
+      console.log(`🌐 Network API URL: ${networkUrl}`);
+      return networkUrl;
+    }
+
+    const localhostUrl = 'http://localhost:3000';
+    console.log(`🏠 Localhost access detected - using localhost:3000`);
+    console.log(`🏠 Localhost API URL: ${localhostUrl}`);
+    return localhostUrl;
   }
 
   // Backend API calls (for business logic) - Now using resilient API service
-  private async backendRequest<T>(
+  private async backendRequest<T extends Record<string, unknown>>(
     endpoint: string,
     options?: RequestInit
   ): Promise<T> {
@@ -40,16 +70,45 @@ class ApiService implements IApiService {
     }
 
     try {
+      // For development, use direct fetch to avoid resilient service issues
+      if (import.meta.env.DEV) {
+        const currentBaseUrl = this.getBaseUrl();
+        console.log(`🔧 Development mode: Direct fetch to ${currentBaseUrl}${endpoint}`);
+        
+        const response = await fetch(`${currentBaseUrl}${endpoint}`, {
+          method,
+          headers,
+          body: options?.body,
+          signal: AbortSignal.timeout(15000), // 15 second timeout
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data;
+      }
+
+      // Production mode: Use resilient API service
       let response;
-      
+
       if (method === 'GET') {
         response = await resilientApiService.get<T>(endpoint, { headers });
       } else if (method === 'POST') {
-        const body = options?.body ? JSON.parse(options.body as string) : undefined;
-        response = await resilientApiService.post<T>(endpoint, body, { headers });
+        const body = options?.body
+          ? JSON.parse(options.body as string)
+          : undefined;
+        response = await resilientApiService.post<T>(endpoint, body, {
+          headers,
+        });
       } else if (method === 'PUT') {
-        const body = options?.body ? JSON.parse(options.body as string) : undefined;
-        response = await resilientApiService.put<T>(endpoint, body, { headers });
+        const body = options?.body
+          ? JSON.parse(options.body as string)
+          : undefined;
+        response = await resilientApiService.put<T>(endpoint, body, {
+          headers,
+        });
       } else if (method === 'DELETE') {
         response = await resilientApiService.delete<T>(endpoint, { headers });
       } else {
@@ -63,11 +122,15 @@ class ApiService implements IApiService {
       return response.data as T;
     } catch (error) {
       // Log error with context
-      logError(error, {
-        service: 'api',
-        operation: `${method.toLowerCase()}-${endpoint}`,
-      }, 'medium');
-      
+      logError(
+        error,
+        {
+          service: 'api',
+          operation: `${method.toLowerCase()}-${endpoint}`,
+        },
+        'medium'
+      );
+
       throw error;
     }
   }
@@ -75,11 +138,18 @@ class ApiService implements IApiService {
   // Health check
   async getHealth(): Promise<HealthResponse> {
     try {
+      const healthUrl = `${this.getBaseUrl()}/health`;
+      console.log(`🔍 Health check URL: ${healthUrl}`);
+      console.log(`🔍 Current hostname: ${window.location.hostname}`);
+      console.log(`🔍 Current URL: ${window.location.href}`);
+      
       // Direct fetch to bypass resilient service for debugging
-      const response = await fetch(`${this.baseUrl}/health`, {
+      const response = await fetch(healthUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         },
         signal: AbortSignal.timeout(5000), // 5 second timeout
       });
@@ -397,11 +467,20 @@ class ApiService implements IApiService {
           timestamp: new Date().toISOString(),
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Error in getLiveLocations:', error);
       // Handle 401 Unauthorized gracefully for student access
-      if (error.message && error.message.includes('401')) {
-        console.log('ℹ️ Student access - no authentication required for viewing locations');
+      if (
+        error &&
+        typeof error === 'object' &&
+        error !== null &&
+        'message' in error &&
+        typeof error.message === 'string' &&
+        error.message.includes('401')
+      ) {
+        console.log(
+          'ℹ️ Student access - no authentication required for viewing locations'
+        );
         return {
           success: true,
           data: [],
@@ -478,7 +557,9 @@ class ApiService implements IApiService {
   }
 
   // Spatial optimization methods
-  async getRoutesInViewport(bounds: [[number, number], [number, number]]): Promise<{
+  async getRoutesInViewport(
+    bounds: [[number, number], [number, number]]
+  ): Promise<{
     success: boolean;
     data: Route[];
     timestamp: string;
@@ -486,15 +567,18 @@ class ApiService implements IApiService {
     try {
       const [minLng, minLat] = bounds[0];
       const [maxLng, maxLat] = bounds[1];
-      
+
       // Direct fetch to bypass resilient service for debugging
-      const response = await fetch(`${this.baseUrl}/routes/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(10000), // 10 second timeout
-      });
+      const response = await fetch(
+        `${this.getBaseUrl()}/routes/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -502,7 +586,7 @@ class ApiService implements IApiService {
 
       const data = await response.json();
       console.log('✅ Routes in viewport fetched successfully:', data);
-      
+
       if (data.success && data.data) {
         return {
           success: true,
@@ -527,7 +611,9 @@ class ApiService implements IApiService {
     }
   }
 
-  async getBusesInViewport(bounds: [[number, number], [number, number]]): Promise<{
+  async getBusesInViewport(
+    bounds: [[number, number], [number, number]]
+  ): Promise<{
     success: boolean;
     data: Bus[];
     timestamp: string;
@@ -535,15 +621,18 @@ class ApiService implements IApiService {
     try {
       const [minLng, minLat] = bounds[0];
       const [maxLng, maxLat] = bounds[1];
-      
+
       // Direct fetch to bypass resilient service for debugging
-      const response = await fetch(`${this.baseUrl}/buses/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(10000), // 10 second timeout
-      });
+      const response = await fetch(
+        `${this.getBaseUrl()}/buses/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -551,7 +640,7 @@ class ApiService implements IApiService {
 
       const data = await response.json();
       console.log('✅ Buses in viewport fetched successfully:', data);
-      
+
       if (data.success && data.data) {
         return {
           success: true,
@@ -576,7 +665,9 @@ class ApiService implements IApiService {
     }
   }
 
-  async getLiveLocationsInViewport(bounds: [[number, number], [number, number]]): Promise<{
+  async getLiveLocationsInViewport(
+    bounds: [[number, number], [number, number]]
+  ): Promise<{
     success: boolean;
     data: BusLocation[];
     timestamp: string;
@@ -584,15 +675,18 @@ class ApiService implements IApiService {
     try {
       const [minLng, minLat] = bounds[0];
       const [maxLng, maxLat] = bounds[1];
-      
+
       // Direct fetch to bypass resilient service for debugging
-      const response = await fetch(`${this.baseUrl}/locations/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(10000), // 10 second timeout
-      });
+      const response = await fetch(
+        `${this.getBaseUrl()}/locations/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -600,7 +694,7 @@ class ApiService implements IApiService {
 
       const data = await response.json();
       console.log('✅ Live locations in viewport fetched successfully:', data);
-      
+
       if (data.success && data.data) {
         return {
           success: true,
@@ -608,7 +702,10 @@ class ApiService implements IApiService {
           timestamp: new Date().toISOString(),
         };
       } else {
-        console.error('❌ Error fetching live locations in viewport:', data.error);
+        console.error(
+          '❌ Error fetching live locations in viewport:',
+          data.error
+        );
         return {
           success: false,
           data: [],
@@ -625,23 +722,34 @@ class ApiService implements IApiService {
     }
   }
 
-  async getBusClusters(bounds: [[number, number], [number, number]], zoom: number): Promise<{
+  async getBusClusters(
+    bounds: [[number, number], [number, number]],
+    zoom: number
+  ): Promise<{
     success: boolean;
-    data: any[];
+    data: Array<{
+      id: string;
+      center: { latitude: number; longitude: number };
+      buses: BusLocation[];
+      count: number;
+    }>;
     timestamp: string;
   }> {
     try {
       const [minLng, minLat] = bounds[0];
       const [maxLng, maxLat] = bounds[1];
-      
+
       // Direct fetch to bypass resilient service for debugging
-      const response = await fetch(`${this.baseUrl}/buses/clusters?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}&zoom=${zoom}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(10000), // 10 second timeout
-      });
+      const response = await fetch(
+        `${this.getBaseUrl()}/buses/clusters?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}&zoom=${zoom}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -649,7 +757,7 @@ class ApiService implements IApiService {
 
       const data = await response.json();
       console.log('✅ Bus clusters fetched successfully:', data);
-      
+
       if (data.success && data.data) {
         return {
           success: true,
@@ -675,5 +783,5 @@ class ApiService implements IApiService {
   }
 }
 
-export const apiService = new ApiService(API_BASE_URL);
+export const apiService = new ApiService();
 export default apiService;

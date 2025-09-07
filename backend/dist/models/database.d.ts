@@ -125,7 +125,7 @@ export interface DatabaseLiveLocation {
 }
 export interface DatabaseBusLocationLive {
     bus_id: string;
-    geom: any;
+    geom: PostGISGeometry;
     lat: number;
     lng: number;
     speed_kmh?: number;
@@ -136,7 +136,7 @@ export interface DatabaseBusLocationLive {
 export interface DatabaseBusLocationHistory {
     id: string;
     bus_id: string;
-    geom: any;
+    geom: PostGISGeometry;
     speed_kmh?: number;
     heading?: number;
     recorded_at: string;
@@ -146,7 +146,7 @@ export interface DatabaseBusStop {
     route_id: string;
     name: string;
     description?: string;
-    location: any;
+    location: PostGISGeometry;
     stop_order: number;
     estimated_time_from_start?: number;
     is_active: boolean;
@@ -157,7 +157,7 @@ export interface DatabaseRouteStop {
     id: string;
     route_id: string;
     name: string;
-    geom: any;
+    geom: PostGISGeometry;
     seq: number;
 }
 export interface DatabaseDriverBusAssignment {
@@ -176,7 +176,7 @@ export interface DatabaseDestination {
     address: string;
     latitude: number;
     longitude: number;
-    location: any;
+    location: PostGISGeometry;
     is_default: boolean;
     is_active: boolean;
     created_at?: string;
@@ -186,7 +186,7 @@ export interface DatabaseDefaultDestination {
     id: string;
     name: string;
     description?: string;
-    location: any;
+    location: PostGISGeometry;
     address?: string;
     is_active: boolean;
     created_at?: string;
@@ -195,7 +195,7 @@ export interface DatabaseDefaultDestination {
 export interface DatabaseSystemConstant {
     id: number;
     constant_name: string;
-    constant_value: any;
+    constant_value: JSONB;
     description?: string;
     created_at?: string;
     updated_at?: string;

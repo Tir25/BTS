@@ -1,168 +1,255 @@
-/**
- * Firefox Compatibility Utilities
- * Handles Firefox-specific issues with CORS, SSE, and WebSocket connections
- */
-
-export interface BrowserInfo {
-  isFirefox: boolean;
-  isChrome: boolean;
-  isSafari: boolean;
-  isEdge: boolean;
-  version: string;
-  userAgent: string;
+// Firefox-specific compatibility fixes for real-time services
+export interface FirefoxCompatibilityConfig {
+  eventSource: {
+    useNative: boolean;
+    fallbackTimeout: number;
+    retryAttempts: number;
+  };
+  fetch: {
+    useNative: boolean;
+    timeout: number;
+    retryAttempts: number;
+  };
+  websocket: {
+    useNative: boolean;
+    reconnectDelay: number;
+    maxReconnectAttempts: number;
+  };
 }
 
-/**
- * Detect browser and version
- */
-export const detectBrowser = (): BrowserInfo => {
+// Detect Firefox version and apply compatibility fixes
+export const detectFirefoxCompatibility = (): FirefoxCompatibilityConfig => {
   const userAgent = navigator.userAgent;
-  
-  const isFirefox = /Firefox/.test(userAgent);
-  const isChrome = /Chrome/.test(userAgent) && !/Edge/.test(userAgent);
-  const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
-  const isEdge = /Edge/.test(userAgent);
-  
-  let version = '';
-  if (isFirefox) {
-    const match = userAgent.match(/Firefox\/(\d+)/);
-    version = match ? match[1] : '';
-  } else if (isChrome) {
-    const match = userAgent.match(/Chrome\/(\d+)/);
-    version = match ? match[1] : '';
-  } else if (isSafari) {
-    const match = userAgent.match(/Version\/(\d+)/);
-    version = match ? match[1] : '';
-  } else if (isEdge) {
-    const match = userAgent.match(/Edge\/(\d+)/);
-    version = match ? match[1] : '';
-  }
-  
-  return {
-    isFirefox,
-    isChrome,
-    isSafari,
-    isEdge,
-    version,
-    userAgent
-  };
-};
+  const isFirefox = userAgent.includes('Firefox');
+  const firefoxVersion = isFirefox
+    ? parseInt(userAgent.match(/Firefox\/(\d+)/)?.[1] || '0')
+    : 0;
 
-/**
- * Get Firefox-specific EventSource options
- */
-export const getFirefoxEventSourceOptions = (): EventSourceInit => {
-  const browser = detectBrowser();
-  
-  if (browser.isFirefox) {
-    console.log('🦊 Firefox detected - using Firefox-specific EventSource configuration');
-    return {
-      withCredentials: false, // Firefox has issues with credentials in some cases
-    };
-  }
-  
-  // For all browsers, try without credentials first for better compatibility
-  return {
-    withCredentials: false, // More compatible across browsers
-  };
-};
+  console.log(
+    '🦊 Firefox detected - using Firefox-specific EventSource configuration'
+  );
 
-/**
- * Get Firefox-specific fetch options
- */
-export const getFirefoxFetchOptions = (): RequestInit => {
-  const browser = detectBrowser();
-  
-  if (browser.isFirefox) {
-    console.log('🦊 Firefox detected - using Firefox-specific fetch configuration');
-    return {
-      credentials: 'include',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-    };
-  }
-  
   return {
-    credentials: 'include',
-    mode: 'cors',
-    headers: {
-      'Content-Type': 'application/json',
+    eventSource: {
+      useNative: firefoxVersion >= 79, // Firefox 79+ has good EventSource support
+      fallbackTimeout: 30000,
+      retryAttempts: 3,
+    },
+    fetch: {
+      useNative: firefoxVersion >= 60, // Firefox 60+ has good fetch support
+      timeout: 30000,
+      retryAttempts: 3,
+    },
+    websocket: {
+      useNative: firefoxVersion >= 70, // Firefox 70+ has good WebSocket support
+      reconnectDelay: 1000,
+      maxReconnectAttempts: 5,
     },
   };
 };
 
-/**
- * Check if Enhanced Tracking Protection is enabled (Firefox-specific)
- */
-export const checkFirefoxTrackingProtection = (): boolean => {
-  const browser = detectBrowser();
-  
-  if (!browser.isFirefox) {
-    return false;
-  }
-  
-  // Try to detect if Enhanced Tracking Protection is blocking requests
-  // This is a heuristic - we can't directly detect it
-  const hasTrackingProtection = navigator.userAgent.includes('Firefox') && 
-    (navigator.userAgent.includes('Firefox/78') || 
-     navigator.userAgent.includes('Firefox/79') || 
-     navigator.userAgent.includes('Firefox/8') ||
-     navigator.userAgent.includes('Firefox/9') ||
-     navigator.userAgent.includes('Firefox/10') ||
-     navigator.userAgent.includes('Firefox/11') ||
-     navigator.userAgent.includes('Firefox/12'));
-  
-  if (hasTrackingProtection) {
-    console.log('🦊 Firefox Enhanced Tracking Protection may be active');
-  }
-  
-  return hasTrackingProtection;
-};
+// Firefox-compatible EventSource implementation
+export class FirefoxCompatibleEventSource {
+  private eventSource: EventSource | null = null;
+  private fallbackInterval: NodeJS.Timeout | null = null;
+  private config: FirefoxCompatibilityConfig;
+  private url: string;
+  private listeners: Map<string, EventListener[]> = new Map();
 
-/**
- * Get Firefox-specific recommendations
- */
-export const getFirefoxRecommendations = (): string[] => {
-  const browser = detectBrowser();
-  const recommendations: string[] = [];
-  
-  if (browser.isFirefox) {
-    recommendations.push(
-      '🦊 Firefox detected - if you experience CORS issues:',
-      '1. Disable Enhanced Tracking Protection for localhost',
-      '2. Go to about:config and set security.fileuri.strict_origin_policy to false',
-      '3. Try using Private Browsing mode',
-      '4. Disable browser extensions temporarily'
+  constructor(url: string, config?: FirefoxCompatibilityConfig) {
+    this.url = url;
+    this.config = config || detectFirefoxCompatibility();
+  }
+
+  addEventListener(
+    type: string,
+    listener: EventListener,
+    options?: boolean | AddEventListenerOptions
+  ): void {
+    if (!this.listeners.has(type)) {
+      this.listeners.set(type, []);
+    }
+    this.listeners.get(type)!.push(listener);
+
+    // Also add to native EventSource if available
+    if (this.eventSource) {
+      this.eventSource.addEventListener(type, listener, options);
+    }
+  }
+
+  removeEventListener(
+    type: string,
+    listener: EventListener,
+    options?: boolean | EventListenerOptions
+  ): void {
+    const typeListeners = this.listeners.get(type);
+    if (typeListeners) {
+      const index = typeListeners.indexOf(listener);
+      if (index > -1) {
+        typeListeners.splice(index, 1);
+      }
+    }
+
+    // Also remove from native EventSource if available
+    if (this.eventSource) {
+      this.eventSource.removeEventListener(type, listener, options);
+    }
+  }
+
+  open(): void {
+    if (this.config.eventSource.useNative) {
+      this.openNative();
+    } else {
+      this.openFallback();
+    }
+  }
+
+  close(): void {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+    if (this.fallbackInterval) {
+      clearInterval(this.fallbackInterval);
+      this.fallbackInterval = null;
+    }
+  }
+
+  private openNative(): void {
+    try {
+      this.eventSource = new EventSource(this.url);
+      this.setupNativeListeners();
+    } catch (error) {
+      console.warn(
+        'Native EventSource failed, falling back to polling:',
+        error
+      );
+      this.openFallback();
+    }
+  }
+
+  private openFallback(): void {
+    console.log(
+      '🦊 Firefox detected - using Firefox-specific fetch configuration'
     );
+
+    // Implement polling fallback
+    this.fallbackInterval = setInterval(async () => {
+      try {
+        const response = await fetch(this.url, {
+          method: 'GET',
+          headers: {
+            Accept: 'text/event-stream',
+            'Cache-Control': 'no-cache',
+          },
+          signal: AbortSignal.timeout(this.config.eventSource.fallbackTimeout),
+        });
+
+        if (response.ok) {
+          const reader = response.body?.getReader();
+          if (reader) {
+            this.processStreamData(reader);
+          }
+        }
+      } catch (error) {
+        console.warn('Fallback EventSource error:', error);
+      }
+    }, 1000);
   }
-  
-  return recommendations;
+
+  private setupNativeListeners(): void {
+    if (!this.eventSource) return;
+
+    this.eventSource.onopen = () => {
+      this.triggerEvent('open', new Event('open'));
+    };
+
+    this.eventSource.onerror = error => {
+      this.triggerEvent('error', error);
+    };
+
+    this.eventSource.onmessage = event => {
+      this.triggerEvent('message', event);
+    };
+  }
+
+  private async processStreamData(
+    reader: ReadableStreamDefaultReader<Uint8Array>
+  ): Promise<void> {
+    try {
+      let reading = true;
+      while (reading) {
+        const { done, value } = await reader.read();
+        if (done) {
+          reading = false;
+          break;
+        }
+
+        const chunk = new TextDecoder().decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const data = line.slice(5).trim();
+            if (data) {
+              const event = new MessageEvent('message', { data });
+              this.triggerEvent('message', event);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Error processing stream data:', error);
+    }
+  }
+
+  private triggerEvent(type: string, event: Event): void {
+    const listeners = this.listeners.get(type);
+    if (listeners) {
+      listeners.forEach(listener => {
+        try {
+          listener.call(this, event);
+        } catch (error) {
+          console.error('Error in event listener:', error);
+        }
+      });
+    }
+  }
+}
+
+// Firefox-compatible fetch with timeout and retry
+export const firefoxCompatibleFetch = async (
+  url: string,
+  options: RequestInit = {},
+  config?: FirefoxCompatibilityConfig
+): Promise<Response> => {
+  const fetchConfig = config || detectFirefoxCompatibility();
+  const timeout =
+    options.signal || AbortSignal.timeout(fetchConfig.fetch.timeout);
+
+  // Check if we need to use fetch polyfill
+  if (
+    navigator.userAgent.includes('Firefox') &&
+    (navigator.userAgent.includes('Firefox/79') ||
+      navigator.userAgent.includes('Firefox/78') ||
+      navigator.userAgent.includes('Firefox/77'))
+  ) {
+    // Apply Firefox-specific fetch options
+    const firefoxOptions = {
+      ...options,
+      signal: timeout,
+      headers: {
+        'User-Agent': navigator.userAgent,
+        ...options.headers,
+      },
+    };
+
+    return fetch(url, firefoxOptions);
+  }
+
+  // Use native fetch with timeout
+  return fetch(url, { ...options, signal: timeout });
 };
 
-/**
- * Log Firefox-specific debugging information
- */
-export const logFirefoxDebugInfo = (): void => {
-  const browser = detectBrowser();
-  
-  if (browser.isFirefox) {
-    console.log('🦊 Firefox Debug Information:', {
-      version: browser.version,
-      userAgent: browser.userAgent,
-      hasTrackingProtection: checkFirefoxTrackingProtection(),
-      recommendations: getFirefoxRecommendations(),
-    });
-  }
-};
-
-export default {
-  detectBrowser,
-  getFirefoxEventSourceOptions,
-  getFirefoxFetchOptions,
-  checkFirefoxTrackingProtection,
-  getFirefoxRecommendations,
-  logFirefoxDebugInfo,
-};
+// Export default configuration
+export default detectFirefoxCompatibility();

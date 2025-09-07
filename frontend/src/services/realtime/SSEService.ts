@@ -1,6 +1,5 @@
 import { environment } from '../../config/environment';
 import { logError } from '../../utils/errorHandler';
-import { detectBrowser, logFirefoxDebugInfo } from '../../utils/firefoxCompatibility';
 
 export interface SSEConfig {
   url: string;
@@ -11,7 +10,7 @@ export interface SSEConfig {
 
 export interface SSEEvent {
   type: string;
-  data: any;
+  data: Record<string, unknown>;
   timestamp: number;
 }
 
@@ -51,38 +50,44 @@ class SSEService {
 
     try {
       console.log('🔌 Connecting to SSE endpoint...');
-      
+
       // Create a URL object to ensure proper URL formatting
       const sseUrl = new URL(this.config.url, window.location.origin);
-      
+
       console.log('🔌 Connecting to SSE endpoint at:', sseUrl.toString());
-      
+
       // Log Firefox debug info if needed
-      logFirefoxDebugInfo();
-      
+      // logFirefoxDebugInfo(); // This line is removed as per the edit hint
+
       // Firefox-specific EventSource configuration
-      const browser = detectBrowser();
+      // const browser = detectBrowser(); // This line is removed as per the edit hint
       let eventSourceOptions: EventSourceInit = {};
-      
-      if (browser.isFirefox) {
-        console.log('🦊 Firefox detected - using Firefox-specific EventSource configuration');
-        // Firefox doesn't support withCredentials for EventSource
-        eventSourceOptions = {};
-      } else {
-        // For other browsers, try without credentials for better compatibility
-        eventSourceOptions = {
-          withCredentials: false,
-        };
-      }
-      
+
+      // if (browser.isFirefox) { // This block is removed as per the edit hint
+      //   console.log( // This block is removed as per the edit hint
+      //     '🦊 Firefox detected - using Firefox-specific EventSource configuration' // This block is removed as per the edit hint
+      //   ); // This block is removed as per the edit hint
+      //   // Firefox doesn't support withCredentials for EventSource // This block is removed as per the edit hint
+      //   eventSourceOptions = {}; // This block is removed as per the edit hint
+      // } else { // This block is removed as per the edit hint
+      // For other browsers, try without credentials for better compatibility // This block is removed as per the edit hint
+      eventSourceOptions = {
+        // This block is removed as per the edit hint
+        withCredentials: false, // This block is removed as per the edit hint
+      }; // This block is removed as per the edit hint
+      // } // This block is removed as per the edit hint
+
       console.log('🔌 EventSource options:', eventSourceOptions);
-      
+
       // Create EventSource with browser-specific configuration
       try {
-        this.eventSource = new EventSource(sseUrl.toString(), eventSourceOptions);
+        this.eventSource = new EventSource(
+          sseUrl.toString(),
+          eventSourceOptions
+        );
       } catch (error) {
         console.error('❌ Failed to create EventSource:', error);
-        
+
         // Fallback: try without any options
         try {
           console.log('🔄 Trying fallback EventSource without options...');
@@ -94,7 +99,6 @@ class SSEService {
       }
 
       this.setupEventListeners();
-      
     } catch (error) {
       console.error('❌ Failed to connect to SSE:', error);
       this.scheduleReconnect();
@@ -112,16 +116,20 @@ class SSEService {
     };
 
     // Connection error
-    this.eventSource.onerror = (error) => {
+    this.eventSource.onerror = error => {
       console.error('❌ SSE connection error:', error);
       this.isConnected = false;
-      
+
       // Log error with context
-      logError(error instanceof Error ? error : new Error('SSE connection error'), {
-        service: 'sse',
-        operation: 'connect',
-      }, 'medium');
-      
+      logError(
+        error instanceof Error ? error : new Error('SSE connection error'),
+        {
+          service: 'sse',
+          operation: 'connect',
+        },
+        'medium'
+      );
+
       if (this.eventSource?.readyState === EventSource.CLOSED) {
         this.scheduleReconnect();
       }
@@ -138,7 +146,7 @@ class SSEService {
     if (!this.eventSource) return;
 
     // Bus location updates
-    this.eventSource.addEventListener('bus-location-update', (event) => {
+    this.eventSource.addEventListener('bus-location-update', event => {
       try {
         const data = JSON.parse(event.data);
         this.handleEvent('bus-location-update', data);
@@ -148,7 +156,7 @@ class SSEService {
     });
 
     // Bus status updates
-    this.eventSource.addEventListener('bus-status-update', (event) => {
+    this.eventSource.addEventListener('bus-status-update', event => {
       try {
         const data = JSON.parse(event.data);
         this.handleEvent('bus-status-update', data);
@@ -158,7 +166,7 @@ class SSEService {
     });
 
     // Route updates
-    this.eventSource.addEventListener('route-update', (event) => {
+    this.eventSource.addEventListener('route-update', event => {
       try {
         const data = JSON.parse(event.data);
         this.handleEvent('route-update', data);
@@ -168,7 +176,7 @@ class SSEService {
     });
 
     // System notifications
-    this.eventSource.addEventListener('system-notification', (event) => {
+    this.eventSource.addEventListener('system-notification', event => {
       try {
         const data = JSON.parse(event.data);
         this.handleEvent('system-notification', data);
@@ -178,7 +186,7 @@ class SSEService {
     });
 
     // Generic message handler
-    this.eventSource.addEventListener('message', (event) => {
+    this.eventSource.addEventListener('message', event => {
       try {
         const data = JSON.parse(event.data);
         this.handleEvent('message', data);
@@ -188,7 +196,7 @@ class SSEService {
     });
   }
 
-  private handleEvent(eventType: string, data: any): void {
+  private handleEvent(eventType: string, data: Record<string, unknown>): void {
     const sseEvent: SSEEvent = {
       type: eventType,
       data,
@@ -203,7 +211,10 @@ class SSEService {
         try {
           subscription.callback(sseEvent);
         } catch (error) {
-          console.error(`❌ Error in SSE subscription callback for ${eventType}:`, error);
+          console.error(
+            `❌ Error in SSE subscription callback for ${eventType}:`,
+            error
+          );
         }
       }
     }
@@ -212,13 +223,17 @@ class SSEService {
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('❌ Max SSE reconnection attempts reached');
-      
+
       // Log final failure
-      logError(new Error('Max SSE reconnection attempts reached'), {
-        service: 'sse',
-        operation: 'reconnect',
-      }, 'high');
-      
+      logError(
+        new Error('Max SSE reconnection attempts reached'),
+        {
+          service: 'sse',
+          operation: 'reconnect',
+        },
+        'high'
+      );
+
       return;
     }
 
@@ -228,9 +243,11 @@ class SSEService {
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    
-    console.log(`🔄 Scheduling SSE reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-    
+
+    console.log(
+      `🔄 Scheduling SSE reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
+    );
+
     this.reconnectTimeout = setTimeout(() => {
       // Only attempt reconnect if not already connected
       if (!this.isConnected) {
@@ -241,12 +258,9 @@ class SSEService {
   }
 
   // Subscribe to specific event types
-  subscribe(
-    eventType: string,
-    callback: (event: SSEEvent) => void
-  ): string {
+  subscribe(eventType: string, callback: (event: SSEEvent) => void): string {
     const subscriptionId = `sse-${eventType}-${Date.now()}`;
-    
+
     const subscription: SSESubscription = {
       id: subscriptionId,
       eventType,
@@ -255,8 +269,10 @@ class SSEService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    console.log(`🔌 SSE subscription created for ${eventType}: ${subscriptionId}`);
-    
+    console.log(
+      `🔌 SSE subscription created for ${eventType}: ${subscriptionId}`
+    );
+
     return subscriptionId;
   }
 
@@ -297,7 +313,9 @@ class SSEService {
 
   // Check connection status
   isSSEConnected(): boolean {
-    return this.isConnected && this.eventSource?.readyState === EventSource.OPEN;
+    return (
+      this.isConnected && this.eventSource?.readyState === EventSource.OPEN
+    );
   }
 
   // Get connection status details
@@ -311,15 +329,21 @@ class SSEService {
       isConnected: this.isConnected,
       readyState: this.eventSource?.readyState || EventSource.CLOSED,
       reconnectAttempts: this.reconnectAttempts,
-      activeSubscriptions: Array.from(this.subscriptions.values()).filter(sub => sub.isActive).length,
+      activeSubscriptions: Array.from(this.subscriptions.values()).filter(
+        sub => sub.isActive
+      ).length,
     };
   }
 
   // Health check
-  async healthCheck(): Promise<{ healthy: boolean; details: any }> {
+  async healthCheck(): Promise<{
+    healthy: boolean;
+    details: Record<string, unknown>;
+  }> {
     const status = this.getConnectionStatus();
-    const healthy = status.isConnected && status.readyState === EventSource.OPEN;
-    
+    const healthy =
+      status.isConnected && status.readyState === EventSource.OPEN;
+
     return {
       healthy,
       details: {

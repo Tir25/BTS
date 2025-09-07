@@ -1,0 +1,460 @@
+openapi: 3.0.3
+info:
+  title: Bus Tracking System API
+  description: API for the Ganpat University Bus Tracking System
+  version: 1.0.0
+  contact:
+    name: Development Team
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://bus-tracking-backend-sxh8.onrender.com
+    description: Production server
+  - url: http://localhost:3000
+    description: Development server
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the backend services
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /buses:
+    get:
+      summary: Get all buses
+      description: Retrieve a list of all active buses
+      tags:
+        - Buses
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of buses retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusListResponse'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /buses/{busId}:
+    get:
+      summary: Get bus by ID
+      description: Retrieve detailed information about a specific bus
+      tags:
+        - Buses
+      parameters:
+        - name: busId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Unique identifier of the bus
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Bus information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusResponse'
+        '404':
+          description: Bus not found
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /routes:
+    get:
+      summary: Get all routes
+      description: Retrieve a list of all active routes
+      tags:
+        - Routes
+      responses:
+        '200':
+          description: List of routes retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteListResponse'
+        '500':
+          description: Internal server error
+
+  /routes/{routeId}:
+    get:
+      summary: Get route by ID
+      description: Retrieve detailed information about a specific route
+      tags:
+        - Routes
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Unique identifier of the route
+      responses:
+        '200':
+          description: Route information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteResponse'
+        '404':
+          description: Route not found
+        '500':
+          description: Internal server error
+
+  /locations/current:
+    get:
+      summary: Get current bus locations
+      description: Retrieve real-time location data for all active buses
+      tags:
+        - Locations
+      responses:
+        '200':
+          description: Current locations retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationListResponse'
+        '500':
+          description: Internal server error
+
+  /locations/update:
+    post:
+      summary: Update bus location
+      description: Update the current location of a specific bus
+      tags:
+        - Locations
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationUpdateRequest'
+      responses:
+        '200':
+          description: Location updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponse'
+        '400':
+          description: Invalid request data
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /admin/drivers:
+    get:
+      summary: Get all drivers
+      description: Retrieve a list of all registered drivers
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of drivers retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverListResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin access required
+        '500':
+          description: Internal server error
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: number
+        environment:
+          type: string
+        services:
+          type: object
+          properties:
+            database:
+              $ref: '#/components/schemas/ServiceHealth'
+            api:
+              $ref: '#/components/schemas/ServiceHealth'
+
+    ServiceHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [up, down]
+        details:
+          type: object
+
+    BusListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bus'
+        timestamp:
+          type: string
+          format: date-time
+
+    BusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/Bus'
+        timestamp:
+          type: string
+          format: date-time
+
+    Bus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        number_plate:
+          type: string
+        capacity:
+          type: integer
+        model:
+          type: string
+        year:
+          type: integer
+        route_id:
+          type: string
+          format: uuid
+        assigned_driver_id:
+          type: string
+          format: uuid
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RouteListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Route'
+        timestamp:
+          type: string
+          format: date-time
+
+    RouteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/Route'
+        timestamp:
+          type: string
+          format: date-time
+
+    Route:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        distance_km:
+          type: number
+        estimated_duration_minutes:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    LocationListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BusLocation'
+        timestamp:
+          type: string
+          format: date-time
+
+    LocationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/BusLocation'
+        timestamp:
+          type: string
+          format: date-time
+
+    BusLocation:
+      type: object
+      properties:
+        busId:
+          type: string
+          format: uuid
+        latitude:
+          type: number
+        longitude:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+        speed:
+          type: number
+        heading:
+          type: number
+
+    LocationUpdateRequest:
+      type: object
+      required:
+        - busId
+        - driverId
+        - latitude
+        - longitude
+      properties:
+        busId:
+          type: string
+          format: uuid
+        driverId:
+          type: string
+          format: uuid
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        speed:
+          type: number
+          minimum: 0
+        heading:
+          type: number
+          minimum: 0
+          maximum: 360
+        timestamp:
+          type: string
+          format: date-time
+
+    DriverListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Driver'
+        timestamp:
+          type: string
+          format: date-time
+
+    Driver:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        driver_id:
+          type: string
+        driver_name:
+          type: string
+        license_no:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        photo_url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Buses
+    description: Bus management endpoints
+  - name: Routes
+    description: Route management endpoints
+  - name: Locations
+    description: Location tracking endpoints
+  - name: Admin
+    description: Administrative endpoints

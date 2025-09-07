@@ -1,18 +1,30 @@
 import express from 'express';
-import { getBusInfo, getAllBuses, getCurrentBusLocations } from '../services/locationService';
+import {
+  getBusInfo,
+  getAllBuses,
+  getCurrentBusLocations,
+} from '../services/locationService';
+import { validate, validateParams, sanitizeInput } from '../middleware/validation';
+import { busIdSchema, locationQuerySchema } from '../utils/validation';
+import { asyncHandler } from '../middleware/errorHandler';
 
 const router = express.Router();
 
 // Get all active buses with optional filtering
-router.get('/', async (req, res) => {
-  try {
-    const { driver_id } = req.query;
-    
+router.get('/', 
+  sanitizeInput,
+  validate({ query: locationQuerySchema }),
+  asyncHandler(async (req: any, res: any) => {
+    const { busId, driver_id } = req.query;
+
     if (driver_id) {
       // Filter buses by driver_id
       const buses = await getAllBuses();
-      const filteredBuses = buses.filter(bus => bus.driver_id === driver_id || bus.assigned_driver_id === driver_id);
-      
+      const filteredBuses = buses.filter(
+        (bus) =>
+          bus.driver_id === driver_id || bus.assigned_driver_id === driver_id
+      );
+
       res.json({
         success: true,
         data: filteredBuses,
@@ -27,15 +39,8 @@ router.get('/', async (req, res) => {
         timestamp: new Date().toISOString(),
       });
     }
-  } catch (error) {
-    console.error('❌ Error fetching buses:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch buses',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-});
+  })
+);
 
 // Get buses within viewport (spatial query) - MUST come before /:busId
 router.get('/viewport', async (req, res) => {
@@ -59,11 +64,11 @@ router.get('/viewport', async (req, res) => {
 
     // Get current locations and filter by viewport
     const currentLocations = await getCurrentBusLocations();
-    const locationsInViewport = currentLocations.filter(location => {
+    const locationsInViewport = currentLocations.filter((location) => {
       // Parse PostGIS Point format: "POINT(longitude latitude)"
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
       if (!pointMatch) return false;
-      
+
       const [longitude, latitude] = pointMatch[1].split(' ').map(Number);
       return (
         latitude >= viewport.minLat &&
@@ -74,22 +79,34 @@ router.get('/viewport', async (req, res) => {
     });
 
     // Get bus info for buses in viewport
-    const busIds = [...new Set(locationsInViewport.map(loc => loc.bus_id))];
+    const busIds = [...new Set(locationsInViewport.map((loc) => loc.bus_id))];
     const busesInViewport = [];
-    
+
     for (const busId of busIds) {
       const busInfo = await getBusInfo(busId as string);
       if (busInfo) {
-        const location = locationsInViewport.find(loc => loc.bus_id === busId);
+        const location = locationsInViewport.find(
+          (loc) => loc.bus_id === busId
+        );
         busesInViewport.push({
           ...busInfo,
-          currentLocation: location ? {
-            latitude: parseFloat(location.location.match(/POINT\([^)]+\)/)?.[1]?.split(' ')[1] || '0'),
-            longitude: parseFloat(location.location.match(/POINT\([^)]+\)/)?.[1]?.split(' ')[0] || '0'),
-            timestamp: location.timestamp,
-            speed: location.speed,
-            heading: location.heading,
-          } : null,
+          currentLocation: location
+            ? {
+                latitude: parseFloat(
+                  location.location
+                    .match(/POINT\([^)]+\)/)?.[1]
+                    ?.split(' ')[1] || '0'
+                ),
+                longitude: parseFloat(
+                  location.location
+                    .match(/POINT\([^)]+\)/)?.[1]
+                    ?.split(' ')[0] || '0'
+                ),
+                timestamp: location.timestamp,
+                speed: location.speed,
+                heading: location.heading,
+              }
+            : null,
         });
       }
     }
@@ -132,11 +149,11 @@ router.get('/clusters', async (req, res) => {
 
     // Get current locations and filter by viewport
     const currentLocations = await getCurrentBusLocations();
-    const locationsInViewport = currentLocations.filter(location => {
+    const locationsInViewport = currentLocations.filter((location) => {
       // Parse PostGIS Point format: "POINT(longitude latitude)"
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
       if (!pointMatch) return false;
-      
+
       const [longitude, latitude] = pointMatch[1].split(' ').map(Number);
       return (
         latitude >= viewport.minLat &&
@@ -147,16 +164,24 @@ router.get('/clusters', async (req, res) => {
     });
 
     // Simple clustering algorithm
-    const clusterRadius = Math.max(0.001, 0.01 / Math.pow(2, viewport.zoom - 10));
-    const clusters: any[] = [];
+    const clusterRadius = Math.max(
+      0.001,
+      0.01 / Math.pow(2, viewport.zoom - 10)
+    );
+    const clusters: Array<{
+      id: string;
+      center: { latitude: number; longitude: number };
+      buses: unknown[];
+      count: number;
+    }> = [];
     const processedLocations = new Set();
 
-    locationsInViewport.forEach(location => {
+    locationsInViewport.forEach((location) => {
       if (processedLocations.has(location.id)) return;
 
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
       if (!pointMatch) return;
-      
+
       const [longitude, latitude] = pointMatch[1].split(' ').map(Number);
 
       const cluster = {
@@ -170,17 +195,24 @@ router.get('/clusters', async (req, res) => {
       };
 
       // Find nearby buses
-      locationsInViewport.forEach(otherLocation => {
-        if (otherLocation.id === location.id || processedLocations.has(otherLocation.id)) return;
+      locationsInViewport.forEach((otherLocation) => {
+        if (
+          otherLocation.id === location.id ||
+          processedLocations.has(otherLocation.id)
+        )
+          return;
 
-        const otherPointMatch = otherLocation.location.match(/POINT\(([^)]+)\)/);
+        const otherPointMatch =
+          otherLocation.location.match(/POINT\(([^)]+)\)/);
         if (!otherPointMatch) return;
-        
-        const [otherLongitude, otherLatitude] = otherPointMatch[1].split(' ').map(Number);
+
+        const [otherLongitude, otherLatitude] = otherPointMatch[1]
+          .split(' ')
+          .map(Number);
 
         const distance = Math.sqrt(
           Math.pow(latitude - otherLatitude, 2) +
-          Math.pow(longitude - otherLongitude, 2)
+            Math.pow(longitude - otherLongitude, 2)
         );
 
         if (distance <= clusterRadius) {
@@ -210,8 +242,10 @@ router.get('/clusters', async (req, res) => {
 });
 
 // Get specific bus information
-router.get('/:busId', async (req, res) => {
-  try {
+router.get('/:busId', 
+  sanitizeInput,
+  validateParams(busIdSchema),
+  asyncHandler(async (req: any, res: any) => {
     const { busId } = req.params;
     const busInfo = await getBusInfo(busId);
 
@@ -228,14 +262,7 @@ router.get('/:busId', async (req, res) => {
       data: busInfo,
       timestamp: new Date().toISOString(),
     });
-  } catch (error) {
-    console.error('❌ Error fetching bus info:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch bus information',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-});
+  })
+);
 
 export default router;

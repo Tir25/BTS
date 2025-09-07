@@ -339,14 +339,14 @@ export class RouteService {
         )
         ORDER BY name;
       `;
-      
+
       const result = await pool.query(query, [
         viewport.minLng,
         viewport.minLat,
         viewport.maxLng,
         viewport.maxLat,
       ]);
-      
+
       return result.rows;
     } catch (error) {
       console.error('❌ Error fetching routes in viewport:', error);

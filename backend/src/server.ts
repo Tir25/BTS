@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { corsMiddleware, handlePreflight } from './middleware/cors';
 import { rateLimitMiddleware } from './middleware/rateLimit';
+import { errorHandler, notFoundHandler, setupGlobalErrorHandlers } from './middleware/errorHandler';
 import healthRoutes from './routes/health';
 import busRoutes from './routes/buses';
 import routeRoutes from './routes/routes';
@@ -12,23 +13,99 @@ import storageRoutes from './routes/storage';
 import locationRoutes from './routes/locations';
 import sseRoutes from './routes/sse';
 import { initializeDatabase, testDatabaseConnection } from './models/database';
-import { closeDatabasePool } from './config/database';
+import { closeDatabasePool, pool } from './config/database';
 import { initializeEnvironment } from './config/environment';
 import { initializeWebSocket } from './sockets/websocket';
+import { performanceMiddleware } from './middleware/performanceMiddleware';
+import { performanceMonitor } from './services/PerformanceMonitor';
+import metricsRoutes from './routes/metrics';
 
 // Initialize environment configuration
 const config = initializeEnvironment();
 
+// System metrics collection
+const startSystemMetricsCollection = () => {
+  setInterval(() => {
+    try {
+      performanceMonitor.recordSystemMetrics({
+        activeConnections: io.engine.clientsCount,
+        databaseConnections: {
+          total: pool.totalCount,
+          idle: pool.idleCount,
+          waiting: pool.waitingCount,
+        },
+        websocketConnections: io.engine.clientsCount,
+      });
+    } catch (error) {
+      console.error('❌ Error collecting system metrics:', error);
+    }
+  }, 30000); // Collect every 30 seconds
+};
+
 const app = express();
 const server = createServer(app);
 const io = new SocketIOServer(server, {
-  cors: config.websocket.cors,
+  cors: {
+    // Use environment-based origin validation
+    origin: config.cors.allowedOrigins,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'User-Agent',
+      'Accept',
+      'Origin'
+    ],
+    credentials: true,
+    // Firefox-specific CORS settings
+    preflightContinue: false,
+    optionsSuccessStatus: 204
+  },
+  // Use polling first, then upgrade to WebSocket for better compatibility
+  transports: ['polling', 'websocket'],
+  allowEIO3: true, // Allow Engine.IO v3 clients for better compatibility
+  pingTimeout: 60000, // 60 seconds
+  pingInterval: 25000, // 25 seconds
+  upgradeTimeout: 10000, // 10 seconds
+  maxHttpBufferSize: 1e6, // 1MB
+  // Disable per-message deflate to fix Firefox WebSocket issues
+  perMessageDeflate: false,
+  // Enhanced request validation for WebSocket connections
+  allowRequest: (req, callback) => {
+    const origin = req.headers.origin;
+    
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Validate origin against allowed origins
+    const isAllowed = config.cors.allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return allowedOrigin === origin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`🚫 WebSocket: Blocked connection from origin: ${origin}`);
+      callback('Origin not allowed', false);
+    }
+  }
 });
 
 const PORT = config.port;
 
 // Security middleware
 app.use(helmet());
+
+// Performance monitoring middleware (add early to track all requests)
+app.use(performanceMiddleware);
 
 // CORS middleware
 app.use(corsMiddleware);
@@ -49,6 +126,7 @@ app.use('/routes', routeRoutes);
 app.use('/storage', storageRoutes);
 app.use('/locations', locationRoutes);
 app.use('/sse', sseRoutes);
+app.use('/metrics', metricsRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -58,58 +136,28 @@ app.get('/', (req, res) => {
     status: 'running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    endpoints: {
-      health: '/health',
-      healthDetailed: '/health/detailed',
-      admin: '/admin',
-      buses: '/buses',
-      routes: '/routes',
-      storage: '/storage',
-      locations: '/locations',
-      sse: '/sse',
-    },
+          endpoints: {
+        health: '/health',
+        healthDetailed: '/health/detailed',
+        admin: '/admin',
+        buses: '/buses',
+        routes: '/routes',
+        storage: '/storage',
+        locations: '/locations',
+        sse: '/sse',
+        metrics: '/metrics',
+      },
   });
 });
 
 // 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Route not found',
-    path: req.originalUrl,
-    availableEndpoints: [
-      '/',
-      '/health',
-      '/health/detailed',
-      '/buses',
-      '/routes',
-      '/admin',
-      '/storage',
-      '/locations',
-      '/sse',
-    ],
-  });
-});
+app.use('*', notFoundHandler);
 
-// Error handling middleware
-app.use(
-  (
-    err: Error,
-    req: express.Request,
-    res: express.Response,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-unused-vars
-    _next: express.NextFunction
-  ) => {
-    console.error('Error:', err);
-    res.status(500).json({
-      error: 'Internal server error',
-      message:
-        process.env.NODE_ENV === 'development'
-          ? err.message
-          : 'Something went wrong',
-      timestamp: new Date().toISOString(),
-    });
-  }
-);
+// Error handling middleware (must be last)
+app.use(errorHandler);
+
+// Setup global error handlers
+setupGlobalErrorHandlers();
 
 // Initialize server with enhanced error handling
 const startServer = async () => {
@@ -123,7 +171,7 @@ const startServer = async () => {
     await initializeDatabase();
 
     // Test database connection
-    // Testing database connection...
+    console.log('🔄 Testing database connection...');
     await testDatabaseConnection();
 
     // Initialize WebSocket server
@@ -138,10 +186,16 @@ const startServer = async () => {
       console.log(
         `📊 Detailed health: http://localhost:${PORT}/health/detailed`
       );
+      console.log(`📈 Performance metrics: http://localhost:${PORT}/metrics`);
       console.log(`🌐 API base: http://localhost:${PORT}`);
       console.log(`🌐 Network access: http://192.168.1.2:${PORT}`);
+      console.log(`🌐 Frontend network: http://192.168.1.2:5173`);
       console.log(`🔌 WebSocket server ready on ws://localhost:${PORT}`);
       console.log(`🔌 WebSocket network: ws://192.168.1.2:${PORT}`);
+      console.log(`📱 Mobile/Cross-laptop access: http://192.168.1.2:${PORT}`);
+      
+      // Start system metrics collection
+      startSystemMetricsCollection();
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -176,18 +230,6 @@ const gracefulShutdown = async (signal: string) => {
 // Handle graceful shutdown
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  gracefulShutdown('Uncaught Exception');
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('Unhandled Rejection');
-});
 
 // Start the server
 startServer();

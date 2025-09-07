@@ -11,7 +11,7 @@ import { ConnectionManager } from './ConnectionManager';
 
 export class ServiceFactory {
   private static instance: ServiceFactory;
-  private services: Map<string, any> = new Map();
+  private services: Map<string, unknown> = new Map();
 
   private constructor() {}
 
@@ -27,28 +27,28 @@ export class ServiceFactory {
     if (!this.services.has('mapService')) {
       this.services.set('mapService', new MapService());
     }
-    return this.services.get('mapService');
+    return this.services.get('mapService') as IMapService;
   }
 
   getWebSocketService(): IWebSocketService {
     if (!this.services.has('webSocketService')) {
       this.services.set('webSocketService', websocketService);
     }
-    return this.services.get('webSocketService');
+    return this.services.get('webSocketService') as IWebSocketService;
   }
 
   getBusService(): IBusService {
     if (!this.services.has('busService')) {
       this.services.set('busService', busService);
     }
-    return this.services.get('busService');
+    return this.services.get('busService') as IBusService;
   }
 
   getApiService(): IApiService {
     if (!this.services.has('apiService')) {
       this.services.set('apiService', apiService);
     }
-    return this.services.get('apiService');
+    return this.services.get('apiService') as IApiService;
   }
 
   getDataManager(): DataManager {
@@ -59,7 +59,7 @@ export class ServiceFactory {
       );
       this.services.set('dataManager', dataManager);
     }
-    return this.services.get('dataManager');
+    return this.services.get('dataManager') as DataManager;
   }
 
   getConnectionManager(): ConnectionManager {
@@ -69,7 +69,7 @@ export class ServiceFactory {
       );
       this.services.set('connectionManager', connectionManager);
     }
-    return this.services.get('connectionManager');
+    return this.services.get('connectionManager') as ConnectionManager;
   }
 
   // Method to replace services (useful for testing)
@@ -83,7 +83,7 @@ export class ServiceFactory {
   }
 
   // Method to get all registered services
-  getAllServices(): Map<string, any> {
+  getAllServices(): Map<string, unknown> {
     return new Map(this.services);
   }
 }

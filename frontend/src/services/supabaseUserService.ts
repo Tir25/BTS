@@ -36,7 +36,7 @@ class SupabaseUserService {
       }
 
       // Convert profiles to SupabaseUser format
-      return (profiles || []).map((profile) => ({
+      return (profiles || []).map(profile => ({
         id: profile.id,
         email: profile.email || '',
         user_metadata: {
@@ -86,10 +86,10 @@ class SupabaseUserService {
 
       // Filter out assigned drivers
       const assignedDriverIds = new Set(
-        assignedDrivers?.map((bus) => bus.assigned_driver_id) || []
+        assignedDrivers?.map(bus => bus.assigned_driver_id) || []
       );
       const unassignedDrivers =
-        allDrivers?.filter((driver) => !assignedDriverIds.has(driver.id)) || [];
+        allDrivers?.filter(driver => !assignedDriverIds.has(driver.id)) || [];
 
       console.log(
         '✅ Returning',
@@ -170,8 +170,8 @@ class SupabaseUserService {
   async createUser(
     email: string,
     password: string,
-    metadata: any
-  ): Promise<any> {
+    metadata: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
     try {
       // Instead of using admin functions, call the backend API
       const response = await fetch(`${environment.api.url}/admin/drivers`, {
@@ -183,8 +183,9 @@ class SupabaseUserService {
         body: JSON.stringify({
           email,
           password,
-          first_name: metadata.full_name?.split(' ')[0] || '',
-          last_name: metadata.full_name?.split(' ').slice(1).join(' ') || '',
+          first_name: (metadata.full_name as string)?.split(' ')[0] || '',
+          last_name:
+            (metadata.full_name as string)?.split(' ').slice(1).join(' ') || '',
           role: 'driver',
         }),
       });
@@ -202,17 +203,23 @@ class SupabaseUserService {
   }
 
   // Frontend-safe user metadata update (redirects to backend API)
-  async updateUserMetadata(userId: string, metadata: any): Promise<any> {
+  async updateUserMetadata(
+    userId: string,
+    metadata: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
     try {
       // Instead of using admin functions, call the backend API
-      const response = await fetch(`${environment.api.url}/admin/drivers/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.getAccessToken()}`,
-        },
-        body: JSON.stringify(metadata),
-      });
+      const response = await fetch(
+        `${environment.api.url}/admin/drivers/${userId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.getAccessToken()}`,
+          },
+          body: JSON.stringify(metadata),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();

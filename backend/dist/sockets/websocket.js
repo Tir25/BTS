@@ -23,6 +23,13 @@ const initializeWebSocket = (io) => {
         activeConnections++;
         socket.lastActivity = Date.now();
         console.log(`🔌 New client connected: ${socket.id} (Total: ${totalConnections}, Active: ${activeConnections})`);
+        console.log('🔌 Connection details:', {
+            socketId: socket.id,
+            transport: socket.conn.transport.name,
+            headers: socket.handshake.headers,
+            query: socket.handshake.query,
+            timestamp: new Date().toISOString()
+        });
         socket.conn.on('packet', ({ type }) => {
             if (type === 'pong') {
                 console.log(`💓 Pong received from ${socket.id}`);
@@ -30,14 +37,32 @@ const initializeWebSocket = (io) => {
             }
         });
         socket.on('ping', () => {
-            socket.emit('pong');
+            console.log('💓 Ping received from:', socket.id);
+            socket.emit('pong', { timestamp: new Date().toISOString() });
+        });
+        socket.on('driver:connected', (data) => {
             socket.lastActivity = Date.now();
-            console.log(`💓 Ping received from ${socket.id}`);
+            console.log('👨‍✈️ Driver connected:', {
+                socketId: socket.id,
+                timestamp: data.timestamp,
+                clientInfo: data.clientInfo
+            });
+            socket.join('drivers');
+            socket.emit('driver:connected', {
+                timestamp: new Date().toISOString(),
+                socketId: socket.id
+            });
         });
         socket.on('driver:authenticate', async (data) => {
+            console.log('🔐 DRIVER AUTHENTICATION EVENT RECEIVED:', {
+                socketId: socket.id,
+                data: data,
+                timestamp: new Date().toISOString()
+            });
             try {
                 const { token } = data;
                 if (!token) {
+                    console.log('❌ No token provided in authentication request');
                     socket.emit('driver:authentication_failed', {
                         message: 'Authentication token required',
                         code: 'MISSING_TOKEN',
@@ -45,15 +70,17 @@ const initializeWebSocket = (io) => {
                     return;
                 }
                 if (typeof token !== 'string' || token.length < 10) {
+                    console.log('❌ Invalid token format:', { tokenLength: token?.length, tokenType: typeof token });
                     socket.emit('driver:authentication_failed', {
                         message: 'Invalid token format',
                         code: 'INVALID_TOKEN_FORMAT',
                     });
                     return;
                 }
+                console.log('🔐 Validating token with Supabase...');
                 const { data: { user }, error, } = await supabase_1.supabaseAdmin.auth.getUser(token);
                 if (error || !user) {
-                    console.error('❌ Authentication error:', error);
+                    console.error('❌ Supabase authentication error:', error);
                     socket.emit('driver:authentication_failed', {
                         message: 'Invalid authentication token',
                         code: 'INVALID_TOKEN',
@@ -109,6 +136,13 @@ const initializeWebSocket = (io) => {
                 socket.join(`driver:${user.id}`);
                 socket.join(`bus:${busInfo.bus_id}`);
                 console.log(`✅ Driver ${user.id} authenticated and assigned to bus ${busInfo.bus_id}`);
+                console.log('🔐 Socket authentication state set:', {
+                    socketId: socket.id,
+                    driverId: socket.driverId,
+                    busId: socket.busId,
+                    isAuthenticated: socket.isAuthenticated,
+                    timestamp: new Date().toISOString()
+                });
                 const authResponse = {
                     driverId: user.id,
                     busId: busInfo.bus_id,
@@ -135,18 +169,28 @@ const initializeWebSocket = (io) => {
                     timestamp: data.timestamp,
                     socketDriverId: socket.driverId,
                     socketBusId: socket.busId,
+                    socketId: socket.id,
+                    isAuthenticated: socket.isAuthenticated,
                 });
                 if (!socket.driverId || !socket.busId || !socket.isAuthenticated) {
+                    console.error('❌ Driver authentication check failed:', {
+                        socketId: socket.id,
+                        socketDriverId: socket.driverId,
+                        socketBusId: socket.busId,
+                        isAuthenticated: socket.isAuthenticated,
+                        incomingDriverId: data.driverId,
+                        timestamp: new Date().toISOString()
+                    });
                     socket.emit('error', {
                         message: 'Driver not authenticated',
                         code: 'NOT_AUTHENTICATED',
                     });
                     return;
                 }
-                const validationError = (0, validation_1.validateLocationData)(data);
-                if (validationError) {
+                const validationResult = (0, validation_1.validateLocationData)(data);
+                if (!validationResult.success) {
                     socket.emit('error', {
-                        message: validationError,
+                        message: validationResult.errors?.issues || 'Validation failed',
                         code: 'VALIDATION_ERROR',
                     });
                     return;
@@ -251,9 +295,6 @@ const initializeWebSocket = (io) => {
         });
         socket.on('error', (error) => {
             console.error('❌ Socket error:', error);
-            socket.lastActivity = Date.now();
-        });
-        socket.onAny(() => {
             socket.lastActivity = Date.now();
         });
     });

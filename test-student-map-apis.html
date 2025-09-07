@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Map API Testing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-item {
+            margin: 15px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .response {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .websocket-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .connection-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+        }
+        .connection-indicator.connected { background: #28a745; }
+        .connection-indicator.connecting { background: #ffc107; }
+    </style>
+</head>
+<body>
+    <h1>🚌 Student Live Map API Testing</h1>
+    <p>This page tests all APIs used in the student live map to ensure they are working properly.</p>
+
+    <div class="test-section">
+        <h2>🔧 Backend Server Status</h2>
+        <div class="test-item">
+            <strong>Backend Health Check</strong>
+            <button onclick="testHealth()">Test Health</button>
+            <span id="health-status" class="status info">Not tested</span>
+            <div id="health-response" class="response" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🚌 Bus APIs</h2>
+        <div class="test-item">
+            <strong>Get All Buses</strong>
+            <button onclick="testGetAllBuses()">Test API</button>
+            <span id="buses-status" class="status info">Not tested</span>
+            <div id="buses-response" class="response" style="display: none;"></div>
+        </div>
+        
+        <div class="test-item">
+            <strong>Get Buses in Viewport</strong>
+            <button onclick="testBusesInViewport()">Test API</button>
+            <span id="buses-viewport-status" class="status info">Not tested</span>
+            <div id="buses-viewport-response" class="response" style="display: none;"></div>
+        </div>
+        
+        <div class="test-item">
+            <strong>Get Bus Clusters</strong>
+            <button onclick="testBusClusters()">Test API</button>
+            <span id="bus-clusters-status" class="status info">Not tested</span>
+            <div id="bus-clusters-response" class="response" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🛣️ Route APIs</h2>
+        <div class="test-item">
+            <strong>Get All Routes</strong>
+            <button onclick="testGetAllRoutes()">Test API</button>
+            <span id="routes-status" class="status info">Not tested</span>
+            <div id="routes-response" class="response" style="display: none;"></div>
+        </div>
+        
+        <div class="test-item">
+            <strong>Get Routes in Viewport</strong>
+            <button onclick="testRoutesInViewport()">Test API</button>
+            <span id="routes-viewport-status" class="status info">Not tested</span>
+            <div id="routes-viewport-response" class="response" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>📍 Location APIs</h2>
+        <div class="test-item">
+            <strong>Get Current Locations</strong>
+            <button onclick="testCurrentLocations()">Test API</button>
+            <span id="locations-status" class="status info">Not tested</span>
+            <div id="locations-response" class="response" style="display: none;"></div>
+        </div>
+        
+        <div class="test-item">
+            <strong>Get Locations in Viewport</strong>
+            <button onclick="testLocationsInViewport()">Test API</button>
+            <span id="locations-viewport-status" class="status info">Not tested</span>
+            <div id="locations-viewport-response" class="response" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔌 WebSocket Connection</h2>
+        <div class="test-item">
+            <div class="websocket-status">
+                <div id="ws-indicator" class="connection-indicator"></div>
+                <strong>WebSocket Connection</strong>
+                <button onclick="testWebSocket()">Test Connection</button>
+                <button onclick="disconnectWebSocket()">Disconnect</button>
+            </div>
+            <span id="websocket-status" class="status info">Not tested</span>
+            <div id="websocket-response" class="response" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 Comprehensive Test</h2>
+        <div class="test-item">
+            <strong>Run All Tests</strong>
+            <button onclick="runAllTests()">Run All Tests</button>
+            <span id="all-tests-status" class="status info">Not tested</span>
+            <div id="all-tests-response" class="response" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        let socket = null;
+        let testResults = {};
+
+        // Test Health API
+        async function testHealth() {
+            const statusEl = document.getElementById('health-status');
+            const responseEl = document.getElementById('health-response');
+            
+            try {
+                statusEl.textContent = 'Testing...';
+                statusEl.className = 'status warning';
+                
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'healthy') {
+                    statusEl.textContent = '✅ Healthy';
+                    statusEl.className = 'status success';
+                    testResults.health = { success: true, data };
+                } else {
+                    statusEl.textContent = '❌ Unhealthy';
+                    statusEl.className = 'status error';
+                    testResults.health = { success: false, error: data };
+                }
+                
+                responseEl.textContent = JSON.stringify(data, null, 2);
+                responseEl.style.display = 'block';
+            } catch (error) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+                testResults.health = { success: false, error: error.message };
+                responseEl.textContent = `Error: ${error.message}`;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        // Test Get All Buses API
+        async function testGetAllBuses() {
+            const statusEl = document.getElementById('buses-status');
+            const responseEl = document.getElementById('buses-response');
+            
+            try {
+                statusEl.textContent = 'Testing...';
+                statusEl.className = 'status warning';
+                
+                const response = await fetch(`${API_BASE}/buses`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    statusEl.textContent = `✅ Success (${data.data.length} buses)`;
+                    statusEl.className = 'status success';
+                    testResults.buses = { success: true, data };
+                } else {
+                    statusEl.textContent = '❌ Failed';
+                    statusEl.className = 'status error';
+                    testResults.buses = { success: false, error: data };
+                }
+                
+                responseEl.textContent = JSON.stringify(data, null, 2);
+                responseEl.style.display = 'block';
+            } catch (error) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+                testResults.buses = { success: false, error: error.message };
+                responseEl.textContent = `Error: ${error.message}`;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        // Test Buses in Viewport API
+        async function testBusesInViewport() {
+            const statusEl = document.getElementById('buses-viewport-status');
+            const responseEl = document.getElementById('buses-viewport-response');
+            
+            try {
+                statusEl.textContent = 'Testing...';
+                statusEl.className = 'status warning';
+                
+                // Test with a viewport around Ahmedabad
+                const params = new URLSearchParams({
+                    minLng: '72.5',
+                    minLat: '23.0',
+                    maxLng: '72.6',
+                    maxLat: '23.1'
+                });
+                
+                const response = await fetch(`${API_BASE}/buses/viewport?${params}`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    statusEl.textContent = `✅ Success (${data.data.length} buses in viewport)`;
+                    statusEl.className = 'status success';
+                    testResults.busesViewport = { success: true, data };
+                } else {
+                    statusEl.textContent = '❌ Failed';
+                    statusEl.className = 'status error';
+                    testResults.busesViewport = { success: false, error: data };
+                }
+                
+                responseEl.textContent = JSON.stringify(data, null, 2);
+                responseEl.style.display = 'block';
+            } catch (error) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+                testResults.busesViewport = { success: false, error: error.message };
+                responseEl.textContent = `Error: ${error.message}`;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        // Test Bus Clusters API
+        async function testBusClusters() {
+            const statusEl = document.getElementById('bus-clusters-status');
+            const responseEl = document.getElementById('bus-clusters-response');
+            
+            try {
+                statusEl.textContent = 'Testing...';
+                statusEl.className = 'status warning';
+                
+                const params = new URLSearchParams({
+                    minLng: '72.5',
+                    minLat: '23.0',
+                    maxLng: '72.6',
+                    maxLat: '23.1',
+                    zoom: '12'
+                });
+                
+                const response = await fetch(`${API_BASE}/buses/clusters?${params}`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    statusEl.textContent = `✅ Success (${data.data.length} clusters)`;
+                    statusEl.className = 'status success';
+                    testResults.busClusters = { success: true, data };
+                } else {
+                    statusEl.textContent = '❌ Failed';
+                    statusEl.className = 'status error';
+                    testResults.busClusters = { success: false, error: data };
+                }
+                
+                responseEl.textContent = JSON.stringify(data, null, 2);
+                responseEl.style.display = 'block';
+            } catch (error) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+                testResults.busClusters = { success: false, error: error.message };
+                responseEl.textContent = `Error: ${error.message}`;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        // Test Get All Routes API
+        async function testGetAllRoutes() {
+            const statusEl = document.getElementById('routes-status');
+            const responseEl = document.getElementById('routes-response');
+            
+            try {
+                statusEl.textContent = 'Testing...';
+                statusEl.className = 'status warning';
+                
+                const response = await fetch(`${API_BASE}/routes`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    statusEl.textContent = `✅ Success (${data.data.length} routes)`;
+                    statusEl.className = 'status success';
+                    testResults.routes = { success: true, data };
+                } else {
+                    statusEl.textContent = '❌ Failed';
+                    statusEl.className = 'status error';
+                    testResults.routes = { success: false, error: data };
+                }
+                
+                responseEl.textContent = JSON.stringify(data, null, 2);
+                responseEl.style.display = 'block';
+            } catch (error) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+                testResults.routes = { success: false, error: error.message };
+                responseEl.textContent = `Error: ${error.message}`;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        // Test Routes in Viewport API
+        async function testRoutesInViewport() {
+            const statusEl = document.getElementById('routes-viewport-status');
+            const responseEl = document.getElementById('routes-viewport-response');
+            
+            try {
+                statusEl.textContent = 'Testing...';
+                statusEl.className = 'status warning';
+                
+                const params = new URLSearchParams({
+                    minLng: '72.5',
+                    minLat: '23.0',
+                    maxLng: '72.6',
+                    maxLat: '23.1'
+                });
+                
+                const response = await fetch(`${API_BASE}/routes/viewport?${params}`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    statusEl.textContent = `✅ Success (${data.data.length} routes in viewport)`;
+                    statusEl.className = 'status success';
+                    testResults.routesViewport = { success: true, data };
+                } else {
+                    statusEl.textContent = '❌ Failed';
+                    statusEl.className = 'status error';
+                    testResults.routesViewport = { success: false, error: data };
+                }
+                
+                responseEl.textContent = JSON.stringify(data, null, 2);
+                responseEl.style.display = 'block';
+            } catch (error) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+                testResults.routesViewport = { success: false, error: error.message };
+                responseEl.textContent = `Error: ${error.message}`;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        // Test Current Locations API
+        async function testCurrentLocations() {
+            const statusEl = document.getElementById('locations-status');
+            const responseEl = document.getElementById('locations-response');
+            
+            try {
+                statusEl.textContent = 'Testing...';
+                statusEl.className = 'status warning';
+                
+                const response = await fetch(`${API_BASE}/locations/current`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    statusEl.textContent = `✅ Success (${data.data.length} locations)`;
+                    statusEl.className = 'status success';
+                    testResults.locations = { success: true, data };
+                } else {
+                    statusEl.textContent = '❌ Failed';
+                    statusEl.className = 'status error';
+                    testResults.locations = { success: false, error: data };
+                }
+                
+                responseEl.textContent = JSON.stringify(data, null, 2);
+                responseEl.style.display = 'block';
+            } catch (error) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+                testResults.locations = { success: false, error: error.message };
+                responseEl.textContent = `Error: ${error.message}`;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        // Test Locations in Viewport API
+        async function testLocationsInViewport() {
+            const statusEl = document.getElementById('locations-viewport-status');
+            const responseEl = document.getElementById('locations-viewport-response');
+            
+            try {
+                statusEl.textContent = 'Testing...';
+                statusEl.className = 'status warning';
+                
+                const params = new URLSearchParams({
+                    minLng: '72.5',
+                    minLat: '23.0',
+                    maxLng: '72.6',
+                    maxLat: '23.1'
+                });
+                
+                const response = await fetch(`${API_BASE}/locations/viewport?${params}`);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    statusEl.textContent = `✅ Success (${data.data.length} locations in viewport)`;
+                    statusEl.className = 'status success';
+                    testResults.locationsViewport = { success: true, data };
+                } else {
+                    statusEl.textContent = '❌ Failed';
+                    statusEl.className = 'status error';
+                    testResults.locationsViewport = { success: false, error: data };
+                }
+                
+                responseEl.textContent = JSON.stringify(data, null, 2);
+                responseEl.style.display = 'block';
+            } catch (error) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+                testResults.locationsViewport = { success: false, error: error.message };
+                responseEl.textContent = `Error: ${error.message}`;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        // Test WebSocket Connection
+        function testWebSocket() {
+            const statusEl = document.getElementById('websocket-status');
+            const responseEl = document.getElementById('websocket-response');
+            const indicatorEl = document.getElementById('ws-indicator');
+            
+            try {
+                statusEl.textContent = 'Connecting...';
+                statusEl.className = 'status warning';
+                indicatorEl.className = 'connection-indicator connecting';
+                
+                // Disconnect existing connection
+                if (socket) {
+                    socket.disconnect();
+                }
+                
+                // Create new connection
+                socket = io('http://localhost:3000', {
+                    transports: ['websocket', 'polling'],
+                    timeout: 10000,
+                    forceNew: true,
+                    query: {
+                        clientType: 'student',
+                        version: '1.0.0',
+                        timestamp: Date.now().toString()
+                    }
+                });
+                
+                socket.on('connect', () => {
+                    statusEl.textContent = '✅ Connected';
+                    statusEl.className = 'status success';
+                    indicatorEl.className = 'connection-indicator connected';
+                    testResults.websocket = { success: true, connected: true };
+                    
+                    responseEl.textContent = `WebSocket connected successfully!
+Connection ID: ${socket.id}
+Transport: ${socket.io.engine.transport.name}
+Query: ${JSON.stringify(socket.io.opts.query, null, 2)}`;
+                    responseEl.style.display = 'block';
+                });
+                
+                socket.on('connect_error', (error) => {
+                    statusEl.textContent = '❌ Connection Failed';
+                    statusEl.className = 'status error';
+                    indicatorEl.className = 'connection-indicator';
+                    testResults.websocket = { success: false, error: error.message };
+                    
+                    responseEl.textContent = `WebSocket connection failed: ${error.message}`;
+                    responseEl.style.display = 'block';
+                });
+                
+                socket.on('disconnect', (reason) => {
+                    statusEl.textContent = '❌ Disconnected';
+                    statusEl.className = 'status error';
+                    indicatorEl.className = 'connection-indicator';
+                    
+                    responseEl.textContent = `WebSocket disconnected: ${reason}`;
+                    responseEl.style.display = 'block';
+                });
+                
+                // Listen for bus location updates
+                socket.on('bus:locationUpdate', (data) => {
+                    console.log('Received bus location update:', data);
+                    responseEl.textContent += `\n\nBus Location Update Received:
+${JSON.stringify(data, null, 2)}`;
+                });
+                
+                // Emit student connection event
+                socket.emit('student:connect', {
+                    timestamp: new Date().toISOString(),
+                    clientInfo: {
+                        userAgent: navigator.userAgent,
+                        platform: navigator.platform,
+                        language: navigator.language
+                    }
+                });
+                
+            } catch (error) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+                indicatorEl.className = 'connection-indicator';
+                testResults.websocket = { success: false, error: error.message };
+                responseEl.textContent = `Error: ${error.message}`;
+                responseEl.style.display = 'block';
+            }
+        }
+
+        // Disconnect WebSocket
+        function disconnectWebSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+            
+            const statusEl = document.getElementById('websocket-status');
+            const indicatorEl = document.getElementById('ws-indicator');
+            
+            statusEl.textContent = 'Disconnected';
+            statusEl.className = 'status info';
+            indicatorEl.className = 'connection-indicator';
+        }
+
+        // Run All Tests
+        async function runAllTests() {
+            const statusEl = document.getElementById('all-tests-status');
+            const responseEl = document.getElementById('all-tests-response');
+            
+            statusEl.textContent = 'Running all tests...';
+            statusEl.className = 'status warning';
+            
+            testResults = {};
+            let passedTests = 0;
+            let totalTests = 0;
+            
+            const tests = [
+                { name: 'Health Check', fn: testHealth },
+                { name: 'Get All Buses', fn: testGetAllBuses },
+                { name: 'Buses in Viewport', fn: testBusesInViewport },
+                { name: 'Bus Clusters', fn: testBusClusters },
+                { name: 'Get All Routes', fn: testGetAllRoutes },
+                { name: 'Routes in Viewport', fn: testRoutesInViewport },
+                { name: 'Current Locations', fn: testCurrentLocations },
+                { name: 'Locations in Viewport', fn: testLocationsInViewport },
+                { name: 'WebSocket Connection', fn: testWebSocket }
+            ];
+            
+            for (const test of tests) {
+                totalTests++;
+                try {
+                    await test.fn();
+                    if (testResults[test.name.toLowerCase().replace(/\s+/g, '')]?.success) {
+                        passedTests++;
+                    }
+                } catch (error) {
+                    console.error(`Test ${test.name} failed:`, error);
+                }
+                
+                // Wait a bit between tests
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            const successRate = (passedTests / totalTests * 100).toFixed(1);
+            
+            if (passedTests === totalTests) {
+                statusEl.textContent = `✅ All Tests Passed (${passedTests}/${totalTests})`;
+                statusEl.className = 'status success';
+            } else if (passedTests > 0) {
+                statusEl.textContent = `⚠️ Partial Success (${passedTests}/${totalTests}) - ${successRate}%`;
+                statusEl.className = 'status warning';
+            } else {
+                statusEl.textContent = `❌ All Tests Failed (${passedTests}/${totalTests})`;
+                statusEl.className = 'status error';
+            }
+            
+            responseEl.textContent = `Test Results Summary:
+Total Tests: ${totalTests}
+Passed: ${passedTests}
+Failed: ${totalTests - passedTests}
+Success Rate: ${successRate}%
+
+Detailed Results:
+${JSON.stringify(testResults, null, 2)}`;
+            responseEl.style.display = 'block';
+        }
+
+        // Auto-run health check on page load
+        window.addEventListener('load', () => {
+            setTimeout(testHealth, 1000);
+        });
+    </script>
+</body>
+</html>

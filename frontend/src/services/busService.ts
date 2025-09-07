@@ -52,6 +52,8 @@ class BusService implements IBusService {
   updateBusLocation(location: BusLocation): void {
     const { busId, latitude, longitude, timestamp } = location;
 
+    console.log('🚌 BusService: Updating location for bus:', busId, location);
+
     // Get previous location for speed calculation
     const previousLocation = this.previousLocations[busId];
 
@@ -73,6 +75,7 @@ class BusService implements IBusService {
 
     // Update or create bus info
     if (!this.buses[busId]) {
+      console.log('🚌 BusService: Creating new bus entry for:', busId);
       this.buses[busId] = {
         busId,
         busNumber: `Bus ${busId}`, // Default name, will be updated from API
@@ -84,7 +87,13 @@ class BusService implements IBusService {
         },
         eta: location.eta?.estimated_arrival_minutes,
       };
+      
+      // Try to sync with API to get proper bus information
+      this.syncBusFromAPI(busId).catch(error => {
+        console.warn('⚠️ BusService: Failed to sync bus data from API:', error);
+      });
     } else {
+      console.log('🚌 BusService: Updating existing bus:', busId);
       this.buses[busId].currentLocation = {
         ...location,
         speed: speed || location.speed,
@@ -99,6 +108,8 @@ class BusService implements IBusService {
       longitude,
       timestamp,
     };
+
+    console.log('🚌 BusService: Bus updated successfully:', this.buses[busId]);
   }
 
   // Get bus information by ID
@@ -113,9 +124,7 @@ class BusService implements IBusService {
 
   // Get buses by route name
   getBusesByRoute(routeName: string): BusInfo[] {
-    return Object.values(this.buses).filter(
-      (bus) => bus.routeName === routeName
-    );
+    return Object.values(this.buses).filter(bus => bus.routeName === routeName);
   }
 
   // Sync bus data from API
@@ -190,14 +199,14 @@ class BusService implements IBusService {
     const buses = Object.values(this.buses);
     const busesByRoute: { [routeName: string]: number } = {};
 
-    buses.forEach((bus) => {
+    buses.forEach(bus => {
       const routeName = bus.routeName;
       busesByRoute[routeName] = (busesByRoute[routeName] || 0) + 1;
     });
 
     return {
       totalBuses: buses.length,
-      activeBuses: buses.filter((bus) => bus.currentLocation).length,
+      activeBuses: buses.filter(bus => bus.currentLocation).length,
       busesByRoute,
     };
   }
@@ -205,7 +214,7 @@ class BusService implements IBusService {
   // Get buses with recent activity (within last 5 minutes)
   getActiveBuses(): BusInfo[] {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    return Object.values(this.buses).filter((bus) => {
+    return Object.values(this.buses).filter(bus => {
       const lastUpdate = new Date(bus.currentLocation.timestamp);
       return lastUpdate > fiveMinutesAgo;
     });
@@ -234,7 +243,7 @@ class BusService implements IBusService {
     longitude: number,
     radiusKm: number = 5
   ): BusInfo[] {
-    return Object.values(this.buses).filter((bus) => {
+    return Object.values(this.buses).filter(bus => {
       const busLat = bus.currentLocation.latitude;
       const busLng = bus.currentLocation.longitude;
 

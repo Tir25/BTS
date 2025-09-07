@@ -1,6 +1,43 @@
 // Unified Type Definitions for Bus Tracking System
 // Aligned with actual database schema and backend services
 
+// ===== POSTGIS GEOMETRY TYPES =====
+export interface PostGISPoint {
+  type: 'Point';
+  coordinates: [number, number]; // [longitude, latitude]
+  crs?: {
+    type: 'name';
+    properties: {
+      name: string;
+    };
+  };
+}
+
+export interface PostGISLineString {
+  type: 'LineString';
+  coordinates: [number, number][]; // Array of [longitude, latitude] pairs
+  crs?: {
+    type: 'name';
+    properties: {
+      name: string;
+    };
+  };
+}
+
+export interface PostGISGeometry {
+  type: string;
+  coordinates: unknown;
+  crs?: {
+    type: 'name';
+    properties: {
+      name: string;
+    };
+  };
+}
+
+// ===== JSONB TYPE =====
+export type JSONB = Record<string, unknown>;
+
 // ===== USER MANAGEMENT TYPES =====
 export interface User {
   id: string;
@@ -69,8 +106,8 @@ export interface Route {
   id: string;
   name: string;
   description?: string;
-  geom: any; // PostGIS geometry
-  stops?: any; // PostGIS geometry
+  geom: PostGISGeometry; // PostGIS geometry
+  stops?: PostGISGeometry; // PostGIS geometry
   total_distance_m?: number;
   distance_km?: number;
   estimated_duration_minutes?: number;
@@ -85,17 +122,17 @@ export interface Route {
   city?: string;
   custom_destination?: string;
   custom_origin?: string;
-  custom_destination_coordinates?: any;
-  custom_origin_coordinates?: any;
-  destination_coordinates?: any;
-  origin_coordinates?: any;
+  custom_destination_coordinates?: PostGISGeometry;
+  custom_origin_coordinates?: PostGISGeometry;
+  destination_coordinates?: PostGISGeometry;
+  origin_coordinates?: PostGISGeometry;
   // Route configuration
   use_custom_arrival?: boolean;
   custom_arrival_point?: string;
-  custom_arrival_coordinates?: any;
+  custom_arrival_coordinates?: PostGISGeometry;
   use_custom_starting_point?: boolean;
   custom_starting_point?: string;
-  custom_starting_coordinates?: any;
+  custom_starting_coordinates?: PostGISGeometry;
   arrival_point_type?:
     | 'ganpat_university'
     | 'custom_arrival'
@@ -116,7 +153,7 @@ export interface BusStop {
   route_id: string;
   name: string;
   description?: string;
-  location: any; // PostGIS geometry
+  location: PostGISGeometry; // PostGIS geometry
   stop_order: number;
   estimated_time_from_start?: number;
   is_active: boolean;
@@ -128,7 +165,7 @@ export interface RouteStop {
   id: string;
   route_id: string;
   name: string;
-  geom: any; // PostGIS geometry
+  geom: PostGISGeometry; // PostGIS geometry
   seq: number;
 }
 
@@ -148,7 +185,7 @@ export interface BusLocation {
 export interface LiveLocation {
   id: string;
   bus_id: string;
-  location: any; // PostGIS Point geometry
+  location: PostGISGeometry; // PostGIS Point geometry
   speed_kmh?: number;
   heading_degrees?: number;
   recorded_at: string;
@@ -156,7 +193,7 @@ export interface LiveLocation {
 
 export interface BusLocationLive {
   bus_id: string;
-  geom: any; // PostGIS geometry
+  geom: PostGISGeometry; // PostGIS geometry
   lat: number;
   lng: number;
   speed_kmh?: number;
@@ -168,7 +205,7 @@ export interface BusLocationLive {
 export interface BusLocationHistory {
   id: string;
   bus_id: string;
-  geom: any; // PostGIS geometry
+  geom: PostGISGeometry; // PostGIS geometry
   speed_kmh?: number;
   heading?: number;
   recorded_at: string;
@@ -208,7 +245,7 @@ export interface Destination {
   address: string;
   latitude: number;
   longitude: number;
-  location: any; // PostGIS geometry
+  location: PostGISGeometry; // PostGIS geometry
   is_default: boolean;
   is_active: boolean;
   created_at?: string;
@@ -219,7 +256,7 @@ export interface DefaultDestination {
   id: string;
   name: string;
   description?: string;
-  location: any; // PostGIS geometry
+  location: PostGISGeometry; // PostGIS geometry
   address?: string;
   is_active: boolean;
   created_at?: string;
@@ -230,7 +267,7 @@ export interface DefaultDestination {
 export interface SystemConstant {
   id: number;
   constant_name: string;
-  constant_value: any; // JSONB
+  constant_value: Record<string, unknown>; // JSONB
   description?: string;
   created_at?: string;
   updated_at?: string;

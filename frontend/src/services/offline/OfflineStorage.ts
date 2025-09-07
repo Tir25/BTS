@@ -2,7 +2,7 @@
 export interface OfflineData {
   id: string;
   type: 'bus' | 'route' | 'location' | 'driver' | 'user';
-  data: any;
+  data: Record<string, unknown>;
   timestamp: number;
   version: number;
   syncStatus: 'synced' | 'pending' | 'failed';
@@ -12,7 +12,7 @@ export interface SyncQueueItem {
   id: string;
   operation: 'create' | 'update' | 'delete';
   endpoint: string;
-  data: any;
+  data: Record<string, unknown>;
   timestamp: number;
   retryCount: number;
 }
@@ -60,19 +60,23 @@ class OfflineStorage {
         resolve();
       };
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = event => {
         const db = (event.target as IDBOpenDBRequest).result;
 
         // Create object stores
         if (!db.objectStoreNames.contains('offlineData')) {
-          const dataStore = db.createObjectStore('offlineData', { keyPath: 'id' });
+          const dataStore = db.createObjectStore('offlineData', {
+            keyPath: 'id',
+          });
           dataStore.createIndex('type', 'type', { unique: false });
           dataStore.createIndex('timestamp', 'timestamp', { unique: false });
           dataStore.createIndex('syncStatus', 'syncStatus', { unique: false });
         }
 
         if (!db.objectStoreNames.contains('syncQueue')) {
-          const queueStore = db.createObjectStore('syncQueue', { keyPath: 'id' });
+          const queueStore = db.createObjectStore('syncQueue', {
+            keyPath: 'id',
+          });
           queueStore.createIndex('timestamp', 'timestamp', { unique: false });
           queueStore.createIndex('retryCount', 'retryCount', { unique: false });
         }
@@ -110,7 +114,11 @@ class OfflineStorage {
   }
 
   // Store data offline
-  async storeData(type: OfflineData['type'], id: string, data: any): Promise<void> {
+  async storeData(
+    type: OfflineData['type'],
+    id: string,
+    data: Record<string, unknown>
+  ): Promise<void> {
     if (!this.db) {
       throw new Error('IndexedDB not initialized');
     }
@@ -142,7 +150,10 @@ class OfflineStorage {
   }
 
   // Get data from offline storage
-  async getData(type: OfflineData['type'], id: string): Promise<any | null> {
+  async getData(
+    type: OfflineData['type'],
+    id: string
+  ): Promise<Record<string, unknown> | null> {
     if (!this.db) {
       return null;
     }
@@ -169,14 +180,19 @@ class OfflineStorage {
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to get data from offline storage:', request.error);
+        console.error(
+          '❌ Failed to get data from offline storage:',
+          request.error
+        );
         reject(request.error);
       };
     });
   }
 
   // Get all data of a specific type
-  async getAllData(type: OfflineData['type']): Promise<any[]> {
+  async getAllData(
+    type: OfflineData['type']
+  ): Promise<Record<string, unknown>[]> {
     if (!this.db) {
       return [];
     }
@@ -196,7 +212,10 @@ class OfflineStorage {
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to get all data from offline storage:', request.error);
+        console.error(
+          '❌ Failed to get all data from offline storage:',
+          request.error
+        );
         reject(request.error);
       };
     });
@@ -219,14 +238,21 @@ class OfflineStorage {
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to remove data from offline storage:', request.error);
+        console.error(
+          '❌ Failed to remove data from offline storage:',
+          request.error
+        );
         reject(request.error);
       };
     });
   }
 
   // Add item to sync queue
-  async addToSyncQueue(operation: SyncQueueItem['operation'], endpoint: string, data: any): Promise<void> {
+  async addToSyncQueue(
+    operation: SyncQueueItem['operation'],
+    endpoint: string,
+    data: Record<string, unknown>
+  ): Promise<void> {
     if (!this.db) {
       throw new Error('IndexedDB not initialized');
     }
@@ -351,7 +377,8 @@ class OfflineStorage {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: item.operation !== 'delete' ? JSON.stringify(item.data) : undefined,
+          body:
+            item.operation !== 'delete' ? JSON.stringify(item.data) : undefined,
         });
 
         if (response.ok) {
@@ -362,7 +389,7 @@ class OfflineStorage {
         }
       } catch (error) {
         console.error(`❌ Failed to sync item ${item.id}:`, error);
-        
+
         // Increment retry count
         const newRetryCount = item.retryCount + 1;
         await this.updateRetryCount(item.id, newRetryCount);
@@ -383,7 +410,10 @@ class OfflineStorage {
     }
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offlineData', 'syncQueue'], 'readwrite');
+      const transaction = this.db!.transaction(
+        ['offlineData', 'syncQueue'],
+        'readwrite'
+      );
       const dataStore = transaction.objectStore('offlineData');
       const queueStore = transaction.objectStore('syncQueue');
 
@@ -413,7 +443,10 @@ class OfflineStorage {
     }
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offlineData', 'syncQueue'], 'readonly');
+      const transaction = this.db!.transaction(
+        ['offlineData', 'syncQueue'],
+        'readonly'
+      );
       const dataStore = transaction.objectStore('offlineData');
       const queueStore = transaction.objectStore('syncQueue');
 
@@ -434,7 +467,9 @@ class OfflineStorage {
             totalItems: dataItems.length,
             dataByType,
             queueItems: queueItems.length,
-            totalSize: JSON.stringify(dataItems).length + JSON.stringify(queueItems).length,
+            totalSize:
+              JSON.stringify(dataItems).length +
+              JSON.stringify(queueItems).length,
           });
         };
         queueRequest.onerror = () => reject(queueRequest.error);

@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
 import { supabase } from '../config/supabase';
 import { websocketService } from '../services/websocket';
-import maplibregl from 'maplibre-gl';
+import { Map, Marker, Popup, NavigationControl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import './DriverInterface.css';
 
 interface BusInfo {
   bus_id: string;
@@ -49,9 +48,9 @@ const DriverInterface: React.FC = () => {
   const socketRef = useRef<Socket | null>(null);
   const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const watchIdRef = useRef<number | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapRef = useRef<Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const markerRef = useRef<maplibregl.Marker | null>(null);
+  const markerRef = useRef<Marker | null>(null);
 
   // Initialize Supabase auth listener
   useEffect(() => {
@@ -69,7 +68,91 @@ const DriverInterface: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
+  });
+
+  const cleanupMap = useCallback(() => {
+    if (markerRef.current) {
+      markerRef.current.remove();
+      markerRef.current = null;
+    }
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
   }, []);
+
+  const authenticateWithSocket = useCallback(async (token: string) => {
+    try {
+      console.log('🔌 Driver: Connecting to WebSocket...');
+
+      // Use the WebSocket service
+      await websocketService.connect();
+
+      // Handle socket events
+      websocketService.socket?.on('connect', () => {
+        console.log('🔌 Driver: Connected to WebSocket server');
+        setSocketError(null);
+      });
+
+      websocketService.socket?.on('disconnect', () => {
+        console.log('🔌 Driver: Disconnected from WebSocket server');
+        setSocketError('Disconnected from server');
+      });
+
+      websocketService.socket?.on('error', error => {
+        console.error('❌ Driver: Socket error:', error);
+        setSocketError(error.message || 'Socket error occurred');
+      });
+
+      websocketService.socket?.on(
+        'driver:authenticated',
+        (data: { driverId: string; busId: string; busInfo: BusInfo }) => {
+          console.log('✅ Driver: Authentication successful:', data);
+          setIsAuthenticated(true);
+          setBusInfo(data.busInfo);
+          setSocketError(null);
+        }
+      );
+
+      websocketService.socket?.on('driver:locationConfirmed', data => {
+        console.log('📍 Driver: Location confirmed:', data);
+        setLastUpdateTime(new Date().toLocaleTimeString());
+        setUpdateCount(prev => prev + 1);
+      });
+
+      // Store the socket reference
+      socketRef.current = websocketService.socket;
+
+      // Authenticate with the server
+      websocketService.authenticateAsDriver(token);
+    } catch (error) {
+      console.error('❌ Driver: Authentication error:', error);
+      setSocketError('Failed to authenticate with server');
+    }
+  }, []);
+
+  const disconnectSocket = useCallback(() => {
+    websocketService.disconnect();
+    socketRef.current = null;
+  }, []);
+
+  // Add the useEffect that uses the functions after they're defined
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        await authenticateWithSocket(session.access_token);
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false);
+        setBusInfo(null);
+        disconnectSocket();
+        cleanupMap();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [authenticateWithSocket, disconnectSocket, cleanupMap]);
 
   // Proactively request location permission when component mounts
   useEffect(() => {
@@ -80,7 +163,7 @@ const DriverInterface: React.FC = () => {
       if ('permissions' in navigator) {
         navigator.permissions
           .query({ name: 'geolocation' })
-          .then((permission) => {
+          .then(permission => {
             console.log('📍 Initial permission state:', permission.state);
 
             // If permission is granted, we can proceed
@@ -129,21 +212,10 @@ const DriverInterface: React.FC = () => {
     checkLocationPermission();
   }, []);
 
-  const cleanupMap = () => {
-    if (markerRef.current) {
-      markerRef.current.remove();
-      markerRef.current = null;
-    }
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
-  };
-
   const initializeMap = (latitude: number, longitude: number) => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    mapRef.current = new maplibregl.Map({
+    mapRef.current = new Map({
       container: mapContainerRef.current,
       style: {
         version: 8,
@@ -184,7 +256,7 @@ const DriverInterface: React.FC = () => {
     });
 
     // Add navigation controls
-    mapRef.current.addControl(new maplibregl.NavigationControl(), 'top-right');
+    mapRef.current.addControl(new NavigationControl(), 'top-right');
 
     // Handle map load event
     mapRef.current.once('load', () => {
@@ -212,7 +284,7 @@ const DriverInterface: React.FC = () => {
       </div>
     `;
 
-    markerRef.current = new maplibregl.Marker({
+    markerRef.current = new Marker({
       element: markerElement,
       anchor: 'center',
     })
@@ -220,7 +292,7 @@ const DriverInterface: React.FC = () => {
       .addTo(mapRef.current);
 
     // Add popup to marker with enhanced styling
-    const popup = new maplibregl.Popup({
+    const popup = new Popup({
       offset: 25,
       className: 'driver-popup',
     }).setHTML(`
@@ -251,7 +323,7 @@ const DriverInterface: React.FC = () => {
     });
 
     // Update popup content with enhanced styling
-    const popup = new maplibregl.Popup({
+    const popup = new Popup({
       offset: 25,
       className: 'driver-popup',
     }).setHTML(`
@@ -305,61 +377,6 @@ const DriverInterface: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const authenticateWithSocket = async (token: string) => {
-    try {
-      console.log('🔌 Driver: Connecting to WebSocket...');
-
-      // Use the WebSocket service
-      await websocketService.connect();
-
-      // Handle socket events
-      websocketService.socket?.on('connect', () => {
-        console.log('🔌 Driver: Connected to WebSocket server');
-        setSocketError(null);
-      });
-
-      websocketService.socket?.on('disconnect', () => {
-        console.log('🔌 Driver: Disconnected from WebSocket server');
-        setSocketError('Disconnected from server');
-      });
-
-      websocketService.socket?.on('error', (error) => {
-        console.error('❌ Driver: Socket error:', error);
-        setSocketError(error.message || 'Socket error occurred');
-      });
-
-      websocketService.socket?.on(
-        'driver:authenticated',
-        (data: { driverId: string; busId: string; busInfo: BusInfo }) => {
-          console.log('✅ Driver: Authentication successful:', data);
-          setIsAuthenticated(true);
-          setBusInfo(data.busInfo);
-          setSocketError(null);
-        }
-      );
-
-      websocketService.socket?.on('driver:locationConfirmed', (data) => {
-        console.log('📍 Driver: Location confirmed:', data);
-        setLastUpdateTime(new Date().toLocaleTimeString());
-        setUpdateCount((prev) => prev + 1);
-      });
-
-      // Store the socket reference
-      socketRef.current = websocketService.socket;
-
-      // Authenticate with the server
-      websocketService.authenticateAsDriver(token);
-    } catch (error) {
-      console.error('❌ Driver: Authentication error:', error);
-      setSocketError('Failed to authenticate with server');
-    }
-  };
-
-  const disconnectSocket = () => {
-    websocketService.disconnect();
-    socketRef.current = null;
   };
 
   const startLocationTracking = async () => {
@@ -424,7 +441,7 @@ const DriverInterface: React.FC = () => {
 
     // Get initial position with enhanced error handling
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async position => {
         console.log('✅ Initial position obtained:', {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -437,9 +454,9 @@ const DriverInterface: React.FC = () => {
         // Initialize map with current location
         initializeMap(position.coords.latitude, position.coords.longitude);
 
-        sendLocationUpdate(position);
+        await sendLocationUpdate(position);
       },
-      (error) => {
+      error => {
         console.error('❌ Geolocation error:', error);
         let errorMessage = 'Location error: ';
 
@@ -483,7 +500,7 @@ const DriverInterface: React.FC = () => {
 
     // Start watching position with same options
     watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
+      async position => {
         console.log('📍 Location update received:', {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -496,9 +513,9 @@ const DriverInterface: React.FC = () => {
         // Update map with new location
         updateMapLocation(position.coords.latitude, position.coords.longitude);
 
-        sendLocationUpdate(position);
+        await sendLocationUpdate(position);
       },
-      (error) => {
+      error => {
         console.error('❌ Geolocation watch error:', error);
         let errorMessage = 'Location tracking error: ';
 
@@ -546,11 +563,19 @@ const DriverInterface: React.FC = () => {
     console.log('📍 Location tracking stopped');
   };
 
-  const sendLocationUpdate = (position: GeolocationPosition) => {
+  const sendLocationUpdate = async (position: GeolocationPosition) => {
     if (!socketRef.current || !busInfo) return;
 
+    // Get the current Supabase user ID (this should match what was used during authentication)
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('❌ No authenticated user found for location update');
+      return;
+    }
+
     const locationData: LocationData = {
-      driverId: busInfo.driver_id,
+      driverId: user.id, // Use Supabase user ID instead of database driver ID
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
       timestamp: new Date().toISOString(),
@@ -558,6 +583,7 @@ const DriverInterface: React.FC = () => {
       heading: position.coords.heading || undefined,
     };
 
+    console.log('📍 Sending location update with driverId:', user.id);
     socketRef.current.emit('driver:locationUpdate', locationData);
   };
 
@@ -631,8 +657,8 @@ const DriverInterface: React.FC = () => {
                   type="email"
                   required
                   value={loginForm.email}
-                  onChange={(e) =>
-                    setLoginForm((prev) => ({ ...prev, email: e.target.value }))
+                  onChange={e =>
+                    setLoginForm(prev => ({ ...prev, email: e.target.value }))
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter your email"
@@ -651,8 +677,8 @@ const DriverInterface: React.FC = () => {
                   type="password"
                   required
                   value={loginForm.password}
-                  onChange={(e) =>
-                    setLoginForm((prev) => ({
+                  onChange={e =>
+                    setLoginForm(prev => ({
                       ...prev,
                       password: e.target.value,
                     }))
@@ -767,7 +793,7 @@ const DriverInterface: React.FC = () => {
                       // Force location permission request
                       if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
-                          (position) => {
+                          position => {
                             console.log(
                               '✅ Manual location permission granted:',
                               position
@@ -775,7 +801,7 @@ const DriverInterface: React.FC = () => {
                             setLocationError(null);
                             startLocationTracking();
                           },
-                          (error) => {
+                          error => {
                             console.error(
                               '❌ Manual location permission denied:',
                               error
@@ -915,7 +941,7 @@ const DriverInterface: React.FC = () => {
 
                       if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(
-                          (position) => {
+                          position => {
                             const successMsg =
                               `✅ Location Test Successful!\n\n` +
                               `Latitude: ${position.coords.latitude}\n` +
@@ -926,7 +952,7 @@ const DriverInterface: React.FC = () => {
                             alert(successMsg);
                             setLocationError(null);
                           },
-                          (error) => {
+                          error => {
                             const errorMsg =
                               `❌ Location Test Failed\n\n` +
                               `Error Code: ${error.code}\n` +

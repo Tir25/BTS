@@ -6,7 +6,7 @@ export interface RealtimeSubscription {
   table: string;
   event: 'INSERT' | 'UPDATE' | 'DELETE' | '*';
   filter?: string;
-  callback: (payload: any) => void;
+  callback: (payload: Record<string, unknown>) => void;
 }
 
 export interface RealtimeConfig {
@@ -37,7 +37,7 @@ class SupabaseRealtimeService {
         'bus_locations_live',
         'buses',
         'routes',
-        'driver_bus_assignments'
+        'driver_bus_assignments',
       ]);
 
       console.log('✅ Supabase Realtime initialized');
@@ -54,11 +54,11 @@ class SupabaseRealtimeService {
 
   // Subscribe to bus location updates
   subscribeToBusLocations(
-    callback: (payload: any) => void,
+    callback: (payload: Record<string, unknown>) => void,
     filter?: string
   ): string {
     const subscriptionId = `bus-locations-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table: 'live_locations',
@@ -68,24 +68,27 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'live_locations',
           filter,
         },
-        (payload) => {
+        payload => {
           console.log('📍 Bus location update via Supabase Realtime:', payload);
           callback(payload);
         }
       )
-      .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+      .subscribe(status => {
+        console.log(
+          `🔌 Supabase Realtime subscription status for ${subscriptionId}:`,
+          status
+        );
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -96,11 +99,11 @@ class SupabaseRealtimeService {
 
   // Subscribe to bus information updates
   subscribeToBusUpdates(
-    callback: (payload: any) => void,
+    callback: (payload: Record<string, unknown>) => void,
     filter?: string
   ): string {
     const subscriptionId = `bus-updates-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table: 'buses',
@@ -110,24 +113,27 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'buses',
           filter,
         },
-        (payload) => {
+        payload => {
           console.log('🚌 Bus update via Supabase Realtime:', payload);
           callback(payload);
         }
       )
-      .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+      .subscribe(status => {
+        console.log(
+          `🔌 Supabase Realtime subscription status for ${subscriptionId}:`,
+          status
+        );
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -138,11 +144,11 @@ class SupabaseRealtimeService {
 
   // Subscribe to route updates
   subscribeToRouteUpdates(
-    callback: (payload: any) => void,
+    callback: (payload: Record<string, unknown>) => void,
     filter?: string
   ): string {
     const subscriptionId = `route-updates-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table: 'routes',
@@ -152,24 +158,27 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'routes',
           filter,
         },
-        (payload) => {
+        payload => {
           console.log('🛣️ Route update via Supabase Realtime:', payload);
           callback(payload);
         }
       )
-      .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+      .subscribe(status => {
+        console.log(
+          `🔌 Supabase Realtime subscription status for ${subscriptionId}:`,
+          status
+        );
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -180,11 +189,11 @@ class SupabaseRealtimeService {
 
   // Subscribe to driver assignments
   subscribeToDriverAssignments(
-    callback: (payload: any) => void,
+    callback: (payload: Record<string, unknown>) => void,
     filter?: string
   ): string {
     const subscriptionId = `driver-assignments-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table: 'driver_bus_assignments',
@@ -194,24 +203,30 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'driver_bus_assignments',
           filter,
         },
-        (payload) => {
-          console.log('👨‍💼 Driver assignment update via Supabase Realtime:', payload);
+        payload => {
+          console.log(
+            '👨‍💼 Driver assignment update via Supabase Realtime:',
+            payload
+          );
           callback(payload);
         }
       )
-      .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+      .subscribe(status => {
+        console.log(
+          `🔌 Supabase Realtime subscription status for ${subscriptionId}:`,
+          status
+        );
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -224,11 +239,11 @@ class SupabaseRealtimeService {
   subscribe(
     table: string,
     event: 'INSERT' | 'UPDATE' | 'DELETE' | '*',
-    callback: (payload: any) => void,
+    callback: (payload: Record<string, unknown>) => void,
     filter?: string
   ): string {
     const subscriptionId = `${table}-${event}-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table,
@@ -238,24 +253,27 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
-        'postgres_changes' as any,
+        'postgres_changes' as any, // Type assertion to bypass type checking issue
         {
           event,
           schema: 'public',
           table,
           filter,
         },
-        (payload) => {
+        (payload: Record<string, unknown>) => {
           console.log(`📊 ${table} ${event} via Supabase Realtime:`, payload);
           callback(payload);
         }
       )
-      .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+      .subscribe(status => {
+        console.log(
+          `🔌 Supabase Realtime subscription status for ${subscriptionId}:`,
+          status
+        );
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -268,7 +286,7 @@ class SupabaseRealtimeService {
   unsubscribe(subscriptionId: string): boolean {
     const subscription = this.subscriptions.get(subscriptionId);
     const channel = this.channels.get(subscriptionId);
-    
+
     if (subscription && channel) {
       supabase.removeChannel(channel);
       this.subscriptions.delete(subscriptionId);
@@ -276,7 +294,7 @@ class SupabaseRealtimeService {
       console.log(`🔌 Unsubscribed from ${subscriptionId}`);
       return true;
     }
-    
+
     return false;
   }
 
@@ -311,11 +329,14 @@ class SupabaseRealtimeService {
   }
 
   // Health check for realtime connections
-  async healthCheck(): Promise<{ healthy: boolean; details: any }> {
+  async healthCheck(): Promise<{
+    healthy: boolean;
+    details: Record<string, unknown>;
+  }> {
     try {
       const activeSubscriptions = this.getActiveSubscriptions();
       const healthy = this.isEnabled && activeSubscriptions.length > 0;
-      
+
       return {
         healthy,
         details: {

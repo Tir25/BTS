@@ -53,7 +53,9 @@ class CircuitBreaker {
       if (this.shouldAttemptReset()) {
         this.transitionToHalfOpen();
       } else {
-        console.warn(`🚨 Circuit breaker '${this.name}' is OPEN, using fallback`);
+        console.warn(
+          `🚨 Circuit breaker '${this.name}' is OPEN, using fallback`
+        );
         if (fallback) {
           return fallback();
         }
@@ -67,13 +69,16 @@ class CircuitBreaker {
       return result;
     } catch (error) {
       this.onFailure(error);
-      
+
       // If we have a fallback, use it
       if (fallback) {
-        console.log(`🔄 Using fallback for '${this.name}' due to error:`, error);
+        console.log(
+          `🔄 Using fallback for '${this.name}' due to error:`,
+          error
+        );
         return fallback();
       }
-      
+
       throw error;
     }
   }
@@ -82,25 +87,30 @@ class CircuitBreaker {
     this.successfulRequests++;
     this.lastSuccessTime = Date.now();
     this.failureCount = 0;
-    
+
     if (this.state === 'HALF_OPEN') {
       this.transitionToClosed();
     }
   }
 
-  private onFailure(error: any): void {
+  private onFailure(error: unknown): void {
     this.failedRequests++;
     this.lastFailureTime = Date.now();
 
     // Check if this is an expected error
-    const errorMessage = error?.message || error?.toString() || '';
-    const isExpectedError = this.config.expectedErrors.some(pattern =>
-      errorMessage.includes(pattern)
+    const errorMessage =
+      (error as Error)?.message ||
+      (error as Record<string, unknown>)?.message ||
+      error?.toString() ||
+      '';
+    const isExpectedError = this.config.expectedErrors.some(
+      pattern =>
+        typeof errorMessage === 'string' && errorMessage.includes(pattern)
     );
 
     if (!isExpectedError) {
       this.failureCount++;
-      
+
       if (this.failureCount >= this.config.failureThreshold) {
         this.transitionToOpen();
       }
@@ -128,7 +138,9 @@ class CircuitBreaker {
   }
 
   private shouldAttemptReset(): boolean {
-    return this.nextAttemptTime !== undefined && Date.now() >= this.nextAttemptTime;
+    return (
+      this.nextAttemptTime !== undefined && Date.now() >= this.nextAttemptTime
+    );
   }
 
   private startMonitoring(): void {
@@ -141,9 +153,13 @@ class CircuitBreaker {
     const metrics = this.getMetrics();
     console.log(`📊 Circuit Breaker '${this.name}' Metrics:`, {
       state: metrics.currentState,
-      successRate: metrics.totalRequests > 0 
-        ? ((metrics.successfulRequests / metrics.totalRequests) * 100).toFixed(2) + '%'
-        : '0%',
+      successRate:
+        metrics.totalRequests > 0
+          ? (
+              (metrics.successfulRequests / metrics.totalRequests) *
+              100
+            ).toFixed(2) + '%'
+          : '0%',
       failureCount: metrics.failureCount,
       totalRequests: metrics.totalRequests,
     });
@@ -180,10 +196,7 @@ class CircuitBreaker {
 class CircuitBreakerRegistry {
   private breakers: Map<string, CircuitBreaker> = new Map();
 
-  create(
-    name: string,
-    config?: CircuitBreakerConfig
-  ): CircuitBreaker {
+  create(name: string, config?: CircuitBreakerConfig): CircuitBreaker {
     if (this.breakers.has(name)) {
       return this.breakers.get(name)!;
     }
@@ -229,18 +242,24 @@ export const apiCircuitBreaker = circuitBreakerRegistry.create('api', {
   monitorInterval: 15000, // 15 seconds
 });
 
-export const websocketCircuitBreaker = circuitBreakerRegistry.create('websocket', {
-  failureThreshold: 5,
-  recoveryTimeout: 60000, // 1 minute
-  expectedErrors: [],
-  monitorInterval: 30000, // 30 seconds
-});
+export const websocketCircuitBreaker = circuitBreakerRegistry.create(
+  'websocket',
+  {
+    failureThreshold: 5,
+    recoveryTimeout: 60000, // 1 minute
+    expectedErrors: [],
+    monitorInterval: 30000, // 30 seconds
+  }
+);
 
-export const supabaseCircuitBreaker = circuitBreakerRegistry.create('supabase', {
-  failureThreshold: 3,
-  recoveryTimeout: 45000, // 45 seconds
-  expectedErrors: ['401', '403'],
-  monitorInterval: 20000, // 20 seconds
-});
+export const supabaseCircuitBreaker = circuitBreakerRegistry.create(
+  'supabase',
+  {
+    failureThreshold: 3,
+    recoveryTimeout: 45000, // 45 seconds
+    expectedErrors: ['401', '403'],
+    monitorInterval: 20000, // 20 seconds
+  }
+);
 
 export default CircuitBreaker;

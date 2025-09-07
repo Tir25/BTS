@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../services/authService';
@@ -20,6 +20,21 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
 
+  const handleLoginSuccess = useCallback(() => {
+    // Set transition type for login to dashboard
+    setTransition('login-to-dashboard');
+
+    // Add a small delay to ensure session is properly set
+    setTimeout(() => {
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
+        // Use replace to avoid 404 issues
+        navigate('/admin-dashboard', { replace: true });
+      }
+    }, 500);
+  }, [onLoginSuccess, navigate, setTransition]);
+
   // Try to recover session on component mount
   useEffect(() => {
     const attemptSessionRecovery = async () => {
@@ -28,7 +43,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
 
         // Wait for auth service to be fully initialized
         while (!authService.isInitialized()) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
 
         const result = await authService.recoverSession();
@@ -48,7 +63,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
 
     // Delay the recovery attempt to ensure auth service is fully initialized
     setTimeout(attemptSessionRecovery, 2000);
-  }, []);
+  }, [handleLoginSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,21 +124,6 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleLoginSuccess = () => {
-    // Set transition type for login to dashboard
-    setTransition('login-to-dashboard');
-
-    // Add a small delay to ensure session is properly set
-    setTimeout(() => {
-      if (onLoginSuccess) {
-        onLoginSuccess();
-      } else {
-        // Use replace to avoid 404 issues
-        navigate('/admin-dashboard', { replace: true });
-      }
-    }, 500);
   };
 
   const handleRecoverSession = async () => {
@@ -258,7 +258,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                   autoComplete="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={e => setEmail(e.target.value)}
                   className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
                   placeholder="admin@university.edu"
                   disabled={isLoading}
@@ -287,7 +287,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                   autoComplete="current-password"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={e => setPassword(e.target.value)}
                   className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-300"
                   placeholder="••••••••"
                   disabled={isLoading}
@@ -315,7 +315,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                   type="text"
                   autoComplete="one-time-code"
                   value={twoFactorCode}
-                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  onChange={e => setTwoFactorCode(e.target.value)}
                   className="w-full px-4 py-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl text-white placeholder-blue-200/30 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent transition-all duration-300"
                   placeholder="Enter 2FA code if enabled"
                   disabled={isLoading}

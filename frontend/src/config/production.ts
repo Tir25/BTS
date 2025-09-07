@@ -13,12 +13,8 @@ export const productionConfig = {
 
   // Supabase Configuration
   supabase: {
-    url:
-      process.env.VITE_SUPABASE_URL ||
-      'https://gthwmwfwvhyriygpcdlr.supabase.co',
-    anonKey:
-      process.env.VITE_SUPABASE_ANON_KEY ||
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI',
+    url: process.env.VITE_SUPABASE_URL || '',
+    anonKey: process.env.VITE_SUPABASE_ANON_KEY || '',
   },
 
   // WebSocket Configuration
@@ -100,8 +96,8 @@ export const getConfig = () => {
     return {
       ...productionConfig,
       api: {
-        baseUrl: 'http://localhost:3000',
-        websocketUrl: 'ws://localhost:3000',
+        baseUrl: 'https://bus-tracking-backend-sxh8.onrender.com',
+        websocketUrl: 'wss://bus-tracking-backend-sxh8.onrender.com',
       },
       features: {
         ...productionConfig.features,

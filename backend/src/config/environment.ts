@@ -33,6 +33,7 @@ export interface EnvironmentConfig {
     enableHelmet: boolean;
     enableCors: boolean;
     enableRateLimit: boolean;
+    adminEmails: string[];
   };
   logging: {
     level: string;
@@ -78,20 +79,45 @@ export const initializeEnvironment = (): EnvironmentConfig => {
     }
   }
 
-  // Provide fallbacks for development
-  const supabaseUrl =
-    process.env.SUPABASE_URL ||
-    (isProduction ? '' : 'https://gthwmwfwvhyriygpcdlr.supabase.co');
-  const supabaseAnonKey =
-    process.env.SUPABASE_ANON_KEY ||
-    (isProduction
-      ? ''
-      : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI');
-  const supabaseServiceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    (isProduction
-      ? ''
-      : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDk3MTQ1NSwiZXhwIjoyMDcwNTQ3NDU1fQ.LuwfYUuGMRQh3Gbc7NQuRCqZxLsS5CrQOd1eMjiWj2o');
+  // Validate required secrets in production
+  if (isProduction) {
+    const requiredSecrets = [
+      'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'SUPABASE_SERVICE_ROLE_KEY',
+    ];
+
+    const missingSecrets = requiredSecrets.filter(
+      (secret) => !process.env[secret]
+    );
+
+    if (missingSecrets.length > 0) {
+      console.error(
+        '❌ Missing required secrets in production:',
+        missingSecrets
+      );
+      throw new Error(
+        `Missing required secrets: ${missingSecrets.join(', ')}`
+      );
+    }
+  }
+
+  // Get Supabase configuration from environment variables
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  // Validate that secrets are provided
+  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+    console.error('❌ Missing Supabase configuration');
+    throw new Error('Supabase configuration is required');
+  }
+
+  // Get admin emails from environment variables
+  const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(email => email.trim()) || [];
+
+  // Get allowed origins from environment variables
+  const allowedOriginsEnv = process.env.ALLOWED_ORIGINS?.split(',').map(origin => origin.trim()) || [];
 
   const config: EnvironmentConfig = {
     port: parseInt(process.env.PORT || '3000'),
@@ -116,6 +142,8 @@ export const initializeEnvironment = (): EnvironmentConfig => {
     cors: {
       allowedOrigins: isProduction
         ? [
+            // Use environment variables first, then fallback to defaults
+            ...allowedOriginsEnv,
             // Specific frontend domains
             'https://bts-frontend-navy.vercel.app',
             'https://bts-frontend-navy.vercel.com',
@@ -125,11 +153,23 @@ export const initializeEnvironment = (): EnvironmentConfig => {
             /^https:\/\/.*\.vercel\.com$/,
           ]
         : [
-            // Development
+            // Use environment variables first, then fallback to defaults
+            ...allowedOriginsEnv,
+            // Development - localhost
             'http://localhost:5173',
             'http://127.0.0.1:5173',
             'http://localhost:3000',
             'http://127.0.0.1:3000',
+            
+            // Network access for cross-laptop testing
+            'http://192.168.1.2:5173',
+            'http://192.168.1.2:3000',
+            'http://192.168.1.2:8080',
+            'http://192.168.1.2:9000',
+            
+            // Dynamic network IPs (192.168.x.x range)
+            /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
+            /^https:\/\/192\.168\.\d+\.\d+:\d+$/,
           ],
       credentials: true,
     },
@@ -144,6 +184,7 @@ export const initializeEnvironment = (): EnvironmentConfig => {
       enableHelmet: true,
       enableCors: true,
       enableRateLimit: true,
+      adminEmails: adminEmails,
     },
     logging: {
       level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
@@ -169,7 +210,7 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               /^wss:\/\/.*\.vercel\.com$/,
             ]
           : [
-              // Development WebSocket origins
+              // Development WebSocket origins - localhost
               'http://localhost:5173',
               'http://localhost:3000',
               'http://127.0.0.1:5173',
@@ -179,12 +220,28 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               'ws://localhost:5173',
               'ws://127.0.0.1:5173',
 
+              // Network access for cross-laptop testing - dynamic IPs
+              /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
+              /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
+              /^wss:\/\/192\.168\.\d+\.\d+:\d+$/,
+              
+              // Common local network IPs for testing
+              'http://192.168.1.2:5173',
+              'http://192.168.1.2:3000',
+              'http://192.168.1.2:8080',
+              'http://192.168.1.2:9000',
+              'ws://192.168.1.2:3000',
+              'ws://192.168.1.2:8080',
+              'ws://192.168.1.2:9000',
+
               // VS Code tunnel origins
               /^https:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
               /^wss:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
-              // Network access for cross-laptop testing
-              /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
-              /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
+              
+              // Additional network IPs for comprehensive testing
+              /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,
+              /^ws:\/\/10\.\d+\.\d+\.\d+:\d+$/,
+              /^wss:\/\/10\.\d+\.\d+\.\d+:\d+$/,
             ],
         methods: ['GET', 'POST', 'OPTIONS'],
         credentials: true,

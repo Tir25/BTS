@@ -1,16 +1,18 @@
+import { HealthResponse, Bus, Route } from '../../types';
+
 export interface IApiService {
-  getHealth(): Promise<any>;
+  getHealth(): Promise<HealthResponse>;
   getAllBuses(): Promise<{
     success: boolean;
-    data: any[];
+    data: Bus[];
     timestamp: string;
   }>;
   getBusInfo(busId: string): Promise<{
     success: boolean;
-    data: any | null;
+    data: Bus | null;
   }>;
   getRoutes(): Promise<{
     success: boolean;
-    data: any[];
+    data: Route[];
   }>;
 }

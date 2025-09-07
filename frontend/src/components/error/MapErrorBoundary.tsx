@@ -1,106 +1,169 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { logError } from '../../utils/errorHandler';
+import { errorHandler } from '../../utils/errorHandler';
 
-interface Props {
+interface MapErrorBoundaryProps {
   children: ReactNode;
-  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  onMapError?: (error: Error, errorInfo: ErrorInfo) => void;
+  fallbackComponent?: ReactNode;
+  mapType?: 'student' | 'driver' | 'admin';
 }
 
-interface State {
+interface MapErrorBoundaryState {
   hasError: boolean;
   error?: Error;
   errorInfo?: ErrorInfo;
+  retryCount: number;
+  isRetrying: boolean;
 }
 
-class MapErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-  };
+class MapErrorBoundary extends Component<MapErrorBoundaryProps, MapErrorBoundaryState> {
+  private retryTimeoutId?: NodeJS.Timeout;
+  private maxRetries = 3;
 
-  public static getDerivedStateFromError(error: Error): Partial<State> {
+  constructor(props: MapErrorBoundaryProps) {
+    super(props);
+    this.state = {
+      hasError: false,
+      retryCount: 0,
+      isRetrying: false,
+    };
+  }
+
+  public static getDerivedStateFromError(error: Error): Partial<MapErrorBoundaryState> {
     return { hasError: true, error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error with map-specific context
-    logError(error, {
+    const { onMapError, mapType = 'student' } = this.props;
+    
+    // Log map-specific error
+    errorHandler.logError(error, {
       service: 'map',
-      operation: 'map-render-error',
+      operation: `${mapType}_map_rendering`,
     }, 'high');
 
+    // Call custom error handler if provided
+    if (onMapError) {
+      onMapError(error, errorInfo);
+    }
+
+    // Store error info for debugging
     this.setState({ errorInfo });
 
-    if (this.props.onError) {
-      this.props.onError(error, errorInfo);
+    // Schedule auto-retry for map-specific errors
+    this.scheduleMapRetry(error);
+  }
+
+  public componentWillUnmount() {
+    if (this.retryTimeoutId) {
+      clearTimeout(this.retryTimeoutId);
     }
   }
 
-  private handleRetry = (): void => {
+  private scheduleMapRetry = (error: Error) => {
+    const { retryCount } = this.state;
+    
+    // Map-specific retryable errors
+    const mapRetryableErrors = [
+      'MapLibre',
+      'Leaflet',
+      'WebGL',
+      'Canvas',
+      'Map container',
+      'Invalid LatLng',
+      'Tile load error',
+      'NetworkError',
+      'Failed to fetch'
+    ];
+
+    const shouldRetry = mapRetryableErrors.some(errorType => 
+      error.message.includes(errorType)
+    );
+
+    if (shouldRetry && retryCount < this.maxRetries) {
+      const delay = Math.min(2000 * Math.pow(1.5, retryCount), 15000); // Slower backoff for maps
+      
+      this.setState({ isRetrying: true });
+      
+      this.retryTimeoutId = setTimeout(() => {
+        console.log(`🗺️ Auto-retrying map component (attempt ${retryCount + 1}/${this.maxRetries})`);
+        this.resetMapError();
+      }, delay);
+    }
+  };
+
+  public resetMapError = () => {
+    if (this.retryTimeoutId) {
+      clearTimeout(this.retryTimeoutId);
+    }
+    
     this.setState({
       hasError: false,
       error: undefined,
       errorInfo: undefined,
+      retryCount: this.state.retryCount + 1,
+      isRetrying: false,
     });
-  };
-
-  private handleReloadPage = (): void => {
-    window.location.reload();
   };
 
   public render() {
     if (this.state.hasError) {
-      const { error } = this.state;
-      const isMapError = error?.message?.includes('map') || 
-                        error?.message?.includes('WebGL') ||
-                        error?.message?.includes('tile');
+      const { fallbackComponent, mapType = 'student' } = this.props;
+      const { error, retryCount, isRetrying } = this.state;
+
+      // Use custom fallback if provided
+      if (fallbackComponent) {
+        return fallbackComponent;
+      }
 
       return (
         <div className="w-full h-full bg-gray-100 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-md p-6 max-w-md w-full text-center">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m-6 3l6-3" />
-              </svg>
-            </div>
-            
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Map Loading Error
-            </h3>
-            
-            <p className="text-gray-600 mb-4">
-              {isMapError 
-                ? "We're having trouble loading the map. This might be due to network issues or browser compatibility."
-                : "Something went wrong while displaying the map."
-              }
-            </p>
-
-            <div className="space-y-2">
-              <button
-                onClick={this.handleRetry}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-              >
-                🔄 Retry Loading Map
-              </button>
+          <div className="max-w-md w-full">
+            <div className="bg-white rounded-lg shadow-md p-6 text-center">
+              <div className="text-5xl mb-4">🗺️</div>
+              <h2 className="text-xl font-bold text-orange-600 mb-3">
+                Map Loading Error
+              </h2>
+              <p className="text-gray-600 mb-4">
+                The {mapType} map encountered an error while loading.
+                {retryCount > 0 && ` (Retry attempt ${retryCount})`}
+              </p>
               
-              <button
-                onClick={this.handleReloadPage}
-                className="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
-              >
-                🔄 Reload Page
-              </button>
-            </div>
+              {isRetrying && (
+                <div className="mb-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-sm text-gray-500 mt-2">Retrying...</p>
+                </div>
+              )}
 
-            {isMapError && (
-              <div className="mt-4 text-left">
-                <p className="text-sm text-gray-500 mb-2">Troubleshooting tips:</p>
-                <ul className="text-xs text-gray-600 space-y-1">
-                  <li>• Check your internet connection</li>
-                  <li>• Try refreshing the page</li>
-                  <li>• Update your browser to the latest version</li>
-                  <li>• Disable browser extensions that might interfere</li>
-                </ul>
+              <div className="space-y-3">
+                <button
+                  onClick={this.resetMapError}
+                  disabled={isRetrying}
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  🔄 Reload Map
+                </button>
+                
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+                >
+                  🔄 Refresh Page
+                </button>
               </div>
-            )}
+
+              {error && (
+                <details className="text-left bg-gray-100 p-3 rounded-lg mt-4">
+                  <summary className="cursor-pointer font-medium text-gray-700 text-sm">
+                    Error Details
+                  </summary>
+                  <pre className="text-xs text-red-600 mt-2 whitespace-pre-wrap break-words">
+                    {error.toString()}
+                  </pre>
+                </details>
+              )}
+            </div>
           </div>
         </div>
       );

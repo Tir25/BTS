@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../config/supabase';
+import { databasePerformanceMiddleware } from '../middleware/performanceMiddleware';
 
 interface LocationData {
   driverId: string;
@@ -32,48 +33,52 @@ interface SavedLocation {
   heading?: number;
 }
 
-import pool from '../config/database';
+import { pool } from '../config/database';
 
 export const saveLocationUpdate = async (
   data: LocationData
 ): Promise<SavedLocation | null> => {
-  try {
-    // Convert coordinates to PostGIS Point format
-    const point = `POINT(${data.longitude} ${data.latitude})`;
+  const trackPerformance = databasePerformanceMiddleware('saveLocationUpdate');
+  
+  return trackPerformance(async () => {
+    try {
+      // Convert coordinates to PostGIS Point format
+      const point = `POINT(${data.longitude} ${data.latitude})`;
 
-    const query = `
-      INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
-      VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
-      RETURNING id, bus_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
-    `;
+      const query = `
+        INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
+        VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
+        RETURNING id, bus_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
+      `;
 
-    const result = await pool.query(query, [
-      data.busId,
-      point,
-      data.speed,
-      data.heading,
-      data.timestamp,
-    ]);
+      const result = await pool.query(query, [
+        data.busId,
+        point,
+        data.speed,
+        data.heading,
+        data.timestamp,
+      ]);
 
-    if (result.rows.length === 0) {
-      console.error('❌ Error saving location: No rows returned');
+      if (result.rows.length === 0) {
+        console.error('❌ Error saving location: No rows returned');
+        return null;
+      }
+
+      const savedLocation = result.rows[0];
+      return {
+        id: savedLocation.id,
+        driver_id: data.driverId,
+        bus_id: savedLocation.bus_id,
+        location: savedLocation.location,
+        timestamp: savedLocation.recorded_at,
+        speed: savedLocation.speed_kmh,
+        heading: savedLocation.heading_degrees,
+      };
+    } catch (error) {
+      console.error('❌ Error in saveLocationUpdate:', error);
       return null;
     }
-
-    const savedLocation = result.rows[0];
-    return {
-      id: savedLocation.id,
-      driver_id: data.driverId,
-      bus_id: savedLocation.bus_id,
-      location: savedLocation.location,
-      timestamp: savedLocation.recorded_at,
-      speed: savedLocation.speed_kmh,
-      heading: savedLocation.heading_degrees,
-    };
-  } catch (error) {
-    console.error('❌ Error in saveLocationUpdate:', error);
-    return null;
-  }
+  });
 };
 
 export const getDriverBusInfo = async (

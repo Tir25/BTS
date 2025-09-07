@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Test for Student Map</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .status {
+            font-weight: bold;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .warning { background: #fff3cd; color: #856404; }
+        pre {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .test-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 CORS Test for Student Map</h1>
+        <p>This page tests all Cross-Origin Resource Sharing (CORS) configurations for the student map functionality.</p>
+        
+        <div class="test-section">
+            <h2>🌐 Environment Detection</h2>
+            <div id="environment-info" class="info">Detecting environment...</div>
+            <button onclick="detectEnvironment()">Detect Environment</button>
+        </div>
+
+        <div class="test-section">
+            <h2>🔌 WebSocket CORS Test</h2>
+            <div id="websocket-status" class="status info">Not tested</div>
+            <div id="websocket-details"></div>
+            <button onclick="testWebSocketCORS()">Test WebSocket CORS</button>
+            <button onclick="testWebSocketWithCredentials()">Test with Credentials</button>
+        </div>
+
+        <div class="test-section">
+            <h2>🌍 API CORS Tests</h2>
+            <div class="test-grid">
+                <div class="test-item">
+                    <h3>Health Check</h3>
+                    <div id="health-status" class="status info">Not tested</div>
+                    <button onclick="testHealthCORS()">Test Health API</button>
+                </div>
+                <div class="test-item">
+                    <h3>Buses API</h3>
+                    <div id="buses-status" class="status info">Not tested</div>
+                    <button onclick="testBusesCORS()">Test Buses API</button>
+                </div>
+                <div class="test-item">
+                    <h3>Locations API</h3>
+                    <div id="locations-status" class="status info">Not tested</div>
+                    <button onclick="testLocationsCORS()">Test Locations API</button>
+                </div>
+                <div class="test-item">
+                    <h3>Routes API</h3>
+                    <div id="routes-status" class="status info">Not tested</div>
+                    <button onclick="testRoutesCORS()">Test Routes API</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔍 Preflight Request Tests</h2>
+            <div id="preflight-status" class="status info">Not tested</div>
+            <button onclick="testPreflightRequests()">Test Preflight Requests</button>
+        </div>
+
+        <div class="test-section">
+            <h2>🚫 Unauthorized Origin Test</h2>
+            <div id="unauthorized-status" class="status info">Not tested</div>
+            <button onclick="testUnauthorizedOrigin()">Test Unauthorized Origin</button>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Test Results Summary</h2>
+            <div id="summary-results"></div>
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+
+        <div class="test-section">
+            <h2>📝 Test Log</h2>
+            <pre id="test-log"></pre>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        const WS_BASE = 'ws://localhost:3000';
+        let testResults = {};
+        let socket = null;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('test-log');
+            const logEntry = `[${timestamp}] ${message}\n`;
+            logElement.textContent += logEntry;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function updateStatus(elementId, message, className) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${className}`;
+        }
+
+        function detectEnvironment() {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            const port = window.location.port;
+            
+            const envInfo = {
+                hostname,
+                protocol,
+                port,
+                fullUrl: window.location.href,
+                isLocalhost: hostname === 'localhost' || hostname === '127.0.0.1',
+                isNetworkIP: /^192\.168\.\d+\.\d+$/.test(hostname),
+                isProduction: hostname.includes('vercel.app') || hostname.includes('render.com'),
+                userAgent: navigator.userAgent
+            };
+
+            document.getElementById('environment-info').innerHTML = `
+                <strong>Environment Details:</strong><br>
+                Hostname: ${envInfo.hostname}<br>
+                Protocol: ${envInfo.protocol}<br>
+                Port: ${envInfo.port || 'default'}<br>
+                Full URL: ${envInfo.fullUrl}<br>
+                Is Localhost: ${envInfo.isLocalhost}<br>
+                Is Network IP: ${envInfo.isNetworkIP}<br>
+                Is Production: ${envInfo.isProduction}<br>
+                User Agent: ${envInfo.userAgent}
+            `;
+
+            log(`Environment detected: ${JSON.stringify(envInfo)}`);
+        }
+
+        async function testWebSocketCORS() {
+            log('🔌 Testing WebSocket CORS...');
+            updateStatus('websocket-status', 'Testing...', 'info');
+
+            try {
+                if (socket) {
+                    socket.disconnect();
+                }
+
+                socket = io(WS_BASE, {
+                    transports: ['websocket', 'polling'],
+                    forceNew: true,
+                    timeout: 10000,
+                    withCredentials: false
+                });
+
+                socket.on('connect', () => {
+                    log('✅ WebSocket connected successfully');
+                    updateStatus('websocket-status', 'Connected', 'success');
+                    
+                    document.getElementById('websocket-details').innerHTML = `
+                        <strong>Connection Details:</strong><br>
+                        Socket ID: ${socket.id}<br>
+                        Transport: ${socket.io.engine.transport.name}<br>
+                        Origin: ${window.location.origin}<br>
+                        Timestamp: ${new Date().toISOString()}
+                    `;
+                    
+                    testResults.websocket = { status: 'success', details: 'Connected without credentials' };
+                    updateSummary();
+                });
+
+                socket.on('connect_error', (error) => {
+                    log(`❌ WebSocket connection error: ${error.message}`);
+                    updateStatus('websocket-status', `Error: ${error.message}`, 'error');
+                    testResults.websocket = { status: 'error', details: error.message };
+                    updateSummary();
+                });
+
+                socket.on('disconnect', (reason) => {
+                    log(`🔌 WebSocket disconnected: ${reason}`);
+                });
+
+            } catch (error) {
+                log(`❌ WebSocket test error: ${error.message}`);
+                updateStatus('websocket-status', `Error: ${error.message}`, 'error');
+                testResults.websocket = { status: 'error', details: error.message };
+                updateSummary();
+            }
+        }
+
+        async function testWebSocketWithCredentials() {
+            log('🔌 Testing WebSocket CORS with credentials...');
+            updateStatus('websocket-status', 'Testing with credentials...', 'info');
+
+            try {
+                if (socket) {
+                    socket.disconnect();
+                }
+
+                socket = io(WS_BASE, {
+                    transports: ['websocket', 'polling'],
+                    forceNew: true,
+                    timeout: 10000,
+                    withCredentials: true
+                });
+
+                socket.on('connect', () => {
+                    log('✅ WebSocket connected with credentials');
+                    updateStatus('websocket-status', 'Connected with credentials', 'success');
+                    testResults.websocketCredentials = { status: 'success', details: 'Connected with credentials' };
+                    updateSummary();
+                });
+
+                socket.on('connect_error', (error) => {
+                    log(`❌ WebSocket credentials error: ${error.message}`);
+                    updateStatus('websocket-status', `Credentials Error: ${error.message}`, 'error');
+                    testResults.websocketCredentials = { status: 'error', details: error.message };
+                    updateSummary();
+                });
+
+            } catch (error) {
+                log(`❌ WebSocket credentials test error: ${error.message}`);
+                updateStatus('websocket-status', `Credentials Error: ${error.message}`, 'error');
+                testResults.websocketCredentials = { status: 'error', details: error.message };
+                updateSummary();
+            }
+        }
+
+        async function testHealthCORS() {
+            log('🏥 Testing Health API CORS...');
+            updateStatus('health-status', 'Testing...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': window.location.origin
+                    },
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ Health API CORS test successful');
+                    updateStatus('health-status', 'Success', 'success');
+                    testResults.health = { status: 'success', details: 'CORS headers present' };
+                } else {
+                    log(`❌ Health API error: ${response.status} ${response.statusText}`);
+                    updateStatus('health-status', `Error: ${response.status}`, 'error');
+                    testResults.health = { status: 'error', details: `${response.status} ${response.statusText}` };
+                }
+            } catch (error) {
+                log(`❌ Health API CORS test failed: ${error.message}`);
+                updateStatus('health-status', `Error: ${error.message}`, 'error');
+                testResults.health = { status: 'error', details: error.message };
+            }
+            updateSummary();
+        }
+
+        async function testBusesCORS() {
+            log('🚌 Testing Buses API CORS...');
+            updateStatus('buses-status', 'Testing...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/buses`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': window.location.origin
+                    },
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ Buses API CORS test successful');
+                    updateStatus('buses-status', 'Success', 'success');
+                    testResults.buses = { status: 'success', details: 'CORS headers present' };
+                } else {
+                    log(`❌ Buses API error: ${response.status} ${response.statusText}`);
+                    updateStatus('buses-status', `Error: ${response.status}`, 'error');
+                    testResults.buses = { status: 'error', details: `${response.status} ${response.statusText}` };
+                }
+            } catch (error) {
+                log(`❌ Buses API CORS test failed: ${error.message}`);
+                updateStatus('buses-status', `Error: ${error.message}`, 'error');
+                testResults.buses = { status: 'error', details: error.message };
+            }
+            updateSummary();
+        }
+
+        async function testLocationsCORS() {
+            log('📍 Testing Locations API CORS...');
+            updateStatus('locations-status', 'Testing...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/locations/current`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': window.location.origin
+                    },
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ Locations API CORS test successful');
+                    updateStatus('locations-status', 'Success', 'success');
+                    testResults.locations = { status: 'success', details: 'CORS headers present' };
+                } else {
+                    log(`❌ Locations API error: ${response.status} ${response.statusText}`);
+                    updateStatus('locations-status', `Error: ${response.status}`, 'error');
+                    testResults.locations = { status: 'error', details: `${response.status} ${response.statusText}` };
+                }
+            } catch (error) {
+                log(`❌ Locations API CORS test failed: ${error.message}`);
+                updateStatus('locations-status', `Error: ${error.message}`, 'error');
+                testResults.locations = { status: 'error', details: error.message };
+            }
+            updateSummary();
+        }
+
+        async function testRoutesCORS() {
+            log('🛣️ Testing Routes API CORS...');
+            updateStatus('routes-status', 'Testing...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/routes`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': window.location.origin
+                    },
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ Routes API CORS test successful');
+                    updateStatus('routes-status', 'Success', 'success');
+                    testResults.routes = { status: 'success', details: 'CORS headers present' };
+                } else {
+                    log(`❌ Routes API error: ${response.status} ${response.statusText}`);
+                    updateStatus('routes-status', `Error: ${response.status}`, 'error');
+                    testResults.routes = { status: 'error', details: `${response.status} ${response.statusText}` };
+                }
+            } catch (error) {
+                log(`❌ Routes API CORS test failed: ${error.message}`);
+                updateStatus('routes-status', `Error: ${error.message}`, 'error');
+                testResults.routes = { status: 'error', details: error.message };
+            }
+            updateSummary();
+        }
+
+        async function testPreflightRequests() {
+            log('🔍 Testing preflight requests...');
+            updateStatus('preflight-status', 'Testing...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/health`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'GET',
+                        'Access-Control-Request-Headers': 'Content-Type'
+                    }
+                });
+
+                if (response.status === 204 || response.status === 200) {
+                    log('✅ Preflight request successful');
+                    updateStatus('preflight-status', 'Success', 'success');
+                    testResults.preflight = { status: 'success', details: 'Preflight handled correctly' };
+                } else {
+                    log(`❌ Preflight request failed: ${response.status}`);
+                    updateStatus('preflight-status', `Error: ${response.status}`, 'error');
+                    testResults.preflight = { status: 'error', details: `Status: ${response.status}` };
+                }
+            } catch (error) {
+                log(`❌ Preflight test failed: ${error.message}`);
+                updateStatus('preflight-status', `Error: ${error.message}`, 'error');
+                testResults.preflight = { status: 'error', details: error.message };
+            }
+            updateSummary();
+        }
+
+        async function testUnauthorizedOrigin() {
+            log('🚫 Testing unauthorized origin...');
+            updateStatus('unauthorized-status', 'Testing...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': 'http://malicious-site.com'
+                    }
+                });
+
+                if (response.status === 403) {
+                    log('✅ Unauthorized origin correctly blocked');
+                    updateStatus('unauthorized-status', 'Blocked (Expected)', 'success');
+                    testResults.unauthorized = { status: 'success', details: 'Correctly blocked unauthorized origin' };
+                } else {
+                    log(`⚠️ Unauthorized origin not blocked: ${response.status}`);
+                    updateStatus('unauthorized-status', `Not Blocked: ${response.status}`, 'warning');
+                    testResults.unauthorized = { status: 'warning', details: `Status: ${response.status}` };
+                }
+            } catch (error) {
+                if (error.message.includes('CORS')) {
+                    log('✅ Unauthorized origin correctly blocked by CORS');
+                    updateStatus('unauthorized-status', 'Blocked by CORS', 'success');
+                    testResults.unauthorized = { status: 'success', details: 'Blocked by CORS policy' };
+                } else {
+                    log(`❌ Unauthorized origin test error: ${error.message}`);
+                    updateStatus('unauthorized-status', `Error: ${error.message}`, 'error');
+                    testResults.unauthorized = { status: 'error', details: error.message };
+                }
+            }
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const summaryElement = document.getElementById('summary-results');
+            const totalTests = Object.keys(testResults).length;
+            const successfulTests = Object.values(testResults).filter(r => r.status === 'success').length;
+            const errorTests = Object.values(testResults).filter(r => r.status === 'error').length;
+            const warningTests = Object.values(testResults).filter(r => r.status === 'warning').length;
+
+            summaryElement.innerHTML = `
+                <strong>Test Summary:</strong><br>
+                Total Tests: ${totalTests}<br>
+                ✅ Successful: ${successfulTests}<br>
+                ⚠️ Warnings: ${warningTests}<br>
+                ❌ Errors: ${errorTests}<br>
+                <br>
+                <strong>Detailed Results:</strong><br>
+                ${Object.entries(testResults).map(([test, result]) => 
+                    `${test}: <span class="${result.status}">${result.status}</span> - ${result.details}`
+                ).join('<br>')}
+            `;
+        }
+
+        async function runAllTests() {
+            log('🚀 Running all CORS tests...');
+            testResults = {};
+            
+            detectEnvironment();
+            await testWebSocketCORS();
+            await testWebSocketWithCredentials();
+            await testHealthCORS();
+            await testBusesCORS();
+            await testLocationsCORS();
+            await testRoutesCORS();
+            await testPreflightRequests();
+            await testUnauthorizedOrigin();
+            
+            log('✅ All tests completed');
+        }
+
+        function clearResults() {
+            testResults = {};
+            document.getElementById('summary-results').innerHTML = '';
+            document.getElementById('test-log').textContent = '';
+            log('🧹 Results cleared');
+        }
+
+        // Auto-detect environment on load
+        document.addEventListener('DOMContentLoaded', () => {
+            detectEnvironment();
+            log('🔒 CORS Test page loaded');
+        });
+    </script>
+</body>
+</html>

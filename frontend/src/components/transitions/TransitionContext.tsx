@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 export type TransitionType =
@@ -12,17 +12,9 @@ interface TransitionContextType {
   setTransition: (transition: TransitionType) => void;
 }
 
-const TransitionContext = createContext<TransitionContextType | undefined>(
-  undefined
-);
-
-export const useTransition = () => {
-  const context = useContext(TransitionContext);
-  if (!context) {
-    throw new Error('useTransition must be used within a TransitionProvider');
-  }
-  return context;
-};
+export const TransitionContext = createContext<
+  TransitionContextType | undefined
+>(undefined);
 
 interface TransitionProviderProps {
   children: React.ReactNode;
@@ -44,7 +36,7 @@ export const TransitionProvider: React.FC<TransitionProviderProps> = ({
     ) {
       setCurrentTransition('homepage-to-login');
     } else if (
-      pathname.includes('student') || 
+      pathname.includes('student') ||
       pathname.includes('student-map')
     ) {
       setCurrentTransition('homepage-to-map');

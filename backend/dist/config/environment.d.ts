@@ -27,6 +27,7 @@ export interface EnvironmentConfig {
         enableHelmet: boolean;
         enableCors: boolean;
         enableRateLimit: boolean;
+        adminEmails: string[];
     };
     logging: {
         level: string;

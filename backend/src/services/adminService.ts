@@ -1064,8 +1064,18 @@ export class AdminService {
     custom_destination_coordinates?: [number, number];
     custom_origin?: string;
     custom_origin_coordinates?: [number, number];
-    bus_stops?: any[];
-    stops?: any;
+    bus_stops?: Array<{
+      id: string;
+      name: string;
+      location: string;
+      stop_order: number;
+    }>;
+    stops?: Array<{
+      id: string;
+      name: string;
+      geom: string;
+      seq: number;
+    }>;
   }) {
     try {
       // Validate required fields
@@ -1126,8 +1136,18 @@ export class AdminService {
       custom_destination_coordinates?: [number, number];
       custom_origin?: string;
       custom_origin_coordinates?: [number, number];
-      bus_stops?: any[];
-      stops?: any;
+      bus_stops?: Array<{
+        id: string;
+        name: string;
+        location: string;
+        stop_order: number;
+      }>;
+      stops?: Array<{
+        id: string;
+        name: string;
+        geom: string;
+        seq: number;
+      }>;
     }
   ) {
     try {

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross-Laptop Connection Debug Tool</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .log-container {
+            height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 3px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .log-time {
+            color: #6c757d;
+            margin-right: 5px;
+        }
+        .log-error { color: #dc3545; }
+        .log-success { color: #28a745; }
+        .log-info { color: #17a2b8; }
+        .log-warning { color: #ffc107; }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0069d9;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .details {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .test-section {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Cross-Laptop Connection Debug Tool</h1>
+        <p><strong>Purpose:</strong> This tool helps diagnose cross-laptop WebSocket connection issues by testing different connection scenarios.</p>
+        
+        <div class="grid">
+            <div class="test-section">
+                <h3>🔍 Environment Detection</h3>
+                <div id="env-info" class="details">Loading...</div>
+            </div>
+            
+            <div class="test-section">
+                <h3>🌐 Network Information</h3>
+                <div id="network-info" class="details">Loading...</div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔌 WebSocket Connection Tests</h3>
+            <div>
+                <button id="test-localhost">Test localhost:3000</button>
+                <button id="test-127">Test 127.0.0.1:3000</button>
+                <button id="test-network">Test Network IP:3000</button>
+                <button id="test-all">Test All Scenarios</button>
+                <button id="clear-log">Clear Log</button>
+            </div>
+            
+            <div id="connection-status" class="status info">Ready to test</div>
+            
+            <h4>Connection Log:</h4>
+            <div id="log" class="log-container"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 Test Results Summary</h3>
+            <div id="test-results" class="details">No tests run yet</div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const testLocalhostBtn = document.getElementById('test-localhost');
+        const test127Btn = document.getElementById('test-127');
+        const testNetworkBtn = document.getElementById('test-network');
+        const testAllBtn = document.getElementById('test-all');
+        const clearLogBtn = document.getElementById('clear-log');
+        const logContainer = document.getElementById('log');
+        const connectionStatus = document.getElementById('connection-status');
+        const envInfo = document.getElementById('env-info');
+        const networkInfo = document.getElementById('network-info');
+        const testResults = document.getElementById('test-results');
+        
+        // Test results storage
+        const testResultsData = {};
+        
+        // Get current time formatted for logs
+        function getTimeString() {
+            const now = new Date();
+            return now.toLocaleTimeString();
+        }
+        
+        // Add log entry
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            
+            const time = document.createElement('span');
+            time.className = 'log-time';
+            time.textContent = `[${getTimeString()}]`;
+            
+            entry.appendChild(time);
+            entry.appendChild(document.createTextNode(` ${message}`));
+            
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        // Clear log
+        function clearLog() {
+            logContainer.innerHTML = '';
+            log('🚀 Cross-laptop connection debug tool loaded.', 'info');
+        }
+        
+        // Update connection status
+        function updateStatus(message, type = 'info') {
+            connectionStatus.textContent = message;
+            connectionStatus.className = `status ${type}`;
+        }
+        
+        // Get environment information
+        function getEnvironmentInfo() {
+            const info = {
+                hostname: window.location.hostname,
+                port: window.location.port,
+                protocol: window.location.protocol,
+                origin: window.location.origin,
+                userAgent: navigator.userAgent,
+                isLocalhost: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
+                isNetworkIP: !window.location.hostname.includes('localhost') && 
+                           !window.location.hostname.includes('127.0.0.1') &&
+                           !window.location.hostname.includes('devtunnels.ms'),
+                isDevTunnel: window.location.hostname.includes('devtunnels.ms'),
+                isProduction: window.location.hostname.includes('render.com') || 
+                             window.location.hostname.includes('vercel.app')
+            };
+            
+            envInfo.textContent = JSON.stringify(info, null, 2);
+            return info;
+        }
+        
+        // Get network information
+        function getNetworkInfo() {
+            const info = {
+                connection: navigator.connection ? {
+                    effectiveType: navigator.connection.effectiveType,
+                    downlink: navigator.connection.downlink,
+                    rtt: navigator.connection.rtt,
+                    saveData: navigator.connection.saveData
+                } : 'Not available',
+                platform: navigator.platform,
+                language: navigator.language,
+                cookieEnabled: navigator.cookieEnabled,
+                onLine: navigator.onLine
+            };
+            
+            networkInfo.textContent = JSON.stringify(info, null, 2);
+            return info;
+        }
+        
+        // Test WebSocket connection
+        async function testWebSocketConnection(url, testName) {
+            return new Promise((resolve) => {
+                log(`🔄 Testing ${testName}: ${url}`, 'info');
+                updateStatus(`Testing ${testName}...`, 'info');
+                
+                const startTime = Date.now();
+                let connected = false;
+                let error = null;
+                
+                const socket = io(url, {
+                    transports: ['polling', 'websocket'],
+                    timeout: 10000,
+                    forceNew: true,
+                    reconnection: false
+                });
+                
+                const timeout = setTimeout(() => {
+                    if (!connected) {
+                        log(`⏰ ${testName} timeout after 10 seconds`, 'error');
+                        socket.disconnect();
+                        resolve({
+                            testName,
+                            url,
+                            success: false,
+                            error: 'Connection timeout',
+                            duration: Date.now() - startTime
+                        });
+                    }
+                }, 10000);
+                
+                socket.on('connect', () => {
+                    connected = true;
+                    clearTimeout(timeout);
+                    log(`✅ ${testName} connected successfully!`, 'success');
+                    socket.disconnect();
+                    resolve({
+                        testName,
+                        url,
+                        success: true,
+                        error: null,
+                        duration: Date.now() - startTime
+                    });
+                });
+                
+                socket.on('connect_error', (err) => {
+                    if (!connected) {
+                        connected = true; // Prevent multiple error calls
+                        clearTimeout(timeout);
+                        error = err.message;
+                        log(`❌ ${testName} connection error: ${err.message}`, 'error');
+                        socket.disconnect();
+                        resolve({
+                            testName,
+                            url,
+                            success: false,
+                            error: err.message,
+                            duration: Date.now() - startTime
+                        });
+                    }
+                });
+                
+                socket.on('error', (err) => {
+                    if (!connected) {
+                        connected = true; // Prevent multiple error calls
+                        clearTimeout(timeout);
+                        error = err.message || 'Unknown error';
+                        log(`❌ ${testName} socket error: ${error}`, 'error');
+                        socket.disconnect();
+                        resolve({
+                            testName,
+                            url,
+                            success: false,
+                            error: error,
+                            duration: Date.now() - startTime
+                        });
+                    }
+                });
+            });
+        }
+        
+        // Test localhost connection
+        async function testLocalhost() {
+            const result = await testWebSocketConnection('http://localhost:3000', 'Localhost');
+            testResultsData.localhost = result;
+            updateTestResults();
+        }
+        
+        // Test 127.0.0.1 connection
+        async function test127() {
+            const result = await testWebSocketConnection('http://127.0.0.1:3000', '127.0.0.1');
+            testResultsData.localhost127 = result;
+            updateTestResults();
+        }
+        
+        // Test network IP connection
+        async function testNetwork() {
+            const currentHost = window.location.hostname;
+            const networkUrl = `http://${currentHost}:3000`;
+            const result = await testWebSocketConnection(networkUrl, 'Network IP');
+            testResultsData.network = result;
+            updateTestResults();
+        }
+        
+        // Test all scenarios
+        async function testAll() {
+            log('🚀 Starting comprehensive connection tests...', 'info');
+            updateStatus('Running all tests...', 'info');
+            
+            await testLocalhost();
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between tests
+            
+            await test127();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testNetwork();
+            
+            log('✅ All tests completed!', 'success');
+            updateStatus('All tests completed', 'success');
+        }
+        
+        // Update test results display
+        function updateTestResults() {
+            const results = Object.values(testResultsData);
+            const successful = results.filter(r => r.success).length;
+            const total = results.length;
+            
+            let summary = `Tests Run: ${total}\nSuccessful: ${successful}\nFailed: ${total - successful}\n\n`;
+            
+            results.forEach(result => {
+                const status = result.success ? '✅' : '❌';
+                summary += `${status} ${result.testName}: ${result.success ? 'SUCCESS' : result.error}\n`;
+                summary += `   URL: ${result.url}\n`;
+                summary += `   Duration: ${result.duration}ms\n\n`;
+            });
+            
+            testResults.textContent = summary;
+        }
+        
+        // Event listeners
+        testLocalhostBtn.addEventListener('click', testLocalhost);
+        test127Btn.addEventListener('click', test127);
+        testNetworkBtn.addEventListener('click', testNetwork);
+        testAllBtn.addEventListener('click', testAll);
+        clearLogBtn.addEventListener('click', clearLog);
+        
+        // Initialize
+        clearLog();
+        getEnvironmentInfo();
+        getNetworkInfo();
+        
+        log('🌐 Environment detection completed', 'info');
+        log('🔍 Network information gathered', 'info');
+        log('🚀 Ready to test WebSocket connections', 'success');
+    </script>
+</body>
+</html>

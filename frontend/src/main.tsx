@@ -5,6 +5,14 @@ import './index.css';
 import { setupConsoleFilter } from './utils/consoleFilter';
 import './utils/apiInterceptor';
 import { QueryProvider } from './providers/QueryProvider';
+import { serviceWorkerManager } from './utils/serviceWorkerManager';
+
+// Reduce console noise in production: keep warnings/errors only
+if (import.meta.env.PROD) {
+  const noop = () => {};
+  console.debug = noop;
+  console.log = noop;
+}
 
 // Import Service Worker cache clearer for development
 if (import.meta.env.DEV) {
@@ -12,55 +20,67 @@ if (import.meta.env.DEV) {
   const script = document.createElement('script');
   script.src = '/clear-sw-cache.js';
   script.onload = () => console.log('✅ Service Worker cache clearer loaded');
-  script.onerror = () => console.log('⚠️ Service Worker cache clearer not available');
+  script.onerror = () =>
+    console.log('⚠️ Service Worker cache clearer not available');
   document.head.appendChild(script);
 }
 
 // Setup console filter to suppress expected warnings in development
 setupConsoleFilter();
 
-// Register service worker for better performance (only in production)
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', {
-      scope: '/',
-      updateViaCache: 'none'
-    })
-      .then((registration) => {
-        console.log('✅ Service Worker registered successfully:', registration.scope);
-        
-        // Handle service worker updates
-        registration.addEventListener('updatefound', () => {
-          console.log('🔄 Service Worker update found');
-        });
-        
-        // Handle service worker state changes
-        registration.addEventListener('statechange', () => {
-          console.log('🔄 Service Worker state changed:', registration.active?.state);
-        });
-      })
-      .catch((error) => {
-        console.error('❌ Service Worker registration failed:', error);
-      });
-  });
-  
-  // Handle service worker errors
-  navigator.serviceWorker.addEventListener('error', (event) => {
-    console.error('❌ Service Worker error:', event);
-  });
-  
-  // Handle service worker message events
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    console.log('📨 Service Worker message:', event.data);
-  });
-} else if ('serviceWorker' in navigator && import.meta.env.DEV) {
-  // Unregister any existing service workers in development
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister();
-      console.log('🔄 Service Worker unregistered for development');
+// Enhanced Service Worker registration
+if (import.meta.env.PROD) {
+  // Register service worker for better performance
+  window.addEventListener('load', async () => {
+    try {
+      await serviceWorkerManager.register();
+      console.log('✅ Enhanced Service Worker registered successfully');
+      
+      // Setup network listeners
+      serviceWorkerManager.setupNetworkListeners();
+      
+      // Preload critical resources with PRPL pattern
+      const criticalResources = [
+        '/',
+        '/index.html',
+        '/manifest.json',
+      ];
+      await serviceWorkerManager.preloadResources(criticalResources);
+      
+      // Pre-cache critical resources
+      await serviceWorkerManager.precacheCriticalResources();
+      
+      // Pre-cache user patterns
+      await serviceWorkerManager.precacheUserPatterns();
+      
+    } catch (error) {
+      console.error('❌ Enhanced Service Worker registration failed:', error);
     }
   });
+
+  // Listen for service worker updates
+  window.addEventListener('sw-update-available', () => {
+    console.log('🔄 Service Worker update available');
+    // You can show a notification to the user here
+  });
+
+  // Listen for network status changes
+  window.addEventListener('network-online', () => {
+    console.log('🌐 Network is online');
+  });
+
+  window.addEventListener('network-offline', () => {
+    console.log('📴 Network is offline');
+  });
+
+} else if (import.meta.env.DEV) {
+  // Unregister any existing service workers in development
+  try {
+    await serviceWorkerManager.unregister();
+    console.log('🔄 Service Worker unregistered for development');
+  } catch (error) {
+    console.log('⚠️ No service worker to unregister');
+  }
 }
 
 // Optimize font loading with proper resource hints
@@ -75,7 +95,8 @@ document.head.appendChild(preconnectLink);
 // Using a direct link element with font-display: swap to prevent FOIT
 const fontLink = document.createElement('link');
 fontLink.rel = 'stylesheet';
-fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap&font-display=swap';
+fontLink.href =
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap&font-display=swap';
 document.head.appendChild(fontLink);
 
 // Ensure proper rendering

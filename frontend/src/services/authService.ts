@@ -167,9 +167,7 @@ class AuthService {
       // Check if this is a known admin user - prioritize admin email over database role
       const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
         (email: string) => email.trim().toLowerCase()
-      ) || [
-        'siddharthmali.211@gmail.com', // Keep this as fallback for development
-      ];
+      ) || [];
 
       const isAdmin = adminEmails.includes(
         this.currentUser?.email?.toLowerCase() || ''
@@ -199,15 +197,17 @@ class AuthService {
 
   // Removed unused setTemporaryProfile function
 
-  private setTemporaryProfileWithRoleCheck(userId: string, user: any): void {
+  private setTemporaryProfileWithRoleCheck(
+    userId: string,
+    user: { email?: string; user_metadata?: { full_name?: string } } | null
+  ): void {
+    if (!user) return;
     console.log('🔄 Setting temporary profile with role check for user login');
 
     // Check if this is a known admin user - use environment variable
     const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
       (email: string) => email.trim().toLowerCase()
-    ) || [
-      'siddharthmali.211@gmail.com', // Keep this as fallback for development
-    ];
+    ) || [];
 
     const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
     const role = isAdmin ? 'admin' : 'student';
@@ -285,7 +285,13 @@ class AuthService {
       const { data, error } = (await Promise.race([
         authPromise,
         timeoutPromise,
-      ])) as any;
+      ])) as unknown as {
+        data: {
+          user: { id: string; email?: string } | null;
+          session: { access_token: string } | null;
+        } | null;
+        error: { message: string } | null;
+      };
 
       if (error) {
         console.error('❌ Sign in error:', error);
@@ -294,16 +300,33 @@ class AuthService {
 
       console.log('✅ Supabase authentication successful');
 
-      if (data.user && data.session) {
+      if (data?.user && data?.session) {
         console.log('👤 User data received:', data.user.email);
-        this.currentUser = data.user;
-        this.currentSession = data.session;
+        // Convert from partial User type to full User type
+        this.currentUser = {
+          ...data.user,
+          app_metadata: {},
+          user_metadata:
+            (data.user as { user_metadata?: Record<string, unknown> })
+              .user_metadata || {},
+          aud: 'authenticated',
+          created_at: new Date().toISOString(),
+        } as User;
+
+        // Convert from partial Session type to full Session type
+        this.currentSession = {
+          ...data.session,
+          refresh_token: '',
+          expires_in: 3600,
+          token_type: 'bearer',
+          user: this.currentUser,
+        } as Session;
 
         console.log('📋 Loading user profile...');
         try {
           // Load profile with timeout
           const profilePromise = this.loadUserProfile(data.user.id);
-          const profileTimeout = new Promise((_, reject) => {
+          const profileTimeout = new Promise<never>((_, reject) => {
             setTimeout(
               () => reject(new Error('Profile loading timeout')),
               3000 // Reduced from 5s to 3s for better UX
@@ -691,7 +714,7 @@ class AuthService {
         }
       }
 
-      keysToRemove.forEach((key) => {
+      keysToRemove.forEach(key => {
         localStorage.removeItem(key);
         console.log(`🗑️ Removed localStorage key: ${key}`);
       });
@@ -991,11 +1014,27 @@ class AuthService {
         return { isValid: false, assignment: null };
       }
 
+      // Wait for profile to be loaded if it's not available yet
+      if (!this.currentProfile && this.currentUser) {
+        console.log('🔄 Profile not loaded yet, waiting for profile...');
+        await this.loadUserProfile(this.currentUser.id);
+        
+        // Wait a bit more for the profile to be set
+        let attempts = 0;
+        while (!this.currentProfile && attempts < 10) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+      }
+
       // Check if user is a driver
       if (this.currentProfile?.role !== 'driver') {
-        console.log('❌ User is not a driver');
+        console.log('❌ User is not a driver. Current profile:', this.currentProfile);
+        console.log('❌ User role:', this.currentProfile?.role);
         return { isValid: false, assignment: null };
       }
+
+      console.log('✅ User is a driver, checking for bus assignment...');
 
       // Get driver assignment from database
       const assignment = await this.getDriverBusAssignment(

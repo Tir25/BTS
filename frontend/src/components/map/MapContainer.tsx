@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import maplibregl from 'maplibre-gl';
+import { Map } from 'maplibre-gl';
 
 interface MapContainerProps {
-  onMapLoad: (map: maplibregl.Map) => void;
-  onMapError: (error: any) => void;
+  onMapLoad: (map: Map) => void;
+  onMapError: (error: ErrorEvent) => void;
   onViewportChange?: (viewport: {
     bounds: [[number, number], [number, number]];
     zoom: number;
@@ -25,19 +25,19 @@ const MapContainer: React.FC<MapContainerProps> = ({
   enableHeatmap = false,
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<maplibregl.Map | null>(null);
+  const map = useRef<Map | null>(null);
   const viewportChangeTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const initializeMap = useCallback(() => {
     if (!mapContainer.current || map.current) return;
 
     try {
-      map.current = new maplibregl.Map({
+      map.current = new Map({
         container: mapContainer.current,
         style: {
           version: 8,
           sources: {
-            'osm': {
+            osm: {
               type: 'raster',
               tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
               tileSize: 256,
@@ -47,7 +47,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
               bounds: [-180, -85.051129, 180, 85.051129],
               // Add tile caching headers
               scheme: 'xyz',
-            }
+            },
           },
           layers: [
             {
@@ -60,9 +60,9 @@ const MapContainer: React.FC<MapContainerProps> = ({
               paint: {
                 'raster-opacity': 1,
                 'raster-fade-duration': 300,
-              }
-            }
-          ]
+              },
+            },
+          ],
         },
         center,
         zoom,
@@ -74,7 +74,10 @@ const MapContainer: React.FC<MapContainerProps> = ({
         maxZoom: 18,
         minZoom: 0,
         // Add spatial optimization settings
-        maxBounds: [[72.0, 22.0], [74.0, 24.0]], // Restrict to Ahmedabad area
+        maxBounds: [
+          [72.0, 22.0],
+          [74.0, 24.0],
+        ], // Restrict to Ahmedabad area
         pitchWithRotate: false, // Disable 3D for better performance
         dragRotate: false, // Disable rotation for better UX
       });
@@ -84,7 +87,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
         onMapLoad(map.current!);
       });
 
-      map.current.on('error', (error) => {
+      map.current.on('error', error => {
         console.error('❌ Map error:', error);
         onMapError(error);
       });
@@ -107,7 +110,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
           onViewportChange({
             bounds: [
               [bounds.getWest(), bounds.getSouth()],
-              [bounds.getEast(), bounds.getNorth()]
+              [bounds.getEast(), bounds.getNorth()],
             ],
             zoom,
             center: [center.lng, center.lat],
@@ -122,10 +125,10 @@ const MapContainer: React.FC<MapContainerProps> = ({
 
       // Handle WebGL context loss with better error recovery
       let isContextLost = false;
-      
+
       map.current.on('webglcontextlost', () => {
         console.warn('⚠️ WebGL context lost, attempting to restore...');
-        
+
         // Prevent multiple restoration attempts
         if (isContextLost) return;
         isContextLost = true;
@@ -140,7 +143,11 @@ const MapContainer: React.FC<MapContainerProps> = ({
               console.log('✅ WebGL context restored successfully');
             } catch (error) {
               console.error('❌ Failed to restore WebGL context:', error);
-              onMapError(new Error('Map rendering failed, please refresh the page'));
+              onMapError(
+                new ErrorEvent('error', {
+                  message: 'Map rendering failed, please refresh the page',
+                })
+              );
             }
           }
         }, 2000); // Increased delay for better recovery
@@ -155,7 +162,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
       });
 
       // Add error recovery for tile loading issues
-      map.current.on('error', (error) => {
+      map.current.on('error', error => {
         console.error('❌ Map error:', error);
         // Don't call onMapError for tile loading errors
         if (error.type !== 'TileLoadError') {
@@ -176,12 +183,23 @@ const MapContainer: React.FC<MapContainerProps> = ({
       if (enableHeatmap) {
         console.log('🗺️ Heatmap enabled');
       }
-
     } catch (error) {
       console.error('❌ Error initializing map:', error);
-      onMapError(error);
+      onMapError(
+        error instanceof ErrorEvent
+          ? error
+          : new ErrorEvent('error', { message: String(error) })
+      );
     }
-  }, [center, zoom, onMapLoad, onMapError, onViewportChange, enableClustering, enableHeatmap]);
+  }, [
+    center,
+    zoom,
+    onMapLoad,
+    onMapError,
+    onViewportChange,
+    enableClustering,
+    enableHeatmap,
+  ]);
 
   useEffect(() => {
     // Prevent double initialization
@@ -196,14 +214,14 @@ const MapContainer: React.FC<MapContainerProps> = ({
       if (viewportChangeTimeout.current) {
         clearTimeout(viewportChangeTimeout.current);
       }
-      
+
       if (map.current) {
         console.log('🗺️ Cleaning up map...');
         map.current.remove();
         map.current = null;
       }
     };
-  }, []); // Remove initializeMap dependency to prevent re-initialization
+  }, [initializeMap]); // Add initializeMap dependency
 
   // Expose map methods for external use
   useEffect(() => {
@@ -216,13 +234,13 @@ const MapContainer: React.FC<MapContainerProps> = ({
       onViewportChange({
         bounds: [
           [bounds.getWest(), bounds.getSouth()],
-          [bounds.getEast(), bounds.getNorth()]
+          [bounds.getEast(), bounds.getNorth()],
         ],
         zoom: currentZoom,
         center: [currentCenter.lng, currentCenter.lat],
       });
     }
-  }, [map.current, onViewportChange]);
+  }, [onViewportChange]);
 
   return (
     <div

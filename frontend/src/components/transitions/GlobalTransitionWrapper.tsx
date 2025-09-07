@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTransition } from './TransitionContext';
+import { useTransition } from './useTransition';
 import { HomepageToLoginTransition } from './HomepageToLoginTransition';
 import { HomepageToMapTransition } from './HomepageToMapTransition';
 import { LoginToDashboardTransition } from './LoginToDashboardTransition';

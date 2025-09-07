@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Cache</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 16px;
+        }
+        button:hover { background: #c82333; }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 4px;
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ Clear Browser Cache</h1>
+        <p>This page will help clear browser cache and force a fresh load of the application.</p>
+        
+        <button onclick="clearCache()">Clear Cache & Reload</button>
+        <button onclick="hardRefresh()">Hard Refresh</button>
+        <button onclick="clearLocalStorage()">Clear Local Storage</button>
+        
+        <div id="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        function clearCache() {
+            // Clear various caches
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (let name of names) {
+                        caches.delete(name);
+                    }
+                });
+            }
+            
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            // Force reload
+            window.location.reload(true);
+        }
+
+        function hardRefresh() {
+            // Force a hard refresh
+            window.location.href = window.location.href + '?v=' + Date.now();
+        }
+
+        function clearLocalStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('result').textContent = 'Local storage cleared!';
+        }
+    </script>
+</body>
+</html>

@@ -556,7 +556,14 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/driver-login')}
               >
                 <div className="text-center px-2">
-                  <div className="mb-2 sm:mb-4 animate-pulse icon-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <div
+                    className="mb-2 sm:mb-4 animate-pulse icon-container"
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
                     <BusIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -594,7 +601,14 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/student-map')}
               >
                 <div className="text-center px-2">
-                  <div className="mb-2 sm:mb-4 animate-pulse icon-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <div
+                    className="mb-2 sm:mb-4 animate-pulse icon-container"
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
                     <MapIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">
@@ -632,7 +646,14 @@ const PremiumHomepage: React.FC = () => {
                 onClick={() => handleNavigation('/admin-login')}
               >
                 <div className="text-center px-2">
-                  <div className="mb-2 sm:mb-4 animate-pulse icon-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <div
+                    className="mb-2 sm:mb-4 animate-pulse icon-container"
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
                     <AdminIcon />
                   </div>
                   <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2">

@@ -45,6 +45,187 @@ const DriverLogin: React.FC = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // disconnectSocket function
+  const disconnectSocket = React.useCallback(() => {
+    websocketService.disconnect();
+  }, []);
+
+  // Define authenticateWithSocket function with useCallback
+  const authenticateWithSocket = React.useCallback(
+    async (token: string) => {
+      try {
+        console.log('🔌 Driver: Connecting to WebSocket as driver...');
+        await websocketService.connectAs('driver');
+
+        // Wait for connection to be established with improved timeout handling
+        let connectionAttempts = 0;
+        const maxAttempts = 10; // Increased attempts for better reliability
+
+        while (
+          !websocketService.isConnected() &&
+          connectionAttempts < maxAttempts
+        ) {
+          console.log(
+            `⏳ Waiting for WebSocket connection... (attempt ${connectionAttempts + 1}/${maxAttempts})`
+          );
+          await new Promise(resolve => setTimeout(resolve, 1500)); // Increased wait time
+          connectionAttempts++;
+        }
+
+        if (!websocketService.isConnected()) {
+          console.error('❌ WebSocket connection failed after all attempts');
+          throw new Error(
+            'Failed to establish WebSocket connection. Please check your internet connection and try again.'
+          );
+        }
+
+        console.log('✅ WebSocket connection established');
+
+        websocketService.socket?.on('connect', () => {
+          console.log('🔌 Driver: Connected to WebSocket server');
+        });
+
+        websocketService.socket?.on('disconnect', () => {
+          console.log('🔌 Driver: Disconnected from WebSocket server');
+        });
+
+        websocketService.socket?.on('error', error => {
+          console.error('❌ Driver: Socket error:', error);
+          setLoginError(error.message || 'Socket error occurred');
+        });
+
+        // Wait a moment for connection to stabilize - REDUCED WAIT TIME
+        await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 1s to 500ms
+
+        // Double-check connection status
+        if (!websocketService.isConnected()) {
+          throw new Error('WebSocket connection failed to establish');
+        }
+
+        // Set up authentication response handler
+        const handleAuthenticationSuccess = async (data: {
+          driverId: string;
+          busId: string;
+          busInfo: BusInfo;
+        }) => {
+          console.log('✅ Driver: Authentication successful:', data);
+
+          try {
+            // Store driver-bus assignment in database instead of localStorage
+            const assignment = {
+              driver_id: data.driverId,
+              bus_id: data.busId,
+              bus_number: data.busInfo.bus_number,
+              route_id: data.busInfo.route_id,
+              route_name: data.busInfo.route_name,
+              driver_name: data.busInfo.driver_name,
+            };
+
+            console.log('💾 Storing driver assignment:', assignment);
+            const stored =
+              await authService.storeDriverBusAssignment(assignment);
+            console.log('💾 Assignment stored result:', stored);
+
+            if (!stored) {
+              console.error('❌ Failed to store driver assignment in database');
+              setLoginError('Failed to store authentication data');
+              return;
+            }
+
+            console.log('✅ Setting authentication state...');
+            setIsAuthenticated(true);
+            setBusInfo(data.busInfo);
+
+            // Set transition type for login to dashboard
+            setTransition('login-to-dashboard');
+
+            // Navigate to driver dashboard after successful authentication
+            console.log('🚀 Driver: Navigating to dashboard immediately...');
+            navigate('/driver-dashboard');
+
+            console.log('✅ Navigation initiated successfully');
+          } catch (error) {
+            console.error('❌ Error storing authentication data:', error);
+            setLoginError('Failed to complete authentication');
+          }
+        };
+
+        const handleAuthenticationFailed = (error: Error) => {
+          console.error('❌ Driver: Authentication failed:', error);
+          setLoginError(
+            'Authentication failed: ' + (error.message || 'Unknown error')
+          );
+        };
+
+        // Add timeout for authentication (increased to 60 seconds for better reliability)
+        const authTimeout = setTimeout(() => {
+          console.error('❌ Driver: Authentication timeout');
+          setLoginError('Authentication timeout - please try again');
+          // Clean up listeners
+          websocketService.socket?.off(
+            'driver:authenticated',
+            handleAuthenticationSuccess
+          );
+          websocketService.socket?.off(
+            'driver:authentication_failed',
+            handleAuthenticationFailed
+          );
+        }, 60000);
+
+        console.log('🔐 Driver: Sending authentication request...');
+
+        // Ensure we have a valid token
+        if (!token) {
+          throw new Error('No authentication token available');
+        }
+
+        // Send authentication request with callbacks
+        websocketService.authenticateAsDriver(token, {
+          onSuccess: data => {
+            clearTimeout(authTimeout);
+            handleAuthenticationSuccess(
+              data as unknown as {
+                driverId: string;
+                busId: string;
+                busInfo: BusInfo;
+              }
+            );
+          },
+          onFailure: error => {
+            clearTimeout(authTimeout);
+            handleAuthenticationFailed(
+              new Error(
+                typeof error === 'object' &&
+                error !== null &&
+                'message' in error
+                  ? String(error.message)
+                  : 'Authentication failed'
+              )
+            );
+          },
+          onError: error => {
+            clearTimeout(authTimeout);
+            console.error('❌ Driver: Authentication error:', error);
+            setLoginError(
+              'Authentication error: ' +
+                (typeof error === 'object' &&
+                error !== null &&
+                'message' in error
+                  ? String(error.message)
+                  : 'Unknown error')
+            );
+          },
+        });
+
+        console.log('📤 Authentication request sent, waiting for response...');
+      } catch (error) {
+        console.error('❌ Driver: Authentication error:', error);
+        setLoginError('Failed to authenticate with server');
+      }
+    },
+    [navigate, setLoginError, setIsAuthenticated, setBusInfo, setTransition]
+  );
+
   // Initialize Supabase auth listener (same as original)
   useEffect(() => {
     const {
@@ -60,7 +241,7 @@ const DriverLogin: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [authenticateWithSocket, disconnectSocket]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,162 +273,6 @@ const DriverLogin: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const authenticateWithSocket = async (token: string) => {
-    try {
-      console.log('🔌 Driver: Connecting to WebSocket...');
-      await websocketService.connect();
-
-      // Wait for connection to be established with improved timeout handling
-      let connectionAttempts = 0;
-      const maxAttempts = 10; // Increased attempts for better reliability
-
-      while (
-        !websocketService.isConnected() &&
-        connectionAttempts < maxAttempts
-      ) {
-        console.log(
-          `⏳ Waiting for WebSocket connection... (attempt ${connectionAttempts + 1}/${maxAttempts})`
-        );
-        await new Promise((resolve) => setTimeout(resolve, 1500)); // Increased wait time
-        connectionAttempts++;
-      }
-
-      if (!websocketService.isConnected()) {
-        console.error('❌ WebSocket connection failed after all attempts');
-        throw new Error(
-          'Failed to establish WebSocket connection. Please check your internet connection and try again.'
-        );
-      }
-
-      console.log('✅ WebSocket connection established');
-
-      websocketService.socket?.on('connect', () => {
-        console.log('🔌 Driver: Connected to WebSocket server');
-      });
-
-      websocketService.socket?.on('disconnect', () => {
-        console.log('🔌 Driver: Disconnected from WebSocket server');
-      });
-
-      websocketService.socket?.on('error', (error) => {
-        console.error('❌ Driver: Socket error:', error);
-        setLoginError(error.message || 'Socket error occurred');
-      });
-
-      // Wait a moment for connection to stabilize - REDUCED WAIT TIME
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Reduced from 1s to 500ms
-
-      // Double-check connection status
-      if (!websocketService.isConnected()) {
-        throw new Error('WebSocket connection failed to establish');
-      }
-
-      // Set up authentication response handler
-      const handleAuthenticationSuccess = async (data: {
-        driverId: string;
-        busId: string;
-        busInfo: BusInfo;
-      }) => {
-        console.log('✅ Driver: Authentication successful:', data);
-
-        try {
-          // Store driver-bus assignment in database instead of localStorage
-          const assignment = {
-            driver_id: data.driverId,
-            bus_id: data.busId,
-            bus_number: data.busInfo.bus_number,
-            route_id: data.busInfo.route_id,
-            route_name: data.busInfo.route_name,
-            driver_name: data.busInfo.driver_name,
-          };
-
-          console.log('💾 Storing driver assignment:', assignment);
-          const stored = await authService.storeDriverBusAssignment(assignment);
-          console.log('💾 Assignment stored result:', stored);
-
-          if (!stored) {
-            console.error('❌ Failed to store driver assignment in database');
-            setLoginError('Failed to store authentication data');
-            return;
-          }
-
-          console.log('✅ Setting authentication state...');
-          setIsAuthenticated(true);
-          setBusInfo(data.busInfo);
-
-          // Set transition type for login to dashboard
-          setTransition('login-to-dashboard');
-
-          // Navigate to driver dashboard after successful authentication
-          console.log('🚀 Driver: Navigating to dashboard immediately...');
-          navigate('/driver-dashboard');
-
-          console.log('✅ Navigation initiated successfully');
-        } catch (error) {
-          console.error('❌ Error storing authentication data:', error);
-          setLoginError('Failed to complete authentication');
-        }
-      };
-
-      const handleAuthenticationFailed = (error: any) => {
-        console.error('❌ Driver: Authentication failed:', error);
-        setLoginError(
-          'Authentication failed: ' + (error.message || 'Unknown error')
-        );
-      };
-
-      // Add timeout for authentication (increased to 60 seconds for better reliability)
-      const authTimeout = setTimeout(() => {
-        console.error('❌ Driver: Authentication timeout');
-        setLoginError('Authentication timeout - please try again');
-        // Clean up listeners
-        websocketService.socket?.off(
-          'driver:authenticated',
-          handleAuthenticationSuccess
-        );
-        websocketService.socket?.off(
-          'driver:authentication_failed',
-          handleAuthenticationFailed
-        );
-      }, 60000);
-
-      console.log('🔐 Driver: Sending authentication request...');
-
-      // Ensure we have a valid token
-      if (!token) {
-        throw new Error('No authentication token available');
-      }
-
-      // Send authentication request with callbacks
-      websocketService.authenticateAsDriver(token, {
-        onSuccess: (data) => {
-          clearTimeout(authTimeout);
-          handleAuthenticationSuccess(data);
-        },
-        onFailure: (error) => {
-          clearTimeout(authTimeout);
-          handleAuthenticationFailed(error);
-        },
-        onError: (error) => {
-          clearTimeout(authTimeout);
-          console.error('❌ Driver: Authentication error:', error);
-          setLoginError(
-            'Authentication error: ' + (error.message || 'Unknown error')
-          );
-        },
-      });
-
-      console.log('📤 Authentication request sent, waiting for response...');
-    } catch (error) {
-      console.error('❌ Driver: Authentication error:', error);
-      setLoginError('Failed to authenticate with server');
-    }
-  };
-
-  const disconnectSocket = () => {
-    websocketService.disconnect();
   };
 
   // If already authenticated, redirect to dashboard
@@ -300,7 +325,17 @@ const DriverLogin: React.FC = () => {
                 transition={{ duration: 0.6, delay: 0.2 }}
                 className="text-center mb-8"
               >
-                <div className="text-6xl mb-4 animate-pulse icon-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', lineHeight: '1' }}>🚌</div>
+                <div
+                  className="text-6xl mb-4 animate-pulse icon-container"
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    lineHeight: '1',
+                  }}
+                >
+                  🚌
+                </div>
                 <h1 className="text-3xl font-bold text-white mb-2">
                   Driver Login
                 </h1>
@@ -348,8 +383,8 @@ const DriverLogin: React.FC = () => {
                     type="email"
                     required
                     value={loginForm.email}
-                    onChange={(e) =>
-                      setLoginForm((prev) => ({
+                    onChange={e =>
+                      setLoginForm(prev => ({
                         ...prev,
                         email: e.target.value,
                       }))
@@ -376,8 +411,8 @@ const DriverLogin: React.FC = () => {
                     type="password"
                     required
                     value={loginForm.password}
-                    onChange={(e) =>
-                      setLoginForm((prev) => ({
+                    onChange={e =>
+                      setLoginForm(prev => ({
                         ...prev,
                         password: e.target.value,
                       }))

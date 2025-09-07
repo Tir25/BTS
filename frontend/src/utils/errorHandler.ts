@@ -1,4 +1,15 @@
 // Comprehensive Error Handler for Real-time Services
+
+// Add NetworkInformation type definition
+interface NetworkInformation {
+  effectiveType: string;
+  downlink: number;
+  rtt: number;
+  saveData: boolean;
+  addEventListener: (type: string, listener: EventListener) => void;
+  removeEventListener: (type: string, listener: EventListener) => void;
+}
+
 export interface ErrorContext {
   service: 'websocket' | 'supabase' | 'sse' | 'api' | 'ui' | 'map' | 'network';
   operation: string;
@@ -33,7 +44,7 @@ class ErrorHandler {
   ): ErrorReport {
     // Handle different error types
     let errorMessage: string;
-    
+
     if (error instanceof Error) {
       errorMessage = error.message;
     } else if (typeof error === 'string') {
@@ -43,11 +54,13 @@ class ErrorHandler {
     } else {
       errorMessage = 'Unknown error';
     }
-    
+
     // Add network information if available
     let networkInfo = {};
     if (typeof navigator !== 'undefined' && 'connection' in navigator) {
-      const conn = (navigator as any).connection;
+      const conn = (
+        navigator as Navigator & { connection?: NetworkInformation }
+      ).connection;
       if (conn) {
         networkInfo = {
           effectiveType: conn.effectiveType,
@@ -57,7 +70,7 @@ class ErrorHandler {
         };
       }
     }
-    
+
     const errorReport: ErrorReport = {
       message: errorMessage,
       context: {
@@ -66,22 +79,28 @@ class ErrorHandler {
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent,
         url: window.location.href,
-        networkInfo: networkInfo as any,
+        networkInfo: networkInfo as Record<string, unknown>,
         ...context,
       },
       severity,
       retryable: this.isRetryableError(error),
-      suggestions: this.getSuggestions(error, context),
+      suggestions: this.getSuggestions(error),
     };
 
     this.errorLog.push(errorReport);
-    
+
     // Keep log size manageable
     if (this.errorLog.length > this.maxLogSize) {
       this.errorLog.shift();
     }
 
-    // Log to console with appropriate level
+    // Log to console with appropriate level (suppress verbose logs in production for low severity)
+    if (import.meta && (import.meta as any).env && (import.meta as any).env.PROD) {
+      if (severity === 'low') {
+        // Store internally but avoid noisy console output in production
+        return errorReport;
+      }
+    }
     this.logToConsole(errorReport);
 
     return errorReport;
@@ -90,7 +109,7 @@ class ErrorHandler {
   // Check if an error is retryable
   private isRetryableError(error: Error | string | Event | unknown): boolean {
     let message: string;
-    
+
     if (error instanceof Error) {
       message = error.message;
     } else if (typeof error === 'string') {
@@ -100,29 +119,26 @@ class ErrorHandler {
     } else {
       message = 'Unknown error';
     }
-    
-    // Network-related errors are usually retryable
+
+    // Define retryable error patterns
     const retryablePatterns = [
       /network/i,
       /timeout/i,
       /connection/i,
-      /cors/i,
-      /fetch/i,
-      /websocket/i,
-      /sse/i,
-      /socket\.io/i,
-      /error/i,
-      /failed/i,
-      /disconnect/i,
+      /temporary/i,
+      /rate.?limit/i,
+      /server.?error/i,
+      /gateway/i,
+      /service.?unavailable/i,
     ];
 
     return retryablePatterns.some(pattern => pattern.test(message));
   }
 
   // Get suggestions for fixing the error
-  private getSuggestions(error: Error | string | Event | unknown, _context: Partial<ErrorContext>): string[] {
+  private getSuggestions(error: Error | string | Event | unknown): string[] {
     let message: string;
-    
+
     if (error instanceof Error) {
       message = error.message;
     } else if (typeof error === 'string') {
@@ -132,6 +148,7 @@ class ErrorHandler {
     } else {
       message = 'Unknown error';
     }
+
     const suggestions: string[] = [];
 
     if (message.includes('CORS')) {
@@ -171,7 +188,7 @@ class ErrorHandler {
   // Log to console with appropriate styling
   private logToConsole(errorReport: ErrorReport): void {
     const { message, context, severity, retryable, suggestions } = errorReport;
-    
+
     const severityColors = {
       low: 'color: #6b7280',
       medium: 'color: #f59e0b',
@@ -182,18 +199,21 @@ class ErrorHandler {
     const color = severityColors[severity];
     const retryableText = retryable ? '🔄 Retryable' : '❌ Not Retryable';
 
-    console.group(`%c${severity.toUpperCase()} ERROR - ${context.service.toUpperCase()}`, color);
+    console.group(
+      `%c${severity.toUpperCase()} ERROR - ${context.service.toUpperCase()}`,
+      color
+    );
     console.error(`Message: ${message}`);
     console.error(`Service: ${context.service}`);
     console.error(`Operation: ${context.operation}`);
     console.error(`Status: ${retryableText}`);
     console.error(`Timestamp: ${context.timestamp}`);
-    
+
     if (suggestions.length > 0) {
       console.warn('Suggestions:');
       suggestions.forEach(suggestion => console.warn(`  • ${suggestion}`));
     }
-    
+
     console.groupEnd();
   }
 
@@ -208,7 +228,8 @@ class ErrorHandler {
     const bySeverity: Record<string, number> = {};
 
     this.errorLog.forEach(error => {
-      byService[error.context.service] = (byService[error.context.service] || 0) + 1;
+      byService[error.context.service] =
+        (byService[error.context.service] || 0) + 1;
       bySeverity[error.severity] = (bySeverity[error.severity] || 0) + 1;
     });
 
@@ -216,8 +237,28 @@ class ErrorHandler {
       total: this.errorLog.length,
       byService,
       bySeverity,
-      recentErrors: this.errorLog.slice(-10), // Last 10 errors
+      recentErrors: [...this.errorLog].reverse().slice(0, 10),
     };
+  }
+
+  // Get errors by service
+  getErrorsByService(service: string): ErrorReport[] {
+    return this.errorLog.filter(error => error.context.service === service);
+  }
+
+  // Get errors by severity
+  getErrorsBySeverity(severity: string): ErrorReport[] {
+    return this.errorLog.filter(error => error.severity === severity);
+  }
+
+  // Get critical errors
+  getCriticalErrors(): ErrorReport[] {
+    return this.errorLog.filter(error => error.severity === 'critical');
+  }
+
+  // Get retryable errors
+  getRetryableErrors(): ErrorReport[] {
+    return this.errorLog.filter(error => error.retryable);
   }
 
   // Clear error log
@@ -225,34 +266,40 @@ class ErrorHandler {
     this.errorLog = [];
   }
 
-  // Get all errors
-  getErrors(): ErrorReport[] {
+  // Export error log for debugging
+  exportLog(): ErrorReport[] {
     return [...this.errorLog];
   }
 
-  // Check if there are critical errors
-  hasCriticalErrors(): boolean {
-    return this.errorLog.some(error => error.severity === 'critical');
+  // Get all errors (for testing/debugging)
+  getAllErrors(): ErrorReport[] {
+    return [...this.errorLog];
   }
 
-  // Get retryable errors
-  getRetryableErrors(): ErrorReport[] {
-    return this.errorLog.filter(error => error.retryable);
+  // Public method to set max log size (for testing)
+  setMaxLogSize(size: number): void {
+    this.maxLogSize = size;
   }
 }
 
-// Create singleton instance
+// Export singleton instance
 export const errorHandler = new ErrorHandler();
 
 // Export utility functions
 export const logError = (
   error: Error | string | Event | unknown,
   context: Partial<ErrorContext>,
-  severity?: 'low' | 'medium' | 'high' | 'critical'
-) => errorHandler.logError(error, context, severity);
+  severity: 'low' | 'medium' | 'high' | 'critical' = 'medium'
+): ErrorReport => {
+  return errorHandler.logError(error, context, severity);
+};
 
 export const getErrorStats = () => errorHandler.getErrorStats();
-export const hasCriticalErrors = () => errorHandler.hasCriticalErrors();
+export const getErrorsByService = (service: string) =>
+  errorHandler.getErrorsByService(service);
+export const getErrorsBySeverity = (severity: string) =>
+  errorHandler.getErrorsBySeverity(severity);
+export const getCriticalErrors = () => errorHandler.getCriticalErrors();
 export const getRetryableErrors = () => errorHandler.getRetryableErrors();
-
-export default errorHandler;
+export const clearErrorLog = () => errorHandler.clearLog();
+export const exportErrorLog = () => errorHandler.exportLog();

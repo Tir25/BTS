@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simplest Socket.IO Test Client</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .log-container {
+            height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 3px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .log-time {
+            color: #6c757d;
+            margin-right: 5px;
+        }
+        .log-error { color: #dc3545; }
+        .log-success { color: #28a745; }
+        .log-info { color: #17a2b8; }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0069d9;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .details {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Simplest Socket.IO Test Client</h1>
+        <p><strong>Test Purpose:</strong> This is the simplest possible Socket.IO client using polling only.</p>
+        <p><strong>Target Server:</strong> <span id="server-url">http://127.0.0.1:3000</span></p>
+        
+        <div id="connection-status" class="status disconnected">Disconnected</div>
+        
+        <div>
+            <button id="connect-btn">Connect</button>
+            <button id="disconnect-btn" disabled>Disconnect</button>
+            <button id="send-ping-btn" disabled>Send Ping</button>
+            <button id="clear-log-btn">Clear Log</button>
+        </div>
+        
+        <h3>Connection Log:</h3>
+        <div id="log" class="log-container"></div>
+        
+        <h3>Connection Details:</h3>
+        <div id="connection-details" class="details">Not connected</div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const sendPingBtn = document.getElementById('send-ping-btn');
+        const clearLogBtn = document.getElementById('clear-log-btn');
+        const logContainer = document.getElementById('log');
+        const connectionStatus = document.getElementById('connection-status');
+        const connectionDetails = document.getElementById('connection-details');
+        const serverUrl = document.getElementById('server-url');
+        
+        // Socket.IO instance
+        let socket = null;
+        
+        // Get current time formatted for logs
+        function getTimeString() {
+            const now = new Date();
+            return now.toLocaleTimeString();
+        }
+        
+        // Add log entry
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            
+            const time = document.createElement('span');
+            time.className = 'log-time';
+            time.textContent = `[${getTimeString()}]`;
+            
+            entry.appendChild(time);
+            entry.appendChild(document.createTextNode(` ${message}`));
+            
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        // Clear log
+        function clearLog() {
+            logContainer.innerHTML = '';
+            log('🚀 Simplest Socket.IO test client loaded.');
+            log('🔍 Using polling transport only, no WebSocket.');
+        }
+        
+        // Update connection status
+        function updateStatus(connected) {
+            if (connected) {
+                connectionStatus.textContent = 'Connected';
+                connectionStatus.className = 'status connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                sendPingBtn.disabled = false;
+            } else {
+                connectionStatus.textContent = 'Disconnected';
+                connectionStatus.className = 'status disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                sendPingBtn.disabled = true;
+                connectionDetails.textContent = 'Not connected';
+            }
+        }
+        
+        // Update connection details
+        function updateConnectionDetails() {
+            if (!socket) {
+                connectionDetails.textContent = 'Not connected';
+                return;
+            }
+            
+            const details = {
+                id: socket.id || 'Not available',
+                connected: socket.connected,
+                transport: socket.io.engine.transport.name,
+                hostname: socket.io.uri,
+                namespace: socket.nsp,
+                timestamp: new Date().toISOString()
+            };
+            
+            connectionDetails.textContent = JSON.stringify(details, null, 2);
+        }
+        
+        // Connect to Socket.IO server
+        function connect() {
+            if (socket) return;
+            
+            log('🔄 Attempting to connect...');
+            
+            // For Firefox, use 127.0.0.1 instead of localhost
+            const isFirefox = navigator.userAgent.includes('Firefox');
+            const host = isFirefox ? '127.0.0.1' : 'localhost';
+            const url = `http://${host}:8080`; // Using port 8080 instead of 3000
+            
+            serverUrl.textContent = url;
+            log(`🔌 Connecting to: ${url}`);
+            
+            try {
+                // Create socket with polling transport only
+                socket = io(url, {
+                    transports: ['polling'], // Polling only, no WebSocket
+                    reconnection: false,
+                    timeout: 10000,
+                    forceNew: true
+                });
+                
+                // Connection events
+                socket.on('connect', () => {
+                    log('✅ Socket.IO connection established!', 'success');
+                    updateStatus(true);
+                    updateConnectionDetails();
+                });
+                
+                socket.on('connect_error', (error) => {
+                    log(`❌ Connection error: ${error.message}`, 'error');
+                    socket.disconnect();
+                    updateStatus(false);
+                });
+                
+                socket.on('disconnect', (reason) => {
+                    log(`❌ Disconnected: ${reason}`, 'error');
+                    updateStatus(false);
+                });
+                
+                socket.on('error', (error) => {
+                    log(`❌ Socket error: ${error.message}`, 'error');
+                });
+                
+                // Custom events
+                socket.on('welcome', (data) => {
+                    log(`📚 Welcome message: ${JSON.stringify(data)}`, 'success');
+                });
+                
+                socket.on('pong', (data) => {
+                    log(`💓 Pong received: ${JSON.stringify(data)}`, 'success');
+                });
+                
+                // Connect
+                socket.connect();
+                
+            } catch (error) {
+                log(`❌ Error creating socket: ${error.message}`, 'error');
+                updateStatus(false);
+            }
+        }
+        
+        // Disconnect from Socket.IO server
+        function disconnect() {
+            if (!socket) return;
+            
+            log('🔌 Disconnecting...');
+            socket.disconnect();
+            socket = null;
+            updateStatus(false);
+        }
+        
+        // Send ping to server
+        function sendPing() {
+            if (!socket || !socket.connected) return;
+            
+            log('💓 Sending ping...');
+            socket.emit('ping');
+        }
+        
+        // Event listeners
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+        sendPingBtn.addEventListener('click', sendPing);
+        clearLogBtn.addEventListener('click', clearLog);
+        
+        // Initialize
+        clearLog();
+    </script>
+</body>
+</html>

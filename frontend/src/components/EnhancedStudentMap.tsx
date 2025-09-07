@@ -6,14 +6,18 @@ import React, {
   useMemo,
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import maplibregl from 'maplibre-gl';
+import { Map, Marker, Popup, LngLatBounds, NavigationControl } from 'maplibre-gl';
 import { websocketService, BusLocation } from '../services/websocket';
 import { busService, BusInfo } from '../services/busService';
 import { apiService } from '../services/api';
 import { authService } from '../services/authService';
+import { environment } from '../config/environment';
+import { supabaseRealtimeService } from '../services/realtime/SupabaseRealtimeService';
 import GlassyCard from './ui/GlassyCard';
-import './StudentMap.css';
-import { Route } from '../types';
+import { Route, Bus } from '../types';
+import MapErrorBoundary from './error/MapErrorBoundary';
+import ConnectionStatus from './error/ConnectionStatus';
+import ValidationStatus from './validation/ValidationStatus';
 
 interface EnhancedStudentMapProps {
   className?: string;
@@ -24,8 +28,8 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 }) => {
   // Map references
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<maplibregl.Map | null>(null);
-  const markers = useRef<{ [busId: string]: maplibregl.Marker }>({});
+  const map = useRef<Map | null>(null);
+  const markers = useRef<{ [busId: string]: Marker }>({});
   const isMapInitialized = useRef(false);
   const addedRoutes = useRef<Set<string>>(new Set());
 
@@ -79,7 +83,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   const removeRoutesFromMap = useCallback(() => {
     if (!map.current) return;
 
-    routes.forEach((route) => {
+    routes.forEach(route => {
       const routeId = `route-${route.id}`;
 
       try {
@@ -151,14 +155,26 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   // Update bus marker on map
   const updateBusMarker = useCallback(
     (location: BusLocation) => {
-      if (!map.current) return;
+      if (!map.current) {
+        console.warn('⚠️ Map not initialized, cannot update marker');
+        return;
+      }
 
       const { busId, latitude, longitude, speed } = location;
       const bus = busService.getBus(busId);
 
-      if (!bus) return;
+      if (!bus) {
+        console.warn('⚠️ Bus not found in service for ID:', busId);
+        return;
+      }
+
+      // Coordinates are already validated by the validation middleware
+      // No need for additional validation here
+
+      console.log('🗺️ Updating marker for bus:', busId, 'at', latitude, longitude);
 
       if (!markers.current[busId]) {
+        console.log('🗺️ Creating new marker for bus:', busId);
         const el = document.createElement('div');
         el.className = 'bus-marker';
         el.innerHTML = `
@@ -173,14 +189,14 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         </div>
       `;
 
-        const marker = new maplibregl.Marker({
+        const marker = new Marker({
           element: el,
           anchor: 'center',
         })
           .setLngLat([longitude, latitude])
           .addTo(map.current);
 
-        const popup = new maplibregl.Popup({
+        const popup = new Popup({
           offset: 25,
           className: 'bus-popup-container',
         }).setHTML(`
@@ -204,7 +220,9 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 
         marker.setPopup(popup);
         markers.current[busId] = marker;
+        console.log('✅ New marker created for bus:', busId);
       } else {
+        console.log('🗺️ Updating existing marker for bus:', busId);
         markers.current[busId].setLngLat([longitude, latitude]);
 
         const popup = markers.current[busId].getPopup();
@@ -226,6 +244,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
           </div>
         </div>
       `);
+        console.log('✅ Existing marker updated for bus:', busId);
       }
     },
     [isConnected]
@@ -244,7 +263,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
     if (!map.current || Object.keys(lastBusLocations).length === 0) return;
 
     const coordinates = Object.values(lastBusLocations).map(
-      (location) => [location.longitude, location.latitude] as [number, number]
+      location => [location.longitude, location.latitude] as [number, number]
     );
 
     if (coordinates.length === 1) {
@@ -254,8 +273,8 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         duration: 2000,
       });
     } else if (coordinates.length > 1) {
-      const bounds = new maplibregl.LngLatBounds();
-      coordinates.forEach((coord) => bounds.extend(coord));
+      const bounds = new LngLatBounds();
+      coordinates.forEach(coord => bounds.extend(coord));
 
       map.current.fitBounds(bounds, {
         padding: 50,
@@ -267,44 +286,63 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   // Handle bus location updates
   const handleBusLocationUpdate = useCallback(
     (location: BusLocation) => {
-      console.log('📍 Bus location update:', location);
+      console.log('📍 Bus location update received:', location);
 
-      setLastBusLocations((prev) => ({
+      // Update bus service with the new location
+      busService.updateBusLocation(location);
+
+      // Update local state
+      setLastBusLocations(prev => ({
         ...prev,
         [location.busId]: location,
       }));
 
+      // Update buses state to trigger re-render
+      setBuses(prevBuses => {
+        const updatedBuses = [...prevBuses];
+        const busIndex = updatedBuses.findIndex(bus => bus.busId === location.busId);
+        
+        if (busIndex >= 0) {
+          // Update existing bus
+          updatedBuses[busIndex] = {
+            ...updatedBuses[busIndex],
+            currentLocation: location,
+            eta: location.eta?.estimated_arrival_minutes,
+          };
+        } else {
+          // Add new bus if it doesn't exist
+          const newBus = busService.getBus(location.busId);
+          if (newBus) {
+            updatedBuses.push(newBus);
+          }
+        }
+        
+        return updatedBuses;
+      });
+
+      // Update map marker
       updateBusMarker(location);
     },
     [updateBusMarker]
   );
 
-  const handleDriverConnected = useCallback(
-    (data: { driverId: string; busId: string; timestamp: string }) => {
-      console.log('🚌 Driver connected:', data);
-    },
-    []
-  );
+  const handleDriverConnected = useCallback((data: Record<string, unknown>) => {
+    console.log('🚌 Driver connected:', data);
+  }, []);
 
   const handleDriverDisconnected = useCallback(
-    (data: { driverId: string; busId: string; timestamp: string }) => {
+    (data: Record<string, unknown>) => {
       console.log('🚌 Driver disconnected:', data);
-      removeBusMarker(data.busId);
+      if (typeof data.busId === 'string') {
+        removeBusMarker(data.busId);
+      }
     },
     [removeBusMarker]
   );
 
-  const handleBusArriving = useCallback(
-    (data: {
-      busId: string;
-      routeId: string;
-      location: [number, number];
-      timestamp: string;
-    }) => {
-      console.log('🚌 Bus arriving:', data);
-    },
-    []
-  );
+  const handleBusArriving = useCallback((data: Record<string, unknown>) => {
+    console.log('🚌 Bus arriving:', data);
+  }, []);
 
   // Initialize map
   useEffect(() => {
@@ -315,7 +353,11 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
     console.log('🗺️ Initializing map...');
     isMapInitialized.current = true;
 
-    map.current = new maplibregl.Map({
+    // Store refs at the beginning of the effect to avoid React Hook warnings
+    const addedRoutesRef = addedRoutes.current;
+    const markersRef = markers.current;
+
+    map.current = new Map({
       container: mapContainer.current,
       style: {
         version: 8,
@@ -355,7 +397,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
       dragRotate: false,
     });
 
-    map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.current.addControl(new NavigationControl(), 'top-right');
 
     map.current.once('load', () => {
       console.log('🗺️ Map loaded successfully');
@@ -363,38 +405,55 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
       loadRoutes();
     });
 
-    map.current.on('error', (e) => {
+    map.current.on('error', e => {
       console.error('❌ Map error:', e);
     });
 
     return () => {
       if (map.current) {
-        map.current.remove();
+        // Store reference to avoid React Hook warning about using .current in cleanup
+        const mapRef = map.current;
+
+        // Clean up using stored refs
+        mapRef.remove();
         map.current = null;
         isMapInitialized.current = false;
-        addedRoutes.current.clear();
-        markers.current = {};
+        if (addedRoutesRef) {
+          addedRoutesRef.clear();
+        }
+        if (markersRef) {
+          Object.keys(markersRef).forEach(key => {
+            if (markersRef[key]) {
+              markersRef[key].remove();
+            }
+          });
+        }
       }
     };
   }, [loadRoutes]);
 
-  // Connect to WebSocket
+  // Connect to real-time source (Socket.IO in dev, Supabase in prod or when flagged)
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout;
     let statusInterval: NodeJS.Timeout;
     let reconnectAttempts = 0;
+    let supabaseSubscriptionId: string | null = null;
+
+    const useSupabaseRealtime =
+      import.meta.env.VITE_REALTIME_PROVIDER === 'supabase' ||
+      environment.isProduction;
 
     const connectWebSocket = async () => {
       try {
         setConnectionError(null);
         setConnectionStatus('connecting');
-        
+
         // Set client type for student map
         websocketService.setClientType('student');
-        
+
         // Reset WebSocket service state before connecting
         websocketService.resetState();
-        
+
         await websocketService.connect();
         setIsConnected(true);
         setConnectionStatus('connected');
@@ -402,12 +461,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         websocketService.onBusLocationUpdate(handleBusLocationUpdate);
         websocketService.onDriverConnected(handleDriverConnected);
         websocketService.onDriverDisconnected(handleDriverDisconnected);
-        // Emit student connection event
-        websocketService.socket?.emit('student:connect');
-        
-        // Set client type for student connection
-        websocketService.setClientType('student');
-        
+
         websocketService.onStudentConnected(() => {
           console.log('✅ Student connected to WebSocket');
         });
@@ -426,7 +480,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         const loadBuses = async () => {
           try {
             while (!authService.isInitialized()) {
-              await new Promise((resolve) => setTimeout(resolve, 100));
+              await new Promise(resolve => setTimeout(resolve, 100));
             }
 
             const response = await apiService.getAllBuses();
@@ -437,8 +491,8 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
                 'buses'
               );
 
-              response.data.forEach((apiBus: any) => {
-                const busId = apiBus.bus_id || apiBus.id;
+              response.data.forEach((apiBus: Bus) => {
+                const busId = apiBus.id;
                 if (busId) {
                   busService.syncBusFromAPI(busId, apiBus);
                 }
@@ -464,9 +518,12 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
         setConnectionStatus('disconnected');
 
         // Retry connection with exponential backoff
-        const retryDelay = Math.min(5000 * Math.pow(2, Math.min(reconnectAttempts, 3)), 30000);
+        const retryDelay = Math.min(
+          5000 * Math.pow(2, Math.min(reconnectAttempts, 3)),
+          30000
+        );
         console.log(`🔄 Retrying WebSocket connection in ${retryDelay}ms...`);
-        
+
         reconnectAttempts++;
         reconnectTimeout = setTimeout(() => {
           console.log('🔄 Retrying WebSocket connection...');
@@ -476,7 +533,105 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
       }
     };
 
-    connectWebSocket();
+    if (useSupabaseRealtime) {
+      // Production/flagged: use Supabase Realtime, avoid Socket.IO to prevent duplicates
+      setConnectionError(null);
+      setConnectionStatus('connecting');
+
+      // Subscribe to live_locations changes and update markers directly
+      supabaseSubscriptionId = supabaseRealtimeService.subscribeToBusLocations(
+        async (payload: any) => {
+          try {
+            const row = payload?.new || payload?.record || payload;
+            const busId: string | undefined = row?.bus_id || row?.busId || row?.busid;
+
+            // Extract coordinates from GeoJSON or known shapes
+            let latitude: number | undefined;
+            let longitude: number | undefined;
+
+            const loc = row?.location;
+            if (loc && typeof loc === 'object') {
+              // GeoJSON Point: { type: 'Point', coordinates: [lng, lat] }
+              const coords = loc.coordinates || loc?.point?.coordinates;
+              if (Array.isArray(coords) && coords.length >= 2) {
+                longitude = Number(coords[0]);
+                latitude = Number(coords[1]);
+              }
+            }
+
+            // Fallbacks if lat/lng are flattened
+            latitude = latitude ?? Number(row?.latitude);
+            longitude = longitude ?? Number(row?.longitude);
+
+            const speed =
+              typeof row?.speed_kmh === 'number'
+                ? row.speed_kmh
+                : typeof row?.speed === 'number'
+                ? row.speed
+                : undefined;
+            const heading =
+              typeof row?.heading_degrees === 'number'
+                ? row.heading_degrees
+                : typeof row?.heading === 'number'
+                ? row.heading
+                : undefined;
+            const timestamp: string = row?.recorded_at || row?.timestamp || new Date().toISOString();
+
+            if (busId && isFinite(Number(latitude)) && isFinite(Number(longitude))) {
+              handleBusLocationUpdate({
+                busId,
+                driverId: row?.driver_id || row?.driverId || '',
+                latitude: Number(latitude),
+                longitude: Number(longitude),
+                timestamp,
+                speed,
+                heading,
+              });
+              return;
+            }
+
+            // Fallback: if row insufficient, refresh minimal data once
+            const response = await apiService.getAllBuses();
+            if (response.success && response.data) {
+              response.data.forEach((apiBus: Bus) => {
+                const id = apiBus.id;
+                if (id) {
+                  busService.syncBusFromAPI(id, apiBus);
+                }
+              });
+              setBuses(busService.getAllBuses());
+            }
+          } catch (e) {
+            console.warn('⚠️ Realtime event handling error', e);
+          }
+        }
+      );
+
+      // Initial load
+      (async () => {
+        try {
+          const response = await apiService.getAllBuses();
+          if (response.success && response.data) {
+            response.data.forEach((apiBus: Bus) => {
+              const busId = apiBus.id;
+              if (busId) {
+                busService.syncBusFromAPI(busId, apiBus);
+              }
+            });
+            setBuses(busService.getAllBuses());
+          }
+          setIsConnected(true);
+          setConnectionStatus('connected');
+        } catch (error) {
+          setConnectionError('Failed to connect to real-time updates');
+          setIsConnected(false);
+          setConnectionStatus('disconnected');
+        }
+      })();
+    } else {
+      // Development: keep existing Socket.IO flow
+      connectWebSocket();
+    }
 
     return () => {
       if (reconnectTimeout) {
@@ -485,13 +640,21 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
       if (statusInterval) {
         clearInterval(statusInterval);
       }
-      websocketService.softDisconnect();
+      if (useSupabaseRealtime) {
+        if (supabaseSubscriptionId) {
+          supabaseRealtimeService.unsubscribe(supabaseSubscriptionId);
+        }
+        supabaseRealtimeService.unsubscribeAll();
+      } else {
+        websocketService.softDisconnect();
+      }
     };
   }, [
     handleBusArriving,
     handleBusLocationUpdate,
     handleDriverConnected,
     handleDriverDisconnected,
+    connectionStatus,
   ]);
 
   // Get filtered buses based on selected route
@@ -500,8 +663,8 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
       return buses;
     }
 
-    return buses.filter((bus) => {
-      const busRoute = routes.find((route) => route.name === bus.routeName);
+    return buses.filter(bus => {
+      const busRoute = routes.find(route => route.name === bus.routeName);
       return busRoute && busRoute.id === selectedRoute;
     });
   }, [buses, selectedRoute, routes]);
@@ -530,7 +693,13 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
   }, [routes, addRoutesToMap, removeRoutesFromMap]);
 
   return (
-    <div className={`relative h-screen ${className}`}>
+    <MapErrorBoundary
+      mapType="student"
+      onMapError={(error, errorInfo) => {
+        console.error('Student map error:', error, errorInfo);
+      }}
+    >
+      <div className={`relative h-screen ${className}`}>
       {/* Loading overlay */}
       {isLoading && (
         <div className="loading-overlay">
@@ -621,6 +790,8 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
 
           {/* Navbar Content */}
           <div className="p-4 space-y-4 max-h-[calc(100vh-8rem)] overflow-y-auto">
+            {/* Validation Status */}
+            <ValidationStatus compact={true} className="mb-4" />
             {/* Connection Status */}
             <div className="flex items-center justify-between p-3 bg-blue-50/80 rounded-lg border border-blue-200/50">
               <div className="flex items-center space-x-2">
@@ -633,6 +804,20 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
                   {isConnected ? 'Live Connected' : 'Offline'}
                 </span>
               </div>
+              
+              {/* WebSocket Connection Status */}
+              <ConnectionStatus
+                isConnected={isConnected}
+                isConnecting={connectionStatus === 'connecting' || connectionStatus === 'reconnecting'}
+                onRetry={() => {
+                  console.log('🔄 Retrying WebSocket connection...');
+                  websocketService.connect();
+                }}
+                connectionType="location-updates"
+                showOfflineMessage={false}
+                compact={true}
+                className="ml-2"
+              />
               <span className="text-xs text-gray-600 bg-white/70 px-2 py-1 rounded">
                 {filteredBuses.length} buses
               </span>
@@ -677,11 +862,11 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
                   >
                     <select
                       value={selectedRoute}
-                      onChange={(e) => setSelectedRoute(e.target.value)}
+                      onChange={e => setSelectedRoute(e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200"
                     >
                       <option value="all">All Routes ({routes.length})</option>
-                      {availableRoutes.map((route) => (
+                      {availableRoutes.map(route => (
                         <option key={route.id} value={route.id}>
                           {route.name}
                         </option>
@@ -748,7 +933,7 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
                         </p>
                       </div>
                     ) : (
-                      filteredBuses.map((bus) => {
+                      filteredBuses.map(bus => {
                         const location = lastBusLocations[bus.busId];
                         return (
                           <motion.div
@@ -828,7 +1013,8 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
           </div>
         </GlassyCard>
       </motion.div>
-    </div>
+      </div>
+    </MapErrorBoundary>
   );
 };
 

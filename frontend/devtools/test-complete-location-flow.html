@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Location Flow Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border-color: #ffeaa7; }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        .status.connecting { background: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Complete Location Flow Test</h1>
+        <p>This test verifies the entire real-time location flow from driver to student map.</p>
+
+        <!-- Test Controls -->
+        <div class="test-section">
+            <h3>🎮 Test Controls</h3>
+            <button onclick="startTest()">🚀 Start Complete Test</button>
+            <button onclick="testWebSocketConnection()">🔌 Test WebSocket</button>
+            <button onclick="testAPIHealth()">🏥 Test API Health</button>
+            <button onclick="testLocationUpdates()">📍 Test Location Updates</button>
+            <button onclick="clearLog()">🗑️ Clear Log</button>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="test-section">
+            <h3>📊 Connection Status</h3>
+            <div id="connectionStatus">
+                <div>WebSocket: <span id="wsStatus" class="status disconnected">Disconnected</span></div>
+                <div>API: <span id="apiStatus" class="status disconnected">Unknown</span></div>
+                <div>Location Updates: <span id="locationStatus" class="status disconnected">None</span></div>
+            </div>
+        </div>
+
+        <!-- Test Results -->
+        <div class="test-section">
+            <h3>📋 Test Results</h3>
+            <div id="testResults">
+                <div class="info">Click "Start Complete Test" to begin...</div>
+            </div>
+        </div>
+
+        <!-- Live Log -->
+        <div class="test-section">
+            <h3>📝 Live Log</h3>
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+        let testResults = [];
+        let locationUpdateCount = 0;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('log');
+            const logEntry = `[${timestamp}] ${message}\n`;
+            logElement.textContent += logEntry;
+            logElement.scrollTop = logElement.scrollHeight;
+            
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function updateStatus(elementId, status, text) {
+            const element = document.getElementById(elementId);
+            element.className = `status ${status}`;
+            element.textContent = text;
+        }
+
+        function addTestResult(test, status, message) {
+            testResults.push({ test, status, message, timestamp: new Date().toLocaleTimeString() });
+            updateTestResults();
+        }
+
+        function updateTestResults() {
+            const resultsElement = document.getElementById('testResults');
+            resultsElement.innerHTML = testResults.map(result => 
+                `<div class="${result.status}">
+                    <strong>${result.test}</strong> - ${result.message} 
+                    <small>(${result.timestamp})</small>
+                </div>`
+            ).join('');
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+            testResults = [];
+            updateTestResults();
+        }
+
+        async function testAPIHealth() {
+            log('🏥 Testing API Health...');
+            try {
+                const currentHost = window.location.hostname;
+                let apiUrl;
+                
+                if (currentHost !== 'localhost' && currentHost !== '127.0.0.1' && currentHost !== '0.0.0.0' && !currentHost.includes('devtunnels.ms')) {
+                    apiUrl = `http://${currentHost}:3000/health`;
+                } else {
+                    apiUrl = 'http://localhost:3000/health';
+                }
+                
+                log(`🌐 API URL: ${apiUrl}`);
+                
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ API Health Check: ${data.status}`);
+                    updateStatus('apiStatus', 'connected', 'Healthy');
+                    addTestResult('API Health', 'success', `Status: ${data.status}`);
+                    return true;
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                log(`❌ API Health Check Failed: ${error.message}`);
+                updateStatus('apiStatus', 'disconnected', 'Failed');
+                addTestResult('API Health', 'error', error.message);
+                return false;
+            }
+        }
+
+        function testWebSocketConnection() {
+            log('🔌 Testing WebSocket Connection...');
+            updateStatus('wsStatus', 'connecting', 'Connecting...');
+            
+            const currentHost = window.location.hostname;
+            let wsUrl;
+            
+            if (currentHost !== 'localhost' && currentHost !== '127.0.0.1' && currentHost !== '0.0.0.0' && !currentHost.includes('devtunnels.ms')) {
+                wsUrl = `ws://${currentHost}:3000`;
+            } else {
+                wsUrl = 'ws://localhost:3000';
+            }
+            
+            log(`🌐 WebSocket URL: ${wsUrl}`);
+            
+            try {
+                if (socket) {
+                    socket.disconnect();
+                }
+                
+                socket = io(wsUrl, {
+                    transports: ['websocket', 'polling'],
+                    timeout: 10000,
+                    forceNew: true,
+                    autoConnect: true,
+                    query: {
+                        clientType: 'student',
+                        version: '1.0.0',
+                        timestamp: Date.now().toString(),
+                    }
+                });
+
+                socket.on('connect', () => {
+                    log('✅ WebSocket Connected Successfully');
+                    updateStatus('wsStatus', 'connected', 'Connected');
+                    addTestResult('WebSocket Connection', 'success', 'Connected successfully');
+                    
+                    // Emit student connection
+                    socket.emit('student:connect');
+                    log('📤 Emitted student:connect event');
+                });
+
+                socket.on('disconnect', (reason) => {
+                    log(`❌ WebSocket Disconnected: ${reason}`);
+                    updateStatus('wsStatus', 'disconnected', 'Disconnected');
+                });
+
+                socket.on('connect_error', (error) => {
+                    log(`❌ WebSocket Connection Error: ${error.message}`);
+                    updateStatus('wsStatus', 'disconnected', 'Connection Failed');
+                    addTestResult('WebSocket Connection', 'error', error.message);
+                });
+
+                socket.on('student:connected', (data) => {
+                    log('✅ Student Connection Confirmed');
+                    addTestResult('Student Connection', 'success', 'Connected as student');
+                });
+
+                socket.on('bus:locationUpdate', (data) => {
+                    locationUpdateCount++;
+                    log(`📍 Location Update #${locationUpdateCount}: Bus ${data.busId} at ${data.latitude}, ${data.longitude}`);
+                    updateStatus('locationStatus', 'connected', `${locationUpdateCount} updates`);
+                    addTestResult('Location Updates', 'success', `Received ${locationUpdateCount} updates`);
+                });
+
+                socket.on('error', (error) => {
+                    log(`❌ WebSocket Error: ${error.message || error}`);
+                });
+
+                // Test ping/pong
+                socket.on('pong', (data) => {
+                    log('💓 Pong received');
+                });
+
+                setTimeout(() => {
+                    if (socket.connected) {
+                        socket.emit('ping');
+                        log('📤 Ping sent');
+                    }
+                }, 2000);
+
+            } catch (error) {
+                log(`❌ WebSocket Test Failed: ${error.message}`);
+                updateStatus('wsStatus', 'disconnected', 'Failed');
+                addTestResult('WebSocket Connection', 'error', error.message);
+            }
+        }
+
+        function testLocationUpdates() {
+            log('📍 Testing Location Updates...');
+            
+            if (!socket || !socket.connected) {
+                log('❌ WebSocket not connected, cannot test location updates');
+                addTestResult('Location Updates', 'error', 'WebSocket not connected');
+                return;
+            }
+
+            // Simulate a location update (this would normally come from a driver)
+            const mockLocationUpdate = {
+                busId: 'test-bus-001',
+                driverId: 'test-driver-001',
+                latitude: 23.0225 + (Math.random() - 0.5) * 0.01,
+                longitude: 72.5714 + (Math.random() - 0.5) * 0.01,
+                timestamp: new Date().toISOString(),
+                speed: Math.floor(Math.random() * 60) + 20,
+                heading: Math.floor(Math.random() * 360)
+            };
+
+            log('📤 Simulating location update...');
+            socket.emit('driver:locationUpdate', mockLocationUpdate);
+            
+            // Wait a bit to see if we get the broadcast
+            setTimeout(() => {
+                if (locationUpdateCount === 0) {
+                    log('⚠️ No location updates received yet');
+                    addTestResult('Location Updates', 'warning', 'No updates received');
+                }
+            }, 3000);
+        }
+
+        async function startTest() {
+            log('🚀 Starting Complete Location Flow Test...');
+            clearLog();
+            
+            // Step 1: Test API Health
+            log('📋 Step 1: Testing API Health...');
+            const apiHealthy = await testAPIHealth();
+            
+            // Step 2: Test WebSocket Connection
+            log('📋 Step 2: Testing WebSocket Connection...');
+            testWebSocketConnection();
+            
+            // Step 3: Wait for WebSocket connection and test location updates
+            setTimeout(() => {
+                if (socket && socket.connected) {
+                    log('📋 Step 3: Testing Location Updates...');
+                    testLocationUpdates();
+                } else {
+                    log('❌ WebSocket not connected, skipping location update test');
+                    addTestResult('Location Updates', 'error', 'WebSocket not connected');
+                }
+            }, 3000);
+            
+            // Step 4: Final summary
+            setTimeout(() => {
+                log('📋 Step 4: Test Summary...');
+                const totalTests = testResults.length;
+                const successfulTests = testResults.filter(r => r.status === 'success').length;
+                const failedTests = testResults.filter(r => r.status === 'error').length;
+                
+                log(`📊 Test Summary: ${successfulTests}/${totalTests} successful, ${failedTests} failed`);
+                
+                if (successfulTests === totalTests) {
+                    log('🎉 All tests passed! Location flow is working correctly.');
+                    addTestResult('Overall Test', 'success', 'All tests passed');
+                } else {
+                    log('⚠️ Some tests failed. Check the results above.');
+                    addTestResult('Overall Test', 'error', `${failedTests} tests failed`);
+                }
+            }, 10000);
+        }
+
+        // Auto-start test on page load
+        window.addEventListener('load', () => {
+            log('🌐 Page loaded, ready for testing...');
+            log('💡 Click "Start Complete Test" to begin the full test suite');
+        });
+    </script>
+</body>
+</html>

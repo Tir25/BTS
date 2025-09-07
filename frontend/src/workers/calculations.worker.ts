@@ -1,122 +1,227 @@
-// Web Worker for heavy calculations
-const ctx: Worker = self as any;
-
-interface LocationData {
-  latitude: number;
-  longitude: number;
-  timestamp: string;
+// Web Worker for heavy calculations to avoid blocking the main thread
+export interface CalculationRequest {
+  type: 'distance' | 'eta' | 'clustering' | 'routeOptimization';
+  data: unknown;
+  id: string;
 }
 
-interface ETACalculation {
-  estimated_arrival_minutes: number;
-  distance_remaining: number;
-  is_near_stop: boolean;
+export interface CalculationResponse {
+  type: string;
+  data: unknown;
+  id: string;
+  success: boolean;
+  error?: string;
 }
 
-interface WorkerMessage {
-  type: 'CALCULATE_SPEED' | 'CALCULATE_ETA' | 'CALCULATE_DISTANCE';
-  data: any;
-}
-
-// Haversine formula for distance calculation
-function calculateDistance(
+// Distance calculation between two points using Haversine formula
+const calculateDistance = (
   lat1: number,
   lon1: number,
   lat2: number,
   lon2: number
-): number {
+): number => {
   const R = 6371; // Earth's radius in kilometers
-  const dLat = toRadians(lat2 - lat1);
-  const dLon = toRadians(lon2 - lon1);
-
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distance in kilometers
-}
+  return R * c;
+};
 
-function toRadians(degrees: number): number {
-  return degrees * (Math.PI / 180);
-}
-
-// Calculate speed between two points
-function calculateSpeed(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-  timeDiffMs: number
-): number {
-  const distance = calculateDistance(lat1, lon1, lat2, lon2);
-  const timeDiffHours = timeDiffMs / (1000 * 60 * 60); // Convert to hours
-  const speed = distance / timeDiffHours; // Speed in km/h
-  return Math.round(speed * 10) / 10; // Round to 1 decimal place
-}
-
-// Calculate ETA to destination
-function calculateETA(
-  currentLocation: LocationData,
-  destination: { latitude: number; longitude: number },
-  averageSpeed: number = 30 // Default average speed in km/h
-): ETACalculation {
-  const distance = calculateDistance(
-    currentLocation.latitude,
-    currentLocation.longitude,
-    destination.latitude,
-    destination.longitude
-  );
-
-  const estimatedTimeHours = distance / averageSpeed;
-  const estimatedTimeMinutes = Math.round(estimatedTimeHours * 60);
-  const isNearStop = distance < 0.5; // Within 500 meters
+// Calculate ETA based on distance and speed
+const calculateETA = (
+  distance: number,
+  speed: number,
+  currentTime: Date
+): { eta: Date; duration: number } => {
+  const durationHours = distance / speed;
+  const durationMinutes = durationHours * 60;
+  const eta = new Date(currentTime.getTime() + durationMinutes * 60 * 1000);
 
   return {
-    estimated_arrival_minutes: estimatedTimeMinutes,
-    distance_remaining: Math.round(distance * 10) / 10,
-    is_near_stop: isNearStop,
+    eta,
+    duration: durationMinutes,
   };
-}
+};
 
-// Handle worker messages
-ctx.addEventListener('message', (event: MessageEvent<WorkerMessage>) => {
-  const { type, data } = event.data;
+// Spatial clustering algorithm for bus locations
+const calculateClusters = (
+  locations: Array<{ lat: number; lng: number; id: string }>,
+  radius: number
+): Array<{
+  center: { lat: number; lng: number };
+  buses: string[];
+  count: number;
+}> => {
+  const clusters: Array<{
+    center: { lat: number; lng: number };
+    buses: string[];
+    count: number;
+  }> = [];
+  const processed = new Set<string>();
+
+  locations.forEach(location => {
+    if (processed.has(location.id)) return;
+
+    const clusterBuses = [location.id];
+    processed.add(location.id);
+
+    locations.forEach(otherLocation => {
+      if (processed.has(otherLocation.id)) return;
+
+      const distance = calculateDistance(
+        location.lat,
+        location.lng,
+        otherLocation.lat,
+        otherLocation.lng
+      );
+
+      if (distance <= radius) {
+        clusterBuses.push(otherLocation.id);
+        processed.add(otherLocation.id);
+      }
+    });
+
+    if (clusterBuses.length > 1) {
+      // Calculate cluster center
+      const clusterLocations = locations.filter(loc =>
+        clusterBuses.includes(loc.id)
+      );
+      const centerLat =
+        clusterLocations.reduce((sum, loc) => sum + loc.lat, 0) /
+        clusterLocations.length;
+      const centerLng =
+        clusterLocations.reduce((sum, loc) => sum + loc.lng, 0) /
+        clusterLocations.length;
+
+      clusters.push({
+        center: { lat: centerLat, lng: centerLng },
+        buses: clusterBuses,
+        count: clusterBuses.length,
+      });
+    }
+  });
+
+  return clusters;
+};
+
+// Route optimization using nearest neighbor algorithm
+const optimizeRoute = (
+  stops: Array<{ lat: number; lng: number; id: string }>
+): Array<string> => {
+  if (stops.length <= 2) {
+    return stops.map(stop => stop.id);
+  }
+
+  const route: string[] = [];
+  const unvisited = new Set(stops.map(stop => stop.id));
+  let current = stops[0];
+
+  route.push(current.id);
+  unvisited.delete(current.id);
+
+  while (unvisited.size > 0) {
+    let minDistance = Infinity;
+    let nearest: { lat: number; lng: number; id: string } | null = null;
+
+    for (const stop of stops) {
+      if (!unvisited.has(stop.id)) continue;
+
+      const distance = calculateDistance(
+        current.lat,
+        current.lng,
+        stop.lat,
+        stop.lng
+      );
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearest = stop;
+      }
+    }
+
+    if (nearest) {
+      route.push(nearest.id);
+      unvisited.delete(nearest.id);
+      current = nearest;
+    }
+  }
+
+  return route;
+};
+
+// Main worker message handler
+self.addEventListener('message', (event: MessageEvent<CalculationRequest>) => {
+  const { type, data, id } = event.data;
 
   try {
+    let result: unknown;
+
     switch (type) {
-      case 'CALCULATE_SPEED':
-        const { lat1, lon1, lat2, lon2, timeDiffMs } = data;
-        const speed = calculateSpeed(lat1, lon1, lat2, lon2, timeDiffMs);
-        ctx.postMessage({ type: 'SPEED_CALCULATED', data: speed });
+      case 'distance': {
+        const { lat1, lon1, lat2, lon2 } = data as {
+          lat1: number;
+          lon1: number;
+          lat2: number;
+          lon2: number;
+        };
+        result = calculateDistance(lat1, lon1, lat2, lon2);
         break;
+      }
 
-      case 'CALCULATE_ETA':
-        const { currentLocation, destination, averageSpeed } = data;
-        const eta = calculateETA(currentLocation, destination, averageSpeed);
-        ctx.postMessage({ type: 'ETA_CALCULATED', data: eta });
+      case 'eta': {
+        const { distance, speed, currentTime } = data as {
+          distance: number;
+          speed: number;
+          currentTime: string;
+        };
+        result = calculateETA(distance, speed, new Date(currentTime));
         break;
+      }
 
-      case 'CALCULATE_DISTANCE':
-        const { point1, point2 } = data;
-        const distance = calculateDistance(
-          point1.latitude,
-          point1.longitude,
-          point2.latitude,
-          point2.longitude
-        );
-        ctx.postMessage({ type: 'DISTANCE_CALCULATED', data: distance });
+      case 'clustering': {
+        const { locations, radius } = data as {
+          locations: Array<{ lat: number; lng: number; id: string }>;
+          radius: number;
+        };
+        result = calculateClusters(locations, radius);
         break;
+      }
+
+      case 'routeOptimization': {
+        const { stops } = data as {
+          stops: Array<{ lat: number; lng: number; id: string }>;
+        };
+        result = optimizeRoute(stops);
+        break;
+      }
 
       default:
-        ctx.postMessage({ type: 'ERROR', data: 'Unknown message type' });
+        throw new Error(`Unknown calculation type: ${type}`);
     }
+
+    const response: CalculationResponse = {
+      type,
+      data: result,
+      id,
+      success: true,
+    };
+
+    self.postMessage(response);
   } catch (error) {
-    ctx.postMessage({ type: 'ERROR', data: (error as Error).message || 'Unknown error' });
+    const response: CalculationResponse = {
+      type,
+      data: null,
+      id,
+      success: false,
+      error: (error as Error).message || 'Unknown error',
+    };
+
+    self.postMessage(response);
   }
 });
-
-export {};

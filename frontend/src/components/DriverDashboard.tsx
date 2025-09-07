@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../config/supabase';
 import { websocketService } from '../services/websocket';
 import { authService } from '../services/authService';
 import { environment } from '../config/environment';
-import maplibregl from 'maplibre-gl';
+import { dataValidator } from '../utils/dataValidation';
+import { Map, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import './DriverInterface.css';
-import './DriverDashboard.css';
+import MapErrorBoundary from './error/MapErrorBoundary';
 
 interface BusInfo {
   bus_id: string;
@@ -21,6 +21,7 @@ interface BusInfo {
 
 interface LocationData {
   driverId: string;
+  busId: string;
   latitude: number;
   longitude: number;
   timestamp: string;
@@ -38,45 +39,55 @@ const DriverDashboard: React.FC = () => {
 
   const [lastUpdateTime, setLastUpdateTime] = useState<string | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Removed unused isAuthenticated state
   const [connectionStatus, setConnectionStatus] = useState<
     'connected' | 'disconnected' | 'connecting'
   >('disconnected');
 
-  // Monitor busInfo changes for debugging
-  useEffect(() => {
-    console.log('🚌 BusInfo state changed:', busInfo);
-  }, [busInfo]);
+  // Monitor busInfo changes for debugging (removed to prevent re-render loop)
+  // useEffect(() => {
+  //   console.log('🚌 BusInfo state changed:', busInfo);
+  // }, [busInfo]);
 
   const socketRef = useRef<Socket | null>(null);
   // const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const watchIdRef = useRef<number | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapRef = useRef<Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const markerRef = useRef<maplibregl.Marker | null>(null);
+  const markerRef = useRef<Marker | null>(null);
   const initializationRef = useRef(false);
   const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
+  const [isInitialized, setIsInitialized] = useState(false);
+
   // Store event listener references to properly remove them later
   const eventListenersRef = useRef<{
     webglcontextlost?: (event: Event) => void;
     webglcontextrestored?: () => void;
-    error?: (e: any) => void;
+    error?: (e: ErrorEvent) => void;
     load?: () => void;
   }>({});
 
   // Initialize driver data and WebSocket connection when component mounts
   useEffect(() => {
     // Prevent multiple initializations
-    if (initializationRef.current) {
+    if (initializationRef.current || isInitialized) {
       console.log('🔄 Driver Dashboard: Already initialized, skipping...');
       return;
     }
 
     console.log('🚀 Driver Dashboard: Starting initialization...');
+
+    // Check if this is a page refresh
+    const isPageRefresh = performance.navigation?.type === 1 || 
+                         (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.type === 'reload';
     
-    // Set initialization flag immediately to prevent multiple calls
+    if (isPageRefresh) {
+      console.log('🔄 Page refresh detected, will attempt WebSocket reconnection...');
+    }
+
+    // Set initialization flags immediately to prevent multiple calls
     initializationRef.current = true;
+    setIsInitialized(true);
 
     // Set up connection status monitoring
     const updateConnectionStatus = () => {
@@ -97,6 +108,35 @@ const DriverDashboard: React.FC = () => {
 
     // Set up periodic status monitoring
     const statusInterval = setInterval(updateConnectionStatus, 2000);
+    
+    // Enhanced connection monitoring for page refresh scenarios
+    const enhancedConnectionMonitor = () => {
+      const connectionState = websocketService.getConnectionState();
+      const isConnected = websocketService.isConnected();
+      
+      console.log(`🔍 Connection monitor: State=${connectionState}, Connected=${isConnected}`);
+      
+      if (!isConnected && connectionState !== 'connecting' && connectionState !== 'reconnecting') {
+        console.log('🔄 Connection lost, attempting automatic reconnection...');
+        websocketService.connectAs('driver').catch(error => {
+          console.warn('⚠️ Automatic reconnection failed:', error);
+        });
+      } else if (connectionState === 'connecting') {
+        // Check if we've been in connecting state for too long (30 seconds)
+        // Track connection timeout
+        setTimeout(() => {
+          if (websocketService.getConnectionState() === 'connecting' && !websocketService.isConnected()) {
+            console.log('⚠️ Connection stuck in connecting state, forcing fresh connection...');
+            websocketService.forceFreshConnection().catch(error => {
+              console.warn('⚠️ Force fresh connection failed:', error);
+            });
+          }
+        }, 30000); // 30 seconds timeout
+      }
+    };
+    
+    // Monitor connection every 5 seconds
+    const connectionMonitorInterval = setInterval(enhancedConnectionMonitor, 5000);
 
     const initializeDriverData = async () => {
       try {
@@ -138,7 +178,7 @@ const DriverDashboard: React.FC = () => {
               driver_id: existingAssignment.driver_id,
               driver_name: existingAssignment.driver_name,
             });
-            setIsAuthenticated(true);
+            // Authentication state managed by authService
             console.log(
               '✅ Bus info and authentication state set from existing assignment'
             );
@@ -167,7 +207,7 @@ const DriverDashboard: React.FC = () => {
                 driver_id: assignment.driver_id,
                 driver_name: assignment.driver_name,
               });
-              setIsAuthenticated(true);
+              // Authentication state managed by authService
               console.log(
                 '✅ Bus info and authentication state set from validation'
               );
@@ -175,17 +215,51 @@ const DriverDashboard: React.FC = () => {
               console.log(
                 '❌ Driver Dashboard: Invalid session or no assignment found'
               );
-              return;
+              console.log('🔄 Attempting to fetch bus info from API as fallback...');
+              
+              // Try to fetch bus info from API as fallback
+              const apiSuccess = await fetchBusInfoFromAPI(session.user.id);
+              if (!apiSuccess) {
+                console.log('❌ Driver Dashboard: All validation methods failed');
+                return;
+              }
             }
           }
 
           // Connect to WebSocket only if not already connected
           if (!websocketService.isConnected()) {
-            console.log('🔌 Driver Dashboard: Connecting to WebSocket...');
+            console.log('🔌 Driver Dashboard: Connecting to WebSocket as driver...');
             try {
-              await websocketService.connect();
+              await websocketService.connectAs('driver');
+              console.log('✅ WebSocket connected successfully');
             } catch (error) {
-              console.warn('⚠️ WebSocket connection failed, will use API fallback:', error);
+              console.warn(
+                '⚠️ WebSocket connection failed, will use API fallback:',
+                error
+              );
+              // Try to connect again after a short delay
+              setTimeout(async () => {
+                if (!websocketService.isConnected()) {
+                  console.log('🔄 Retrying WebSocket connection...');
+                  try {
+                    await websocketService.connectAs('driver');
+                    console.log('✅ WebSocket reconnection successful');
+                  } catch (retryError) {
+                    console.warn('⚠️ WebSocket reconnection failed:', retryError);
+                    
+                    // For page refresh scenarios, try force reconnection
+                    if (isPageRefresh) {
+                      console.log('🔄 Page refresh detected, attempting force reconnection...');
+                      try {
+                        await websocketService.forceReconnect();
+                        console.log('✅ Force reconnection successful');
+                      } catch (forceError) {
+                        console.warn('⚠️ Force reconnection failed:', forceError);
+                      }
+                    }
+                  }
+                }
+              }, 2000);
             }
           } else {
             console.log('✅ WebSocket already connected');
@@ -194,6 +268,28 @@ const DriverDashboard: React.FC = () => {
           // Set up WebSocket listeners
           websocketService.socket?.on('connect', () => {
             console.log('🔌 Driver Dashboard: Connected to WebSocket server');
+            
+            // Authenticate as driver after connection
+            const currentSession = authService.getCurrentSession();
+            if (currentSession?.access_token) {
+              console.log('🔐 Driver Dashboard: Authenticating with WebSocket server...');
+              websocketService.authenticateAsDriver(currentSession.access_token, {
+                onSuccess: (data: any) => {
+                  console.log('✅ Driver Dashboard: Authentication successful:', data);
+                  if (data.busInfo) {
+                    setBusInfo(data.busInfo);
+                  }
+                },
+                onFailure: (error: any) => {
+                  console.error('❌ Driver Dashboard: Authentication failed:', error);
+                },
+                onError: (error: any) => {
+                  console.error('❌ Driver Dashboard: Authentication error:', error);
+                }
+              });
+            } else {
+              console.error('❌ Driver Dashboard: No access token available for authentication');
+            }
           });
 
           websocketService.socket?.on('disconnect', () => {
@@ -202,7 +298,7 @@ const DriverDashboard: React.FC = () => {
             );
           });
 
-          websocketService.socket?.on('error', (error) => {
+          websocketService.socket?.on('error', error => {
             console.error('❌ Driver Dashboard: Socket error:', error);
           });
 
@@ -215,24 +311,18 @@ const DriverDashboard: React.FC = () => {
               );
               console.log('🚌 Bus Info received:', data.busInfo);
               setBusInfo(data.busInfo);
-              setIsAuthenticated(true);
+              // Authentication state managed by authService
             }
           );
 
-          websocketService.socket?.on(
-            'driver:authentication_failed',
-            (error) => {
-              console.error(
-                '❌ Driver Dashboard: Authentication failed:',
-                error
-              );
-            }
-          );
+          websocketService.socket?.on('driver:authentication_failed', error => {
+            console.error('❌ Driver Dashboard: Authentication failed:', error);
+          });
 
           websocketService.socket?.on('driver:locationConfirmed', () => {
             console.log('📍 Driver Dashboard: Location confirmed');
             setLastUpdateTime(new Date().toLocaleTimeString());
-            setUpdateCount((prev) => prev + 1);
+            setUpdateCount(prev => prev + 1);
           });
 
           // Store socket reference
@@ -248,39 +338,8 @@ const DriverDashboard: React.FC = () => {
             });
           }
 
-          // Enhanced fallback mechanism with retry logic
-          let fallbackAttempt = 0;
-          const maxFallbackAttempts = 3;
-          const fallbackInterval = 5000; // 5 seconds between attempts
-          
-          fallbackTimerRef.current = setInterval(() => {
-            fallbackAttempt++;
-            
-            if (!busInfo && !isAuthenticated) {
-              console.log(`🔄 Fallback attempt ${fallbackAttempt}/${maxFallbackAttempts}: Fetching bus info from API...`);
-              fetchBusInfoFromAPI(session.user.id).then(success => {
-                if (success) {
-                  console.log('✅ Fallback API call successful');
-                  if (fallbackTimerRef.current) {
-                    clearInterval(fallbackTimerRef.current);
-                    fallbackTimerRef.current = null;
-                  }
-                } else if (fallbackAttempt >= maxFallbackAttempts) {
-                  console.log('❌ Max fallback attempts reached, stopping retries');
-                  if (fallbackTimerRef.current) {
-                    clearInterval(fallbackTimerRef.current);
-                    fallbackTimerRef.current = null;
-                  }
-                }
-              });
-            } else {
-              console.log('✅ Bus info already set, canceling fallback timer');
-              if (fallbackTimerRef.current) {
-                clearInterval(fallbackTimerRef.current);
-                fallbackTimerRef.current = null;
-              }
-            }
-          }, fallbackInterval);
+          // Enhanced fallback mechanism with retry logic (moved to separate effect)
+          // This will be handled by a separate useEffect to prevent re-render loops
         } else {
           console.log(
             '❌ Driver Dashboard: No session found, redirecting to login'
@@ -299,16 +358,17 @@ const DriverDashboard: React.FC = () => {
     // Cleanup function
     return () => {
       clearInterval(statusInterval);
-      
+      clearInterval(connectionMonitorInterval);
+
       // Clear fallback timer if it exists
       if (fallbackTimerRef.current) {
         clearInterval(fallbackTimerRef.current);
         fallbackTimerRef.current = null;
       }
-      
-      // Reset initialization flag on cleanup
-      initializationRef.current = false;
-      
+
+      // Don't reset initialization flag on cleanup to prevent re-initialization
+      // initializationRef.current = false;
+
       // Clean up WebSocket listeners
       if (websocketService.socket) {
         websocketService.socket.off('connect');
@@ -318,25 +378,12 @@ const DriverDashboard: React.FC = () => {
         websocketService.socket.off('driver:authentication_failed');
         websocketService.socket.off('driver:locationConfirmed');
       }
-      
+
       console.log('🧹 Driver Dashboard: Cleanup completed');
     };
-  }, [navigate]);
+  }, [navigate]); // Removed busInfo and isAuthenticated to prevent infinite loop
 
-  // Initialize map when component mounts
-  useEffect(() => {
-    if (mapContainerRef.current && !mapRef.current) {
-      console.log('🗺️ Initializing map...');
-      initializeMap();
-    }
-
-    return () => {
-      console.log('🗺️ Cleaning up map...');
-      cleanupMap();
-    };
-  }, []);
-
-  const initializeMap = () => {
+  const initializeMap = useCallback(() => {
     if (!mapContainerRef.current) return;
 
     const latitude = 23.0225;
@@ -350,7 +397,7 @@ const DriverDashboard: React.FC = () => {
 
     try {
       // Create map with optimized settings to prevent WebGL context loss
-      mapRef.current = new maplibregl.Map({
+      mapRef.current = new Map({
         container: mapContainerRef.current,
         style: {
           version: 8,
@@ -390,7 +437,7 @@ const DriverDashboard: React.FC = () => {
         if (event instanceof WebGLContextEvent) {
           event.preventDefault();
         }
-        
+
         // Attempt to restore the context after a short delay
         setTimeout(() => {
           try {
@@ -403,7 +450,7 @@ const DriverDashboard: React.FC = () => {
           }
         }, 1000);
       };
-      
+
       // Store the listener reference
       eventListenersRef.current.webglcontextlost = handleContextLost;
       mapRef.current.on('webglcontextlost', handleContextLost);
@@ -417,11 +464,11 @@ const DriverDashboard: React.FC = () => {
           markerRef.current.setLngLat(currentLngLat);
         }
       };
-      
+
       // Store the listener reference
       eventListenersRef.current.webglcontextrestored = handleContextRestored;
       mapRef.current.on('webglcontextrestored', handleContextRestored);
-      
+
       // Create marker
       const markerElement = document.createElement('div');
       markerElement.className = 'driver-marker';
@@ -431,38 +478,37 @@ const DriverDashboard: React.FC = () => {
         </div>
       `;
 
-      markerRef.current = new maplibregl.Marker({
+      markerRef.current = new Marker({
         element: markerElement,
         anchor: 'center',
       })
         .setLngLat([longitude, latitude])
         .addTo(mapRef.current);
-        
+
       // Add error handling for tile loading
-      const handleMapError = (e: any) => {
+      const handleMapError = (e: ErrorEvent) => {
         console.error('❌ Map error:', e);
       };
-      
+
       // Store the listener reference
       eventListenersRef.current.error = handleMapError;
       mapRef.current.on('error', handleMapError);
-      
+
       // Optimize performance
       const handleMapLoad = () => {
         console.log('✅ Map loaded successfully');
       };
-      
+
       // Store the listener reference
       eventListenersRef.current.load = handleMapLoad;
       mapRef.current.on('load', handleMapLoad);
-      
     } catch (error) {
       console.error('❌ Error initializing map:', error);
       // Fallback to a simpler map initialization if the first attempt fails
       try {
         console.log('🔄 Attempting fallback map initialization...');
         if (mapContainerRef.current && !mapRef.current) {
-          mapRef.current = new maplibregl.Map({
+          mapRef.current = new Map({
             container: mapContainerRef.current,
             style: {
               version: 8,
@@ -488,25 +534,25 @@ const DriverDashboard: React.FC = () => {
             attributionControl: false,
             preserveDrawingBuffer: true,
           });
-          
+
           // Create simple marker
           const markerElement = document.createElement('div');
           markerElement.className = 'driver-marker';
           markerElement.innerHTML = `<div>🚌</div>`;
-          
-          markerRef.current = new maplibregl.Marker({
+
+          markerRef.current = new Marker({
             element: markerElement,
           })
             .setLngLat([longitude, latitude])
             .addTo(mapRef.current);
-            
+
           console.log('✅ Fallback map initialization successful');
         }
       } catch (fallbackError) {
         console.error('❌ Fallback map initialization failed:', fallbackError);
       }
     }
-  };
+  }, []);
 
   const updateMapLocation = (latitude: number, longitude: number) => {
     if (!mapRef.current || !markerRef.current) return;
@@ -538,7 +584,7 @@ const DriverDashboard: React.FC = () => {
 
     try {
       watchIdRef.current = navigator.geolocation.watchPosition(
-        (position) => {
+        position => {
           setCurrentLocation(position);
           setLocationError(null);
 
@@ -550,8 +596,9 @@ const DriverDashboard: React.FC = () => {
           }
 
           if (websocketService.socket && websocketService.isConnected()) {
-            const locationData: LocationData = {
+            const rawLocationData = {
               driverId: busInfo?.driver_id || '',
+              busId: busInfo?.bus_id || '',
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
               timestamp: new Date().toISOString(),
@@ -559,12 +606,35 @@ const DriverDashboard: React.FC = () => {
               heading: position.coords.heading || undefined,
             };
 
-            websocketService.socket.emit('driver:locationUpdate', locationData);
-            setLastUpdateTime(new Date().toLocaleTimeString());
-            setUpdateCount((prev) => prev + 1);
+            // Validate location data before sending
+            const validationResult = dataValidator.validateLocationData(rawLocationData);
+            
+            if (validationResult.success && validationResult.data) {
+              const validatedLocationData: LocationData = {
+                driverId: validationResult.data.driverId,
+                busId: validationResult.data.busId,
+                latitude: validationResult.data.latitude,
+                longitude: validationResult.data.longitude,
+                timestamp: validationResult.data.timestamp,
+                speed: validationResult.data.speed,
+                heading: validationResult.data.heading,
+              };
+
+              websocketService.socket.emit('driver:locationUpdate', validatedLocationData);
+              setLastUpdateTime(new Date().toLocaleTimeString());
+              setUpdateCount(prev => prev + 1);
+
+              // Log if data was sanitized
+              if (validationResult.sanitized) {
+                console.log('✅ Driver location data was sanitized before sending');
+              }
+            } else {
+              console.error('❌ Driver location validation failed:', validationResult.errors);
+              setLocationError(`Location validation failed: ${validationResult.errors?.join(', ')}`);
+            }
           }
         },
-        (error) => {
+        error => {
           console.error('❌ Location error:', error);
           let errorMessage = '';
 
@@ -604,16 +674,22 @@ const DriverDashboard: React.FC = () => {
     setIsTracking(false);
   };
 
-  const cleanupMap = () => {
+  const cleanupMap = useCallback(() => {
     try {
       // Properly remove all event listeners before removing the map
       if (mapRef.current) {
         // Remove all event listeners using the stored references
         if (eventListenersRef.current.webglcontextlost) {
-          mapRef.current.off('webglcontextlost', eventListenersRef.current.webglcontextlost);
+          mapRef.current.off(
+            'webglcontextlost',
+            eventListenersRef.current.webglcontextlost
+          );
         }
         if (eventListenersRef.current.webglcontextrestored) {
-          mapRef.current.off('webglcontextrestored', eventListenersRef.current.webglcontextrestored);
+          mapRef.current.off(
+            'webglcontextrestored',
+            eventListenersRef.current.webglcontextrestored
+          );
         }
         if (eventListenersRef.current.error) {
           mapRef.current.off('error', eventListenersRef.current.error);
@@ -621,23 +697,36 @@ const DriverDashboard: React.FC = () => {
         if (eventListenersRef.current.load) {
           mapRef.current.off('load', eventListenersRef.current.load);
         }
-        
+
         // Clear the event listeners
         eventListenersRef.current = {};
-        
+
         // Remove the map
         mapRef.current.remove();
         mapRef.current = null;
       }
-      
+
       // Clear marker reference
       markerRef.current = null;
-      
+
       console.log('🗺️ Map cleanup completed');
     } catch (error) {
       console.error('❌ Error during map cleanup:', error);
     }
-  };
+  }, []);
+
+  // Initialize map when component mounts
+  useEffect(() => {
+    if (mapContainerRef.current && !mapRef.current) {
+      console.log('🗺️ Initializing map...');
+      initializeMap();
+    }
+
+    return () => {
+      console.log('🗺️ Cleaning up map...');
+      cleanupMap();
+    };
+  }, []); // Empty dependency array since initializeMap and cleanupMap are stable
 
   const fetchBusInfoFromAPI = async (userId: string): Promise<boolean> => {
     try {
@@ -672,25 +761,32 @@ const DriverDashboard: React.FC = () => {
         console.log('✅ Bus info from API:', data);
 
         // Handle the response format from the buses endpoint
-        if (data.success && data.data && Array.isArray(data.data) && data.data.length > 0) {
+        if (
+          data.success &&
+          data.data &&
+          Array.isArray(data.data) &&
+          data.data.length > 0
+        ) {
           const busData = data.data[0]; // Get the first bus assigned to this driver
           setBusInfo({
             bus_id: busData.bus_id || busData.id,
-            bus_number: busData.bus_number || busData.number_plate || busData.code,
+            bus_number:
+              busData.bus_number || busData.number_plate || busData.code,
             route_id: busData.route_id || '',
             route_name: busData.route_name || 'Route TBD',
             driver_id: busData.driver_id || busData.assigned_driver_id,
-            driver_name: busData.driver_name || busData.driver_full_name || 'Driver TBD',
+            driver_name:
+              busData.driver_name || busData.driver_full_name || 'Driver TBD',
           });
-          setIsAuthenticated(true);
+          // Authentication state managed by authService
           return true;
         } else if (data.data?.busInfo) {
           setBusInfo(data.data.busInfo);
-          setIsAuthenticated(true);
+          // Authentication state managed by authService
           return true;
         } else if (data.busInfo) {
           setBusInfo(data.busInfo);
-          setIsAuthenticated(true);
+          // Authentication state managed by authService
           return true;
         } else {
           console.error('❌ No bus info in response:', data);
@@ -729,7 +825,13 @@ const DriverDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-4 driver-dashboard-container">
+    <MapErrorBoundary
+      mapType="driver"
+      onMapError={(error, errorInfo) => {
+        console.error('Driver dashboard map error:', error, errorInfo);
+      }}
+    >
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-4 driver-dashboard-container">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="card-glass p-6 mb-6">
@@ -776,6 +878,23 @@ const DriverDashboard: React.FC = () => {
               >
                 🔄 Refresh
               </button>
+              
+              {/* Debug connection button */}
+              <button
+                onClick={async () => {
+                  console.log('🔧 Manual connection attempt...');
+                  try {
+                    await websocketService.forceFreshConnection();
+                  } catch (error) {
+                    console.error('❌ Manual connection failed:', error);
+                  }
+                }}
+                className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition-colors duration-200 text-sm"
+                title="Force WebSocket reconnection (Debug)"
+              >
+                🔧 Reconnect
+              </button>
+              
               <button
                 onClick={handleSignOut}
                 className="btn-secondary w-full sm:w-auto"
@@ -995,7 +1114,7 @@ const DriverDashboard: React.FC = () => {
 
                         if (navigator.geolocation) {
                           navigator.geolocation.getCurrentPosition(
-                            (position) => {
+                            position => {
                               const successMsg =
                                 `✅ Location Test Successful!\n\n` +
                                 `Latitude: ${position.coords.latitude}\n` +
@@ -1006,7 +1125,7 @@ const DriverDashboard: React.FC = () => {
                               alert(successMsg);
                               setLocationError(null);
                             },
-                            (error) => {
+                            error => {
                               const errorMsg =
                                 `❌ Location Test Failed\n\n` +
                                 `Error Code: ${error.code}\n` +
@@ -1143,7 +1262,8 @@ const DriverDashboard: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </MapErrorBoundary>
   );
 };
 

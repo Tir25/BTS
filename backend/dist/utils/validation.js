@@ -1,171 +1,184 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.validateRouteData = exports.validateRouteName = exports.validateBusNumber = exports.validatePassword = exports.validateEmail = exports.validateLocationData = void 0;
+exports.validateRouteData = exports.validateLocationData = exports.safeValidate = exports.validateField = exports.validateRequest = exports.adminActionSchema = exports.fileUploadSchema = exports.searchSchema = exports.paginationSchema = exports.locationBroadcastSchema = exports.driverAuthSchema = exports.registerSchema = exports.loginSchema = exports.driverIdSchema = exports.updateDriverSchema = exports.createDriverSchema = exports.locationQuerySchema = exports.locationUpdateSchema = exports.routeIdSchema = exports.updateRouteSchema = exports.createRouteSchema = exports.busIdSchema = exports.updateBusSchema = exports.createBusSchema = void 0;
+const zod_1 = require("zod");
+const emailSchema = zod_1.z.string().email('Invalid email format');
+const uuidSchema = zod_1.z.string().uuid('Invalid UUID format');
+const positiveNumberSchema = zod_1.z.number().positive('Must be a positive number');
+const nonEmptyStringSchema = zod_1.z.string().min(1, 'Cannot be empty');
+const coordinateSchema = zod_1.z.number()
+    .min(-180, 'Longitude must be between -180 and 180')
+    .max(180, 'Longitude must be between -180 and 180');
+const latitudeSchema = zod_1.z.number()
+    .min(-90, 'Latitude must be between -90 and 90')
+    .max(90, 'Latitude must be between -90 and 90');
+exports.createBusSchema = zod_1.z.object({
+    code: nonEmptyStringSchema,
+    number_plate: nonEmptyStringSchema,
+    capacity: positiveNumberSchema,
+    model: zod_1.z.string().optional(),
+    year: zod_1.z.number().int().min(1900).max(new Date().getFullYear() + 1).optional(),
+    bus_image_url: zod_1.z.string().url().optional(),
+    route_id: uuidSchema.optional(),
+    is_active: zod_1.z.boolean().default(true),
+});
+exports.updateBusSchema = exports.createBusSchema.partial();
+exports.busIdSchema = zod_1.z.object({
+    id: uuidSchema,
+});
+exports.createRouteSchema = zod_1.z.object({
+    name: nonEmptyStringSchema,
+    description: zod_1.z.string().optional(),
+    origin: zod_1.z.string().optional(),
+    destination: zod_1.z.string().optional(),
+    city: zod_1.z.string().optional(),
+    total_distance_m: positiveNumberSchema.optional(),
+    estimated_duration_minutes: positiveNumberSchema.optional(),
+    is_active: zod_1.z.boolean().default(true),
+});
+exports.updateRouteSchema = exports.createRouteSchema.partial();
+exports.routeIdSchema = zod_1.z.object({
+    id: uuidSchema,
+});
+exports.locationUpdateSchema = zod_1.z.object({
+    busId: uuidSchema,
+    driverId: uuidSchema,
+    latitude: latitudeSchema,
+    longitude: coordinateSchema,
+    speed: zod_1.z.number().min(0).max(200).optional(),
+    heading: zod_1.z.number().min(0).max(360).optional(),
+    timestamp: zod_1.z.string().datetime().optional(),
+});
+exports.locationQuerySchema = zod_1.z.object({
+    busId: uuidSchema.optional(),
+    routeId: uuidSchema.optional(),
+    bounds: zod_1.z.object({
+        north: latitudeSchema,
+        south: latitudeSchema,
+        east: coordinateSchema,
+        west: coordinateSchema,
+    }).optional(),
+    limit: zod_1.z.number().int().min(1).max(1000).default(100),
+    offset: zod_1.z.number().int().min(0).default(0),
+});
+exports.createDriverSchema = zod_1.z.object({
+    driver_id: nonEmptyStringSchema,
+    driver_name: nonEmptyStringSchema,
+    license_no: nonEmptyStringSchema,
+    phone: zod_1.z.string().regex(/^\+?[\d\s\-\(\)]+$/, 'Invalid phone number').optional(),
+    email: emailSchema.optional(),
+    photo_url: zod_1.z.string().url().optional(),
+});
+exports.updateDriverSchema = exports.createDriverSchema.partial();
+exports.driverIdSchema = zod_1.z.object({
+    id: uuidSchema,
+});
+exports.loginSchema = zod_1.z.object({
+    email: emailSchema,
+    password: zod_1.z.string().min(8, 'Password must be at least 8 characters'),
+});
+exports.registerSchema = zod_1.z.object({
+    email: emailSchema,
+    password: zod_1.z.string()
+        .min(8, 'Password must be at least 8 characters')
+        .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Password must contain at least one lowercase letter, one uppercase letter, and one number'),
+    full_name: nonEmptyStringSchema,
+    role: zod_1.z.enum(['student', 'driver', 'admin']).default('student'),
+});
+exports.driverAuthSchema = zod_1.z.object({
+    token: zod_1.z.string().min(1, 'Token is required'),
+    driverId: uuidSchema,
+    busId: uuidSchema,
+});
+exports.locationBroadcastSchema = zod_1.z.object({
+    driverId: uuidSchema,
+    busId: uuidSchema,
+    latitude: latitudeSchema,
+    longitude: coordinateSchema,
+    speed: zod_1.z.number().min(0).max(200).optional(),
+    heading: zod_1.z.number().min(0).max(360).optional(),
+    timestamp: zod_1.z.string().datetime(),
+});
+exports.paginationSchema = zod_1.z.object({
+    page: zod_1.z.number().int().min(1).default(1),
+    limit: zod_1.z.number().int().min(1).max(100).default(10),
+    sort: zod_1.z.string().optional(),
+    order: zod_1.z.enum(['asc', 'desc']).default('asc'),
+});
+exports.searchSchema = zod_1.z.object({
+    q: zod_1.z.string().min(1, 'Search query cannot be empty'),
+    ...exports.paginationSchema.shape,
+});
+exports.fileUploadSchema = zod_1.z.object({
+    fieldname: zod_1.z.string(),
+    originalname: zod_1.z.string(),
+    mimetype: zod_1.z.string().regex(/^image\/(jpeg|jpg|png|gif|webp)$/, 'Only image files are allowed'),
+    size: zod_1.z.number().max(5 * 1024 * 1024, 'File size must be less than 5MB'),
+});
+exports.adminActionSchema = zod_1.z.object({
+    action: zod_1.z.enum(['create', 'update', 'delete', 'activate', 'deactivate']),
+    resource: zod_1.z.enum(['bus', 'route', 'driver', 'user']),
+    targetId: uuidSchema.optional(),
+    data: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).optional(),
+});
+const validateRequest = (schema) => {
+    return (req, res, next) => {
+        try {
+            const data = {
+                ...req.body,
+                ...req.query,
+                ...req.params,
+            };
+            const validatedData = schema.parse(data);
+            req.body = validatedData;
+            req.query = validatedData;
+            req.params = validatedData;
+            next();
+        }
+        catch (error) {
+            if (error instanceof zod_1.z.ZodError) {
+                return res.status(400).json({
+                    error: {
+                        name: 'ValidationError',
+                        message: 'Request validation failed',
+                        statusCode: 400,
+                        timestamp: new Date().toISOString(),
+                        details: error.issues.map((err) => ({
+                            field: err.path.join('.'),
+                            message: err.message,
+                            code: err.code,
+                        })),
+                    },
+                });
+            }
+            next(error);
+        }
+    };
+};
+exports.validateRequest = validateRequest;
+const validateField = (schema, data) => {
+    return schema.parse(data);
+};
+exports.validateField = validateField;
+const safeValidate = (schema, data) => {
+    try {
+        const validatedData = schema.parse(data);
+        return { success: true, data: validatedData };
+    }
+    catch (error) {
+        if (error instanceof zod_1.z.ZodError) {
+            return { success: false, errors: error };
+        }
+        throw error;
+    }
+};
+exports.safeValidate = safeValidate;
 const validateLocationData = (data) => {
-    if (!data.driverId || typeof data.driverId !== 'string') {
-        return 'Driver ID is required and must be a string';
-    }
-    if (data.driverId.trim().length === 0) {
-        return 'Driver ID cannot be empty';
-    }
-    if (typeof data.latitude !== 'number' || isNaN(data.latitude)) {
-        return 'Latitude must be a valid number';
-    }
-    if (data.latitude < -90 || data.latitude > 90) {
-        return 'Latitude must be between -90 and 90 degrees';
-    }
-    if (typeof data.longitude !== 'number' || isNaN(data.longitude)) {
-        return 'Longitude must be a valid number';
-    }
-    if (data.longitude < -180 || data.longitude > 180) {
-        return 'Longitude must be between -180 and 180 degrees';
-    }
-    if (!data.timestamp || typeof data.timestamp !== 'string') {
-        return 'Timestamp is required and must be a string';
-    }
-    const timestamp = new Date(data.timestamp);
-    if (isNaN(timestamp.getTime())) {
-        return 'Timestamp must be a valid ISO date string';
-    }
-    const now = new Date();
-    const timeDiff = timestamp.getTime() - now.getTime();
-    if (timeDiff > 60000) {
-        return 'Timestamp cannot be more than 1 minute in the future';
-    }
-    if (timeDiff < -300000) {
-        return 'Timestamp cannot be more than 5 minutes in the past';
-    }
-    if (data.speed !== undefined) {
-        if (typeof data.speed !== 'number' || isNaN(data.speed)) {
-            return 'Speed must be a valid number';
-        }
-        if (data.speed < 0 || data.speed > 200) {
-            return 'Speed must be between 0 and 200 km/h';
-        }
-    }
-    if (data.heading !== undefined) {
-        if (typeof data.heading !== 'number' || isNaN(data.heading)) {
-            return 'Heading must be a valid number';
-        }
-        if (data.heading < 0 || data.heading > 360) {
-            return 'Heading must be between 0 and 360 degrees';
-        }
-    }
-    return null;
+    return (0, exports.safeValidate)(exports.locationUpdateSchema, data);
 };
 exports.validateLocationData = validateLocationData;
-const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-};
-exports.validateEmail = validateEmail;
-const validatePassword = (password) => {
-    if (password.length < 8) {
-        return 'Password must be at least 8 characters long';
-    }
-    if (!/[A-Z]/.test(password)) {
-        return 'Password must contain at least one uppercase letter';
-    }
-    if (!/[a-z]/.test(password)) {
-        return 'Password must contain at least one lowercase letter';
-    }
-    if (!/\d/.test(password)) {
-        return 'Password must contain at least one number';
-    }
-    return null;
-};
-exports.validatePassword = validatePassword;
-const validateBusNumber = (busNumber) => {
-    if (!busNumber || typeof busNumber !== 'string') {
-        return 'Bus number is required and must be a string';
-    }
-    if (busNumber.trim().length === 0) {
-        return 'Bus number cannot be empty';
-    }
-    if (busNumber.length > 20) {
-        return 'Bus number cannot be longer than 20 characters';
-    }
-    return null;
-};
-exports.validateBusNumber = validateBusNumber;
-const validateRouteName = (routeName) => {
-    if (!routeName || typeof routeName !== 'string') {
-        return 'Route name is required and must be a string';
-    }
-    if (routeName.trim().length === 0) {
-        return 'Route name cannot be empty';
-    }
-    if (routeName.length > 100) {
-        return 'Route name cannot be longer than 100 characters';
-    }
-    return null;
-};
-exports.validateRouteName = validateRouteName;
-const validateRouteData = (routeData) => {
-    const name = routeData.name;
-    if (typeof name !== 'string') {
-        return 'Route name is required and must be a string';
-    }
-    const nameError = (0, exports.validateRouteName)(name);
-    if (nameError)
-        return nameError;
-    if (!routeData.description || typeof routeData.description !== 'string') {
-        return 'Description is required and must be a string';
-    }
-    if (routeData.description.trim().length === 0) {
-        return 'Description cannot be empty';
-    }
-    if (!routeData.coordinates || !Array.isArray(routeData.coordinates)) {
-        return 'Coordinates are required and must be an array';
-    }
-    if (routeData.coordinates.length < 2) {
-        return 'Route must have at least 2 coordinate points';
-    }
-    for (let i = 0; i < routeData.coordinates.length; i++) {
-        const coord = routeData.coordinates[i];
-        if (!Array.isArray(coord) || coord.length !== 2) {
-            return `Coordinate ${i + 1} must be an array with 2 elements [longitude, latitude]`;
-        }
-        const [lng, lat] = coord;
-        if (typeof lng !== 'number' || isNaN(lng)) {
-            return `Longitude at coordinate ${i + 1} must be a valid number`;
-        }
-        if (lng < -180 || lng > 180) {
-            return `Longitude at coordinate ${i + 1} must be between -180 and 180 degrees`;
-        }
-        if (typeof lat !== 'number' || isNaN(lat)) {
-            return `Latitude at coordinate ${i + 1} must be a valid number`;
-        }
-        if (lat < -90 || lat > 90) {
-            return `Latitude at coordinate ${i + 1} must be between -90 and 90 degrees`;
-        }
-    }
-    if (typeof routeData.distance_km !== 'number' ||
-        isNaN(routeData.distance_km)) {
-        return 'Distance must be a valid number';
-    }
-    if (routeData.distance_km <= 0) {
-        return 'Distance must be greater than 0';
-    }
-    if (typeof routeData.estimated_duration_minutes !== 'number' ||
-        isNaN(routeData.estimated_duration_minutes)) {
-        return 'Estimated duration must be a valid number';
-    }
-    if (routeData.estimated_duration_minutes <= 0) {
-        return 'Estimated duration must be greater than 0';
-    }
-    if (routeData.city !== undefined && routeData.city !== null) {
-        if (typeof routeData.city !== 'string') {
-            return 'City must be a string';
-        }
-        if (routeData.city.trim().length === 0) {
-            return 'City cannot be empty if provided';
-        }
-        if (routeData.city.length > 100) {
-            return 'City name cannot be longer than 100 characters';
-        }
-    }
-    return null;
+const validateRouteData = (data) => {
+    return (0, exports.safeValidate)(exports.createRouteSchema, data);
 };
 exports.validateRouteData = validateRouteData;
 //# sourceMappingURL=validation.js.map

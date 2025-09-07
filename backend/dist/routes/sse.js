@@ -13,21 +13,21 @@ router.get('/', (req, res) => {
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'Connection': 'keep-alive',
+        Pragma: 'no-cache',
+        Expires: '0',
+        Connection: 'keep-alive',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
     });
     res.write(`data: ${JSON.stringify({
         type: 'connection',
         message: 'SSE connection established',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
     })}\n\n`);
     const heartbeat = setInterval(() => {
         res.write(`data: ${JSON.stringify({
             type: 'heartbeat',
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
         })}\n\n`);
     }, 30000);
     req.on('close', () => {

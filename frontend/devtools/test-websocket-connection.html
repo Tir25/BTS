@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Connection Test</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            font-weight: bold;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        pre {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 WebSocket Connection Test</h1>
+        <p>This page tests the WebSocket connection used by the student live map.</p>
+
+        <div class="section">
+            <h2>Connection Status</h2>
+            <div id="connectionStatus" class="status info">Disconnected</div>
+            <button id="connectBtn">Connect</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+            <button id="testStudentBtn" disabled>Test Student Connection</button>
+            <button id="testPingBtn" disabled>Test Ping</button>
+        </div>
+
+        <div class="section">
+            <h2>Connection Details</h2>
+            <pre id="connectionDetails">Not connected</pre>
+        </div>
+
+        <div class="section">
+            <h2>Event Log</h2>
+            <pre id="eventLog">Waiting for connection...</pre>
+            <button id="clearLogBtn">Clear Log</button>
+        </div>
+
+        <div class="section">
+            <h2>Bus Location Updates</h2>
+            <pre id="locationLog">No location updates received yet...</pre>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3000';
+        const WEBSOCKET_URL = 'ws://localhost:3000';
+
+        let socket = null;
+        let eventCount = 0;
+
+        // DOM Elements
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const testStudentBtn = document.getElementById('testStudentBtn');
+        const testPingBtn = document.getElementById('testPingBtn');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectionDetails = document.getElementById('connectionDetails');
+        const eventLog = document.getElementById('eventLog');
+        const locationLog = document.getElementById('locationLog');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            eventLog.textContent += logEntry;
+            eventLog.scrollTop = eventLog.scrollHeight;
+            eventCount++;
+        }
+
+        function updateConnectionStatus(status, className) {
+            connectionStatus.textContent = status;
+            connectionStatus.className = `status ${className}`;
+        }
+
+        function updateConnectionDetails() {
+            if (!socket) {
+                connectionDetails.textContent = 'Not connected';
+                return;
+            }
+
+            const details = {
+                id: socket.id || 'Not available',
+                connected: socket.connected,
+                transport: socket.io?.engine?.transport?.name || 'Unknown',
+                hostname: socket.io?.uri || 'Unknown',
+                namespace: socket.nsp?.name || 'Unknown',
+                timestamp: new Date().toISOString()
+            };
+
+            connectionDetails.textContent = JSON.stringify(details, null, 2);
+        }
+
+        function connect() {
+            if (socket && socket.connected) {
+                log('Already connected', 'info');
+                return;
+            }
+
+            log('🔄 Attempting to connect to WebSocket...', 'info');
+            updateConnectionStatus('Connecting...', 'info');
+
+            socket = io(WEBSOCKET_URL, {
+                transports: ['websocket', 'polling'],
+                forceNew: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                query: { 
+                    clientType: 'student',
+                    version: '1.0.0',
+                    timestamp: Date.now().toString()
+                }
+            });
+
+            // Connection events
+            socket.on('connect', () => {
+                log('✅ WebSocket Connected!', 'success');
+                updateConnectionStatus('Connected', 'success');
+                updateConnectionDetails();
+                
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                testStudentBtn.disabled = false;
+                testPingBtn.disabled = false;
+            });
+
+            socket.on('disconnect', (reason) => {
+                log(`❌ WebSocket Disconnected: ${reason}`, 'error');
+                updateConnectionStatus('Disconnected', 'error');
+                updateConnectionDetails();
+                
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                testStudentBtn.disabled = true;
+                testPingBtn.disabled = true;
+            });
+
+            socket.on('connect_error', (error) => {
+                log(`❌ Connection Error: ${error.message}`, 'error');
+                updateConnectionStatus('Connection Error', 'error');
+            });
+
+            socket.on('error', (error) => {
+                log(`❌ Socket Error: ${error.message || error}`, 'error');
+            });
+
+            socket.on('reconnect', (attemptNumber) => {
+                log(`🔄 Reconnected after ${attemptNumber} attempts`, 'success');
+                updateConnectionStatus('Reconnected', 'success');
+            });
+
+            socket.on('reconnect_attempt', (attemptNumber) => {
+                log(`🔄 Reconnection attempt ${attemptNumber}`, 'info');
+            });
+
+            socket.on('reconnect_error', (error) => {
+                log(`❌ Reconnection Error: ${error.message}`, 'error');
+            });
+
+            socket.on('reconnect_failed', () => {
+                log('❌ Reconnection failed after all attempts', 'error');
+                updateConnectionStatus('Reconnection Failed', 'error');
+            });
+
+            // Application events
+            socket.on('student:connected', (data) => {
+                log(`📚 Student Connected: ${JSON.stringify(data)}`, 'success');
+            });
+
+            socket.on('bus:locationUpdate', (data) => {
+                log(`📍 Bus Location Update: Bus ID ${data.busId}`, 'info');
+                locationLog.textContent = JSON.stringify(data, null, 2);
+            });
+
+            socket.on('driver:connected', (data) => {
+                log(`🚌 Driver Connected: ${JSON.stringify(data)}`, 'info');
+            });
+
+            socket.on('driver:disconnected', (data) => {
+                log(`🚫 Driver Disconnected: ${JSON.stringify(data)}`, 'info');
+            });
+
+            socket.on('bus:arriving', (data) => {
+                log(`🚌 Bus Arriving: ${JSON.stringify(data)}`, 'info');
+            });
+
+            socket.on('pong', (data) => {
+                log(`💓 Pong received: ${JSON.stringify(data)}`, 'info');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                log('🔌 Disconnecting...', 'info');
+                socket.disconnect();
+                socket = null;
+            }
+        }
+
+        function testStudentConnection() {
+            if (socket && socket.connected) {
+                log('📚 Testing student connection...', 'info');
+                socket.emit('student:connect', {
+                    timestamp: new Date().toISOString(),
+                    clientInfo: {
+                        userAgent: navigator.userAgent,
+                        platform: navigator.platform,
+                        language: navigator.language
+                    }
+                });
+            }
+        }
+
+        function testPing() {
+            if (socket && socket.connected) {
+                log('💓 Sending ping...', 'info');
+                socket.emit('ping');
+            }
+        }
+
+        function clearLog() {
+            eventLog.textContent = '';
+            locationLog.textContent = 'No location updates received yet...';
+            eventCount = 0;
+        }
+
+        // Event listeners
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+        testStudentBtn.addEventListener('click', testStudentConnection);
+        testPingBtn.addEventListener('click', testPing);
+        clearLogBtn.addEventListener('click', clearLog);
+
+        // Auto-connect on page load
+        window.addEventListener('load', () => {
+            log('🚀 WebSocket test page loaded', 'info');
+            setTimeout(connect, 1000); // Connect after 1 second
+        });
+    </script>
+</body>
+</html>

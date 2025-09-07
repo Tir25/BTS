@@ -6,12 +6,14 @@ export interface ConnectionStatus {
   error: string | null;
 }
 
+import { DriverConnectionData, BusArrivingData } from '../types';
+
 export interface ConnectionCallbacks {
   onBusLocationUpdate?: (location: BusLocation) => void;
-  onDriverConnected?: (data: any) => void;
-  onDriverDisconnected?: (data: any) => void;
+  onDriverConnected?: (data: DriverConnectionData) => void;
+  onDriverDisconnected?: (data: DriverConnectionData) => void;
   onStudentConnected?: () => void;
-  onBusArriving?: (data: any) => void;
+  onBusArriving?: (data: BusArrivingData) => void;
   onConnectionStatusChange?: (status: ConnectionStatus) => void;
 }
 
@@ -155,7 +157,7 @@ export class ConnectionManager {
 
     this.reconnectTimeout = setTimeout(() => {
       console.log('🔄 ConnectionManager: Attempting to reconnect...');
-      this.connect().catch((error) => {
+      this.connect().catch(error => {
         console.error('❌ ConnectionManager: Reconnection failed:', error);
       });
     }, 5000);

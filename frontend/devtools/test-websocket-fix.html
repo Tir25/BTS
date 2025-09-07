@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 WebSocket Fix Test</h1>
+        
+        <div class="test-result info">
+            <strong>Environment Info:</strong><br>
+            Hostname: <span id="hostname"></span><br>
+            Expected WebSocket: <span id="expectedWs"></span>
+        </div>
+
+        <button onclick="testWebSocket()">Test WebSocket Connection</button>
+        <button onclick="testSocketIO()">Test Socket.IO Connection</button>
+        <button onclick="clearLog()">Clear Log</button>
+
+        <div id="result" class="test-result" style="display: none;"></div>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            const hostname = window.location.hostname;
+            const expectedWs = hostname === 'localhost' || hostname === '127.0.0.1' 
+                ? 'ws://localhost:3000' 
+                : `ws://${hostname}:3000`;
+
+            document.getElementById('hostname').textContent = hostname;
+            document.getElementById('expectedWs').textContent = expectedWs;
+
+            log(`Environment detected - Hostname: ${hostname}`);
+            log(`Expected WebSocket: ${expectedWs}`);
+        });
+
+        async function testWebSocket() {
+            const hostname = window.location.hostname;
+            const wsUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
+                ? 'ws://localhost:3000' 
+                : `ws://${hostname}:3000`;
+
+            log(`Testing WebSocket connection to: ${wsUrl}`);
+            
+            try {
+                const ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function() {
+                    showResult('success', `✅ WebSocket connection successful to ${wsUrl}`);
+                    log(`✅ WebSocket SUCCESS: Connected to ${wsUrl}`);
+                    ws.close();
+                };
+                
+                ws.onerror = function(error) {
+                    showResult('error', `❌ WebSocket connection failed: ${error}`);
+                    log(`❌ WebSocket ERROR: ${error}`);
+                };
+                
+                ws.onclose = function() {
+                    log(`🔌 WebSocket connection closed`);
+                };
+                
+            } catch (error) {
+                showResult('error', `❌ WebSocket test failed: ${error.message}`);
+                log(`❌ WebSocket ERROR: ${error.message}`);
+            }
+        }
+
+        async function testSocketIO() {
+            const hostname = window.location.hostname;
+            const socketUrl = hostname === 'localhost' || hostname === '127.0.0.1' 
+                ? 'http://localhost:3000' 
+                : `http://${hostname}:3000`;
+
+            log(`Testing Socket.IO connection to: ${socketUrl}`);
+            
+            try {
+                const socket = io(socketUrl, {
+                    transports: ['websocket', 'polling'],
+                    timeout: 5000
+                });
+                
+                socket.on('connect', function() {
+                    showResult('success', `✅ Socket.IO connection successful to ${socketUrl}`);
+                    log(`✅ Socket.IO SUCCESS: Connected to ${socketUrl}`);
+                    socket.disconnect();
+                });
+                
+                socket.on('connect_error', function(error) {
+                    showResult('error', `❌ Socket.IO connection failed: ${error.message}`);
+                    log(`❌ Socket.IO ERROR: ${error.message}`);
+                });
+                
+                socket.on('disconnect', function() {
+                    log(`🔌 Socket.IO connection disconnected`);
+                });
+                
+            } catch (error) {
+                showResult('error', `❌ Socket.IO test failed: ${error.message}`);
+                log(`❌ Socket.IO ERROR: ${error.message}`);
+            }
+        }
+
+        function showResult(type, message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `test-result ${type}`;
+            resultDiv.textContent = message;
+            resultDiv.style.display = 'block';
+        }
+
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+    </script>
+</body>
+</html>
