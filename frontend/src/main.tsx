@@ -5,6 +5,7 @@ import './index.css';
 import { setupConsoleFilter } from './utils/consoleFilter';
 import './utils/apiInterceptor';
 import { QueryProvider } from './providers/QueryProvider';
+import { registerServiceWorker, unregisterAllServiceWorkers, detectBrowserCompatibility } from './utils/serviceWorkerUtils';
 
 // Import Service Worker cache clearer for development
 if (import.meta.env.DEV) {
@@ -19,46 +20,32 @@ if (import.meta.env.DEV) {
 // Setup console filter to suppress expected warnings in development
 setupConsoleFilter();
 
-// Register service worker for better performance (only in production and HTTPS)
-if ('serviceWorker' in navigator && import.meta.env.PROD && window.location.protocol === 'https:') {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', {
-      scope: '/',
-      updateViaCache: 'none'
-    })
-      .then((registration) => {
-        console.log('✅ Service Worker registered successfully:', registration.scope);
-        
-        // Handle service worker updates
-        registration.addEventListener('updatefound', () => {
-          console.log('🔄 Service Worker update found');
-        });
-        
-        // Handle service worker state changes
-        registration.addEventListener('statechange', () => {
-          console.log('🔄 Service Worker state changed:', registration.active?.state);
-        });
-      })
-      .catch((error) => {
-        console.error('❌ Service Worker registration failed:', error);
-      });
+// Enhanced Service Worker registration with comprehensive security checks
+const browserCompatibility = detectBrowserCompatibility();
+console.log('🔍 Browser compatibility check:', {
+  browser: browserCompatibility.browserName,
+  supportsServiceWorker: browserCompatibility.supportsServiceWorker,
+  isSecureContext: browserCompatibility.isSecureContext,
+  isHTTPS: browserCompatibility.isHTTPS,
+  isLocalhost: browserCompatibility.isLocalhost,
+});
+
+if (import.meta.env.PROD) {
+  // Production: Register Service Worker with enhanced security checks
+  window.addEventListener('load', async () => {
+    try {
+      await registerServiceWorker('/sw.js');
+    } catch (error) {
+      console.warn('⚠️ Service Worker registration failed in production:', error);
+    }
   });
-  
-  // Handle service worker errors
-  navigator.serviceWorker.addEventListener('error', (event) => {
-    console.error('❌ Service Worker error:', event);
-  });
-  
-  // Handle service worker message events
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    console.log('📨 Service Worker message:', event.data);
-  });
-} else if ('serviceWorker' in navigator && import.meta.env.DEV) {
-  // Unregister any existing service workers in development
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister();
-      console.log('🔄 Service Worker unregistered for development');
+} else if (import.meta.env.DEV) {
+  // Development: Unregister any existing service workers
+  window.addEventListener('load', async () => {
+    try {
+      await unregisterAllServiceWorkers();
+    } catch (error) {
+      console.warn('⚠️ Failed to unregister Service Workers in development:', error);
     }
   });
 }
