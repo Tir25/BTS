@@ -19,8 +19,8 @@ if (import.meta.env.DEV) {
 // Setup console filter to suppress expected warnings in development
 setupConsoleFilter();
 
-// Register service worker for better performance (only in production)
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// Register service worker for better performance (only in production and HTTPS)
+if ('serviceWorker' in navigator && import.meta.env.PROD && window.location.protocol === 'https:') {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js', {
       scope: '/',

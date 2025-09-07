@@ -74,7 +74,7 @@ class WebSocketService {
         upgrade: true,
         rememberUpgrade: true,
         timeout: 15000, // Increased timeout for better stability
-        forceNew: true,
+        forceNew: false, // Changed to false to prevent connection churn
         reconnection: true, // Enable automatic reconnection
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,

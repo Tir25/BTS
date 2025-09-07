@@ -494,17 +494,28 @@ const EnhancedStudentMap: React.FC<EnhancedStudentMapProps> = ({
     handleDriverDisconnected,
   ]);
 
-  // Get filtered buses based on selected route
+  // Get filtered buses based on selected route and live locations
   const filteredBuses = useMemo(() => {
+    // First filter to only buses with live locations (within last 5 minutes)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const busesWithLiveLocations = buses.filter((bus) => {
+      const location = lastBusLocations[bus.busId];
+      if (!location) return false;
+      
+      const lastUpdate = new Date(location.timestamp);
+      return lastUpdate > fiveMinutesAgo;
+    });
+
+    // Then filter by selected route
     if (selectedRoute === 'all') {
-      return buses;
+      return busesWithLiveLocations;
     }
 
-    return buses.filter((bus) => {
+    return busesWithLiveLocations.filter((bus) => {
       const busRoute = routes.find((route) => route.name === bus.routeName);
       return busRoute && busRoute.id === selectedRoute;
     });
-  }, [buses, selectedRoute, routes]);
+  }, [buses, selectedRoute, routes, lastBusLocations]);
 
   // Get unique routes for filter
   const availableRoutes = useMemo(() => {
