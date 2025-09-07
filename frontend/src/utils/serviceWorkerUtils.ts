@@ -4,7 +4,7 @@ import { shouldSkipServiceWorkerInFirefox, displayFirefoxServiceWorkerHelp } fro
 export interface ServiceWorkerConfig {
   enabled: boolean;
   scope: string;
-  updateViaCache: RequestCache;
+  updateViaCache: ServiceWorkerUpdateViaCache;
   skipWaiting: boolean;
 }
 
@@ -94,7 +94,7 @@ export function getServiceWorkerConfig(): ServiceWorkerConfig {
   return {
     enabled: import.meta.env.PROD && compatibility.isSecureContext,
     scope: '/',
-    updateViaCache: 'none' as RequestCache,
+    updateViaCache: 'none' as ServiceWorkerUpdateViaCache,
     skipWaiting: true,
   };
 }
@@ -223,7 +223,7 @@ export async function unregisterAllServiceWorkers(): Promise<void> {
 export async function getServiceWorkerStatus(): Promise<{
   isRegistered: boolean;
   isControlling: boolean;
-  registrations: ServiceWorkerRegistration[];
+  registrations: readonly ServiceWorkerRegistration[];
   controller: ServiceWorker | null;
 }> {
   if (!('serviceWorker' in navigator)) {
