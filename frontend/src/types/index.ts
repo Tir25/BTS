@@ -37,6 +37,38 @@ export interface Driver {
   email?: string;
   photo_url?: string;
   created_at?: string;
+  // Additional properties for compatibility
+  first_name?: string;
+  last_name?: string;
+  profile_photo_url?: string;
+  assigned_bus_id?: string;
+  assigned_bus_plate?: string;
+  route_name?: string;
+  is_active?: boolean;
+}
+
+// DriverData interface for API responses
+export interface DriverData {
+  id: string;
+  driver_id?: string; // Make optional since API might not always provide it
+  driver_name?: string;
+  license_no?: string;
+  license_number?: string;
+  phone?: string;
+  email?: string;
+  photo_url?: string;
+  created_at?: string;
+}
+
+// DriverFormData interface for forms
+export interface DriverFormData {
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  profile_photo_url: string;
+  password?: string; // Make optional for updates
+  role: string;
 }
 
 // ===== BUS MANAGEMENT TYPES =====
@@ -56,6 +88,10 @@ export interface Bus {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // Additional properties for compatibility
+  bus_number?: string;
+  vehicle_no?: string;
+  bus_id?: string; // Alternative ID field
   // Joined data from queries
   driver_full_name?: string;
   driver_email?: string;
@@ -64,12 +100,97 @@ export interface Bus {
   route_name?: string;
 }
 
+// BusData interface for API responses (with optional id)
+export interface BusData {
+  id?: string;
+  code: string;
+  name?: string;
+  number_plate: string;
+  capacity: number;
+  model?: string;
+  year?: number;
+  bus_image_url?: string;
+  photo_url?: string;
+  assigned_driver_id?: string;
+  driver_id?: string;
+  route_id?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+  // Joined data from queries
+  driver_full_name?: string;
+  driver_email?: string;
+  driver_first_name?: string;
+  driver_last_name?: string;
+  route_name?: string;
+}
+
+// BusFormData interface for forms
+export interface BusFormData {
+  bus_number: string;
+  vehicle_no: string;
+  capacity: number;
+  model: string;
+  year: number;
+  bus_image_url: string;
+  assigned_driver_profile_id: string;
+  route_id: string;
+  is_active: boolean;
+}
+
 // ===== ROUTE MANAGEMENT TYPES =====
 export interface Route {
   id: string;
   name: string;
   description?: string;
   geom: any; // PostGIS geometry
+  stops?: any; // PostGIS geometry
+  total_distance_m?: number;
+  distance_km?: number;
+  estimated_duration_minutes?: number;
+  map_image_url?: string;
+  route_map_url?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  // Custom route points
+  origin?: string;
+  destination?: string;
+  city?: string;
+  custom_destination?: string;
+  custom_origin?: string;
+  custom_destination_coordinates?: any;
+  custom_origin_coordinates?: any;
+  destination_coordinates?: any;
+  origin_coordinates?: any;
+  // Route configuration
+  use_custom_arrival?: boolean;
+  custom_arrival_point?: string;
+  custom_arrival_coordinates?: any;
+  use_custom_starting_point?: boolean;
+  custom_starting_point?: string;
+  custom_starting_coordinates?: any;
+  arrival_point_type?:
+    | 'ganpat_university'
+    | 'custom_arrival'
+    | 'driver_location';
+  starting_point_type?: 'route_origin' | 'custom_starting' | 'driver_location';
+  use_custom_origin?: boolean;
+  custom_origin_point?: string;
+  origin_point_type?: 'driver_location' | 'custom_origin';
+  // Bus stops
+  bus_stops?: BusStop[];
+  // ETA tracking
+  last_eta_calculation?: string;
+  current_eta_minutes?: number;
+}
+
+// RouteData interface for API responses
+export interface RouteData {
+  id: string;
+  name: string;
+  description?: string;
+  geom?: any; // PostGIS geometry (optional for API responses)
   stops?: any; // PostGIS geometry
   total_distance_m?: number;
   distance_km?: number;

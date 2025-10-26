@@ -8,7 +8,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   error: string | null;
-  
+
   // Actions
   setAuthState: (state: {
     isAuthenticated?: boolean;
@@ -16,12 +16,12 @@ interface AuthState {
     loading?: boolean;
     error?: string | null;
   }) => void;
-  
+
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearError: () => void;
-  
+
   // Computed values
   isAdmin: () => boolean;
   isDriver: () => boolean;
@@ -36,40 +36,37 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       loading: true,
       error: null,
-      
+
       // Actions
       setAuthState: (state) =>
         set((prev) => ({
           ...prev,
           ...state,
         })),
-      
+
       setUser: (user) =>
         set(() => ({
           user,
           isAuthenticated: !!user,
         })),
-      
-      setLoading: (loading) =>
-        set({ loading }),
-      
-      setError: (error) =>
-        set({ error }),
-      
-      clearError: () =>
-        set({ error: null }),
-      
+
+      setLoading: (loading) => set({ loading }),
+
+      setError: (error) => set({ error }),
+
+      clearError: () => set({ error: null }),
+
       // Computed values
       isAdmin: () => {
         const state = get();
         return state.user?.role === 'admin';
       },
-      
+
       isDriver: () => {
         const state = get();
         return state.user?.role === 'driver';
       },
-      
+
       isStudent: () => {
         const state = get();
         return state.user?.role === 'student';

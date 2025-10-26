@@ -115,7 +115,10 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerMessage>) => {
         ctx.postMessage({ type: 'ERROR', data: 'Unknown message type' });
     }
   } catch (error) {
-    ctx.postMessage({ type: 'ERROR', data: (error as Error).message || 'Unknown error' });
+    ctx.postMessage({
+      type: 'ERROR',
+      data: (error as Error).message || 'Unknown error',
+    });
   }
 });
 

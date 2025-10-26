@@ -2,6 +2,8 @@ import maplibregl from 'maplibre-gl';
 import { IMapService, IMapConfiguration } from './interfaces/IMapService';
 import { BusLocation } from './interfaces/IWebSocketService';
 
+import { logger } from '../utils/logger';
+
 export class MapService implements IMapService {
   private map: maplibregl.Map | null = null;
   private markers: { [busId: string]: maplibregl.Marker } = {};
@@ -45,7 +47,7 @@ export class MapService implements IMapService {
       return;
     }
 
-    console.log('🗺️ Initializing MapService...');
+    logger.info('🗺️ Initializing MapService...', 'component');
 
     this.map = new maplibregl.Map({
       container,
@@ -67,19 +69,19 @@ export class MapService implements IMapService {
 
     // Handle map load event
     this.map.once('load', () => {
-      console.log('🗺️ Map loaded successfully');
+      logger.info('🗺️ Map loaded successfully', 'component');
       this.isInitializedFlag = true;
     });
 
     // Handle map errors
     this.map.on('error', (e) => {
-      console.error('❌ Map error:', e);
+      logger.error('Error occurred', 'component', { error: '❌ Map error:', e });
     });
   }
 
   addRoute(routeId: string, routeData: any): void {
     if (!this.map || !this.map.isStyleLoaded()) {
-      console.warn('🗺️ Map not ready for route addition');
+      logger.warn('🗺️ Map not ready for route addition', 'component');
       return;
     }
 
@@ -115,9 +117,9 @@ export class MapService implements IMapService {
         },
       });
 
-      console.log(`🗺️ Added route ${routeData.name} to map`);
+      logger.info('🗺️ Added route to map', 'component', { data: routeData.name });
     } catch (error) {
-      console.error(`❌ Error adding route ${routeId}:`, error);
+      logger.error(`❌ Error adding route ${routeId}:`, 'component', { error });
     }
   }
 
@@ -172,9 +174,7 @@ export class MapService implements IMapService {
     marker.setPopup(popup);
     this.markers[busId] = marker;
 
-    console.log(
-      `📍 Created marker for bus ${busId} at [${longitude.toFixed(6)}, ${latitude.toFixed(6)}]`
-    );
+    logger.debug('Debug info', 'component', { data: `📍 Created marker for bus ${busId} at [${longitude.toFixed(6)}, ${latitude.toFixed(6)}]` });
   }
 
   private updateMarkerPopup(busId: string, location: BusLocation): void {
@@ -204,29 +204,27 @@ export class MapService implements IMapService {
     if (this.markers[busId]) {
       this.markers[busId].remove();
       delete this.markers[busId];
-      console.log(`🗑️ Removed marker for bus ${busId}`);
+      logger.info('🗑️ Removed marker for bus', 'component', { data: busId });
     }
   }
 
   centerOnBuses(locations: BusLocation[]): void {
     if (!this.map) {
-      console.log('🗺️ Map not initialized yet');
+      logger.info('🗺️ Map not initialized yet', 'component');
       return;
     }
 
-    console.log(`🗺️ Centering map on ${locations.length} buses`);
+    logger.info('🗺️ Centering map on buses', 'component', { data: `${locations.length} buses` });
 
     if (locations.length === 0) {
-      console.log('🗺️ No bus locations available');
+      logger.info('🗺️ No bus locations available', 'component');
       return;
     }
 
     if (locations.length === 1) {
       // Single bus - center on it
       const location = locations[0];
-      console.log(
-        `🗺️ Centering on single bus: [${location.longitude}, ${location.latitude}]`
-      );
+      logger.info('🗺️ Centering on single bus', 'component', { data: `[${location.longitude}, ${location.latitude}]` });
       this.map.flyTo({
         center: [location.longitude, location.latitude],
         zoom: 14,
@@ -239,7 +237,7 @@ export class MapService implements IMapService {
         bounds.extend([location.longitude, location.latitude]);
       });
 
-      console.log(`🗺️ Fitting ${locations.length} buses in view`);
+      logger.info('🗺️ Fitting buses in view', 'component', { data: `${locations.length} buses` });
       this.map.fitBounds(bounds, {
         padding: 50,
         duration: 1000,
@@ -253,7 +251,7 @@ export class MapService implements IMapService {
       this.map = null;
       this.isInitializedFlag = false;
       this.markers = {};
-      console.log('🗺️ MapService destroyed');
+      logger.info('🗺️ MapService destroyed', 'component');
     }
   }
 

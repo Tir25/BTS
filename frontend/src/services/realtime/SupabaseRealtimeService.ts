@@ -1,6 +1,8 @@
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../../config/supabase';
 
+import { logger } from '../../utils/logger';
+
 export interface RealtimeSubscription {
   id: string;
   table: string;
@@ -37,19 +39,19 @@ class SupabaseRealtimeService {
         'bus_locations_live',
         'buses',
         'routes',
-        'driver_bus_assignments'
+        'driver_bus_assignments',
       ]);
 
-      console.log('✅ Supabase Realtime initialized');
+      logger.info('✅ Supabase Realtime initialized', 'component');
     } catch (error) {
-      console.error('❌ Failed to initialize Supabase Realtime:', error);
+      logger.error('Error occurred', 'component', { error });
     }
   }
 
   private async enableRealtimeForTables(tables: string[]): Promise<void> {
     // Note: In production, this would be done via Supabase dashboard or API
     // For now, we'll assume realtime is enabled for these tables
-    console.log('🔧 Enabling realtime for tables:', tables);
+    logger.debug('Debug info', 'component', { data: '🔧 Enabling realtime for tables:', tables });
   }
 
   // Subscribe to bus location updates
@@ -58,7 +60,7 @@ class SupabaseRealtimeService {
     filter?: string
   ): string {
     const subscriptionId = `bus-locations-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table: 'live_locations',
@@ -68,7 +70,7 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
@@ -80,12 +82,12 @@ class SupabaseRealtimeService {
           filter,
         },
         (payload) => {
-          console.log('📍 Bus location update via Supabase Realtime:', payload);
+          logger.debug('Debug info', 'component', { data: '📍 Bus location update via Supabase Realtime:', payload });
           callback(payload);
         }
       )
       .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+        logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -100,7 +102,7 @@ class SupabaseRealtimeService {
     filter?: string
   ): string {
     const subscriptionId = `bus-updates-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table: 'buses',
@@ -110,7 +112,7 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
@@ -122,12 +124,12 @@ class SupabaseRealtimeService {
           filter,
         },
         (payload) => {
-          console.log('🚌 Bus update via Supabase Realtime:', payload);
+          logger.debug('Debug info', 'component', { data: '🚌 Bus update via Supabase Realtime:', payload });
           callback(payload);
         }
       )
       .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+        logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -142,7 +144,7 @@ class SupabaseRealtimeService {
     filter?: string
   ): string {
     const subscriptionId = `route-updates-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table: 'routes',
@@ -152,7 +154,7 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
@@ -164,12 +166,12 @@ class SupabaseRealtimeService {
           filter,
         },
         (payload) => {
-          console.log('🛣️ Route update via Supabase Realtime:', payload);
+          logger.debug('Debug info', 'component', { data: '🛣️ Route update via Supabase Realtime:', payload });
           callback(payload);
         }
       )
       .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+        logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -184,7 +186,7 @@ class SupabaseRealtimeService {
     filter?: string
   ): string {
     const subscriptionId = `driver-assignments-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table: 'driver_bus_assignments',
@@ -194,7 +196,7 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
@@ -206,12 +208,12 @@ class SupabaseRealtimeService {
           filter,
         },
         (payload) => {
-          console.log('👨‍💼 Driver assignment update via Supabase Realtime:', payload);
+          logger.debug('Debug info', 'component', { data: '👨‍💼 Driver assignment update via Supabase Realtime:', payload });
           callback(payload);
         }
       )
       .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+        logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -228,7 +230,7 @@ class SupabaseRealtimeService {
     filter?: string
   ): string {
     const subscriptionId = `${table}-${event}-${Date.now()}`;
-    
+
     const subscription: RealtimeSubscription = {
       id: subscriptionId,
       table,
@@ -238,7 +240,7 @@ class SupabaseRealtimeService {
     };
 
     this.subscriptions.set(subscriptionId, subscription);
-    
+
     const channel = supabase
       .channel(subscriptionId)
       .on(
@@ -250,12 +252,12 @@ class SupabaseRealtimeService {
           filter,
         },
         (payload) => {
-          console.log(`📊 ${table} ${event} via Supabase Realtime:`, payload);
+          logger.debug('Debug info', 'component', { data: `📊 ${table} ${event} via Supabase Realtime:`, payload });
           callback(payload);
         }
       )
       .subscribe((status) => {
-        console.log(`🔌 Supabase Realtime subscription status for ${subscriptionId}:`, status);
+        logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
         }
@@ -268,15 +270,15 @@ class SupabaseRealtimeService {
   unsubscribe(subscriptionId: string): boolean {
     const subscription = this.subscriptions.get(subscriptionId);
     const channel = this.channels.get(subscriptionId);
-    
+
     if (subscription && channel) {
       supabase.removeChannel(channel);
       this.subscriptions.delete(subscriptionId);
       this.channels.delete(subscriptionId);
-      console.log(`🔌 Unsubscribed from ${subscriptionId}`);
+      logger.info('🔌 Unsubscribed from subscription', 'component', { data: subscriptionId });
       return true;
     }
-    
+
     return false;
   }
 
@@ -315,13 +317,13 @@ class SupabaseRealtimeService {
     try {
       const activeSubscriptions = this.getActiveSubscriptions();
       const healthy = this.isEnabled && activeSubscriptions.length > 0;
-      
+
       return {
         healthy,
         details: {
           enabled: this.isEnabled,
           activeSubscriptions: activeSubscriptions.length,
-          subscriptions: activeSubscriptions.map(sub => ({
+          subscriptions: activeSubscriptions.map((sub) => ({
             id: sub.id,
             table: sub.table,
             event: sub.event,

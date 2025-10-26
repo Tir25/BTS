@@ -9,8 +9,10 @@ interface Route {
     city?: string;
     is_active: boolean;
 }
-interface RouteWithGeoJSON extends Omit<Route, 'stops'> {
+export interface RouteWithGeoJSON extends Omit<Route, 'stops'> {
     stops: LineString;
+    created_at?: string;
+    updated_at?: string;
 }
 interface BusLocation {
     bus_id: string;
@@ -27,38 +29,25 @@ interface ETAInfo {
     estimated_arrival_minutes: number;
     is_near_stop: boolean;
 }
+export interface RouteData {
+    id?: string;
+    name: string;
+    description?: string;
+    distance_km?: number;
+    estimated_duration_minutes?: number;
+    is_active?: boolean;
+    city?: string;
+}
 export declare class RouteService {
     static calculateETA(busLocation: BusLocation, routeId: string): Promise<ETAInfo | null>;
     static getAllRoutes(): Promise<RouteWithGeoJSON[]>;
     static getRouteById(routeId: string): Promise<RouteWithGeoJSON | null>;
-    static createRoute(routeData: {
-        name: string;
-        description: string;
-        coordinates: [number, number][];
-        distance_km: number;
-        estimated_duration_minutes: number;
-        city?: string;
-    }): Promise<Route | null>;
+    static createRoute(routeData: RouteData): Promise<RouteWithGeoJSON>;
+    static updateRoute(routeId: string, routeData: Partial<RouteData>): Promise<RouteWithGeoJSON | null>;
+    static deleteRoute(routeId: string): Promise<RouteWithGeoJSON | null>;
+    static getRoutesInViewport(viewport: any): Promise<RouteWithGeoJSON[]>;
     static assignBusToRoute(busId: string, routeId: string): Promise<boolean>;
-    static checkBusNearStop(busLocation: BusLocation, routeId: string): Promise<{
-        is_near_stop: boolean;
-        distance_to_stop: number;
-    }>;
-    static updateRoute(routeId: string, routeData: Partial<{
-        name: string;
-        description: string;
-        coordinates: [number, number][];
-        distance_km: number;
-        estimated_duration_minutes: number;
-        is_active: boolean;
-    }>): Promise<Route | null>;
-    static deleteRoute(routeId: string): Promise<Route | null>;
-    static getRoutesInViewport(viewport: {
-        minLng: number;
-        minLat: number;
-        maxLng: number;
-        maxLat: number;
-    }): Promise<RouteWithGeoJSON[]>;
+    static checkBusNearStop(busLocation: any, routeId: string): Promise<any>;
 }
 export {};
 //# sourceMappingURL=routeService.d.ts.map

@@ -4,42 +4,159 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const helmet_1 = __importDefault(require("helmet"));
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
 const cors_1 = require("./middleware/cors");
-const rateLimit_1 = require("./middleware/rateLimit");
+const corsEnhanced_1 = require("./middleware/corsEnhanced");
+const errorHandler_1 = require("./middleware/errorHandler");
+const requestId_1 = require("./middleware/requestId");
+const security_1 = require("./middleware/security");
+const securityEnhanced_1 = require("./middleware/securityEnhanced");
+const performance_1 = require("./middleware/performance");
+const monitoring_1 = require("./middleware/monitoring");
+const redisCache_1 = require("./middleware/redisCache");
+const RedisCacheService_1 = require("./services/RedisCacheService");
+const logger_1 = require("./utils/logger");
 const health_1 = __importDefault(require("./routes/health"));
 const buses_1 = __importDefault(require("./routes/buses"));
 const routes_1 = __importDefault(require("./routes/routes"));
 const admin_1 = __importDefault(require("./routes/admin"));
+const productionAssignments_1 = __importDefault(require("./routes/productionAssignments"));
+const optimizedAssignments_1 = __importDefault(require("./routes/optimizedAssignments"));
 const storage_1 = __importDefault(require("./routes/storage"));
 const locations_1 = __importDefault(require("./routes/locations"));
 const sse_1 = __importDefault(require("./routes/sse"));
 const database_1 = require("./models/database");
 const database_2 = require("./config/database");
-const environment_1 = require("./config/environment");
+const environment_1 = __importDefault(require("./config/environment"));
+const envValidation_1 = require("./config/envValidation");
 const websocket_1 = require("./sockets/websocket");
-const config = (0, environment_1.initializeEnvironment)();
+const WebSocketHealthService_1 = require("./services/WebSocketHealthService");
+const MonitoringService_1 = require("./services/MonitoringService");
+const monitoring_2 = __importDefault(require("./routes/monitoring"));
+const performanceGuard_1 = require("./utils/performanceGuard");
+const systemValidator_1 = require("./utils/systemValidator");
+const memoryOptimization_1 = require("./middleware/memoryOptimization");
+const logRotation_1 = require("./utils/logRotation");
+const deadCodeDetector_1 = require("./utils/deadCodeDetector");
+const advancedRateLimit_1 = require("./middleware/advancedRateLimit");
 const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
 const io = new socket_io_1.Server(server, {
-    cors: config.websocket.cors,
+    cors: environment_1.default.websocket.cors,
 });
-const PORT = config.port;
-app.use((0, helmet_1.default)());
-app.use(cors_1.corsMiddleware);
+const PORT = 3000;
+process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max-old-space-size=512';
+process.on('unhandledRejection', errorHandler_1.unhandledRejectionHandler);
+process.on('uncaughtException', errorHandler_1.uncaughtExceptionHandler);
+const MEMORY_WARNING_THRESHOLD = 300 * 1024 * 1024;
+const MEMORY_CRITICAL_THRESHOLD = 350 * 1024 * 1024;
+const MEMORY_EMERGENCY_THRESHOLD = 400 * 1024 * 1024;
+setInterval(() => {
+    const memoryUsage = process.memoryUsage();
+    const heapUsed = memoryUsage.heapUsed;
+    const memoryMB = Math.round(heapUsed / 1024 / 1024);
+    if (heapUsed > MEMORY_WARNING_THRESHOLD) {
+        logger_1.logger.warn('Memory usage warning', 'server', {
+            memoryMB,
+            heapUsed,
+            heapTotal: memoryUsage.heapTotal,
+            external: memoryUsage.external,
+            rss: memoryUsage.rss,
+            threshold: 'WARNING'
+        });
+    }
+    if (heapUsed > MEMORY_CRITICAL_THRESHOLD && global.gc) {
+        logger_1.logger.warn('Memory usage critical - triggering garbage collection', 'server', {
+            memoryMB,
+            threshold: 'CRITICAL'
+        });
+        global.gc();
+        const postGcMemory = process.memoryUsage();
+        const postGcMB = Math.round(postGcMemory.heapUsed / 1024 / 1024);
+        logger_1.logger.info('Garbage collection completed', 'server', {
+            beforeMB: memoryMB,
+            afterMB: postGcMB,
+            reduction: memoryMB - postGcMB
+        });
+    }
+    if (heapUsed > MEMORY_EMERGENCY_THRESHOLD) {
+        logger_1.logger.error('Memory usage emergency - considering restart', 'server', {
+            memoryMB,
+            threshold: 'EMERGENCY'
+        });
+        if (process.env.NODE_ENV === 'production') {
+            logger_1.logger.error('Emergency memory threshold exceeded - graceful shutdown initiated', 'server');
+            gracefulShutdown('MEMORY_EMERGENCY');
+        }
+    }
+}, 2 * 60 * 1000);
+app.use(requestId_1.requestIdMiddleware);
+app.use(memoryOptimization_1.memoryOptimizationMiddleware);
+app.use(memoryOptimization_1.memoryLeakDetection);
+app.use(securityEnhanced_1.securityManager.getHelmetConfig());
+app.use(securityEnhanced_1.securityHeaders);
+app.use(security_1.securityMiddleware);
+app.use(security_1.validateRequest);
+app.use(security_1.corsSecurity);
+app.use(securityEnhanced_1.requestValidator);
+app.use(securityEnhanced_1.requestSizeValidator);
+app.use(performance_1.performanceMonitor);
+app.use(performance_1.memoryMonitor);
+app.use(performance_1.compressionMonitor);
+app.use((0, performance_1.requestSizeLimit)(50 * 1024 * 1024));
+app.use(monitoring_1.requestMonitoring);
+app.use(monitoring_1.memoryMonitoring);
+app.use(monitoring_1.performanceMonitoring);
+app.use(corsEnhanced_1.corsMiddleware);
 app.use(cors_1.handlePreflight);
-app.use(rateLimit_1.rateLimitMiddleware);
-app.use(express_1.default.json({ limit: '10mb' }));
-app.use(express_1.default.urlencoded({ extended: true }));
+app.use(securityEnhanced_1.securityManager.getRateLimitConfig());
+app.use(advancedRateLimit_1.apiRateLimits.general);
+app.use(express_1.default.json({
+    limit: '10mb',
+    verify: (req, res, buf) => {
+        if (req.headers['content-type']?.includes('application/json')) {
+            try {
+                JSON.parse(buf.toString());
+            }
+            catch (e) {
+                logger_1.logger.warn('Invalid JSON received', 'server', {
+                    error: e.message,
+                    contentLength: buf.length,
+                    contentType: req.headers['content-type']
+                });
+            }
+        }
+    }
+}));
+app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
+app.use(requestId_1.addRequestIdToError);
 app.use('/health', health_1.default);
-app.use('/admin', admin_1.default);
-app.use('/buses', buses_1.default);
-app.use('/routes', routes_1.default);
-app.use('/storage', storage_1.default);
-app.use('/locations', locations_1.default);
+app.use('/admin', advancedRateLimit_1.apiRateLimits.admin, securityEnhanced_1.fileUploadValidator, admin_1.default);
+app.use('/assignments', advancedRateLimit_1.apiRateLimits.assignments, securityEnhanced_1.securityManager.getAuthRateLimitConfig(), productionAssignments_1.default);
+app.use('/production-assignments', advancedRateLimit_1.apiRateLimits.assignments, securityEnhanced_1.securityManager.getAuthRateLimitConfig(), productionAssignments_1.default);
+app.use('/assignments-optimized', advancedRateLimit_1.apiRateLimits.assignments, securityEnhanced_1.securityManager.getAuthRateLimitConfig(), optimizedAssignments_1.default);
+app.use('/buses', (0, redisCache_1.smartCacheMiddleware)({
+    dataTypeTTL: { 'buses': 600 }
+}), buses_1.default);
+app.use('/routes', (0, redisCache_1.smartCacheMiddleware)({
+    dataTypeTTL: { 'routes': 1800 }
+}), routes_1.default);
+app.use('/storage', advancedRateLimit_1.apiRateLimits.upload, securityEnhanced_1.fileUploadValidator, storage_1.default);
+app.use('/locations', advancedRateLimit_1.apiRateLimits.locations, (0, redisCache_1.smartCacheMiddleware)({
+    dataTypeTTL: { 'locations': 60 }
+}), locations_1.default);
 app.use('/sse', sse_1.default);
+app.use('/monitoring', monitoring_2.default);
+app.get('/cache/stats', redisCache_1.redisCacheStats);
+app.get('/cache/health', redisCache_1.redisCacheHealth);
+app.post('/cache/clear', redisCache_1.redisCacheClear);
+app.get('/memory/stats', memoryOptimization_1.getMemoryStats);
+app.post('/memory/gc', memoryOptimization_1.forceGarbageCollection);
+app.get('/logs/rotation/stats', logRotation_1.getLogRotationStats);
+app.post('/logs/rotation/force', logRotation_1.forceLogRotation);
+app.get('/dead-code/detect', deadCodeDetector_1.detectDeadCode);
+app.get('/dead-code/report', deadCodeDetector_1.getDeadCodeReport);
 app.get('/', (req, res) => {
     res.json({
         message: 'University Bus Tracking System API',
@@ -51,6 +168,8 @@ app.get('/', (req, res) => {
             health: '/health',
             healthDetailed: '/health/detailed',
             admin: '/admin',
+            assignments: '/assignments',
+            productionAssignments: '/production-assignments',
             buses: '/buses',
             routes: '/routes',
             storage: '/storage',
@@ -59,82 +178,115 @@ app.get('/', (req, res) => {
         },
     });
 });
-app.use('*', (req, res) => {
-    res.status(404).json({
-        error: 'Route not found',
-        path: req.originalUrl,
-        availableEndpoints: [
-            '/',
-            '/health',
-            '/health/detailed',
-            '/buses',
-            '/routes',
-            '/admin',
-            '/storage',
-            '/locations',
-            '/sse',
-        ],
-    });
-});
-app.use((err, req, res, _next) => {
-    console.error('Error:', err);
-    res.status(500).json({
-        error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development'
-            ? err.message
-            : 'Something went wrong',
-        timestamp: new Date().toISOString(),
-    });
-});
+app.use(monitoring_1.errorMonitoring);
+app.use(errorHandler_1.globalErrorHandler);
+app.use(errorHandler_1.notFoundHandler);
 const startServer = async () => {
     try {
-        console.log('🚀 Starting University Bus Tracking System...');
-        console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.log(`🔧 Port: ${PORT}`);
-        console.log('🔄 Initializing database...');
-        await (0, database_1.initializeDatabase)();
-        await (0, database_1.testDatabaseConnection)();
-        console.log('🔄 Initializing WebSocket server...');
+        logger_1.logger.info('🚀 Starting University Bus Tracking System Backend...', 'server');
+        logger_1.logger.info('🔧 Validating environment variables...', 'server');
+        try {
+            (0, envValidation_1.validateEnvironment)();
+            logger_1.logger.info('✅ Environment variables validated', 'server');
+        }
+        catch (envError) {
+            logger_1.logger.error('❌ Environment validation failed:', 'server', { error: envError.message });
+            logger_1.logger.error('💡 Please check your .env file and ensure all required variables are set', 'server');
+            throw envError;
+        }
+        logger_1.logger.info('🔴 Initializing Redis cache...', 'server');
+        try {
+            await RedisCacheService_1.redisCache.connect();
+            logger_1.logger.info('✅ Redis cache initialized successfully', 'server');
+        }
+        catch (redisError) {
+            logger_1.logger.error('❌ Redis cache initialization failed:', 'server', { error: redisError.message });
+            logger_1.logger.warn('💡 Continuing without Redis cache for development...', 'server');
+        }
+        logger_1.logger.info('🗄️ Initializing database connection...', 'server');
+        try {
+            await (0, database_1.initializeDatabase)();
+            logger_1.logger.info('✅ Database initialized successfully', 'server');
+        }
+        catch (dbError) {
+            logger_1.logger.error('❌ Database initialization failed:', 'server', { error: dbError.message });
+            logger_1.logger.warn('💡 Continuing without database connection for development...', 'server');
+        }
+        logger_1.logger.info('🔍 Testing database connection...', 'server');
+        try {
+            await (0, database_1.testDatabaseConnection)();
+            logger_1.logger.databaseConnected();
+            logger_1.logger.info('✅ Database connection test passed', 'server');
+            (0, database_2.startDatabaseMonitoring)();
+            logger_1.logger.info('📊 Database monitoring started', 'server');
+        }
+        catch (dbTestError) {
+            logger_1.logger.warn('⚠️ Database connection test failed:', 'server', { error: dbTestError.message });
+            logger_1.logger.warn('💡 Continuing without database for development...', 'server');
+        }
+        logger_1.logger.info('🔌 Initializing WebSocket server...', 'server');
         (0, websocket_1.initializeWebSocket)(io);
+        WebSocketHealthService_1.webSocketHealth.initialize(io);
+        logger_1.logger.info('📊 WebSocket health monitoring started', 'server');
+        MonitoringService_1.monitoringService.start();
+        logger_1.logger.info('📈 Comprehensive monitoring service started', 'server');
+        performanceGuard_1.performanceGuard.startMonitoring();
+        logger_1.logger.info('🛡️ Performance guard started', 'server');
+        systemValidator_1.systemValidator.startValidation();
+        logger_1.logger.info('🔍 System validator started', 'server');
+        logger_1.logger.info(`🌐 Starting server on port ${PORT}...`, 'server');
         server.listen(PORT, '0.0.0.0', () => {
-            console.log('🎉 Server started successfully!');
-            console.log(`🚀 Server running on port ${PORT}`);
-            console.log(`📊 Health check: http://localhost:${PORT}/health`);
-            console.log(`📊 Detailed health: http://localhost:${PORT}/health/detailed`);
-            console.log(`🌐 API base: http://localhost:${PORT}`);
-            console.log(`🌐 Network access: http://192.168.1.2:${PORT}`);
-            console.log(`🔌 WebSocket server ready on ws://localhost:${PORT}`);
-            console.log(`🔌 WebSocket network: ws://192.168.1.2:${PORT}`);
+            logger_1.logger.serverReady(PORT);
+            logger_1.logger.info(`📊 Health check: http://localhost:${PORT}/health`, 'server');
+            logger_1.logger.info(`📈 Detailed health: http://localhost:${PORT}/health/detailed`, 'server');
+            logger_1.logger.info(`🔗 API base: http://localhost:${PORT}`, 'server');
+            logger_1.logger.info(`🌍 Network access: http://0.0.0.0:${PORT}`, 'server');
+            logger_1.logger.info(`🔌 WebSocket server: ws://localhost:${PORT}`, 'server');
+            logger_1.logger.info(`🌐 WebSocket network: ws://0.0.0.0:${PORT}`, 'server');
         });
     }
     catch (error) {
-        console.error('❌ Failed to start server:', error);
-        console.error('💡 Please check your database connection and environment variables');
+        logger_1.logger.error('❌ Failed to start server:', 'server', { error: error.message, stack: error.stack });
         process.exit(1);
     }
 };
 const gracefulShutdown = async (signal) => {
-    console.log(`🛑 ${signal} received, shutting down gracefully...`);
+    logger_1.logger.info(`${signal} received, shutting down gracefully...`, 'server');
     try {
         io.close();
-        console.log('✅ WebSocket connections closed');
+        WebSocketHealthService_1.webSocketHealth.stop();
+        logger_1.logger.info('WebSocket connections closed', 'server');
+        (0, database_2.stopDatabaseMonitoring)();
+        logger_1.logger.info('Database monitoring stopped', 'server');
+        MonitoringService_1.monitoringService.stop();
+        logger_1.logger.info('Monitoring service stopped', 'server');
+        performanceGuard_1.performanceGuard.stopMonitoring();
+        logger_1.logger.info('Performance guard stopped', 'server');
+        systemValidator_1.systemValidator.stopValidation();
+        logger_1.logger.info('System validator stopped', 'server');
+        memoryOptimization_1.memoryOptimizer.stop();
+        logger_1.logger.info('Memory optimizer stopped', 'server');
+        logRotation_1.logRotator.stop();
+        logger_1.logger.info('Log rotator stopped', 'server');
+        await RedisCacheService_1.redisCache.disconnect();
+        logger_1.logger.info('Redis cache connection closed', 'server');
         await (0, database_2.closeDatabasePool)();
-        console.log('✅ Database connections closed');
+        logger_1.logger.info('Database connections closed', 'server');
         process.exit(0);
     }
     catch (error) {
-        console.error('❌ Error during shutdown:', error);
+        logger_1.logger.error('Error during shutdown', 'server', { error: String(error) });
         process.exit(1);
     }
 };
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception:', error);
+    logger_1.logger.error('Uncaught Exception', 'server', { error: String(error) });
     gracefulShutdown('Uncaught Exception');
 });
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    logger_1.logger.error('Unhandled Rejection', 'server', { reason: String(reason), promise: String(promise) });
     gracefulShutdown('Unhandled Rejection');
 });
 startServer();

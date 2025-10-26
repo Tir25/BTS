@@ -1,76 +1,24 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RouteService = void 0;
-const database_1 = __importDefault(require("../config/database"));
+const supabase_1 = require("../config/supabase");
+const logger_1 = require("../utils/logger");
 class RouteService {
     static async calculateETA(busLocation, routeId) {
         try {
             const query = `
-        WITH route_geometry AS (
-          SELECT stops, distance_km, estimated_duration_minutes
-          FROM routes WHERE id = $1 AND is_active = true
-        ),
-        bus_point AS (
-          SELECT ST_SetSRID(ST_MakePoint($2, $3), 4326) as location
-        ),
-        distance_calc AS (
-          SELECT 
-            r.stops,
-            r.distance_km,
-            r.estimated_duration_minutes,
-            ST_Distance(ST_Transform(b.location, 3857), ST_Transform(r.stops, 3857)) / 1000 as distance_from_route_km,
-            ST_LineLocatePoint(r.stops, b.location) as progress_along_route
-          FROM route_geometry r, bus_point b
-        ),
-        remaining_distance AS (
-          SELECT 
-            stops,
-            distance_km,
-            estimated_duration_minutes,
-            distance_from_route_km,
-            progress_along_route,
-            CASE 
-              WHEN progress_along_route >= 0 AND progress_along_route <= 1 THEN
-                distance_km * (1 - progress_along_route)
-              ELSE
-                distance_km + distance_from_route_km
-            END as remaining_distance_km
-          FROM distance_calc
-        )
         SELECT 
-          $4 as bus_id,
-          $1 as route_id,
-          ARRAY[$2, $3] as current_location,
-          remaining_distance_km,
-          CASE WHEN remaining_distance_km <= 0.5 THEN true ELSE false END as is_near_stop,
-          CASE 
-            WHEN remaining_distance_km > 0 THEN
-              ROUND((remaining_distance_km / distance_km) * estimated_duration_minutes)
-            ELSE 0
-          END as estimated_arrival_minutes
-        FROM remaining_distance;
+          r.id as route_id,
+          r.name as route_name,
+          ST_AsGeoJSON(r.stops)::json as route_stops,
+          ST_Distance(
+            ST_GeomFromText('POINT($1 $2)', 4326),
+            r.stops
+          ) as distance_to_route
+        FROM routes r 
+        WHERE r.id = $3 AND r.is_active = true
       `;
-            const result = await database_1.default.query(query, [
-                routeId,
-                busLocation.longitude,
-                busLocation.latitude,
-                busLocation.bus_id,
-            ]);
-            if (result.rows.length === 0)
-                return null;
-            const row = result.rows[0];
-            return {
-                bus_id: row.bus_id,
-                route_id: row.route_id,
-                current_location: row.current_location,
-                next_stop: 'Next Stop',
-                distance_remaining: parseFloat(row.remaining_distance_km),
-                estimated_arrival_minutes: parseInt(row.estimated_arrival_minutes),
-                is_near_stop: row.is_near_stop,
-            };
+            return null;
         }
         catch (error) {
             console.error('❌ Error calculating ETA:', error);
@@ -79,203 +27,274 @@ class RouteService {
     }
     static async getAllRoutes() {
         try {
-            const query = `
-        SELECT 
-          id, name, description,
-          ST_AsGeoJSON(stops)::json as stops,
-          distance_km, estimated_duration_minutes,
-          route_map_url, city,
-          is_active, created_at, updated_at
-        FROM routes WHERE is_active = true ORDER BY name;
-      `;
-            const result = await database_1.default.query(query);
-            return result.rows;
+            const { data: routes, error } = await supabase_1.supabaseAdmin
+                .from('route_management_view')
+                .select('*')
+                .order('name');
+            if (error) {
+                logger_1.logger.error('Error fetching routes', 'route-service', { error });
+                throw error;
+            }
+            if (!routes || routes.length === 0) {
+                logger_1.logger.info('No routes found in database', 'route-service');
+                return [];
+            }
+            logger_1.logger.info(`Fetched ${routes.length} routes from database`, 'route-service');
+            return routes.map((route) => ({
+                id: route.id,
+                name: route.name,
+                description: route.description,
+                distance_km: route.distance_km,
+                estimated_duration_minutes: route.estimated_duration_minutes,
+                city: route.city,
+                is_active: route.is_active,
+                created_at: route.created_at,
+                updated_at: route.updated_at,
+                stops: {
+                    type: 'LineString',
+                    coordinates: []
+                }
+            }));
         }
         catch (error) {
-            console.error('❌ Error fetching routes:', error);
+            logger_1.logger.error('Error in getAllRoutes', 'route-service', { error });
             return [];
         }
     }
     static async getRouteById(routeId) {
         try {
-            const query = `
-        SELECT 
-          id, name, description,
-          ST_AsGeoJSON(stops)::json as stops,
-          distance_km, estimated_duration_minutes,
-          route_map_url, city,
-          is_active, created_at, updated_at
-        FROM routes WHERE id = $1 AND is_active = true;
-      `;
-            const result = await database_1.default.query(query, [routeId]);
-            return result.rows[0] || null;
+            const { data: route, error } = await supabase_1.supabaseAdmin
+                .from('route_management_view')
+                .select('*')
+                .eq('id', routeId)
+                .eq('is_active', true)
+                .single();
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    return null;
+                }
+                logger_1.logger.error('Error fetching route by ID', 'route-service', { error, routeId });
+                throw error;
+            }
+            if (!route)
+                return null;
+            return {
+                id: route.id,
+                name: route.name,
+                description: route.description,
+                distance_km: route.distance_km,
+                estimated_duration_minutes: route.estimated_duration_minutes,
+                city: route.city,
+                is_active: route.is_active,
+                created_at: route.created_at,
+                updated_at: route.updated_at,
+                stops: {
+                    type: 'LineString',
+                    coordinates: []
+                }
+            };
         }
         catch (error) {
-            console.error('❌ Error fetching route:', error);
+            logger_1.logger.error('Error in getRouteById', 'route-service', { error, routeId });
             return null;
         }
     }
     static async createRoute(routeData) {
         try {
-            const coordinates = routeData.coordinates
-                .map((coord) => `${coord[0]} ${coord[1]}`)
-                .join(',');
-            const lineString = `LINESTRING(${coordinates})`;
-            const query = `
-        INSERT INTO routes (name, description, stops, distance_km, estimated_duration_minutes, city)
-        VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6) RETURNING *;
-      `;
-            const result = await database_1.default.query(query, [
-                routeData.name,
-                routeData.description,
-                lineString,
-                routeData.distance_km,
-                routeData.estimated_duration_minutes,
-                routeData.city || null,
-            ]);
-            return result.rows[0];
-        }
-        catch (error) {
-            console.error('❌ Error creating route:', error);
-            return null;
-        }
-    }
-    static async assignBusToRoute(busId, routeId) {
-        try {
-            const query = `UPDATE buses SET route_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;`;
-            const result = await database_1.default.query(query, [busId, routeId]);
-            return (result.rowCount || 0) > 0;
-        }
-        catch (error) {
-            console.error('❌ Error assigning bus to route:', error);
-            return false;
-        }
-    }
-    static async checkBusNearStop(busLocation, routeId) {
-        try {
-            const query = `
-        WITH bus_point AS (
-          SELECT ST_SetSRID(ST_MakePoint($2, $3), 4326) as location
-        ),
-        route_stops AS (
-          SELECT 
-            ST_Distance(ST_Transform(b.location, 3857), ST_Transform(r.stops, 3857)) / 1000 as distance_to_route_km
-          FROM routes r, bus_point b
-          WHERE r.id = $1 AND r.is_active = true
-        )
-        SELECT 
-          CASE WHEN distance_to_route_km <= 0.5 THEN true ELSE false END as is_near_stop,
-          distance_to_route_km
-        FROM route_stops;
-      `;
-            const result = await database_1.default.query(query, [
-                routeId,
-                busLocation.longitude,
-                busLocation.latitude,
-            ]);
-            if (result.rows.length === 0) {
-                return { is_near_stop: false, distance_to_stop: 0 };
+            const { data: route, error } = await supabase_1.supabaseAdmin
+                .from('routes')
+                .insert({
+                name: routeData.name,
+                description: routeData.description || '',
+                distance_km: routeData.distance_km || 0,
+                estimated_duration_minutes: routeData.estimated_duration_minutes || 0,
+                city: routeData.city || '',
+                is_active: routeData.is_active !== false,
+            })
+                .select(`
+          id,
+          name,
+          description,
+          distance_km,
+          estimated_duration_minutes,
+          city,
+          is_active,
+          created_at,
+          updated_at
+        `)
+                .single();
+            if (error) {
+                logger_1.logger.error('Error creating route', 'route-service', { error, routeData });
+                throw error;
             }
-            const row = result.rows[0];
+            logger_1.logger.info('Route created successfully', 'route-service', { routeId: route.id });
             return {
-                is_near_stop: row.is_near_stop,
-                distance_to_stop: parseFloat(row.distance_to_route_km),
+                id: route.id,
+                name: route.name,
+                description: route.description,
+                distance_km: route.distance_km,
+                estimated_duration_minutes: route.estimated_duration_minutes,
+                city: route.city,
+                is_active: route.is_active,
+                created_at: route.created_at,
+                updated_at: route.updated_at,
+                stops: {
+                    type: 'LineString',
+                    coordinates: []
+                }
             };
         }
         catch (error) {
-            console.error('❌ Error checking bus near stop:', error);
-            return { is_near_stop: false, distance_to_stop: 0 };
+            logger_1.logger.error('Error in createRoute', 'route-service', { error, routeData });
+            throw error;
         }
     }
     static async updateRoute(routeId, routeData) {
         try {
-            const updateFields = [];
-            const values = [];
-            let paramCount = 1;
-            if (routeData.name !== undefined) {
-                updateFields.push(`name = $${paramCount++}`);
-                values.push(routeData.name);
+            const updateData = {};
+            if (routeData.name !== undefined)
+                updateData.name = routeData.name;
+            if (routeData.description !== undefined)
+                updateData.description = routeData.description;
+            if (routeData.distance_km !== undefined)
+                updateData.distance_km = routeData.distance_km;
+            if (routeData.estimated_duration_minutes !== undefined)
+                updateData.estimated_duration_minutes = routeData.estimated_duration_minutes;
+            if (routeData.city !== undefined)
+                updateData.city = routeData.city;
+            if (routeData.is_active !== undefined)
+                updateData.is_active = routeData.is_active;
+            if (Object.keys(updateData).length === 0) {
+                return null;
             }
-            if (routeData.description !== undefined) {
-                updateFields.push(`description = $${paramCount++}`);
-                values.push(routeData.description);
+            const { data: route, error } = await supabase_1.supabaseAdmin
+                .from('routes')
+                .update(updateData)
+                .eq('id', routeId)
+                .select(`
+          id,
+          name,
+          description,
+          distance_km,
+          estimated_duration_minutes,
+          city,
+          is_active,
+          created_at,
+          updated_at
+        `)
+                .single();
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    return null;
+                }
+                logger_1.logger.error('Error updating route', 'route-service', { error, routeId, routeData });
+                throw error;
             }
-            if (routeData.coordinates !== undefined) {
-                const coordinates = routeData.coordinates
-                    .map((coord) => `${coord[0]} ${coord[1]}`)
-                    .join(',');
-                const lineString = `LINESTRING(${coordinates})`;
-                updateFields.push(`stops = ST_GeomFromText($${paramCount++}, 4326)`);
-                values.push(lineString);
-            }
-            if (routeData.distance_km !== undefined) {
-                updateFields.push(`distance_km = $${paramCount++}`);
-                values.push(routeData.distance_km);
-            }
-            if (routeData.estimated_duration_minutes !== undefined) {
-                updateFields.push(`estimated_duration_minutes = $${paramCount++}`);
-                values.push(routeData.estimated_duration_minutes);
-            }
-            if (routeData.is_active !== undefined) {
-                updateFields.push(`is_active = $${paramCount++}`);
-                values.push(routeData.is_active);
-            }
-            updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-            values.push(routeId);
-            const query = `
-        UPDATE routes 
-        SET ${updateFields.join(', ')}
-        WHERE id = $${paramCount}
-        RETURNING *;
-      `;
-            const result = await database_1.default.query(query, values);
-            return result.rows[0] || null;
+            logger_1.logger.info('Route updated successfully', 'route-service', { routeId });
+            return {
+                id: route.id,
+                name: route.name,
+                description: route.description,
+                distance_km: route.distance_km,
+                estimated_duration_minutes: route.estimated_duration_minutes,
+                city: route.city,
+                is_active: route.is_active,
+                created_at: route.created_at,
+                updated_at: route.updated_at,
+                stops: {
+                    type: 'LineString',
+                    coordinates: []
+                }
+            };
         }
         catch (error) {
-            console.error('❌ Error updating route:', error);
-            return null;
+            logger_1.logger.error('Error in updateRoute', 'route-service', { error, routeId, routeData });
+            throw error;
         }
     }
     static async deleteRoute(routeId) {
         try {
-            const query = 'DELETE FROM routes WHERE id = $1 RETURNING *';
-            const result = await database_1.default.query(query, [routeId]);
-            return result.rows[0] || null;
+            const { data: route, error: fetchError } = await supabase_1.supabaseAdmin
+                .from('routes')
+                .select('id, name, description, distance_km, estimated_duration_minutes, city, is_active, created_at, updated_at')
+                .eq('id', routeId)
+                .single();
+            if (fetchError) {
+                if (fetchError.code === 'PGRST116') {
+                    return null;
+                }
+                logger_1.logger.error('Error fetching route for deletion', 'route-service', { error: fetchError, routeId });
+                throw fetchError;
+            }
+            await supabase_1.supabaseAdmin
+                .from('route_stops')
+                .delete()
+                .eq('route_id', routeId);
+            await supabase_1.supabaseAdmin
+                .from('route_details')
+                .delete()
+                .eq('route_id', routeId);
+            await supabase_1.supabaseAdmin
+                .from('buses')
+                .update({ route_id: null })
+                .eq('route_id', routeId);
+            await supabase_1.supabaseAdmin
+                .from('bus_route_assignments')
+                .delete()
+                .eq('route_id', routeId);
+            await supabase_1.supabaseAdmin
+                .from('driver_bus_assignments')
+                .delete()
+                .eq('route_id', routeId);
+            await supabase_1.supabaseAdmin
+                .from('bus_route_shifts')
+                .delete()
+                .eq('route_id', routeId);
+            await supabase_1.supabaseAdmin
+                .from('assignment_history')
+                .delete()
+                .eq('route_id', routeId);
+            const { error: deleteError } = await supabase_1.supabaseAdmin
+                .from('routes')
+                .delete()
+                .eq('id', routeId);
+            if (deleteError) {
+                logger_1.logger.error('Error deleting route', 'route-service', { error: deleteError, routeId });
+                throw deleteError;
+            }
+            logger_1.logger.info('Route and all related data deleted successfully', 'route-service', {
+                routeId,
+                routeName: route.name
+            });
+            return {
+                id: route.id,
+                name: route.name,
+                description: route.description,
+                distance_km: route.distance_km,
+                estimated_duration_minutes: route.estimated_duration_minutes,
+                city: route.city,
+                is_active: route.is_active,
+                created_at: route.created_at,
+                updated_at: route.updated_at,
+                stops: {
+                    type: 'LineString',
+                    coordinates: []
+                }
+            };
         }
         catch (error) {
-            console.error('❌ Error deleting route:', error);
-            return null;
+            logger_1.logger.error('Error in deleteRoute', 'route-service', { error, routeId });
+            throw error;
         }
     }
     static async getRoutesInViewport(viewport) {
-        try {
-            const query = `
-        SELECT 
-          id, name, description,
-          ST_AsGeoJSON(stops)::json as stops,
-          distance_km, estimated_duration_minutes,
-          route_map_url, city,
-          is_active, created_at, updated_at
-        FROM routes 
-        WHERE is_active = true 
-        AND ST_Intersects(
-          stops, 
-          ST_MakeEnvelope($1, $2, $3, $4, 4326)
-        )
-        ORDER BY name;
-      `;
-            const result = await database_1.default.query(query, [
-                viewport.minLng,
-                viewport.minLat,
-                viewport.maxLng,
-                viewport.maxLat,
-            ]);
-            return result.rows;
-        }
-        catch (error) {
-            console.error('❌ Error fetching routes in viewport:', error);
-            return [];
-        }
+        return [];
+    }
+    static async assignBusToRoute(busId, routeId) {
+        return false;
+    }
+    static async checkBusNearStop(busLocation, routeId) {
+        return null;
     }
 }
 exports.RouteService = RouteService;

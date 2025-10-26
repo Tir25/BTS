@@ -5,15 +5,17 @@ import './index.css';
 import { setupConsoleFilter } from './utils/consoleFilter';
 import './utils/apiInterceptor';
 import { QueryProvider } from './providers/QueryProvider';
-import { registerServiceWorker, unregisterAllServiceWorkers, detectBrowserCompatibility } from './utils/serviceWorkerUtils';
+import { serviceWorkerManager } from './services/ServiceWorkerManager';
+import { logger } from './utils/logger';
 
 // Import Service Worker cache clearer for development
 if (import.meta.env.DEV) {
   // Dynamically load the cache clearer script
   const script = document.createElement('script');
   script.src = '/clear-sw-cache.js';
-  script.onload = () => console.log('✅ Service Worker cache clearer loaded');
-  script.onerror = () => console.log('⚠️ Service Worker cache clearer not available');
+  script.onload = () => logger.info('Service Worker cache clearer loaded', 'main');
+  script.onerror = () =>
+    logger.warn('Service Worker cache clearer not available', 'main');
   document.head.appendChild(script);
 }
 
@@ -21,8 +23,8 @@ if (import.meta.env.DEV) {
 setupConsoleFilter();
 
 // Enhanced Service Worker registration with comprehensive security checks
-const browserCompatibility = detectBrowserCompatibility();
-console.log('🔍 Browser compatibility check:', {
+const browserCompatibility = serviceWorkerManager.detectBrowserCompatibility();
+logger.info('Browser compatibility check', 'main', {
   browser: browserCompatibility.browserName,
   supportsServiceWorker: browserCompatibility.supportsServiceWorker,
   isSecureContext: browserCompatibility.isSecureContext,
@@ -34,18 +36,26 @@ if (import.meta.env.PROD) {
   // Production: Register Service Worker with enhanced security checks
   window.addEventListener('load', async () => {
     try {
-      await registerServiceWorker('/sw.js');
+      await serviceWorkerManager.registerServiceWorker('/sw.js');
     } catch (error) {
-      console.warn('⚠️ Service Worker registration failed in production:', error);
+      logger.warn(
+        'Service Worker registration failed in production',
+        'main',
+        { error: String(error) }
+      );
     }
   });
 } else if (import.meta.env.DEV) {
   // Development: Unregister any existing service workers
   window.addEventListener('load', async () => {
     try {
-      await unregisterAllServiceWorkers();
+      await serviceWorkerManager.unregisterAllServiceWorkers();
     } catch (error) {
-      console.warn('⚠️ Failed to unregister Service Workers in development:', error);
+      logger.warn(
+        'Failed to unregister Service Workers in development',
+        'main',
+        { error: String(error) }
+      );
     }
   });
 }
@@ -62,7 +72,8 @@ document.head.appendChild(preconnectLink);
 // Using a direct link element with font-display: swap to prevent FOIT
 const fontLink = document.createElement('link');
 fontLink.rel = 'stylesheet';
-fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap&font-display=swap';
+fontLink.href =
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap&font-display=swap';
 document.head.appendChild(fontLink);
 
 // Ensure proper rendering

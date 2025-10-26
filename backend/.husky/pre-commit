@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# ESLint Configuration Validation
+echo "🔍 Validating ESLint configuration..."
+node scripts/validate-eslint-config.js
+
+# Run ESLint with auto-fix
+echo "🔧 Running ESLint with auto-fix..."
+npm run lint:fix
+
+# Check if there are any remaining linting issues
+echo "🧪 Checking for remaining linting issues..."
+npm run lint:check
+
+# Run Prettier
+echo "💅 Running Prettier..."
+npm run format
+
+# Type check
+echo "🔍 Running TypeScript type check..."
+npm run build

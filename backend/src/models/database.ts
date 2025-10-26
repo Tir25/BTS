@@ -1,4 +1,6 @@
 import pool, { checkDatabaseHealth } from '../config/database';
+import { logger } from '../utils/logger';
+import MigrationRunner from '../utils/migrationRunner';
 
 // PostGIS Geometry Types
 export interface PostGISPoint {
@@ -143,7 +145,7 @@ export interface DatabaseLiveLocation {
 
 export interface DatabaseBusLocationLive {
   bus_id: string;
-  geom: any; // PostGIS geometry
+  geom: PostGISGeometry;
   lat: number;
   lng: number;
   speed_kmh?: number;
@@ -155,7 +157,7 @@ export interface DatabaseBusLocationLive {
 export interface DatabaseBusLocationHistory {
   id: string;
   bus_id: string;
-  geom: any; // PostGIS geometry
+  geom: PostGISGeometry;
   speed_kmh?: number;
   heading?: number;
   recorded_at: string;
@@ -166,7 +168,7 @@ export interface DatabaseBusStop {
   route_id: string;
   name: string;
   description?: string;
-  location: any; // PostGIS geometry
+  location: PostGISGeometry;
   stop_order: number;
   estimated_time_from_start?: number;
   is_active: boolean;
@@ -178,7 +180,7 @@ export interface DatabaseRouteStop {
   id: string;
   route_id: string;
   name: string;
-  geom: any; // PostGIS geometry
+  geom: PostGISGeometry;
   seq: number;
 }
 
@@ -199,7 +201,7 @@ export interface DatabaseDestination {
   address: string;
   latitude: number;
   longitude: number;
-  location: any; // PostGIS geometry
+  location: PostGISGeometry;
   is_default: boolean;
   is_active: boolean;
   created_at?: string;
@@ -210,7 +212,7 @@ export interface DatabaseDefaultDestination {
   id: string;
   name: string;
   description?: string;
-  location: any; // PostGIS geometry
+  location: PostGISGeometry;
   address?: string;
   is_active: boolean;
   created_at?: string;
@@ -220,7 +222,7 @@ export interface DatabaseDefaultDestination {
 export interface DatabaseSystemConstant {
   id: number;
   constant_name: string;
-  constant_value: any; // JSONB
+  constant_value: JSONB;
   description?: string;
   created_at?: string;
   updated_at?: string;
@@ -229,66 +231,26 @@ export interface DatabaseSystemConstant {
 // Database schema initialization with enhanced error handling
 export const initializeDatabase = async (): Promise<void> => {
   try {
-    console.log('🔄 Initializing database schema...');
+    logger.info('Initializing database schema...', 'database');
 
     // First, ensure database connection is established
     await checkDatabaseHealth();
 
-    // Enable PostGIS extension
+    // Run database migrations
+    const migrationRunner = MigrationRunner.getInstance();
+    
     try {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS postgis;');
-      console.log('✅ PostGIS extension enabled');
-    } catch (error) {
-      console.warn(
-        '⚠️ PostGIS extension may already be enabled or not available:',
-        error
-      );
+      await migrationRunner.runMigrations();
+      logger.info('Database migrations completed successfully', 'database');
+    } catch (migrationError) {
+      logger.error('Database migrations failed', 'database', { error: String(migrationError) });
+      // Don't throw here - let the application continue with existing schema
+      logger.warn('Continuing with existing database schema...', 'database');
     }
 
-    // Note: The actual tables are managed by Supabase, so we only create indexes
-    // and perform any necessary migrations here
-
-    // Create indexes for better performance
-    try {
-      await pool.query(`
-        CREATE INDEX IF NOT EXISTS idx_live_locations_bus_id ON live_locations(bus_id);
-        CREATE INDEX IF NOT EXISTS idx_live_locations_recorded_at ON live_locations(recorded_at);
-        CREATE INDEX IF NOT EXISTS idx_live_locations_location ON live_locations USING GIST(location);
-        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-        CREATE INDEX IF NOT EXISTS idx_buses_number_plate ON buses(number_plate);
-        CREATE INDEX IF NOT EXISTS idx_buses_code ON buses(code);
-        CREATE INDEX IF NOT EXISTS idx_routes_name ON routes(name);
-        CREATE INDEX IF NOT EXISTS idx_routes_is_active ON routes(is_active);
-        CREATE INDEX IF NOT EXISTS idx_bus_stops_route_id ON bus_stops(route_id);
-        CREATE INDEX IF NOT EXISTS idx_bus_stops_location ON bus_stops USING GIST(location);
-        CREATE INDEX IF NOT EXISTS idx_driver_bus_assignments_driver_id ON driver_bus_assignments(driver_id);
-        CREATE INDEX IF NOT EXISTS idx_driver_bus_assignments_bus_id ON driver_bus_assignments(bus_id);
-        CREATE INDEX IF NOT EXISTS idx_driver_bus_assignments_route_id ON driver_bus_assignments(route_id);
-      `);
-
-      // Create routes stops index separately to handle potential issues
-      try {
-        await pool.query(
-          `CREATE INDEX IF NOT EXISTS idx_routes_stops ON routes USING GIST(stops);`
-        );
-        await pool.query(
-          `CREATE INDEX IF NOT EXISTS idx_routes_geom ON routes USING GIST(geom);`
-        );
-      } catch (indexError) {
-        console.warn(
-          '⚠️ Could not create routes geometry indexes:',
-          indexError
-        );
-      }
-
-      console.log('✅ Database indexes created');
-    } catch (indexError) {
-      console.warn('⚠️ Some indexes could not be created:', indexError);
-    }
-
-    console.log('🎉 Database initialization completed successfully');
+    logger.info('Database initialization completed successfully', 'database');
   } catch (error) {
-    console.error('❌ Database initialization failed:', error);
+    logger.error('Database initialization failed', 'database', { error: String(error) });
     throw error;
   }
 };
@@ -300,7 +262,7 @@ export const testDatabaseConnection = async (): Promise<void> => {
 
     if (health.healthy) {
       // Database connection test successful
-      console.log('✅ Database connection test successful');
+      logger.info('Database connection test successful', 'database');
     } else {
       const errorMessage = health.error;
       throw new Error(
@@ -310,7 +272,7 @@ export const testDatabaseConnection = async (): Promise<void> => {
       );
     }
   } catch (error) {
-    console.error('❌ Database connection test failed:', error);
+    logger.error('Database connection test failed', 'database', { error: String(error) });
     throw error;
   }
 };
@@ -335,7 +297,7 @@ export const tableExists = async (tableName: string): Promise<boolean> => {
     );
     return result.rows[0].exists;
   } catch (error) {
-    console.error(`❌ Error checking if table ${tableName} exists:`, error);
+    logger.error(`Error checking if table ${tableName} exists`, 'database', { error: String(error) });
     return false;
   }
 };
@@ -355,7 +317,7 @@ export const getTableColumns = async (tableName: string): Promise<string[]> => {
     );
     return result.rows.map((row) => row.column_name);
   } catch (error) {
-    console.error(`❌ Error getting columns for table ${tableName}:`, error);
+    logger.error(`Error getting columns for table ${tableName}`, 'database', { error: String(error) });
     return [];
   }
 };

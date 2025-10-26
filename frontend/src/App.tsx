@@ -3,24 +3,25 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useAuthStore } from './stores/useAuthStore';
 import { useHealthCheck } from './hooks/useApiQueries';
 import { authService } from './services/authService';
-import DriverInterface from './components/DriverInterface';
-import DriverLogin from './components/DriverLogin';
-import DriverDashboard from './components/DriverDashboard';
-// Lazy load the enhanced student map for better performance
-const EnhancedStudentMap = React.lazy(() => import('./components/EnhancedStudentMap'));
-import AdminDashboard from './components/AdminDashboard';
-import AdminLogin from './components/AdminLogin';
-import PremiumHomepage from './components/PremiumHomepage';
+// Lazy load components for better performance
+const UnifiedDriverInterface = React.lazy(() => import('./components/UnifiedDriverInterface'));
+const DriverLogin = React.lazy(() => import('./components/DriverLogin'));
+const StudentMap = React.lazy(() => import('./components/StudentMap'));
+const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
+const AdminLogin = React.lazy(() => import('./components/AdminLogin'));
+const PremiumHomepage = React.lazy(() => import('./components/PremiumHomepage'));
 import {
   TransitionProvider,
   GlobalTransitionWrapper,
 } from './components/transitions';
 
 // Import error handling components
-import { ErrorBoundary, NetworkStatus } from './components/error';
+import { ErrorBoundary } from './components/error/ErrorBoundary';
+import NotificationContainer from './components/NotificationContainer';
+import { logger } from './utils/logger';
 
 function App() {
-  console.log('🚀 App component is rendering...');
+  logger.componentMount('App');
 
   // Zustand auth store
   const {
@@ -32,21 +33,29 @@ function App() {
   } = useAuthStore();
 
   // React Query health check
-  const { data: health, isLoading: healthLoading, error: healthError } = useHealthCheck();
+  const {
+    data: health,
+    isLoading: healthLoading,
+    error: healthError,
+  } = useHealthCheck();
 
   // Global auth state listener
   useEffect(() => {
     const updateAuthState = () => {
       const currentUser = authService.getCurrentUser();
 
-      setUser(currentUser ? {
-        id: currentUser.id,
-        email: currentUser.email || '',
-        role: 'student' as const,
-        created_at: currentUser.created_at,
-        updated_at: currentUser.updated_at,
-      } : null);
-      
+      setUser(
+        currentUser
+          ? {
+              id: currentUser.id,
+              email: currentUser.email || '',
+              role: 'student' as const,
+              created_at: currentUser.created_at,
+              updated_at: currentUser.updated_at,
+            }
+          : null
+      );
+
       setLoading(false);
     };
 
@@ -151,47 +160,147 @@ function App() {
   return (
     <ErrorBoundary>
       <Router>
-        <NetworkStatus onNetworkChange={(isOnline) => {
-          console.log(`🌐 Network status changed: ${isOnline ? 'Online' : 'Offline'}`);
-        }} />
         <TransitionProvider>
           <GlobalTransitionWrapper>
             <Routes>
               {/* Homepage Routes */}
-              <Route path="/" element={<PremiumHomepage />} />
-              <Route path="/legacy" element={<LegacyHomePage />} />
-
-              {/* Driver Routes */}
-              <Route path="/driver-login" element={<DriverLogin />} />
-              <Route path="/driver-dashboard" element={<DriverDashboard />} />
-              <Route path="/driver-interface" element={<DriverInterface />} />
-
-              {/* Student Routes */}
               <Route 
-                path="/student-map" 
+                path="/" 
                 element={
                   <Suspense fallback={
                     <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
                       <div className="text-center">
                         <div className="loading-spinner mx-auto mb-4" />
-                        <p className="text-white text-lg">Loading Student Map...</p>
+                        <p className="text-white text-lg">Loading Homepage...</p>
                       </div>
                     </div>
                   }>
-                    <EnhancedStudentMap />
+                    <PremiumHomepage />
+                  </Suspense>
+                } 
+              />
+              <Route path="/legacy" element={<LegacyHomePage />} />
+
+              {/* Driver Routes */}
+              <Route 
+                path="/driver-login" 
+                element={
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                      <div className="text-center">
+                        <div className="loading-spinner mx-auto mb-4" />
+                        <p className="text-white text-lg">Loading Driver Login...</p>
+                      </div>
+                    </div>
+                  }>
+                    <DriverLogin />
+                  </Suspense>
+                } 
+              />
+              <Route 
+                path="/driver-dashboard" 
+                element={
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                      <div className="text-center">
+                        <div className="loading-spinner mx-auto mb-4" />
+                        <p className="text-white text-lg">Loading Driver Dashboard...</p>
+                      </div>
+                    </div>
+                  }>
+                    <UnifiedDriverInterface />
+                  </Suspense>
+                } 
+              />
+              <Route 
+                path="/driver-interface" 
+                element={
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                      <div className="text-center">
+                        <div className="loading-spinner mx-auto mb-4" />
+                        <p className="text-white text-lg">Loading Driver Interface...</p>
+                      </div>
+                    </div>
+                  }>
+                    <UnifiedDriverInterface />
                   </Suspense>
                 } 
               />
 
+              {/* Student Routes */}
+              <Route
+                path="/student-map"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                        <div className="text-center">
+                          <div className="loading-spinner mx-auto mb-4" />
+                          <p className="text-white text-lg">
+                            Loading Student Map...
+                          </p>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <StudentMap />
+                  </Suspense>
+                }
+              />
+
               {/* Admin Routes */}
-              <Route path="/admin-login" element={<AdminLogin />} />
-              <Route path="/admin-dashboard" element={<AdminDashboard />} />
+              <Route 
+                path="/admin-login" 
+                element={
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                      <div className="text-center">
+                        <div className="loading-spinner mx-auto mb-4" />
+                        <p className="text-white text-lg">Loading Admin Login...</p>
+                      </div>
+                    </div>
+                  }>
+                    <AdminLogin />
+                  </Suspense>
+                } 
+              />
+              <Route 
+                path="/admin-dashboard" 
+                element={
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                      <div className="text-center">
+                        <div className="loading-spinner mx-auto mb-4" />
+                        <p className="text-white text-lg">Loading Admin Dashboard...</p>
+                      </div>
+                    </div>
+                  }>
+                    <AdminDashboard />
+                  </Suspense>
+                } 
+              />
 
               {/* Fallback */}
-              <Route path="*" element={<PremiumHomepage />} />
+              <Route 
+                path="*" 
+                element={
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                      <div className="text-center">
+                        <div className="loading-spinner mx-auto mb-4" />
+                        <p className="text-white text-lg">Loading...</p>
+                      </div>
+                    </div>
+                  }>
+                    <PremiumHomepage />
+                  </Suspense>
+                } 
+              />
             </Routes>
           </GlobalTransitionWrapper>
         </TransitionProvider>
+        <NotificationContainer />
       </Router>
     </ErrorBoundary>
   );

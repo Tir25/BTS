@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../config/supabase';
+import { UnifiedDatabaseService } from './UnifiedDatabaseService';
 
 interface LocationData {
   driverId: string;
@@ -85,8 +86,8 @@ export const getDriverBusInfo = async (
     // First, get the bus information without route join
     const { data: busData, error: busError } = await supabaseAdmin
       .from('buses')
-      .select('id, number_plate, route_id')
-      .eq('assigned_driver_id', driverId)
+      .select('id, bus_number, vehicle_no, route_id')
+      .eq('assigned_driver_profile_id', driverId)
       .eq('is_active', true)
       .limit(1)
       .maybeSingle();
@@ -102,9 +103,9 @@ export const getDriverBusInfo = async (
     // Then, get the driver profile information from both tables
     let driverName = 'Unknown Driver';
 
-    // First try profiles table
+    // First try user_profiles table
     const { data: profileData } = await supabaseAdmin
-      .from('profiles')
+      .from('user_profiles')
       .select('full_name')
       .eq('id', driverId)
       .maybeSingle();
@@ -147,7 +148,7 @@ export const getDriverBusInfo = async (
 
     const busInfo = {
       bus_id: busData.id,
-      bus_number: busData.number_plate || '',
+      bus_number: busData.bus_number || busData.vehicle_no || '',
       route_id: busData.route_id || '',
       route_name: routeName,
       driver_id: driverId,
@@ -277,54 +278,3 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
   }
 };
 
-export const getAllBuses = async (): Promise<BusInfo[]> => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('buses')
-      .select(
-        `
-        id,
-        number_plate,
-        route_id,
-        assigned_driver_id,
-        bus_image_url,
-        routes!inner(
-          name,
-          city
-        ),
-        profiles!inner(
-          full_name
-        )
-      `
-      )
-      .eq('is_active', true);
-
-    if (error) {
-      console.error('❌ Error fetching all buses:', error);
-      return [];
-    }
-
-    return (data || []).map((item) => {
-      const routeData = Array.isArray(item.routes)
-        ? item.routes[0]
-        : item.routes;
-      const profileData = Array.isArray(item.profiles)
-        ? item.profiles[0]
-        : item.profiles;
-
-      return {
-        bus_id: item.id,
-        bus_number: item.number_plate || '',
-        route_id: item.route_id || '',
-        route_name: routeData?.name || '',
-        route_city: routeData?.city || '',
-        driver_id: item.assigned_driver_id || '',
-        driver_name: profileData?.full_name || 'Unknown Driver',
-        bus_image_url: item.bus_image_url || null,
-      };
-    });
-  } catch (error) {
-    console.error('❌ Error in getAllBuses:', error);
-    return [];
-  }
-};

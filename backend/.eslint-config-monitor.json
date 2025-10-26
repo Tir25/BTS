@@ -1,0 +1,17 @@
+{
+  "lastCheck": "2025-10-25T11:56:42.970Z",
+  "configHash": "e2f8e719e17f49ae7d0cb1ed4c270654",
+  "violations": {
+    "errors": 18,
+    "warnings": 351,
+    "total": 369
+  },
+  "dependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.6.2"
+  }
+}

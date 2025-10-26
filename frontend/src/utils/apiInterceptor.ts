@@ -1,6 +1,8 @@
 import { authService } from '../services/authService';
 import { environment } from '../config/environment';
 
+import { logger } from '../utils/logger';
+
 // Global fetch interceptor to add authorization headers
 const originalFetch = window.fetch;
 
@@ -8,20 +10,18 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
   // Only add auth headers for your API requests
   if (
     typeof input === 'string' &&
-    (input.includes(environment.api.url) || input.includes('localhost'))
+    (input.includes(environment.api.baseUrl) || input.includes('localhost'))
   ) {
     try {
       let token = authService.getAccessToken();
 
       // If no token, only try to refresh if user is authenticated
       if (!token && authService.isAuthenticated()) {
-        console.log(
-          '🔄 No token found but user is authenticated, attempting to refresh session...'
-        );
+        logger.info('🔄 No token found but user is authenticated, attempting to refresh session...', 'component');
         const refreshResult = await authService.refreshSession();
         if (refreshResult.success) {
           token = authService.getAccessToken();
-          console.log('✅ Session refreshed, new token obtained');
+          logger.info('✅ Session refreshed, new token obtained', 'component');
         }
       }
 
@@ -33,7 +33,7 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
         };
       }
     } catch (error) {
-      console.log('🔓 Public access - authentication not available');
+      logger.info('🔓 Public access - authentication not available', 'component');
     }
   }
 

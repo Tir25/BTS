@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../config/supabase';
+import { logger } from '../utils/logger';
 
 // Extend Express Request interface to include user
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: {
@@ -25,10 +27,10 @@ export const authenticateUser = async (
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log(
-        '❌ Missing or invalid Authorization header:',
-        authHeader ? 'Header exists but not Bearer' : 'No header'
-      );
+      logger.auth('Missing or invalid Authorization header', {
+        hasHeader: !!authHeader,
+        headerType: authHeader ? 'not-bearer' : 'none'
+      }, undefined, req);
       res.status(401).json({
         success: false,
         error: 'Authentication required',
@@ -42,7 +44,7 @@ export const authenticateUser = async (
 
     // Validate token format
     if (!token || token.length < 10) {
-      console.log('❌ Invalid token format');
+      logger.auth('Invalid token format', { tokenLength: token?.length || 0 }, undefined, req);
       res.status(401).json({
         success: false,
         error: 'Invalid token format',
@@ -59,10 +61,9 @@ export const authenticateUser = async (
     } = await supabaseAdmin.auth.getUser(token);
 
     if (error || !user) {
-      console.log(
-        '❌ Token validation failed:',
-        error?.message || 'No user found'
-      );
+      logger.auth('Token validation failed', {
+        error: error?.message || 'No user found'
+      }, error || undefined, req);
       res.status(401).json({
         success: false,
         error: 'Invalid token',
@@ -74,7 +75,7 @@ export const authenticateUser = async (
 
     // Check if user email is verified (optional but recommended)
     if (!user.email_confirmed_at && process.env.NODE_ENV === 'production') {
-      console.log('❌ User email not verified:', user.email);
+      logger.auth('User email not verified', { email: user.email }, undefined, req);
       res.status(401).json({
         success: false,
         error: 'Email not verified',
@@ -85,15 +86,15 @@ export const authenticateUser = async (
       return;
     }
 
-    // Get user profile from profiles table
+    // Get user profile from user_profiles table
     const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
+      .from('user_profiles')
       .select('id, full_name, role')
       .eq('id', user.id)
       .single();
 
     if (profileError || !profile) {
-      console.log('⚠️ User profile not found for:', user.email);
+      logger.auth('User profile not found', { email: user.email }, profileError, req);
 
       // SECURITY FIX: Don't automatically assign admin role
       // Users without profiles should be denied access
@@ -106,19 +107,31 @@ export const authenticateUser = async (
       return;
     }
 
-    // Check if this is a known admin user - prioritize admin email over database role
+    // SECURITY FIX: Remove hardcoded admin email and use environment variables only
     const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(
       (email: string) => email.trim().toLowerCase()
-    ) || [
-      'siddharthmali.211@gmail.com', // Keep this as fallback for development
-    ];
+    ) || [];
+
+    if (adminEmails.length === 0) {
+      logger.error('ADMIN_EMAILS environment variable is required', 'auth', undefined, undefined, req);
+      res.status(500).json({
+        success: false,
+        error: 'Server configuration error',
+        message: 'Admin configuration is missing. Please contact administrator.',
+        code: 'CONFIG_ERROR',
+      });
+      return;
+    }
 
     const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
     const role = isAdmin ? 'admin' : profile.role;
 
-    console.log(
-      `🔍 Backend Auth - User ${user.email} - Database role: ${profile.role}, Admin check: ${isAdmin}, Final role: ${role}`
-    );
+    logger.auth('User authentication successful', {
+      email: user.email,
+      databaseRole: profile.role,
+      isAdmin,
+      finalRole: role
+    }, undefined, req);
 
     // Attach user data to request
     req.user = {
@@ -130,14 +143,9 @@ export const authenticateUser = async (
 
     next();
   } catch (error) {
-    console.error('❌ Authentication error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Authentication failed',
-      message: 'Internal server error during authentication',
-      code: 'AUTH_ERROR',
-    });
-    return;
+    logger.error('Authentication error', 'auth', undefined, error as Error, req);
+    // SECURITY FIX: Proper error propagation for async middleware
+    next(error);
   }
 };
 
@@ -214,7 +222,7 @@ export const optionalAuth = async (
 
     // Token is valid, get user profile
     const { data: profile } = await supabaseAdmin
-      .from('profiles')
+      .from('user_profiles')
       .select('id, full_name, role')
       .eq('id', user.id)
       .single();
@@ -222,7 +230,7 @@ export const optionalAuth = async (
     if (profile) {
       const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(
         (email: string) => email.trim().toLowerCase()
-      ) || ['siddharthmali.211@gmail.com'];
+      ) || [];
 
       const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
       const role = isAdmin ? 'admin' : profile.role;
@@ -238,7 +246,7 @@ export const optionalAuth = async (
     next();
   } catch (error) {
     // Error occurred, continue without authentication
-    console.warn('⚠️ Optional auth error:', error);
+    logger.warn('Optional auth error', 'auth', { error: String(error) }, req);
     next();
   }
 };

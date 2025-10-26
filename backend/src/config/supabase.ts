@@ -1,13 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
-import initializeEnvironment from './environment';
+import config from './environment';
 
-// Use the centralized environment configuration
-const environment = initializeEnvironment();
+// Use the centralized environment configuration - REMOVED
 
 // Use environment configuration values
-const finalSupabaseUrl = environment.supabase.url;
-const finalSupabaseAnonKey = environment.supabase.anonKey;
-const finalSupabaseServiceRoleKey = environment.supabase.serviceRoleKey;
+const finalSupabaseUrl = config.supabase.url;
+const finalSupabaseAnonKey = config.supabase.anonKey;
+const finalSupabaseServiceRoleKey = config.supabase.serviceRoleKey;
 
 // Client for public operations (frontend use)
 export const supabase = createClient(finalSupabaseUrl, finalSupabaseAnonKey);

@@ -44,7 +44,7 @@ export const TransitionProvider: React.FC<TransitionProviderProps> = ({
     ) {
       setCurrentTransition('homepage-to-login');
     } else if (
-      pathname.includes('student') || 
+      pathname.includes('student') ||
       pathname.includes('student-map')
     ) {
       setCurrentTransition('homepage-to-map');

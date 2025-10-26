@@ -32,6 +32,5 @@ export declare const getDriverBusInfo: (driverId: string) => Promise<BusInfo | n
 export declare const getCurrentBusLocations: () => Promise<SavedLocation[]>;
 export declare const getBusLocationHistory: (busId: string, startTime: string, endTime: string) => Promise<SavedLocation[]>;
 export declare const getBusInfo: (busId: string) => Promise<BusInfo | null>;
-export declare const getAllBuses: () => Promise<BusInfo[]>;
 export {};
 //# sourceMappingURL=locationService.d.ts.map

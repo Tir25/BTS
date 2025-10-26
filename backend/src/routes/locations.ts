@@ -5,6 +5,7 @@ import {
   getBusLocationHistory,
   saveLocationUpdate,
 } from '../services/locationService';
+import { optimizedLocationService } from '../services/OptimizedLocationService';
 
 const router = express.Router();
 
@@ -51,13 +52,13 @@ router.get('/viewport', async (req, res) => {
     };
 
     const locations = await getCurrentBusLocations();
-    
+
     // Filter locations within viewport
-    const locationsInViewport = locations.filter(location => {
+    const locationsInViewport = locations.filter((location) => {
       // Parse PostGIS Point format: "POINT(longitude latitude)"
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
       if (!pointMatch) return false;
-      
+
       const [longitude, latitude] = pointMatch[1].split(' ').map(Number);
       return (
         latitude >= viewport.minLat &&
@@ -68,10 +69,12 @@ router.get('/viewport', async (req, res) => {
     });
 
     // Convert to frontend-friendly format
-    const formattedLocations = locationsInViewport.map(location => {
+    const formattedLocations = locationsInViewport.map((location) => {
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
-      const [longitude, latitude] = pointMatch ? pointMatch[1].split(' ').map(Number) : [0, 0];
-      
+      const [longitude, latitude] = pointMatch
+        ? pointMatch[1].split(' ').map(Number)
+        : [0, 0];
+
       return {
         busId: location.bus_id,
         driverId: location.driver_id,

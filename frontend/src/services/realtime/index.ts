@@ -2,7 +2,10 @@
 export { connectionPool } from './ConnectionPool';
 export type { ConnectionStatus, ConnectionConfig } from './ConnectionPool';
 export { supabaseRealtimeService } from './SupabaseRealtimeService';
-export type { RealtimeSubscription, RealtimeConfig } from './SupabaseRealtimeService';
+export type {
+  RealtimeSubscription,
+  RealtimeConfig,
+} from './SupabaseRealtimeService';
 export { sseService } from './SSEService';
 export type { SSEEvent, SSEConfig, SSESubscription } from './SSEService';
 export { realtimeManager } from './RealtimeManager';

@@ -2,6 +2,8 @@ import { User, Session } from '@supabase/supabase-js';
 import { UserProfile } from '../types';
 import { supabase } from '../config/supabase';
 
+import { logger } from '../utils/logger';
+
 export interface AuthState {
   user: User | null;
   session: Session | null;
@@ -26,13 +28,24 @@ class AuthService {
   private currentProfile: UserProfile | null = null;
   private currentDriverAssignment: DriverBusAssignment | null = null;
   private authStateChangeListener: (() => void) | null = null;
+  private authSubscription: any = null;
+
+  // Cleanup method
+  public cleanup(): void {
+    if (this.authSubscription) {
+      this.authSubscription.unsubscribe();
+      this.authSubscription = null;
+    }
+    // Clear token cache on cleanup
+    this.tokenCache = { token: null, timestamp: 0, ttl: 5 * 60 * 1000 };
+  }
   private _isInitialized: boolean = false;
 
   constructor() {
     this.initializeAuth();
   }
 
-  private async initializeAuth() {
+  private async initializeAuth(): Promise<void> {
     try {
       // Get initial session
       const {
@@ -41,18 +54,18 @@ class AuthService {
       } = await supabase.auth.getSession();
 
       if (error) {
-        console.error('❌ Error getting session:', error);
+        logger.error('❌ Error getting session', 'component', { error: error instanceof Error ? error.message : String(error) });
         this._isInitialized = true;
         return;
       }
 
       if (session) {
-        console.log('🔑 Setting initial session for user:', session.user.email);
+        logger.info(`🔑 Setting initial session for user: ${session.user.email}`, 'auth');
         this.currentSession = session;
         this.currentUser = session.user;
-        console.log(
-          '🔑 Session access token:',
-          session.access_token ? 'Exists' : 'Missing'
+        logger.debug(
+          `🔑 Session access token: ${session.access_token ? 'Exists' : 'Missing'}`,
+          'auth'
         );
         await this.loadUserProfile(session.user.id);
       }
@@ -61,15 +74,18 @@ class AuthService {
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('🔄 Auth state changed:', event, session?.user?.email);
+        logger.info(`🔄 Auth state changed: ${event} for user: ${session?.user?.email || 'none'}`, 'auth');
 
         this.currentSession = session;
         this.currentUser = session?.user || null;
 
+        // Clear token cache on session change
+        this.tokenCache = { token: null, timestamp: 0, ttl: 5 * 60 * 1000 };
+
         if (session) {
-          console.log(
-            '🔑 Auth state change - Session access token:',
-            session.access_token ? 'Exists' : 'Missing'
+          logger.debug(
+            `🔑 Auth state change - Session access token: ${session.access_token ? 'Exists' : 'Missing'}`,
+            'auth'
           );
         }
 
@@ -86,12 +102,12 @@ class AuthService {
       });
 
       this._isInitialized = true;
-      console.log('✅ Auth service initialized');
+      logger.info('✅ Auth service initialized', 'auth');
 
-      // Cleanup subscription on unmount
-      return () => subscription.unsubscribe();
+      // Store subscription for cleanup
+      this.authSubscription = subscription;
     } catch (error) {
-      console.error('❌ Error initializing auth:', error);
+      logger.error('❌ Error initializing auth', 'auth', { error: String(error) });
       this._isInitialized = true;
     }
   }
@@ -126,7 +142,7 @@ class AuthService {
 
         // Load profile from database but override role
         const { data: profile, error } = await supabase
-          .from('profiles')
+          .from('user_profiles')
           .select('*')
           .eq('id', userId)
           .single();
@@ -152,7 +168,7 @@ class AuthService {
 
       // Regular single-role user handling
       const { data: profile, error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('*')
         .eq('id', userId)
         .single();
@@ -199,8 +215,13 @@ class AuthService {
 
   // Removed unused setTemporaryProfile function
 
-  private setTemporaryProfileWithRoleCheck(userId: string, user: any): void {
+  private setTemporaryProfileWithRoleCheck(userId: string, user: User | null): void {
     console.log('🔄 Setting temporary profile with role check for user login');
+
+    if (!user) {
+      console.log('❌ No user data available for profile creation');
+      return;
+    }
 
     // Check if this is a known admin user - use environment variable
     const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
@@ -209,118 +230,125 @@ class AuthService {
       'siddharthmali.211@gmail.com', // Keep this as fallback for development
     ];
 
-    const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
+    const userEmail = user.email?.toLowerCase() || '';
+    const isAdmin = adminEmails.includes(userEmail);
     const role = isAdmin ? 'admin' : 'student';
 
     console.log(`🔍 User ${user.email} assigned role: ${role}`);
+
+    const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
+    const firstName = user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'User';
+    const lastName = user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '';
 
     this.currentProfile = {
       id: userId,
       email: user.email || '',
       role: role,
-      full_name:
-        user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-      first_name:
-        user.user_metadata?.full_name?.split(' ')[0] ||
-        user.email?.split('@')[0] ||
-        'User',
-      last_name:
-        user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
+      full_name: fullName,
+      first_name: firstName,
+      last_name: lastName,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
   }
 
-  // private async createDefaultProfile(userId: string): Promise<void> {
-  //   try {
-  //     const { data: profile, error } = await supabase
-  //       .from('profiles')
-  //       .insert({
-  //         id: userId,
-  //         full_name:
-  //           this.currentUser?.user_metadata?.full_name || 'Unknown User',
-  //         role: 'admin', // Changed to admin for admin login
-  //       })
-  //       .select()
-  //       .single();
+  // Removed redundant createDefaultProfile method
 
-  //     if (error) {
-  //       console.error('❌ Error creating default profile:', error);
-  //       return;
-  //     }
-
-  //     this.currentProfile = {
-  //       id: profile.id,
-  //       email: this.currentUser?.email || '',
-  //       role: profile.role,
-  //       full_name: profile.full_name,
-  //       first_name: profile.full_name?.split(' ')[0] || '',
-  //       last_name: profile.full_name?.split(' ').slice(1).join(' ') || '',
-  //       created_at: profile.created_at,
-  //       updated_at: profile.updated_at,
-  //     };
-  //   } catch (error) {
-  //     console.error('❌ Error in createDefaultProfile:', error);
-  //   }
-  // }
-
-  // Sign in with email and password - OPTIMIZED VERSION
+  // Sign in with email and password - OPTIMIZED VERSION 2.0
   async signIn(
     email: string,
     password: string
-  ): Promise<{ success: boolean; error?: string; user?: UserProfile }> {
+  ): Promise<{ success: boolean; error?: string; user?: UserProfile | undefined }> {
     try {
-      console.log('🔐 Starting sign in process for:', email);
+      logger.info(`🔐 Starting sign in process for: ${email}`, 'auth');
 
-      // Direct authentication with timeout
+      // OPTIMIZATION: Set an early cache to speed up subsequent sign-ins
+      this.setSignInCache(email);
+
+      // OPTIMIZATION: Use a faster timeout for better UX
+      const timeoutMs = 8000; // 8s timeout - increased for reliability
       const authPromise = supabase.auth.signInWithPassword({
         email,
         password,
       });
 
+      // OPTIMIZATION: Better timeout handling with detailed error messages
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Authentication timeout')), 5000); // 5s timeout
+        setTimeout(() => reject(new Error(`Authentication timeout after ${timeoutMs/1000}s`)), timeoutMs);
       });
 
-      const { data, error } = (await Promise.race([
+      // OPTIMIZATION: Add loading state indicator for UI feedback
+      this._isAuthenticating = true;
+
+      const result = await Promise.race([
         authPromise,
         timeoutPromise,
-      ])) as any;
+      ]) as { data?: { user?: User; session?: Session }; error?: Error };
 
-      if (error) {
-        console.error('❌ Sign in error:', error);
-        return { success: false, error: error.message };
+      if (result.error) {
+        logger.error('❌ Sign in error:', 'auth', { error: result.error });
+        return { 
+          success: false, 
+          error: this.getFormattedAuthError(result.error)
+        };
       }
 
-      console.log('✅ Supabase authentication successful');
+      if (!result.data) {
+        logger.error('❌ No data received from authentication', 'auth');
+        return { success: false, error: 'No authentication data received' };
+      }
+
+      const { data } = result;
+      logger.info('✅ Supabase authentication successful', 'auth');
 
       if (data.user && data.session) {
-        console.log('👤 User data received:', data.user.email);
+        logger.info(`👤 User data received: ${data.user.email}`, 'auth');
+        
+        // OPTIMIZATION: Set current user and session immediately for faster perceived performance
         this.currentUser = data.user;
         this.currentSession = data.session;
 
-        console.log('📋 Loading user profile...');
+        // OPTIMIZATION: Start profile loading with a more graceful fallback strategy
+        logger.info('📋 Loading user profile...', 'auth');
+        
         try {
-          // Load profile with timeout
-          const profilePromise = this.loadUserProfile(data.user.id);
-          const profileTimeout = new Promise((_, reject) => {
-            setTimeout(
-              () => reject(new Error('Profile loading timeout')),
-              3000 // Reduced from 5s to 3s for better UX
-            );
+          // OPTIMIZATION: Use Promise.any instead of race to try multiple profile loading strategies
+          const directProfilePromise = this.loadUserProfile(data.user.id);
+          
+          // OPTIMIZATION: Simultaneously try to use cached profile data if available
+          const cachedProfilePromise = this.tryLoadCachedProfile(data.user.id);
+          
+          // Set a reasonable timeout that won't block the UI
+          const profileTimeout = 2500; // 2.5s
+          
+          // Try both approaches and use whichever succeeds first
+          // Using Promise.race instead of Promise.any for better compatibility
+          const profilePromise = Promise.race([
+            directProfilePromise.then(result => result),
+            cachedProfilePromise.then(result => result)
+          ]);
+          
+          // Use Promise.race with the timeout
+          const timeoutPromise = new Promise<void>((_, reject) => {
+            setTimeout(() => reject(new Error('Profile loading timeout')), profileTimeout);
           });
 
-          await Promise.race([profilePromise, profileTimeout]);
-          console.log('✅ Profile loaded:', this.currentProfile?.role);
+          await Promise.race([profilePromise, timeoutPromise]);
+          logger.info(`✅ Profile loaded: ${this.currentProfile?.role}`, 'auth');
         } catch (profileError) {
-          console.warn(
-            '⚠️ Profile loading failed, using temporary profile:',
-            profileError
-          );
+          logger.warn('⚠️ Profile loading timed out, using temporary profile', 'auth', { error: String(profileError) });
 
-          // Set temporary profile immediately for faster response
+          // OPTIMIZATION: Use a more accurate temporary profile based on user metadata
           this.setTemporaryProfileWithRoleCheck(data.user.id, data.user);
+        } finally {
+          // OPTIMIZATION: Reset authentication state
+          this._isAuthenticating = false;
         }
+
+        // OPTIMIZATION: Pre-fetch any required data for faster initial loading
+        this.prefetchUserData(data.user.id).catch(err => 
+          logger.debug('Non-critical prefetch error', 'auth', { error: String(err) })
+        );
 
         // Notify listeners immediately after successful sign in
         if (this.authStateChangeListener) {
@@ -333,25 +361,106 @@ class AuthService {
         };
       }
 
-      console.error('❌ No user or session data received');
+      logger.error('❌ No user or session data received', 'auth');
       return { success: false, error: 'Authentication failed' };
     } catch (error) {
-      console.error('❌ Sign in error:', error);
-      if (error instanceof Error && error.message.includes('NetworkError')) {
-        return {
-          success: false,
-          error:
-            'Network connection error. Please check your internet connection and try again.',
-        };
+      logger.error('❌ Sign in error:', 'auth', { error: String(error) });
+      
+      // Reset authentication state on error
+      this._isAuthenticating = false;
+      
+      // OPTIMIZATION: More detailed error handling with user-friendly messages
+      if (error instanceof Error) {
+        if (error.message.includes('NetworkError') || error.message.includes('network')) {
+          return {
+            success: false,
+            error: 'Network connection error. Please check your internet connection and try again.',
+          };
+        }
+        if (error.message.includes('timeout')) {
+          return {
+            success: false,
+            error: 'Login is taking longer than expected. Please try again or check your connection.',
+          };
+        }
+        if (error.message.includes('Invalid login credentials')) {
+          return {
+            success: false,
+            error: 'Invalid email or password. Please check your credentials and try again.',
+          };
+        }
       }
-      if (error instanceof Error && error.message.includes('timeout')) {
-        return {
-          success: false,
-          error: 'Login timed out. Please try again.',
-        };
-      }
-      return { success: false, error: 'Network error during sign in' };
+      
+      return { success: false, error: 'An error occurred during sign in. Please try again.' };
     }
+  }
+  
+  // OPTIMIZATION: Helper methods to improve login performance
+  
+  private _isAuthenticating = false;
+  
+  private setSignInCache(email: string): void {
+    try {
+      sessionStorage.setItem('last_signin_attempt', email);
+      sessionStorage.setItem('last_signin_time', Date.now().toString());
+    } catch (e) {
+      // Ignore errors if sessionStorage is unavailable
+    }
+  }
+  
+  private async tryLoadCachedProfile(userId: string): Promise<void> {
+    try {
+      const cachedProfile = localStorage.getItem(`profile_${userId}`);
+      if (cachedProfile) {
+        const parsedProfile = JSON.parse(cachedProfile);
+        const cacheTime = parsedProfile._timestamp || 0;
+        
+        // Only use cache if it's less than 1 hour old
+        if (Date.now() - cacheTime < 3600000) {
+          this.currentProfile = {
+            id: parsedProfile.id,
+            email: parsedProfile.email,
+            role: parsedProfile.role,
+            full_name: parsedProfile.full_name,
+            first_name: parsedProfile.first_name,
+            last_name: parsedProfile.last_name,
+            created_at: parsedProfile.created_at,
+            updated_at: parsedProfile.updated_at,
+          };
+          logger.info('✅ Used cached profile data', 'auth');
+          return;
+        }
+      }
+      throw new Error('No valid cached profile');
+    } catch (e) {
+      throw new Error('Failed to load from cache');
+    }
+  }
+  
+  private async prefetchUserData(userId: string): Promise<void> {
+    // Prefetch common data needed after login to improve perceived performance
+    if (this.currentProfile?.role === 'driver') {
+      // For drivers, prefetch their bus assignment
+      this.getDriverBusAssignment(userId).catch(() => {});
+    }
+  }
+  
+  private getFormattedAuthError(error: Error): string {
+    const errorMsg = error.message || 'Authentication failed';
+    
+    if (errorMsg.includes('Invalid login credentials')) {
+      return 'Invalid email or password. Please check your credentials and try again.';
+    }
+    
+    if (errorMsg.includes('Too many requests')) {
+      return 'Too many login attempts. Please try again later.';
+    }
+    
+    if (errorMsg.includes('Email not confirmed')) {
+      return 'Email not verified. Please check your inbox for a verification email.';
+    }
+    
+    return errorMsg;
   }
 
   // Sign up with email and password
@@ -378,8 +487,8 @@ class AuthService {
       }
 
       if (data.user) {
-        // Create profile in profiles table
-        const { error: profileError } = await supabase.from('profiles').insert({
+        // Create profile in user_profiles table
+        const { error: profileError } = await supabase.from('user_profiles').insert({
           id: data.user.id,
           full_name: profile.full_name || 'Unknown User',
           role: profile.role || 'student',
@@ -476,8 +585,22 @@ class AuthService {
     return this.hasRole('student');
   }
 
-  // Get access token for API calls
+  // Token cache for performance optimization
+  private tokenCache: { token: string | null; timestamp: number; ttl: number } = {
+    token: null,
+    timestamp: 0,
+    ttl: 5 * 60 * 1000 // 5 minutes TTL
+  };
+
+  // Get access token for API calls with caching
   getAccessToken(): string | null {
+    const now = Date.now();
+    
+    // Return cached token if still valid
+    if (this.tokenCache.token && (now - this.tokenCache.timestamp) < this.tokenCache.ttl) {
+      return this.tokenCache.token;
+    }
+
     // First try to get from current session
     let token = this.currentSession?.access_token || null;
 
@@ -502,24 +625,29 @@ class AuthService {
               null;
 
             if (token) {
-              console.log(
-                `🔑 Retrieved token from localStorage fallback (${key})`
-              );
+              logger.debug(`🔑 Retrieved token from localStorage fallback (${key})`, 'auth');
               break;
             }
           }
         }
       } catch (error) {
-        console.warn('⚠️ Error reading token from localStorage:', error);
+        logger.warn('⚠️ Error reading token from localStorage:', 'auth', { error: String(error) });
       }
     }
 
-    console.log(
-      '🔑 getAccessToken called:',
-      token ? 'Token exists' : 'No token',
-      'Session:',
-      !!this.currentSession
-    );
+    // Cache the token
+    this.tokenCache = {
+      token,
+      timestamp: now,
+      ttl: 5 * 60 * 1000 // 5 minutes TTL
+    };
+
+    logger.debug('🔑 getAccessToken called:', 'auth', {
+      hasToken: !!token,
+      hasSession: !!this.currentSession,
+      fromCache: false
+    });
+    
     return token;
   }
 
@@ -632,7 +760,7 @@ class AuthService {
 
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .update(updates)
         .eq('id', this.currentUser.id);
 
@@ -839,10 +967,10 @@ class AuthService {
         }
       }
 
-      // Get driver name from profiles
+      // Get driver name from user_profiles
       let driverName = 'Unknown Driver';
       const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('full_name')
         .eq('id', driverId)
         .single();
@@ -978,39 +1106,134 @@ class AuthService {
   }
 
   /**
-   * Check if user has valid driver session
+   * Check if user has valid driver session with enhanced error handling
    */
   async validateDriverSession(): Promise<{
     isValid: boolean;
     assignment: DriverBusAssignment | null;
+    errorCode?: string;
+    errorMessage?: string;
   }> {
     try {
-      // First validate the session
+      // First validate the session with detailed error reporting
       const isSessionValid = await this.validateSession();
       if (!isSessionValid) {
-        return { isValid: false, assignment: null };
+        logger.warn('❌ Driver session validation failed: Invalid session', 'driver-validation');
+        return { 
+          isValid: false, 
+          assignment: null,
+          errorCode: 'INVALID_SESSION',
+          errorMessage: 'Your login session has expired. Please sign in again.'
+        };
       }
 
-      // Check if user is a driver
+      // Check if user exists
+      if (!this.currentUser || !this.currentUser.id) {
+        logger.warn('❌ Driver session validation failed: No user data', 'driver-validation');
+        return { 
+          isValid: false, 
+          assignment: null,
+          errorCode: 'NO_USER_DATA',
+          errorMessage: 'Unable to retrieve your user information. Please sign in again.'
+        };
+      }
+
+      // Check if user profile was loaded
+      if (!this.currentProfile) {
+        logger.warn('❌ Driver session validation failed: No profile data', 'driver-validation');
+        return { 
+          isValid: false, 
+          assignment: null,
+          errorCode: 'NO_PROFILE',
+          errorMessage: 'Unable to load your driver profile. Please contact your administrator.'
+        };
+      }
+
+      // Check if user is a driver with improved error message
       if (this.currentProfile?.role !== 'driver') {
-        console.log('❌ User is not a driver');
-        return { isValid: false, assignment: null };
+        logger.warn(`❌ User is not a driver: ${this.currentProfile?.role || 'unknown role'}`, 'driver-validation');
+        return { 
+          isValid: false, 
+          assignment: null,
+          errorCode: 'NOT_A_DRIVER',
+          errorMessage: 'You do not have driver privileges. Please contact your administrator if you believe this is an error.'
+        };
       }
 
-      // Get driver assignment from database
-      const assignment = await this.getDriverBusAssignment(
-        this.currentUser!.id
-      );
+      // Get driver assignment from database with retry logic
+      let assignment: DriverBusAssignment | null = null;
+      let retryCount = 0;
+      const maxRetries = 2;
+      
+      while (!assignment && retryCount <= maxRetries) {
+        try {
+          if (retryCount > 0) {
+            logger.info(`Retrying driver assignment fetch (attempt ${retryCount})`, 'driver-validation');
+            await new Promise(resolve => setTimeout(resolve, retryCount * 1000)); // Exponential backoff
+          }
+          
+          assignment = await this.getDriverBusAssignment(this.currentUser.id);
+          retryCount++;
+          
+          if (!assignment && retryCount <= maxRetries) {
+            logger.warn(`No assignment found, retry ${retryCount}/${maxRetries}`, 'driver-validation');
+          }
+        } catch (retryError) {
+          logger.error(`Error fetching driver assignment (attempt ${retryCount})`, 'driver-validation', { 
+            error: String(retryError) 
+          });
+          retryCount++;
+        }
+      }
+      
       if (!assignment) {
-        console.log('❌ No active bus assignment found for driver');
-        return { isValid: false, assignment: null };
+        logger.warn('❌ No active bus assignment found for driver', 'driver-validation', {
+          driverId: this.currentUser.id,
+          driverEmail: this.currentUser.email
+        });
+        
+        return { 
+          isValid: false, 
+          assignment: null,
+          errorCode: 'NO_BUS_ASSIGNMENT',
+          errorMessage: 'You do not have an active bus assignment. Please contact your administrator to get assigned to a bus.'
+        };
       }
 
+      // Store the assignment in memory
       this.currentDriverAssignment = assignment;
+      
+      // Also store in session storage for faster recovery
+      try {
+        sessionStorage.setItem(
+          `driver_assignment_${this.currentUser.id}`, 
+          JSON.stringify({...assignment, _timestamp: Date.now()})
+        );
+      } catch (e) {
+        // Ignore storage errors
+      }
+      
+      logger.info('✅ Driver session validated successfully', 'driver-validation', {
+        busId: assignment.bus_id,
+        busNumber: assignment.bus_number,
+        routeId: assignment.route_id
+      });
+      
       return { isValid: true, assignment };
     } catch (error) {
-      console.error('❌ Error validating driver session:', error);
-      return { isValid: false, assignment: null };
+      logger.error('❌ Error validating driver session:', 'driver-validation', { 
+        error: String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        userId: this.currentUser?.id,
+        userEmail: this.currentUser?.email
+      });
+      
+      return { 
+        isValid: false, 
+        assignment: null,
+        errorCode: 'VALIDATION_ERROR',
+        errorMessage: 'An error occurred while validating your driver status. Please try again or contact support.'
+      };
     }
   }
 

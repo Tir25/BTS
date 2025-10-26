@@ -1,6 +1,8 @@
 import { supabase } from '../config/supabase';
 import { environment } from '../config/environment';
 
+import { logger } from '../utils/logger';
+
 export interface SupabaseUser {
   id: string;
   email: string;
@@ -22,16 +24,16 @@ export interface DriverProfile {
 }
 
 class SupabaseUserService {
-  // Get all users from profiles table (frontend-safe)
+  // Get all users from user_profiles table (frontend-safe)
   async getAllUsers(): Promise<SupabaseUser[]> {
     try {
       const { data: profiles, error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error fetching profiles:', error);
+        logger.error('Error occurred', 'component', { error });
         throw error;
       }
 
@@ -47,7 +49,7 @@ class SupabaseUserService {
         last_sign_in_at: profile.updated_at,
       }));
     } catch (error) {
-      console.error('❌ Error in getAllUsers:', error);
+      logger.error('Error occurred', 'component', { error });
       throw error;
     }
   }
@@ -55,21 +57,21 @@ class SupabaseUserService {
   // Get users with driver role from profiles table (only unassigned drivers)
   async getDriverUsers(): Promise<DriverProfile[]> {
     try {
-      console.log('🔄 Fetching driver profiles from Supabase...');
+      logger.info('🔄 Fetching driver profiles from Supabase...', 'component');
 
       // First get all drivers
       const { data: allDrivers, error: driversError } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('*')
         .eq('role', 'driver')
         .order('created_at', { ascending: false });
 
       if (driversError) {
-        console.error('❌ Error fetching driver profiles:', driversError);
+        logger.error('Error occurred', 'component', { error: '❌ Error fetching driver profiles:', driversError });
         throw driversError;
       }
 
-      console.log('✅ Found', allDrivers?.length || 0, 'total drivers');
+      logger.info(`✅ Found ${allDrivers?.length || 0} total drivers`, 'component');
 
       // Then get all assigned driver IDs
       const { data: assignedDrivers, error: assignedError } = await supabase
@@ -78,11 +80,11 @@ class SupabaseUserService {
         .not('assigned_driver_id', 'is', null);
 
       if (assignedError) {
-        console.error('❌ Error fetching assigned drivers:', assignedError);
+        logger.error('Error occurred', 'component', { error: '❌ Error fetching assigned drivers:', assignedError });
         throw assignedError;
       }
 
-      console.log('✅ Found', assignedDrivers?.length || 0, 'assigned drivers');
+      logger.info(`✅ Found ${assignedDrivers?.length || 0} assigned drivers`, 'component');
 
       // Filter out assigned drivers
       const assignedDriverIds = new Set(
@@ -91,14 +93,10 @@ class SupabaseUserService {
       const unassignedDrivers =
         allDrivers?.filter((driver) => !assignedDriverIds.has(driver.id)) || [];
 
-      console.log(
-        '✅ Returning',
-        unassignedDrivers.length,
-        'unassigned drivers'
-      );
+      logger.info(`✅ Returning ${unassignedDrivers.length} unassigned drivers`, 'component');
       return unassignedDrivers;
     } catch (error) {
-      console.error('❌ Error in getDriverUsers:', error);
+      logger.error('Error occurred', 'component', { error });
       throw error;
     }
   }
@@ -107,40 +105,40 @@ class SupabaseUserService {
   async getAllDriverUsers(): Promise<DriverProfile[]> {
     try {
       const { data: profiles, error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('*')
         .eq('role', 'driver')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error fetching all driver profiles:', error);
+        logger.error('Error occurred', 'component', { error });
         throw error;
       }
 
       return profiles || [];
     } catch (error) {
-      console.error('❌ Error in getAllDriverUsers:', error);
+      logger.error('Error occurred', 'component', { error });
       throw error;
     }
   }
 
-  // Get users with admin role from profiles table
+  // Get users with admin role from user_profiles table
   async getAdminUsers(): Promise<DriverProfile[]> {
     try {
       const { data: profiles, error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('*')
         .eq('role', 'admin')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error fetching admin profiles:', error);
+        logger.error('Error occurred', 'component', { error });
         throw error;
       }
 
       return profiles || [];
     } catch (error) {
-      console.error('❌ Error in getAdminUsers:', error);
+      logger.error('Error occurred', 'component', { error });
       throw error;
     }
   }
@@ -149,19 +147,19 @@ class SupabaseUserService {
   async getUsersWithProfiles(): Promise<DriverProfile[]> {
     try {
       const { data: profiles, error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('*')
         .in('role', ['admin', 'driver'])
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error fetching users with profiles:', error);
+        logger.error('Error occurred', 'component', { error });
         throw error;
       }
 
       return profiles || [];
     } catch (error) {
-      console.error('❌ Error in getUsersWithProfiles:', error);
+      logger.error('Error occurred', 'component', { error });
       throw error;
     }
   }
@@ -174,7 +172,7 @@ class SupabaseUserService {
   ): Promise<any> {
     try {
       // Instead of using admin functions, call the backend API
-      const response = await fetch(`${environment.api.url}/admin/drivers`, {
+      const response = await fetch(`${environment.api.baseUrl}/admin/drivers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -196,7 +194,7 @@ class SupabaseUserService {
 
       return await response.json();
     } catch (error) {
-      console.error('❌ Error in createUser:', error);
+      logger.error('Error occurred', 'component', { error });
       throw error;
     }
   }
@@ -205,14 +203,17 @@ class SupabaseUserService {
   async updateUserMetadata(userId: string, metadata: any): Promise<any> {
     try {
       // Instead of using admin functions, call the backend API
-      const response = await fetch(`${environment.api.url}/admin/drivers/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.getAccessToken()}`,
-        },
-        body: JSON.stringify(metadata),
-      });
+      const response = await fetch(
+        `${environment.api.baseUrl}/admin/drivers/${userId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.getAccessToken()}`,
+          },
+          body: JSON.stringify(metadata),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -221,7 +222,7 @@ class SupabaseUserService {
 
       return await response.json();
     } catch (error) {
-      console.error('❌ Error in updateUserMetadata:', error);
+      logger.error('Error occurred', 'component', { error });
       throw error;
     }
   }
@@ -252,7 +253,7 @@ class SupabaseUserService {
         }
       }
     } catch (error) {
-      console.warn('⚠️ Error reading token from localStorage:', error);
+      logger.warn('Warning', 'component', { data: '⚠️ Error reading token from localStorage:', error });
     }
 
     return null;

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { adminApiService } from '../services/adminApiService';
 import { authService } from '../services/authService';
-import MediaManagement from './MediaManagement';
-import StreamlinedManagement from './StreamlinedManagement';
+import { logger } from '../utils/logger';
+import UnifiedAdminManagementLazy from './lazy/UnifiedAdminManagementLazy';
 
 interface AnalyticsData {
   totalBuses: number;
@@ -27,43 +27,72 @@ interface SystemHealth {
   timestamp: string;
 }
 
-export default function AdminDashboard() {
+const AdminDashboard = memo(function AdminDashboard() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'analytics' | 'management' | 'media'
+    'overview' | 'analytics' | 'management'
   >('overview');
 
   useEffect(() => {
     loadDashboardData();
   }, []);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (retryCount = 0) => {
     setLoading(true);
     setError(null);
 
     try {
-      const [analyticsResult, healthResult] = await Promise.all([
-        adminApiService.getAnalytics(),
-        adminApiService.getSystemHealth(),
-      ]);
+      // Load data sequentially to avoid rate limiting issues
+      let analyticsResult = null;
+      let healthResult = null;
 
-      if (analyticsResult.success && analyticsResult.data) {
-        setAnalytics(analyticsResult.data);
+      // First try to load analytics
+      try {
+        analyticsResult = await adminApiService.getAnalytics();
+        if (analyticsResult.success && analyticsResult.data) {
+          setAnalytics(analyticsResult.data);
+        }
+      } catch (err) {
+        logger.warn('Warning', 'component', { data: 'Analytics loading failed:', err });
       }
 
-      if (healthResult.success && healthResult.data) {
-        setSystemHealth(healthResult.data);
+      // Wait a bit before loading health data to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Then try to load health data
+      try {
+        healthResult = await adminApiService.getSystemHealth();
+        if (healthResult.success && healthResult.data) {
+          setSystemHealth(healthResult.data);
+        }
+      } catch (err) {
+        logger.warn('Warning', 'component', { data: 'Health data loading failed:', err });
       }
 
-      if (!analyticsResult.success || !healthResult.success) {
-        setError('Failed to load dashboard data');
+      // Check if we have at least some data
+      if (!analyticsResult?.success && !healthResult?.success) {
+        if (retryCount < 2) {
+          // Retry after a delay
+          setTimeout(() => loadDashboardData(retryCount + 1), 2000);
+          return;
+        }
+        setError('Failed to load dashboard data. Please try again.');
+      } else {
+        // Clear any previous errors if we got some data
+        setError(null);
       }
     } catch (err) {
+      logger.error('Error occurred', 'component', { error: 'Dashboard data loading error:', err });
+      if (retryCount < 2) {
+        // Retry after a delay
+        setTimeout(() => loadDashboardData(retryCount + 1), 2000);
+        return;
+      }
       setError('An error occurred while loading dashboard data');
-      console.error('❌ Dashboard data loading error:', err);
+      logger.error('Dashboard data loading error', 'admin-dashboard', { error: String(err) });
     } finally {
       setLoading(false);
     }
@@ -74,7 +103,7 @@ export default function AdminDashboard() {
       await authService.signOut();
       window.location.href = '/';
     } catch (error) {
-      console.error('❌ Sign out error:', error);
+      logger.error('Sign out error', 'admin-dashboard', { error: String(error) });
     }
   };
 
@@ -101,7 +130,7 @@ export default function AdminDashboard() {
             </h3>
             <p className="text-red-200 mb-4">{error}</p>
             <button
-              onClick={loadDashboardData}
+              onClick={() => loadDashboardData()}
               className="btn-primary bg-red-600 hover:bg-red-700"
             >
               Retry
@@ -133,7 +162,7 @@ export default function AdminDashboard() {
                   currentUser?.email}
               </span>
               <button
-                onClick={loadDashboardData}
+                onClick={() => loadDashboardData()}
                 className="btn-primary text-sm"
                 disabled={loading}
               >
@@ -180,16 +209,6 @@ export default function AdminDashboard() {
               }`}
             >
               Management
-            </button>
-            <button
-              onClick={() => setActiveTab('media')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                activeTab === 'media'
-                  ? 'border-blue-400 text-blue-300'
-                  : 'border-transparent text-white/60 hover:text-white/80 hover:border-white/40'
-              }`}
-            >
-              Media
             </button>
           </nav>
         </div>
@@ -512,12 +531,11 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Management Tab - All bus, driver, and route management */}
-        {activeTab === 'management' && <StreamlinedManagement />}
-
-        {/* Media Management Tab */}
-        {activeTab === 'media' && <MediaManagement />}
+        {/* Management Tab - Unified management interface */}
+        {activeTab === 'management' && <UnifiedAdminManagementLazy />}
       </main>
     </div>
   );
-}
+});
+
+export default AdminDashboard;

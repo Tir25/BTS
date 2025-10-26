@@ -92,7 +92,12 @@ export class StorageService {
 
   // Upload image file
   static async uploadImage(
-    file: { mimetype: string; size: number; originalname: string; buffer: Buffer },
+    file: {
+      mimetype: string;
+      size: number;
+      originalname: string;
+      buffer: Buffer;
+    },
     folder: string,
     fileName?: string
   ): Promise<UploadResult> {

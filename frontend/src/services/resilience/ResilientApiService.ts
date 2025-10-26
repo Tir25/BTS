@@ -3,6 +3,7 @@ import { standardBackoff } from './ExponentialBackoff';
 import { offlineStorage } from '../offline/OfflineStorage';
 import { logError } from '../../utils/errorHandler';
 import { environment } from '../../config/environment';
+import { logger } from '../../utils/logger';
 
 export interface ApiRequestConfig {
   endpoint: string;
@@ -27,7 +28,7 @@ class ResilientApiService {
   private defaultTimeout: number = 10000; // 10 seconds
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || environment.api.url;
+    this.baseUrl = baseUrl || environment.api.baseUrl;
   }
 
   // Main request method with full resilience
@@ -50,7 +51,7 @@ class ResilientApiService {
       if (method === 'GET' && useOfflineStorage) {
         const cachedData = await this.getFromOfflineStorage(endpoint);
         if (cachedData) {
-          console.log(`📦 Serving cached data for ${endpoint}`);
+          logger.info('📦 Serving cached data', 'component', { data: endpoint });
           return {
             success: true,
             data: cachedData,
@@ -62,7 +63,15 @@ class ResilientApiService {
 
       // Execute request with circuit breaker and exponential backoff
       const result = await apiCircuitBreaker.execute(
-        () => this.executeRequest<T>(url, method, data, headers, timeout, requestId),
+        () =>
+          this.executeRequest<T>(
+            url,
+            method,
+            data,
+            headers,
+            timeout,
+            requestId
+          ),
         retryOnFailure ? () => this.getFallbackData<T>(endpoint) : undefined
       );
 
@@ -76,19 +85,18 @@ class ResilientApiService {
         data: result,
         timestamp: new Date().toISOString(),
       };
-
     } catch (error) {
       // Log error with context
-      logError(error, {
-        service: 'api',
-        operation: `${method.toLowerCase()}-${endpoint}`,
-      }, 'medium');
+      logError(
+        error,
+        `API request failed for ${method} ${endpoint}`
+      );
 
       // Try to get fallback data from offline storage
       if (useOfflineStorage) {
         const fallbackData = await this.getFromOfflineStorage(endpoint);
         if (fallbackData) {
-          console.log(`📦 Using fallback data for ${endpoint}`);
+          logger.info('📦 Using fallback data', 'component', { data: endpoint });
           return {
             success: true,
             data: fallbackData,
@@ -144,14 +152,14 @@ class ResilientApiService {
       return await response.json();
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           throw new Error('Request timeout');
         }
         throw error;
       }
-      
+
       throw new Error('Unknown error occurred');
     }
   }
@@ -178,33 +186,42 @@ class ResilientApiService {
       const id = this.getStorageId(endpoint);
       return await offlineStorage.getData(dataType, id);
     } catch (error) {
-      console.warn('Failed to get data from offline storage:', error);
+      logger.warn('Warning', 'component', { data: 'Failed to get data from offline storage:', error });
       return null;
     }
   }
 
-  private async storeInOfflineStorage(endpoint: string, data: any): Promise<void> {
+  private async storeInOfflineStorage(
+    endpoint: string,
+    data: any
+  ): Promise<void> {
     try {
       const dataType = this.getDataTypeFromEndpoint(endpoint);
       const id = this.getStorageId(endpoint);
       await offlineStorage.storeData(dataType, id, data);
     } catch (error) {
-      console.warn('Failed to store data in offline storage:', error);
+      logger.warn('Warning', 'component', { data: 'Failed to store data in offline storage:', error });
     }
   }
 
-  private async queueForSync(method: string, endpoint: string, data: any): Promise<void> {
+  private async queueForSync(
+    method: string,
+    endpoint: string,
+    data: any
+  ): Promise<void> {
     try {
-      const operation = method === 'DELETE' ? 'delete' : 
-                      method === 'PUT' ? 'update' : 'create';
+      const operation =
+        method === 'DELETE' ? 'delete' : method === 'PUT' ? 'update' : 'create';
       await offlineStorage.addToSyncQueue(operation, endpoint, data);
     } catch (error) {
-      console.warn('Failed to queue request for sync:', error);
+      logger.warn('Warning', 'component', { data: 'Failed to queue request for sync:', error });
     }
   }
 
   // Helper methods
-  private getDataTypeFromEndpoint(endpoint: string): 'bus' | 'route' | 'location' | 'driver' | 'user' {
+  private getDataTypeFromEndpoint(
+    endpoint: string
+  ): 'bus' | 'route' | 'location' | 'driver' | 'user' {
     if (endpoint.includes('/buses')) return 'bus';
     if (endpoint.includes('/routes')) return 'route';
     if (endpoint.includes('/locations')) return 'location';
@@ -220,7 +237,10 @@ class ResilientApiService {
   }
 
   // Convenience methods for common operations
-  async get<T>(endpoint: string, config?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
+  async get<T>(
+    endpoint: string,
+    config?: Partial<ApiRequestConfig>
+  ): Promise<ApiResponse<T>> {
     return this.request<T>({
       endpoint,
       method: 'GET',
@@ -228,7 +248,11 @@ class ResilientApiService {
     });
   }
 
-  async post<T>(endpoint: string, data: any, config?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
+  async post<T>(
+    endpoint: string,
+    data: any,
+    config?: Partial<ApiRequestConfig>
+  ): Promise<ApiResponse<T>> {
     return this.request<T>({
       endpoint,
       method: 'POST',
@@ -237,7 +261,11 @@ class ResilientApiService {
     });
   }
 
-  async put<T>(endpoint: string, data: any, config?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
+  async put<T>(
+    endpoint: string,
+    data: any,
+    config?: Partial<ApiRequestConfig>
+  ): Promise<ApiResponse<T>> {
     return this.request<T>({
       endpoint,
       method: 'PUT',
@@ -246,7 +274,10 @@ class ResilientApiService {
     });
   }
 
-  async delete<T>(endpoint: string, config?: Partial<ApiRequestConfig>): Promise<ApiResponse<T>> {
+  async delete<T>(
+    endpoint: string,
+    config?: Partial<ApiRequestConfig>
+  ): Promise<ApiResponse<T>> {
     return this.request<T>({
       endpoint,
       method: 'DELETE',
@@ -255,7 +286,9 @@ class ResilientApiService {
   }
 
   // Health check with resilience
-  async healthCheck(): Promise<ApiResponse<{ status: string; timestamp: string }>> {
+  async healthCheck(): Promise<
+    ApiResponse<{ status: string; timestamp: string }>
+  > {
     return this.get('/health', {
       timeout: 5000,
       retryOnFailure: true,

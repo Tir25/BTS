@@ -2,7 +2,7 @@ import rateLimit from 'express-rate-limit';
 
 export const rateLimitMiddleware = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // limit each IP to 100 requests per windowMs
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000'), // Increased to 1000 requests per windowMs for development
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: Math.ceil(
@@ -17,9 +17,12 @@ export const rateLimitMiddleware = rateLimit({
   skip: (req) => {
     // Skip rate limiting for health checks
     if (req.path.startsWith('/health')) return true;
-    // Skip rate limiting in development for certain paths
+    // Skip rate limiting in development for admin endpoints
     if (process.env.NODE_ENV === 'development' && req.path.startsWith('/admin'))
-      return false;
+      return true;
+    // Skip rate limiting for analytics in development
+    if (process.env.NODE_ENV === 'development' && req.path.includes('/analytics'))
+      return true;
     return false;
   },
 });

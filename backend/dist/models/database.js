@@ -32,52 +32,31 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getTableColumns = exports.tableExists = exports.getDatabaseHealth = exports.testDatabaseConnection = exports.initializeDatabase = void 0;
 const database_1 = __importStar(require("../config/database"));
+const logger_1 = require("../utils/logger");
+const migrationRunner_1 = __importDefault(require("../utils/migrationRunner"));
 const initializeDatabase = async () => {
     try {
-        console.log('🔄 Initializing database schema...');
+        logger_1.logger.info('Initializing database schema...', 'database');
         await (0, database_1.checkDatabaseHealth)();
+        const migrationRunner = migrationRunner_1.default.getInstance();
         try {
-            await database_1.default.query('CREATE EXTENSION IF NOT EXISTS postgis;');
-            console.log('✅ PostGIS extension enabled');
+            await migrationRunner.runMigrations();
+            logger_1.logger.info('Database migrations completed successfully', 'database');
         }
-        catch (error) {
-            console.warn('⚠️ PostGIS extension may already be enabled or not available:', error);
+        catch (migrationError) {
+            logger_1.logger.error('Database migrations failed', 'database', { error: String(migrationError) });
+            logger_1.logger.warn('Continuing with existing database schema...', 'database');
         }
-        try {
-            await database_1.default.query(`
-        CREATE INDEX IF NOT EXISTS idx_live_locations_bus_id ON live_locations(bus_id);
-        CREATE INDEX IF NOT EXISTS idx_live_locations_recorded_at ON live_locations(recorded_at);
-        CREATE INDEX IF NOT EXISTS idx_live_locations_location ON live_locations USING GIST(location);
-        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-        CREATE INDEX IF NOT EXISTS idx_buses_number_plate ON buses(number_plate);
-        CREATE INDEX IF NOT EXISTS idx_buses_code ON buses(code);
-        CREATE INDEX IF NOT EXISTS idx_routes_name ON routes(name);
-        CREATE INDEX IF NOT EXISTS idx_routes_is_active ON routes(is_active);
-        CREATE INDEX IF NOT EXISTS idx_bus_stops_route_id ON bus_stops(route_id);
-        CREATE INDEX IF NOT EXISTS idx_bus_stops_location ON bus_stops USING GIST(location);
-        CREATE INDEX IF NOT EXISTS idx_driver_bus_assignments_driver_id ON driver_bus_assignments(driver_id);
-        CREATE INDEX IF NOT EXISTS idx_driver_bus_assignments_bus_id ON driver_bus_assignments(bus_id);
-        CREATE INDEX IF NOT EXISTS idx_driver_bus_assignments_route_id ON driver_bus_assignments(route_id);
-      `);
-            try {
-                await database_1.default.query(`CREATE INDEX IF NOT EXISTS idx_routes_stops ON routes USING GIST(stops);`);
-                await database_1.default.query(`CREATE INDEX IF NOT EXISTS idx_routes_geom ON routes USING GIST(geom);`);
-            }
-            catch (indexError) {
-                console.warn('⚠️ Could not create routes geometry indexes:', indexError);
-            }
-            console.log('✅ Database indexes created');
-        }
-        catch (indexError) {
-            console.warn('⚠️ Some indexes could not be created:', indexError);
-        }
-        console.log('🎉 Database initialization completed successfully');
+        logger_1.logger.info('Database initialization completed successfully', 'database');
     }
     catch (error) {
-        console.error('❌ Database initialization failed:', error);
+        logger_1.logger.error('Database initialization failed', 'database', { error: String(error) });
         throw error;
     }
 };
@@ -86,7 +65,7 @@ const testDatabaseConnection = async () => {
     try {
         const health = await (0, database_1.checkDatabaseHealth)();
         if (health.healthy) {
-            console.log('✅ Database connection test successful');
+            logger_1.logger.info('Database connection test successful', 'database');
         }
         else {
             const errorMessage = health.error;
@@ -96,7 +75,7 @@ const testDatabaseConnection = async () => {
         }
     }
     catch (error) {
-        console.error('❌ Database connection test failed:', error);
+        logger_1.logger.error('Database connection test failed', 'database', { error: String(error) });
         throw error;
     }
 };
@@ -117,7 +96,7 @@ const tableExists = async (tableName) => {
         return result.rows[0].exists;
     }
     catch (error) {
-        console.error(`❌ Error checking if table ${tableName} exists:`, error);
+        logger_1.logger.error(`Error checking if table ${tableName} exists`, 'database', { error: String(error) });
         return false;
     }
 };
@@ -134,7 +113,7 @@ const getTableColumns = async (tableName) => {
         return result.rows.map((row) => row.column_name);
     }
     catch (error) {
-        console.error(`❌ Error getting columns for table ${tableName}:`, error);
+        logger_1.logger.error(`Error getting columns for table ${tableName}`, 'database', { error: String(error) });
         return [];
     }
 };

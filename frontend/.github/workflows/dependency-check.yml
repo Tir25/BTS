@@ -1,0 +1,46 @@
+name: Dependency Health Check
+
+on:
+  schedule:
+    - cron: '0 9 * * 1' # Every Monday at 9 AM
+  workflow_dispatch: # Manual trigger
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.19.0'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run dependency health check
+      run: npm run deps:check
+      
+    - name: Security audit
+      run: npm audit --audit-level=moderate
+      
+    - name: Check for outdated packages
+      run: npm outdated || true
+      
+    - name: Generate dependency report
+      run: npm run deps:report
+      
+    - name: Upload dependency report
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-report
+        path: dependency-report.json

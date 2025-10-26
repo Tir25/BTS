@@ -1,7 +1,10 @@
 import { authService } from './authService';
 import { environment } from '../config/environment';
 
-const API_BASE_URL = environment.api.url;
+import { logger } from '../utils/logger';
+import { parseJsonResponse } from '../utils/jsonUtils';
+
+const API_BASE_URL = environment.api.baseUrl;
 
 interface ApiResponse<T = unknown> {
   success: boolean;
@@ -26,6 +29,10 @@ interface BusData {
   driver_first_name?: string;
   driver_last_name?: string;
   route_name?: string;
+  bus_number?: string;
+  vehicle_no?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface DriverData {
@@ -37,6 +44,10 @@ interface DriverData {
   role: string;
   assigned_bus_id?: string;
   assigned_bus_plate?: string;
+  is_driver?: boolean;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface RouteData {
@@ -48,6 +59,8 @@ interface RouteData {
   is_active: boolean;
   city: string;
   custom_destination?: string;
+  created_at?: string;
+  updated_at?: string;
   custom_origin?: string;
   destination_coordinates?: {
     coordinates: [number, number];
@@ -93,15 +106,10 @@ class AdminApiService {
 
     try {
       const token = authService.getAccessToken();
-      console.log(
-        '🔑 Token check for',
-        endpoint,
-        ':',
-        token ? 'Token exists' : 'No token'
-      );
+      logger.info('🔑 Token check', 'component', { data: `${endpoint}: ${token ? 'Token exists' : 'No token'}` });
 
       if (!token) {
-        console.error('❌ No access token available for', endpoint);
+        logger.error('Error occurred', 'component', { error: '❌ No access token available for', endpoint });
         throw new Error('No access token available');
       }
 
@@ -109,8 +117,20 @@ class AdminApiService {
       timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
       // Ensure we're using the correct backend URL for production
-      const baseUrl = API_BASE_URL || environment.api.url;
-      const response = await fetch(`${baseUrl}/admin${endpoint}`, {
+      const baseUrl = API_BASE_URL || environment.api.baseUrl;
+      // Assignment endpoints are at root level, not under /admin
+      const isAssignmentEndpoint = endpoint.startsWith('/assignments') || endpoint.startsWith('/production-assignments');
+      const fullUrl = isAssignmentEndpoint 
+        ? `${baseUrl}${endpoint}`
+        : `${baseUrl}/admin${endpoint}`;
+      
+      logger.info('🌐 API Request', 'admin-api', { 
+        endpoint, 
+        fullUrl, 
+        isAssignmentEndpoint,
+        method: options.method || 'GET'
+      });
+      const response = await fetch(fullUrl, {
         ...options,
         signal: controller.signal,
         headers: {
@@ -120,7 +140,15 @@ class AdminApiService {
         },
       });
 
-      const data = await response.json();
+      // Use safe JSON parsing with comprehensive error handling
+      const parseResult = await parseJsonResponse(response, null, endpoint);
+      
+      if (!parseResult.success) {
+        throw new Error(parseResult.error || 'Failed to parse JSON response');
+      }
+      
+      const data = parseResult.data;
+      
       if (timeoutId) clearTimeout(timeoutId);
 
       if (!response.ok) {
@@ -149,7 +177,7 @@ class AdminApiService {
       return data;
     } catch (error) {
       if (timeoutId) clearTimeout(timeoutId);
-      console.error(`❌ API request failed for ${endpoint}:`, error);
+      logger.error(`❌ API request failed for ${endpoint}:`, 'component', { error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Request failed',
@@ -160,22 +188,50 @@ class AdminApiService {
   // ===== ANALYTICS ENDPOINTS =====
 
   async getAnalytics(): Promise<ApiResponse<AnalyticsData>> {
-    return this.makeRequest<AnalyticsData>('/analytics');
+    try {
+      return await this.makeRequest<AnalyticsData>('/analytics');
+    } catch (error) {
+      logger.warn('Analytics request failed, returning fallback data', 'component');
+      return {
+        success: true,
+        data: {
+          totalBuses: 0,
+          activeBuses: 0,
+          totalRoutes: 0,
+          activeRoutes: 0,
+          totalDrivers: 0,
+          activeDrivers: 0,
+          averageDelay: 0,
+          busUsageStats: []
+        }
+      };
+    }
   }
 
   async getSystemHealth(): Promise<ApiResponse<SystemHealth>> {
-    return this.makeRequest<SystemHealth>('/health');
+    try {
+      return await this.makeRequest<SystemHealth>('/health');
+    } catch (error) {
+      logger.warn('Health request failed, returning fallback data', 'component');
+      return {
+        success: true,
+        data: {
+          buses: 0,
+          routes: 0,
+          drivers: 0,
+          recentLocations: 0,
+          timestamp: new Date().toISOString()
+        }
+      };
+    }
   }
 
   // ===== BUS MANAGEMENT ENDPOINTS =====
 
   async getAllBuses(): Promise<ApiResponse<BusData[]>> {
-    console.log('🚌 Fetching all buses...');
+    logger.info('🚌 Fetching all buses...', 'component');
     const result = await this.makeRequest<BusData[]>('/buses');
-    console.log(
-      '🚌 Buses result:',
-      result.success ? `${result.data?.length || 0} buses` : result.error
-    );
+    logger.debug('Debug info', 'component', { data: `🚌 Buses result: ${result.success ? `${result.data?.length || 0} buses` : result.error}` });
     return result;
   }
 
@@ -209,24 +265,16 @@ class AdminApiService {
   // ===== DRIVER MANAGEMENT ENDPOINTS =====
 
   async getAllDrivers(): Promise<ApiResponse<DriverData[]>> {
-    console.log('👨‍💼 Fetching all drivers...');
+    logger.info('👨‍💼 Fetching all drivers...', 'component');
     const result = await this.makeRequest<DriverData[]>('/drivers');
-    console.log(
-      '👨‍💼 Drivers result:',
-      result.success ? `${result.data?.length || 0} drivers` : result.error
-    );
+    logger.debug('Debug info', 'component', { data: `👨‍💼 Drivers result: ${result.success ? `${result.data?.length || 0} drivers` : result.error}` });
     return result;
   }
 
   async getAssignedDrivers(): Promise<ApiResponse<any[]>> {
-    console.log('🚌 Fetching assigned drivers...');
+    logger.info('🚌 Fetching assigned drivers...', 'component');
     const result = await this.makeRequest<any[]>('/assigned-drivers');
-    console.log(
-      '🚌 Assigned drivers result:',
-      result.success
-        ? `${result.data?.length || 0} assigned drivers`
-        : result.error
-    );
+    logger.debug('Debug info', 'component', { data: `🚌 Assigned drivers result: ${result.success ? `${result.data?.length || 0} assigned drivers` : result.error}` });
     return result;
   }
 
@@ -285,12 +333,9 @@ class AdminApiService {
   // ===== ROUTE MANAGEMENT ENDPOINTS =====
 
   async getAllRoutes(): Promise<ApiResponse<RouteData[]>> {
-    console.log('🛣️ Fetching all routes...');
+    logger.info('🛣️ Fetching all routes...', 'component');
     const result = await this.makeRequest<RouteData[]>('/routes');
-    console.log(
-      '🛣️ Routes result:',
-      result.success ? `${result.data?.length || 0} routes` : result.error
-    );
+    logger.debug('Debug info', 'component', { data: `🛣️ Routes result: ${result.success ? `${result.data?.length || 0} routes` : result.error}` });
     return result;
   }
 
@@ -338,6 +383,86 @@ class AdminApiService {
   async deleteRoute(routeId: string): Promise<ApiResponse<RouteData>> {
     return this.makeRequest<RouteData>(`/routes/${routeId}`, {
       method: 'DELETE',
+    });
+  }
+
+  // ===== ASSIGNMENT MANAGEMENT ENDPOINTS =====
+
+  async getAllAssignments(): Promise<ApiResponse<any[]>> {
+    logger.info('🔗 Fetching all assignments...', 'component');
+    const result = await this.makeRequest<any[]>('/production-assignments');
+    logger.debug('Debug info', 'component', { data: `🔗 Assignments result: ${result.success ? `${result.data?.length || 0} assignments` : result.error}` });
+    return result;
+  }
+
+  async getAssignmentStatus(): Promise<ApiResponse<any>> {
+    logger.info('📊 Fetching assignment status...', 'component');
+    const result = await this.makeRequest<any>('/production-assignments/dashboard');
+    logger.debug('Debug info', 'component', { data: `📊 Assignment status result: ${result.success ? 'Status loaded' : result.error}` });
+    return result;
+  }
+
+  async getAssignmentByBus(busId: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(`/production-assignments/bus/${busId}`);
+  }
+
+  async getAssignmentHistory(busId: string): Promise<ApiResponse<any[]>> {
+    return this.makeRequest<any[]>(`/production-assignments/bus/${busId}/history`);
+  }
+
+  async createAssignment(assignmentData: {
+    driver_id: string;
+    bus_id: string;
+    route_id: string;
+    notes?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/production-assignments', {
+      method: 'POST',
+      body: JSON.stringify(assignmentData),
+    });
+  }
+
+  async updateAssignment(
+    busId: string,
+    assignmentData: {
+      driver_id?: string;
+      route_id?: string;
+      notes?: string;
+    }
+  ): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(`/production-assignments/bus/${busId}`, {
+      method: 'PUT',
+      body: JSON.stringify(assignmentData),
+    });
+  }
+
+  async removeAssignment(busId: string, notes?: string): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>(`/production-assignments/bus/${busId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ notes }),
+    });
+  }
+
+  async validateAssignment(assignmentData: {
+    driver_id: string;
+    bus_id: string;
+    route_id: string;
+  }): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/production-assignments/validate', {
+      method: 'POST',
+      body: JSON.stringify(assignmentData),
+    });
+  }
+
+  async bulkAssignDrivers(assignments: Array<{
+    driver_id: string;
+    bus_id: string;
+    route_id: string;
+    notes?: string;
+  }>): Promise<ApiResponse<any>> {
+    return this.makeRequest<any>('/production-assignments/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ assignments }),
     });
   }
 }

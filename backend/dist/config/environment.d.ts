@@ -39,7 +39,14 @@ export interface EnvironmentConfig {
             credentials: boolean;
         };
     };
+    redis: {
+        url: string;
+        maxRetries: number;
+        retryDelay: number;
+        connectTimeout: number;
+    };
 }
 export declare const initializeEnvironment: () => EnvironmentConfig;
-export default initializeEnvironment;
+declare const config: EnvironmentConfig;
+export default config;
 //# sourceMappingURL=environment.d.ts.map

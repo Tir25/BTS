@@ -1,8 +1,9 @@
 import express from 'express';
 import { authenticateUser, requireAdmin } from '../middleware/auth';
-import { AdminService } from '../services/adminService';
-import { RouteService } from '../services/routeService';
 import { getDriverBusInfo } from '../services/locationService';
+import { RouteController } from '../controllers/routeController';
+import { ConsolidatedAdminService as AdminService } from '../services/ConsolidatedAdminService';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ router.get('/analytics', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching analytics:', error);
+    logger.error('Error fetching analytics', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({
       success: false,
       error: 'Failed to fetch analytics',
@@ -41,7 +42,7 @@ router.get('/health', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching system health:', error);
+    logger.error('Error fetching system health', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({
       success: false,
       error: 'Failed to fetch system health',
@@ -62,7 +63,7 @@ router.get('/buses', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching buses:', error);
+    logger.error('Error fetching buses', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({
       success: false,
       error: 'Failed to fetch buses',
@@ -91,7 +92,7 @@ router.get('/buses/:busId', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching bus:', error);
+    logger.error('Error fetching bus', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch bus',
@@ -105,16 +106,56 @@ router.post('/buses', async (req, res) => {
   try {
     const busData = req.body;
 
-    // Validate required fields
-    if (!busData.code || !busData.number_plate || !busData.capacity) {
+    // Support both naming conventions (code/number_plate and bus_number/vehicle_no)
+    const busNumber = busData.bus_number || busData.code;
+    const vehicleNo = busData.vehicle_no || busData.number_plate;
+    const capacity = busData.capacity;
+
+    // Enhanced validation
+    if (!busNumber || !vehicleNo || !capacity) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields',
-        message: 'Code, number plate and capacity are required',
+        message: 'Bus number, vehicle number and capacity are required',
       });
     }
 
-    const newBus = await AdminService.createBus(busData);
+    // Normalize the data to backend format
+    const normalizedBusData = {
+      ...busData,
+      bus_number: busNumber,
+      vehicle_no: vehicleNo,
+      capacity: parseInt(capacity) || capacity, // Convert to number if string
+      model: busData.model || null,
+      year: busData.year ? parseInt(busData.year) : null, // Convert to number if provided
+      bus_image_url: busData.bus_image_url || null,
+      // Map driver field from frontend format to backend format
+      assigned_driver_profile_id: busData.assigned_driver_profile_id || busData.assigned_driver_id,
+      route_id: busData.route_id || null,
+      // Handle boolean conversion
+      is_active: busData.is_active === 'on' || busData.is_active === true || busData.is_active === 'true'
+    };
+
+    // Validate capacity
+    const capacityNum = parseInt(capacity) || capacity;
+    if (typeof capacityNum !== 'number' || capacityNum <= 0 || capacityNum > 1000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid capacity',
+        message: 'Capacity must be a number between 1 and 1000',
+      });
+    }
+
+    // Validate year if provided
+    if (normalizedBusData.year && (typeof normalizedBusData.year !== 'number' || normalizedBusData.year < 1900 || normalizedBusData.year > new Date().getFullYear() + 10)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid year',
+        message: 'Year must be between 1900 and ' + (new Date().getFullYear() + 10),
+      });
+    }
+
+    const newBus = await AdminService.createBus(normalizedBusData);
 
     return res.status(201).json({
       success: true,
@@ -123,15 +164,21 @@ router.post('/buses', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error creating bus:', error);
+    logger.error('Error creating bus', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
 
     // Provide more specific error messages
     let errorMessage = 'Unknown error occurred';
     let statusCode = 500;
 
     if (error instanceof Error) {
-      if (error.message.includes('already exists')) {
+      if (error.message.includes('already exists') || error.message.includes('already assigned')) {
         statusCode = 409; // Conflict
+        errorMessage = error.message;
+      } else if (error.message.includes('not found') || error.message.includes('not active')) {
+        statusCode = 400; // Bad Request
+        errorMessage = error.message;
+      } else if (error.message.includes('Missing required fields')) {
+        statusCode = 400; // Bad Request
         errorMessage = error.message;
       } else if (error.message.includes('violates')) {
         statusCode = 400; // Bad Request
@@ -172,7 +219,7 @@ router.put('/buses/:busId', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error updating bus:', error);
+    logger.error('Error updating bus', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     return res.status(500).json({
       success: false,
       error: 'Failed to update bus',
@@ -202,7 +249,7 @@ router.delete('/buses/:busId', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error deleting bus:', error);
+    logger.error('Error deleting bus', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     return res.status(500).json({
       success: false,
       error: 'Failed to delete bus',
@@ -223,7 +270,7 @@ router.get('/drivers', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching drivers:', error);
+    logger.error('Error fetching drivers', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({
       success: false,
       error: 'Failed to fetch drivers',
@@ -232,24 +279,8 @@ router.get('/drivers', async (req, res) => {
   }
 });
 
-// Get assigned drivers (MUST be before /drivers/:driverId to avoid route conflict)
-router.get('/assigned-drivers', async (req, res) => {
-  try {
-    const assignedDrivers = await AdminService.getAssignedDrivers();
-    res.json({
-      success: true,
-      data: assignedDrivers,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('❌ Error fetching assigned drivers:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch assigned drivers',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-});
+// Get assigned drivers - moved to /assignments/assigned-drivers
+// Use GET /assignments/assigned-drivers instead
 
 // Get specific driver
 router.get('/drivers/:driverId', async (req, res) => {
@@ -271,7 +302,7 @@ router.get('/drivers/:driverId', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching driver:', error);
+    logger.error('Error fetching driver', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch driver',
@@ -280,45 +311,7 @@ router.get('/drivers/:driverId', async (req, res) => {
   }
 });
 
-// Assign driver to bus
-router.post('/drivers/:driverId/assign-bus', async (req, res) => {
-  try {
-    const { driverId } = req.params;
-    const { busId } = req.body;
-
-    if (!busId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing bus ID',
-        message: 'Bus ID is required',
-      });
-    }
-
-    const updatedBus = await AdminService.assignDriverToBus(driverId, busId);
-
-    if (!updatedBus) {
-      return res.status(404).json({
-        success: false,
-        error: 'Assignment failed',
-        message: 'Driver or bus not found',
-      });
-    }
-
-    return res.json({
-      success: true,
-      data: updatedBus,
-      message: 'Driver assigned to bus successfully',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('❌ Error assigning driver to bus:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to assign driver to bus',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-});
+// Assignment functionality moved to /assignments routes
 
 // Get driver bus information
 router.get('/drivers/:driverId/bus', async (req, res) => {
@@ -341,7 +334,7 @@ router.get('/drivers/:driverId/bus', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error getting driver bus info:', error);
+    logger.error('Error getting driver bus info', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     return res.status(500).json({
       success: false,
       error: 'Failed to get driver bus information',
@@ -350,23 +343,25 @@ router.get('/drivers/:driverId/bus', async (req, res) => {
   }
 });
 
-// Unassign driver from bus
-router.post('/drivers/:driverId/unassign-bus', async (req, res) => {
-  try {
-    const { driverId } = req.params;
-    const updatedBuses = await AdminService.unassignDriverFromBus(driverId);
+// Assignment functionality moved to /assignments routes
+// Use DELETE /assignments/bus/:busId to remove assignments
 
+// Clean up inactive drivers
+router.post('/drivers/cleanup', async (req, res) => {
+  try {
+    const result = await AdminService.cleanupInactiveDrivers();
+    
     return res.json({
       success: true,
-      data: updatedBuses,
-      message: 'Driver unassigned from bus successfully',
+      data: result,
+      message: `Cleanup completed: ${result.cleaned} drivers cleaned, ${result.errors.length} errors`,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error unassigning driver from bus:', error);
+    logger.error('Error cleaning up inactive drivers', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     return res.status(500).json({
       success: false,
-      error: 'Failed to unassign driver from bus',
+      error: 'Failed to clean up inactive drivers',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
@@ -377,7 +372,7 @@ router.post('/drivers', async (req, res) => {
   try {
     const driverData = req.body;
 
-    // Validate required fields
+    // Enhanced validation
     if (
       !driverData.email ||
       !driverData.first_name ||
@@ -391,15 +386,6 @@ router.post('/drivers', async (req, res) => {
       });
     }
 
-    // Validate password strength
-    if (driverData.password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        error: 'Weak password',
-        message: 'Password must be at least 6 characters long',
-      });
-    }
-
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(driverData.email)) {
@@ -410,30 +396,76 @@ router.post('/drivers', async (req, res) => {
       });
     }
 
+    // Validate password strength
+    if (driverData.password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Weak password',
+        message: 'Password must be at least 6 characters long',
+      });
+    }
+
+    // Validate name fields
+    if (driverData.first_name.trim().length === 0 || driverData.last_name.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid name',
+        message: 'First name and last name cannot be empty',
+      });
+    }
+
+    // Validate phone if provided
+    if (driverData.phone && typeof driverData.phone !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid phone',
+        message: 'Phone number must be a string',
+      });
+    }
+
     const newDriver = await AdminService.createDriver(driverData);
 
     return res.status(201).json({
       success: true,
       data: newDriver,
-      message: 'Driver created successfully with Supabase Auth account',
+      message: newDriver.is_active ? 'Driver created successfully with Supabase Auth account' : 'Driver reactivated successfully',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error creating driver:', error);
+    logger.error('Error creating driver', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
 
-    // Handle specific Supabase errors
-    if (error instanceof Error && error.message.includes('Supabase')) {
-      return res.status(400).json({
-        success: false,
-        error: 'Driver creation failed',
-        message: error.message,
-      });
+    // Enhanced error handling
+    let errorMessage = 'Unknown error occurred';
+    let statusCode = 500;
+
+    if (error instanceof Error) {
+      if (error.message.includes('already exists')) {
+        statusCode = 409; // Conflict
+        errorMessage = error.message;
+      } else if (error.message.includes('converting user from student to driver')) {
+        statusCode = 500; // Server Error
+        errorMessage = 'Error while converting student to driver. Please try again or contact support.';
+      } else if (error.message.includes('Invalid email format') || 
+                 error.message.includes('Weak password') ||
+                 error.message.includes('Invalid name') ||
+                 error.message.includes('Invalid phone')) {
+        statusCode = 400; // Bad Request
+        errorMessage = error.message;
+      } else if (error.message.includes('Missing required fields')) {
+        statusCode = 400; // Bad Request
+        errorMessage = error.message;
+      } else if (error.message.includes('Supabase')) {
+        statusCode = 400; // Bad Request
+        errorMessage = error.message;
+      } else {
+        errorMessage = error.message;
+      }
     }
 
-    return res.status(500).json({
+    return res.status(statusCode).json({
       success: false,
       error: 'Failed to create driver',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: errorMessage,
     });
   }
 });
@@ -461,7 +493,7 @@ router.put('/drivers/:driverId', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error updating driver:', error);
+    logger.error('Error updating driver', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     return res.status(500).json({
       success: false,
       error: 'Failed to update driver',
@@ -491,7 +523,7 @@ router.delete('/drivers/:driverId', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error deleting driver:', error);
+    logger.error('Error deleting driver', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     return res.status(500).json({
       success: false,
       error: 'Failed to delete driver',
@@ -503,170 +535,19 @@ router.delete('/drivers/:driverId', async (req, res) => {
 // ===== ROUTE MANAGEMENT ENDPOINTS =====
 
 // Get all routes (admin view)
-router.get('/routes', async (req, res) => {
-  try {
-    const routes = await AdminService.getAllRoutes();
-    res.json({
-      success: true,
-      data: routes,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('❌ Error fetching routes:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch routes',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-});
+router.get('/routes', RouteController.getAllRoutes);
 
 // Get specific route (admin view)
-router.get('/routes/:routeId', async (req, res) => {
-  try {
-    const { routeId } = req.params;
-    const route = await RouteService.getRouteById(routeId);
-
-    if (!route) {
-      return res.status(404).json({
-        success: false,
-        error: 'Route not found',
-        message: `Route with ID ${routeId} not found`,
-      });
-    }
-
-    return res.json({
-      success: true,
-      data: route,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('❌ Error fetching route:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch route',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-});
+router.get('/routes/:routeId', RouteController.getRouteById);
 
 // Create new route
-router.post('/routes', async (req, res) => {
-  try {
-    const routeData = req.body;
-
-    // Validate required fields
-    if (!routeData.name || !routeData.name.trim()) {
-      return res.status(400).json({
-        success: false,
-        error: 'Route name is required',
-        message: 'Route name cannot be empty',
-      });
-    }
-
-    if (!routeData.city || !routeData.city.trim()) {
-      return res.status(400).json({
-        success: false,
-        error: 'City is required',
-        message: 'City cannot be empty',
-      });
-    }
-
-    if (!routeData.description || !routeData.description.trim()) {
-      return res.status(400).json({
-        success: false,
-        error: 'Route description is required',
-        message: 'Route description cannot be empty',
-      });
-    }
-
-    const newRoute = await AdminService.createRoute(routeData);
-
-    if (!newRoute) {
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to create route',
-        message: 'Database error occurred',
-      });
-    }
-
-    return res.status(201).json({
-      success: true,
-      data: newRoute,
-      message: 'Route created successfully',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('❌ Error creating route:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to create route',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-});
+router.post('/routes', RouteController.createRoute);
 
 // Update route
-router.put('/routes/:routeId', async (req, res) => {
-  try {
-    const { routeId } = req.params;
-    const routeData = req.body;
-
-    const updatedRoute = await AdminService.updateRoute(routeId, routeData);
-
-    if (!updatedRoute) {
-      return res.status(404).json({
-        success: false,
-        error: 'Route not found',
-        message: `Route with ID ${routeId} not found`,
-      });
-    }
-
-    return res.json({
-      success: true,
-      data: updatedRoute,
-      message: 'Route updated successfully',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('❌ Error updating route:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to update route',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-});
+router.put('/routes/:routeId', RouteController.updateRoute);
 
 // Delete route
-router.delete('/routes/:routeId', async (req, res) => {
-  try {
-    const { routeId } = req.params;
-    const deletedRoute = await AdminService.deleteRoute(routeId);
-
-    if (!deletedRoute) {
-      return res.status(404).json({
-        success: false,
-        error: 'Route not found',
-        message: `Route with ID ${routeId} not found`,
-      });
-    }
-
-    return res.json({
-      success: true,
-      data: deletedRoute,
-      message: 'Route deleted successfully',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('❌ Error deleting route:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to delete route',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-});
+router.delete('/routes/:routeId', RouteController.deleteRoute);
 
 // ===== SYSTEM MANAGEMENT ENDPOINTS =====
 
@@ -691,7 +572,7 @@ router.post('/clear-all-data', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error clearing all data:', error);
+    logger.error('Error clearing all data', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
     return res.status(500).json({
       success: false,
       error: 'Failed to clear all data',

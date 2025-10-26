@@ -1,5 +1,7 @@
 import { BusLocation } from '../types';
 
+import { logger } from '../utils/logger';
+
 interface WorkerResponse {
   type: string;
   data: any;
@@ -34,10 +36,10 @@ class WorkerService {
       };
 
       this.worker.onerror = (error) => {
-        console.error('❌ Worker error:', error);
+        logger.error('Error occurred', 'component', { error });
       };
     } catch (error) {
-      console.warn('⚠️ Web Worker not supported, falling back to main thread');
+      logger.warn('⚠️ Web Worker not supported, falling back to main thread', 'component');
       this.isSupported = false;
     }
   }
@@ -74,7 +76,11 @@ class WorkerService {
     is_near_stop: boolean;
   }> {
     if (!this.isSupported || !this.worker) {
-      return this.calculateETAFallback(currentLocation, destination, averageSpeed);
+      return this.calculateETAFallback(
+        currentLocation,
+        destination,
+        averageSpeed
+      );
     }
 
     return new Promise((resolve) => {
@@ -131,7 +137,10 @@ class WorkerService {
     is_near_stop: boolean;
   } {
     const distance = this.calculateDistanceFallback(
-      { latitude: currentLocation.latitude, longitude: currentLocation.longitude },
+      {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+      },
       destination
     );
 

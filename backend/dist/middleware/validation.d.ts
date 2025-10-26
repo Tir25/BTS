@@ -1,0 +1,38 @@
+import { ValidationChain } from 'express-validator';
+import { Request, Response, NextFunction } from 'express';
+export declare const handleValidationErrors: (req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined;
+export declare const commonValidations: {
+    uuid: (field: string) => ValidationChain;
+    email: (field: string) => ValidationChain;
+    requiredString: (field: string, minLength?: number, maxLength?: number) => ValidationChain;
+    optionalString: (field: string, maxLength?: number) => ValidationChain;
+    latitude: () => ValidationChain;
+    longitude: () => ValidationChain;
+    positiveInteger: (field: string) => ValidationChain;
+    optionalPositiveInteger: (field: string) => ValidationChain;
+    boolean: (field: string) => ValidationChain;
+    optionalBoolean: (field: string) => ValidationChain;
+    date: (field: string) => ValidationChain;
+    optionalDate: (field: string) => ValidationChain;
+    url: (field: string) => ValidationChain;
+    optionalUrl: (field: string) => ValidationChain;
+    phone: (field: string) => ValidationChain;
+    optionalPhone: (field: string) => ValidationChain;
+    role: () => ValidationChain;
+    status: () => ValidationChain;
+    pagination: () => ValidationChain[];
+};
+export declare const validateLocationUpdate: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateBus: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateRoute: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateUserProfile: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateDriverAssignment: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateStop: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateSearchQuery: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateUuidParam: (paramName: string) => (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validatePagination: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateAdminUser: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateLocationQuery: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateTimeRange: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+export declare const validateBulkOperation: (((req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined) | ValidationChain)[];
+//# sourceMappingURL=validation.d.ts.map

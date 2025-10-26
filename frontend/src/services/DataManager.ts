@@ -2,6 +2,8 @@ import { IBusService, BusInfo } from './interfaces/IBusService';
 import { IApiService } from './interfaces/IApiService';
 import { BusLocation } from './interfaces/IWebSocketService';
 
+import { logger } from '../utils/logger';
+
 export interface Route {
   id: string;
   name: string;
@@ -34,10 +36,10 @@ export class DataManager {
       const response = await this.apiService.getRoutes();
       if (response.success && response.data) {
         this.routes = response.data as Route[];
-        console.log('✅ Routes loaded:', this.routes.length);
+        logger.debug('Debug info', 'component', { data: `✅ Routes loaded: ${this.routes.length}` });
       }
     } catch (error) {
-      console.error('❌ Error loading routes:', error);
+      logger.error('Error occurred', 'component', { error });
     } finally {
       this.isLoading = false;
     }
@@ -54,7 +56,7 @@ export class DataManager {
     try {
       const response = await this.apiService.getAllBuses();
       if (response.success && response.data) {
-        console.log('📊 Initial bus data from API:', response.data.length);
+        logger.debug('Debug info', 'component', { data: `📊 Initial bus data from API: ${response.data.length}` });
 
         // Sync each bus with the bus service
         response.data.forEach((apiBus: any) => {
@@ -78,11 +80,11 @@ export class DataManager {
         });
 
         const updatedBuses = this.busService.getAllBuses();
-        console.log('✅ Initial buses loaded and synced:', updatedBuses.length);
+        logger.debug('Debug info', 'component', { data: `✅ Initial buses loaded and synced: ${updatedBuses.length}` });
         return updatedBuses;
       }
     } catch (error) {
-      console.error('❌ Error loading initial buses:', error);
+      logger.error('Error occurred', 'component', { error: `❌ Error loading initial buses: ${error}` });
     }
 
     return [];
@@ -93,10 +95,10 @@ export class DataManager {
       const response = await this.apiService.getBusInfo(busId);
       if (response.success && response.data) {
         this.busService.syncBusFromAPI(busId, response.data);
-        console.log(`🔄 Synced bus ${busId} with API data:`, response.data);
+        logger.debug('Debug info', 'component', { data: `🔄 Synced bus ${busId} with API data: ${JSON.stringify(response.data)}` });
       }
     } catch (error) {
-      console.error(`❌ Failed to sync bus ${busId} data:`, error);
+      logger.error('Error occurred', 'component', { error: `❌ Failed to sync bus ${busId} data: ${error}` });
     }
   }
 

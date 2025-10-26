@@ -1,7 +1,9 @@
 import { authService } from './authService';
 import { environment } from '../config/environment';
 
-const API_BASE_URL = environment.api.url;
+import { logger } from '../utils/logger';
+
+const API_BASE_URL = environment.api.baseUrl;
 
 export interface UploadResult {
   success: boolean;
@@ -35,15 +37,13 @@ export class StorageService {
 
     // If no token, only try to refresh if user is authenticated
     if (!token && authService.isAuthenticated()) {
-      console.log(
-        '🔄 No token found but user is authenticated, attempting to refresh session...'
-      );
+      logger.info('🔄 No token found but user is authenticated, attempting to refresh session...', 'component');
       const refreshResult = await authService.refreshSession();
       if (refreshResult.success) {
         token = authService.getAccessToken();
-        console.log('✅ Session refreshed, new token obtained');
+        logger.info('✅ Session refreshed, new token obtained', 'component');
       } else {
-        console.error('❌ Failed to refresh session:', refreshResult.error);
+        logger.error('Error occurred', 'component', { error: `❌ Failed to refresh session: ${refreshResult.error}` });
         throw new Error('Authentication required');
       }
     }
@@ -54,7 +54,7 @@ export class StorageService {
     };
 
     // Ensure we're using the correct backend URL for production
-    const baseUrl = API_BASE_URL || environment.api.url;
+    const baseUrl = API_BASE_URL || environment.api.baseUrl;
     return fetch(`${baseUrl}/storage${endpoint}`, {
       ...options,
       headers: {
@@ -70,29 +70,29 @@ export class StorageService {
     file: File
   ): Promise<UploadResult> {
     try {
-      console.log('🔐 Getting access token...');
+      logger.info('🔐 Getting access token...', 'component');
       const token = authService.getAccessToken();
       if (!token) {
-        console.error('❌ No access token available');
+        logger.error('❌ No access token available', 'component');
         return { success: false, error: 'Authentication required' };
       }
-      console.log('✅ Access token obtained');
+      logger.info('✅ Access token obtained', 'component');
 
       const formData = new FormData();
       formData.append('image', file);
       formData.append('busId', busId);
 
       // Ensure we're using the correct backend URL for production
-      const baseUrl = API_BASE_URL || environment.api.url;
-      console.log(
-        '📤 Sending request to:',
-        `${baseUrl}/storage/upload/bus-image`
-      );
-      console.log('📋 FormData contents:', {
-        busId,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
+      const baseUrl = API_BASE_URL || environment.api.baseUrl;
+      logger.debug('Debug info', 'component', { data: `📤 Sending request to: ${baseUrl}/storage/upload/bus-image` });
+      logger.debug('Debug info', 'component', { 
+        data: '📋 FormData contents:',
+        formData: {
+          busId,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type
+        }
       });
 
       const response = await fetch(`${baseUrl}/storage/upload/bus-image`, {
@@ -103,27 +103,30 @@ export class StorageService {
         body: formData,
       });
 
-      console.log('📥 Response status:', response.status);
-      console.log(
-        '📥 Response headers:',
-        Object.fromEntries(response.headers.entries())
-      );
+      logger.debug('Debug info', 'component', { data: `📥 Response status: ${response.status}` });
+      logger.debug('Debug info', 'component', { 
+        data: '📥 Response headers:',
+        headers: Object.fromEntries(response.headers.entries())
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ Upload failed:', errorData);
+        logger.error('Error occurred', 'component', { error: `❌ Upload failed: ${JSON.stringify(errorData)}` });
         return { success: false, error: errorData.error || 'Upload failed' };
       }
 
       const data = await response.json();
-      console.log('✅ Upload successful:', data);
+      logger.debug('Debug info', 'component', { 
+        data: '✅ Upload successful:',
+        uploadData: data
+      });
       return {
         success: true,
         url: data.url,
         fileName: data.fileName,
       };
     } catch (error) {
-      console.error('❌ Upload bus image error:', error);
+      logger.error('Error occurred', 'component', { error: `❌ Upload bus image error: ${error}` });
       return { success: false, error: 'Network error during upload' };
     }
   }
@@ -144,7 +147,7 @@ export class StorageService {
       formData.append('driverId', driverId);
 
       // Ensure we're using the correct backend URL for production
-      const baseUrl = API_BASE_URL || environment.api.url;
+      const baseUrl = API_BASE_URL || environment.api.baseUrl;
       const response = await fetch(`${baseUrl}/storage/upload/driver-photo`, {
         method: 'POST',
         headers: {
@@ -165,7 +168,7 @@ export class StorageService {
         fileName: data.fileName,
       };
     } catch (error) {
-      console.error('Upload driver photo error:', error);
+      logger.error('Error occurred', 'component', { error: `Upload driver photo error: ${error}` });
       return { success: false, error: 'Network error during upload' };
     }
   }
@@ -186,7 +189,7 @@ export class StorageService {
       formData.append('routeId', routeId);
 
       // Ensure we're using the correct backend URL for production
-      const baseUrl = API_BASE_URL || environment.api.url;
+      const baseUrl = API_BASE_URL || environment.api.baseUrl;
       const response = await fetch(`${baseUrl}/storage/upload/route-map`, {
         method: 'POST',
         headers: {
@@ -207,7 +210,7 @@ export class StorageService {
         fileName: data.fileName,
       };
     } catch (error) {
-      console.error('Upload route map error:', error);
+      logger.error('Error occurred', 'component', { error: `Upload route map error: ${error}` });
       return { success: false, error: 'Network error during upload' };
     }
   }
@@ -235,7 +238,7 @@ export class StorageService {
         expiresIn: data.expiresIn,
       };
     } catch (error) {
-      console.error('Get signed URL error:', error);
+      logger.error('Error occurred', 'component', { error: `Get signed URL error: ${error}` });
       return { success: false, error: 'Network error' };
     }
   }
@@ -259,7 +262,7 @@ export class StorageService {
 
       return { success: true };
     } catch (error) {
-      console.error('Delete file error:', error);
+      logger.error('Error occurred', 'component', { error: `Delete file error: ${error}` });
       return { success: false, error: 'Network error during deletion' };
     }
   }
@@ -289,7 +292,7 @@ export class StorageService {
         info: data.info,
       };
     } catch (error) {
-      console.error('Get file info error:', error);
+      logger.error('Error occurred', 'component', { error: `Get file info error: ${error}` });
       return { success: false, hasFile: false, error: 'Network error' };
     }
   }
@@ -315,7 +318,7 @@ export class StorageService {
         files: data.files,
       };
     } catch (error) {
-      console.error('List files error:', error);
+      logger.error('Error occurred', 'component', { error: `List files error: ${error}` });
       return { success: false, error: 'Network error' };
     }
   }

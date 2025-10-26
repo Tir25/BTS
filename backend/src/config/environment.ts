@@ -1,8 +1,29 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load environment variables
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+// Load environment variables in correct order for development
+const isProduction = process.env.NODE_ENV === 'production';
+const envFiles = isProduction 
+  ? ['.env.production', '.env'] 
+  : ['.env.local', '.env'];
+
+// Load environment files in order (later files override earlier ones)
+envFiles.forEach((envFile, index) => {
+  const envPath = path.resolve(process.cwd(), envFile);
+  const result = dotenv.config({ path: envPath, override: false });
+  
+  const dotenvVersion = '16.3.1'; // Static version to avoid require() in ES modules
+  
+  if (result.error) {
+    console.log(`[dotenv@${dotenvVersion}] injecting env (0) from ${envFile} -- tip: 📡 add observability to secrets: https://dotenvx.com/ops`);
+  } else {
+    const envCount = Object.keys(result.parsed || {}).length;
+    console.log(`[dotenv@${dotenvVersion}] injecting env (${envCount}) from ${envFile} -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }`);
+  }
+});
+
+// Import environment variable helpers
+import { getEnvVar, getEnvNumber, getEnvBoolean, getEnvArray } from './envValidation';
 
 export interface EnvironmentConfig {
   port: number;
@@ -45,6 +66,12 @@ export interface EnvironmentConfig {
       credentials: boolean;
     };
   };
+  redis: {
+    url: string;
+    maxRetries: number;
+    retryDelay: number;
+    connectTimeout: number;
+  };
 }
 
 export const initializeEnvironment = (): EnvironmentConfig => {
@@ -76,37 +103,63 @@ export const initializeEnvironment = (): EnvironmentConfig => {
         `Missing required environment variables: ${missingEnvVars.join(', ')}`
       );
     }
+  } else {
+    // In development, just warn about missing variables but don't fail
+    const recommendedEnvVars = [
+      'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'DATABASE_URL',
+    ];
+
+    const missingEnvVars = recommendedEnvVars.filter(
+      (envVar) => !process.env[envVar]
+    );
+
+    if (missingEnvVars.length > 0) {
+      console.warn(
+        '⚠️ Missing recommended environment variables in development:',
+        missingEnvVars
+      );
+      console.warn(
+        '💡 For full functionality, please check your .env.local file and ensure all variables are set'
+      );
+    }
   }
 
-  // Provide fallbacks for development
-  const supabaseUrl =
-    process.env.SUPABASE_URL ||
-    (isProduction ? '' : 'https://gthwmwfwvhyriygpcdlr.supabase.co');
-  const supabaseAnonKey =
-    process.env.SUPABASE_ANON_KEY ||
-    (isProduction
-      ? ''
-      : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI');
-  const supabaseServiceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    (isProduction
-      ? ''
-      : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDk3MTQ1NSwiZXhwIjoyMDcwNTQ3NDU1fQ.LuwfYUuGMRQh3Gbc7NQuRCqZxLsS5CrQOd1eMjiWj2o');
+  // Provide fallbacks for development - but never hardcode sensitive keys
+  let supabaseUrl: string;
+  let supabaseAnonKey: string;
+  let supabaseServiceRoleKey: string;
+  
+  if (isProduction) {
+    // In production, we require these environment variables
+    supabaseUrl = process.env.SUPABASE_URL || '';
+    supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+    supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  } else {
+    // In development, require environment variables - no hardcoded fallbacks for security
+    supabaseUrl = process.env.SUPABASE_URL || '';
+    supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+    supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    
+    // Log warning if keys are not provided in development
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn('⚠️ Missing Supabase credentials in development. Check your .env file and ensure all required variables are set.');
+      console.warn('💡 The server will not start without proper credentials for security reasons.');
+    }
+  }
 
   const config: EnvironmentConfig = {
-    port: parseInt(process.env.PORT || '3000'),
+    port: getEnvNumber('PORT', isProduction ? 3000 : 3001),
     nodeEnv,
     database: {
-      url:
-        process.env.DATABASE_URL ||
-        'postgresql://postgres:password@localhost:5432/bus_tracking',
-      poolMax: parseInt(process.env.DB_POOL_MAX || '20'),
-      poolIdleTimeout: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000'),
-      poolConnectionTimeout: parseInt(
-        process.env.DB_POOL_CONNECTION_TIMEOUT || '10000'
-      ),
-      retryDelay: parseInt(process.env.DB_RETRY_DELAY || '5000'),
-      maxRetries: parseInt(process.env.DB_MAX_RETRIES || '5'),
+      url: getEnvVar('DATABASE_URL', ''),
+      poolMax: getEnvNumber('DB_POOL_MAX', 20),
+      poolIdleTimeout: getEnvNumber('DB_POOL_IDLE_TIMEOUT', 30000),
+      poolConnectionTimeout: getEnvNumber('DB_POOL_CONNECTION_TIMEOUT', 10000),
+      retryDelay: getEnvNumber('DB_RETRY_DELAY', 5000),
+      maxRetries: getEnvNumber('DB_MAX_RETRIES', 5),
     },
     supabase: {
       url: supabaseUrl,
@@ -114,41 +167,58 @@ export const initializeEnvironment = (): EnvironmentConfig => {
       serviceRoleKey: supabaseServiceRoleKey,
     },
     cors: {
-      allowedOrigins: isProduction
-        ? [
-            // Specific frontend domains
-            'https://bts-frontend-navy.vercel.app',
-            'https://bts-frontend-navy.vercel.com',
-            // Platform domains
-            /^https:\/\/.*\.onrender\.com$/,
-            /^https:\/\/.*\.vercel\.app$/,
-            /^https:\/\/.*\.vercel\.com$/,
-          ]
-        : [
-            // Development
-            'http://localhost:5173',
-            'http://127.0.0.1:5173',
-            'http://localhost:3000',
-            'http://127.0.0.1:3000',
-          ],
-      credentials: true,
+      // Parse allowed origins from environment variable or use defaults
+      allowedOrigins: process.env.CORS_ORIGIN
+        ? process.env.CORS_ORIGIN.split(',').map(origin => {
+            origin = origin.trim();
+            // Convert regex strings to actual regex objects
+            if (origin.startsWith('/') && origin.endsWith('/')) {
+              return new RegExp(origin.slice(1, -1));
+            }
+            return origin;
+          })
+        : isProduction
+          ? [
+              // Specific frontend domains
+              'https://bts-frontend-navy.vercel.app',
+              'https://bts-frontend-navy.vercel.com',
+              // Platform domains
+              /^https:\/\/.*\.onrender\.com$/,
+              /^https:\/\/.*\.vercel\.app$/,
+              /^https:\/\/.*\.vercel\.com$/,
+            ]
+          : [
+              // Development - support multiple ports
+              'http://localhost:5173',
+              'http://localhost:5174',
+              'http://localhost:5175',
+              'http://localhost:5176',
+              'http://127.0.0.1:5173',
+              'http://127.0.0.1:5174',
+              'http://127.0.0.1:5175',
+              'http://127.0.0.1:5176',
+              'http://localhost:3000',
+              'http://127.0.0.1:3000',
+              // Network access for cross-laptop testing
+              /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
+              /^http:\/\/172\.\d+\.\d+\.\d+:\d+$/,
+              /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,
+            ],
+      credentials: getEnvBoolean('CORS_CREDENTIALS', true),
     },
     rateLimit: {
-      windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-      maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
-      authMaxRequests: parseInt(
-        process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || '5'
-      ),
+      windowMs: getEnvNumber('RATE_LIMIT_WINDOW_MS', 900000), // 15 minutes
+      maxRequests: getEnvNumber('RATE_LIMIT_MAX_REQUESTS', isProduction ? 1000 : 5000),
+      authMaxRequests: getEnvNumber('AUTH_RATE_LIMIT_MAX_REQUESTS', 5),
     },
     security: {
-      enableHelmet: true,
-      enableCors: true,
-      enableRateLimit: true,
+      enableHelmet: getEnvBoolean('ENABLE_HELMET', true),
+      enableCors: getEnvBoolean('ENABLE_CORS', true),
+      enableRateLimit: getEnvBoolean('ENABLE_RATE_LIMIT', true),
     },
     logging: {
-      level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
-      enableDebugLogs:
-        process.env.ENABLE_DEBUG_LOGS === 'true' && !isProduction,
+      level: getEnvVar('LOG_LEVEL', isProduction ? 'info' : 'debug'),
+      enableDebugLogs: getEnvBoolean('ENABLE_DEBUG_LOGS', !isProduction),
     },
     websocket: {
       cors: {
@@ -169,15 +239,27 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               /^wss:\/\/.*\.vercel\.com$/,
             ]
           : [
-              // Development WebSocket origins
+              // Development WebSocket origins - support multiple ports
               'http://localhost:5173',
+              'http://localhost:5174',
+              'http://localhost:5175',
+              'http://localhost:5176',
               'http://localhost:3000',
               'http://127.0.0.1:5173',
+              'http://127.0.0.1:5174',
+              'http://127.0.0.1:5175',
+              'http://127.0.0.1:5176',
               'http://127.0.0.1:3000',
               'ws://localhost:3000',
               'ws://127.0.0.1:3000',
               'ws://localhost:5173',
+              'ws://localhost:5174',
+              'ws://localhost:5175',
+              'ws://localhost:5176',
               'ws://127.0.0.1:5173',
+              'ws://127.0.0.1:5174',
+              'ws://127.0.0.1:5175',
+              'ws://127.0.0.1:5176',
 
               // VS Code tunnel origins
               /^https:\/\/[a-zA-Z0-9-]+\.devtunnels\.ms$/,
@@ -185,10 +267,20 @@ export const initializeEnvironment = (): EnvironmentConfig => {
               // Network access for cross-laptop testing
               /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
               /^ws:\/\/192\.168\.\d+\.\d+:\d+$/,
+              /^http:\/\/172\.\d+\.\d+\.\d+:\d+$/,
+              /^ws:\/\/172\.\d+\.\d+\.\d+:\d+$/,
+              /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,
+              /^ws:\/\/10\.\d+\.\d+\.\d+:\d+$/,
             ],
         methods: ['GET', 'POST', 'OPTIONS'],
         credentials: true,
       },
+    },
+    redis: {
+      url: getEnvVar('REDIS_URL', 'redis://localhost:6379'),
+      maxRetries: getEnvNumber('REDIS_MAX_RETRIES', 5),
+      retryDelay: getEnvNumber('REDIS_RETRY_DELAY', 1000),
+      connectTimeout: getEnvNumber('REDIS_CONNECT_TIMEOUT', 10000),
     },
   };
 
@@ -225,4 +317,6 @@ export const initializeEnvironment = (): EnvironmentConfig => {
   return config;
 };
 
-export default initializeEnvironment;
+const config = initializeEnvironment();
+
+export default config;

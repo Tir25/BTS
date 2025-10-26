@@ -1,4 +1,7 @@
 import { IWebSocketService, BusLocation } from './interfaces/IWebSocketService';
+import { BusArrivingData } from '../types';
+
+import { logger } from '../utils/logger';
 
 export interface ConnectionStatus {
   isConnected: boolean;
@@ -6,12 +9,19 @@ export interface ConnectionStatus {
   error: string | null;
 }
 
+export interface DriverConnectionData {
+  driverId: string;
+  busId: string;
+  timestamp: string;
+}
+
+
 export interface ConnectionCallbacks {
   onBusLocationUpdate?: (location: BusLocation) => void;
-  onDriverConnected?: (data: any) => void;
-  onDriverDisconnected?: (data: any) => void;
+  onDriverConnected?: (data: DriverConnectionData) => void;
+  onDriverDisconnected?: (data: DriverConnectionData) => void;
   onStudentConnected?: () => void;
-  onBusArriving?: (data: any) => void;
+  onBusArriving?: (data: BusArrivingData) => void;
   onConnectionStatusChange?: (status: ConnectionStatus) => void;
 }
 
@@ -58,7 +68,7 @@ export class ConnectionManager {
         error: null,
       });
 
-      console.log('✅ ConnectionManager: WebSocket connected successfully');
+      logger.info('✅ ConnectionManager: WebSocket connected successfully', 'component');
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -68,10 +78,7 @@ export class ConnectionManager {
         error: errorMessage,
       });
 
-      console.error(
-        '❌ ConnectionManager: WebSocket connection failed:',
-        error
-      );
+      logger.error('Error occurred', 'component', { error: '❌ ConnectionManager: WebSocket connection failed:', details: error });
       this.scheduleReconnection();
     }
   }
@@ -85,7 +92,7 @@ export class ConnectionManager {
       status: 'disconnected',
       error: null,
     });
-    console.log('🔌 ConnectionManager: WebSocket disconnected');
+    logger.info('🔌 ConnectionManager: WebSocket disconnected', 'component');
   }
 
   // Get current connection status
@@ -154,9 +161,9 @@ export class ConnectionManager {
     });
 
     this.reconnectTimeout = setTimeout(() => {
-      console.log('🔄 ConnectionManager: Attempting to reconnect...');
+      logger.info('🔄 ConnectionManager: Attempting to reconnect...', 'component');
       this.connect().catch((error) => {
-        console.error('❌ ConnectionManager: Reconnection failed:', error);
+        logger.error('Error occurred', 'component', { error });
       });
     }, 5000);
   }
@@ -183,7 +190,7 @@ export class ConnectionManager {
 
   // Public method to force reconnection
   async reconnect(): Promise<void> {
-    console.log('🔄 ConnectionManager: Manual reconnection requested');
+    logger.info('🔄 ConnectionManager: Manual reconnection requested', 'component');
     this.cleanup();
     await this.connect();
   }

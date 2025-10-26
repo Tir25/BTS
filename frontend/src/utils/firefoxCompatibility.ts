@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 /**
  * Firefox Compatibility Utilities
  * Handles Firefox-specific issues with CORS, SSE, and WebSocket connections
@@ -17,12 +19,12 @@ export interface BrowserInfo {
  */
 export const detectBrowser = (): BrowserInfo => {
   const userAgent = navigator.userAgent;
-  
+
   const isFirefox = /Firefox/.test(userAgent);
   const isChrome = /Chrome/.test(userAgent) && !/Edge/.test(userAgent);
   const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
   const isEdge = /Edge/.test(userAgent);
-  
+
   let version = '';
   if (isFirefox) {
     const match = userAgent.match(/Firefox\/(\d+)/);
@@ -37,14 +39,14 @@ export const detectBrowser = (): BrowserInfo => {
     const match = userAgent.match(/Edge\/(\d+)/);
     version = match ? match[1] : '';
   }
-  
+
   return {
     isFirefox,
     isChrome,
     isSafari,
     isEdge,
     version,
-    userAgent
+    userAgent,
   };
 };
 
@@ -53,14 +55,14 @@ export const detectBrowser = (): BrowserInfo => {
  */
 export const getFirefoxEventSourceOptions = (): EventSourceInit => {
   const browser = detectBrowser();
-  
+
   if (browser.isFirefox) {
-    console.log('🦊 Firefox detected - using Firefox-specific EventSource configuration');
+    logger.info('🦊 Firefox detected - using Firefox-specific EventSource configuration', 'component');
     return {
       withCredentials: false, // Firefox has issues with credentials in some cases
     };
   }
-  
+
   // For all browsers, try without credentials first for better compatibility
   return {
     withCredentials: false, // More compatible across browsers
@@ -72,9 +74,9 @@ export const getFirefoxEventSourceOptions = (): EventSourceInit => {
  */
 export const getFirefoxFetchOptions = (): RequestInit => {
   const browser = detectBrowser();
-  
+
   if (browser.isFirefox) {
-    console.log('🦊 Firefox detected - using Firefox-specific fetch configuration');
+    logger.info('🦊 Firefox detected - using Firefox-specific fetch configuration', 'component');
     return {
       credentials: 'include',
       mode: 'cors',
@@ -84,7 +86,7 @@ export const getFirefoxFetchOptions = (): RequestInit => {
       },
     };
   }
-  
+
   return {
     credentials: 'include',
     mode: 'cors',
@@ -99,26 +101,27 @@ export const getFirefoxFetchOptions = (): RequestInit => {
  */
 export const checkFirefoxTrackingProtection = (): boolean => {
   const browser = detectBrowser();
-  
+
   if (!browser.isFirefox) {
     return false;
   }
-  
+
   // Try to detect if Enhanced Tracking Protection is blocking requests
   // This is a heuristic - we can't directly detect it
-  const hasTrackingProtection = navigator.userAgent.includes('Firefox') && 
-    (navigator.userAgent.includes('Firefox/78') || 
-     navigator.userAgent.includes('Firefox/79') || 
-     navigator.userAgent.includes('Firefox/8') ||
-     navigator.userAgent.includes('Firefox/9') ||
-     navigator.userAgent.includes('Firefox/10') ||
-     navigator.userAgent.includes('Firefox/11') ||
-     navigator.userAgent.includes('Firefox/12'));
-  
+  const hasTrackingProtection =
+    navigator.userAgent.includes('Firefox') &&
+    (navigator.userAgent.includes('Firefox/78') ||
+      navigator.userAgent.includes('Firefox/79') ||
+      navigator.userAgent.includes('Firefox/8') ||
+      navigator.userAgent.includes('Firefox/9') ||
+      navigator.userAgent.includes('Firefox/10') ||
+      navigator.userAgent.includes('Firefox/11') ||
+      navigator.userAgent.includes('Firefox/12'));
+
   if (hasTrackingProtection) {
-    console.log('🦊 Firefox Enhanced Tracking Protection may be active');
+    logger.info('🦊 Firefox Enhanced Tracking Protection may be active', 'component');
   }
-  
+
   return hasTrackingProtection;
 };
 
@@ -128,7 +131,7 @@ export const checkFirefoxTrackingProtection = (): boolean => {
 export const getFirefoxRecommendations = (): string[] => {
   const browser = detectBrowser();
   const recommendations: string[] = [];
-  
+
   if (browser.isFirefox) {
     recommendations.push(
       '🦊 Firefox detected - if you experience CORS issues:',
@@ -138,7 +141,7 @@ export const getFirefoxRecommendations = (): string[] => {
       '4. Disable browser extensions temporarily'
     );
   }
-  
+
   return recommendations;
 };
 
@@ -147,9 +150,9 @@ export const getFirefoxRecommendations = (): string[] => {
  */
 export const logFirefoxDebugInfo = (): void => {
   const browser = detectBrowser();
-  
+
   if (browser.isFirefox) {
-    console.log('🦊 Firefox Debug Information:', {
+    logger.debug('🦊 Firefox Debug Information', 'component', {
       version: browser.version,
       userAgent: browser.userAgent,
       hasTrackingProtection: checkFirefoxTrackingProtection(),

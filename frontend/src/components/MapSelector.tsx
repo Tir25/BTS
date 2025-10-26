@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { GANPAT_UNIVERSITY } from '../utils/coordinates';
+import { logger } from '../utils/logger';
 
 interface MapSelectorProps {
   onLocationSelect: (location: {
@@ -39,13 +40,15 @@ const MapSelector: React.FC<MapSelectorProps> = ({
   useEffect(() => {
     if (!mapContainer.current || map.current) return; // Prevent multiple initializations
 
-    console.log(
-      `🗺️ [${instanceId.current}] Initializing map with center:`,
-      defaultCenter
+    logger.info(
+      `Initializing map with center`,
+      'MapSelector',
+      { instanceId: instanceId.current, center: defaultCenter }
     );
-    console.log(
-      `🗺️ [${instanceId.current}] Ganpat University coordinates:`,
-      GANPAT_UNIVERSITY.coordinates
+    logger.info(
+      `Ganpat University coordinates`,
+      'MapSelector',
+      { instanceId: instanceId.current, coordinates: GANPAT_UNIVERSITY.coordinates }
     );
 
     // Initialize map
@@ -83,7 +86,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
 
     // Wait for map to load before adding controls and markers
     map.current.on('load', () => {
-      console.log('🗺️ Map loaded, adding controls and marker');
+      logger.info('Map loaded, adding controls and marker', 'MapSelector');
 
       try {
         // Add navigation controls
@@ -119,13 +122,15 @@ const MapSelector: React.FC<MapSelectorProps> = ({
           }
         });
 
-        console.log(
-          `🗺️ [${instanceId.current}] Map centered on ${GANPAT_UNIVERSITY.name}`
+        logger.info(
+          `Map centered on ${GANPAT_UNIVERSITY.name}`,
+          'MapSelector',
+          { instanceId: instanceId.current }
         );
 
         setIsMapLoading(false);
       } catch (error) {
-        console.error('❌ Error setting up map:', error);
+        logger.error('Error setting up map', 'MapSelector', { error: String(error) });
         setMapError('Failed to initialize map');
         setIsMapLoading(false);
       }
@@ -133,7 +138,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
 
     // Handle map errors
     map.current.on('error', (e) => {
-      console.error('❌ Map error:', e);
+      logger.error('Map error', 'MapSelector', { error: String(e) });
       setMapError('Map failed to load');
       setIsMapLoading(false);
     });
@@ -149,16 +154,16 @@ const MapSelector: React.FC<MapSelectorProps> = ({
 
     // Handle WebGL context loss
     map.current.on('webglcontextlost', () => {
-      console.warn('⚠️ WebGL context lost, attempting to restore...');
+      logger.warn('⚠️ WebGL context lost, attempting to restore...', 'component');
     });
 
     map.current.on('webglcontextrestored', () => {
-      console.log('✅ WebGL context restored');
+      logger.info('✅ WebGL context restored', 'component');
     });
 
     return () => {
       if (map.current) {
-        console.log('🗺️ Cleaning up map instance');
+        logger.info('🗺️ Cleaning up map instance', 'component');
         try {
           // Remove all event listeners
           map.current.off('load', () => {});
@@ -175,7 +180,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
           // Remove map
           map.current.remove();
         } catch (error) {
-          console.warn('⚠️ Error during map cleanup:', error);
+          logger.warn('Warning', 'component', { data: '⚠️ Error during map cleanup:', error });
         } finally {
           map.current = null;
           marker.current = null;
@@ -199,7 +204,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
 
       setSelectedLocation(location);
     } catch (error) {
-      console.error('Error reverse geocoding:', error);
+      logger.error('Error occurred', 'component', { error });
       setSelectedLocation({
         name: 'Selected Location',
         coordinates: coordinates,
@@ -212,14 +217,14 @@ const MapSelector: React.FC<MapSelectorProps> = ({
     if (!searchQuery.trim() || !map.current) return;
 
     try {
-      console.log('🔍 Searching for:', searchQuery);
+      logger.debug('Debug info', 'component', { data: '🔍 Searching for:', searchQuery });
 
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5&countrycodes=in`
       );
       const data = await response.json();
 
-      console.log('🔍 Search results:', data);
+      logger.debug('🔍 Search results:', 'component', { data });
 
       if (data.length > 0) {
         const firstResult = data[0];
@@ -228,7 +233,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
           parseFloat(firstResult.lat),
         ];
 
-        console.log('🗺️ Flying to coordinates:', coordinates);
+        logger.debug('Debug info', 'component', { data: '🗺️ Flying to coordinates:', coordinates });
 
         map.current!.flyTo({
           center: coordinates,
@@ -245,10 +250,10 @@ const MapSelector: React.FC<MapSelectorProps> = ({
 
         setSelectedLocation(location);
       } else {
-        console.log('🔍 No search results found');
+        logger.info('🔍 No search results found', 'component');
       }
     } catch (error) {
-      console.error('❌ Error searching location:', error);
+      logger.error('Error occurred', 'component', { error });
     }
   };
 
@@ -313,10 +318,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
             <button
               onClick={() => {
                 if (map.current) {
-                  console.log(
-                    '🏫 Resetting to Ganpat University at coordinates:',
-                    GANPAT_UNIVERSITY.coordinates
-                  );
+                  logger.debug('Resetting to Ganpat University', 'MapSelector', { coordinates: GANPAT_UNIVERSITY.coordinates });
                   map.current!.flyTo({
                     center: GANPAT_UNIVERSITY.coordinates, // Ganpat University
                     zoom: 12,

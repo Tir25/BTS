@@ -42,7 +42,7 @@ router.get('/viewport', async (req, res) => {
             maxLat: parseFloat(maxLat),
         };
         const locations = await (0, locationService_1.getCurrentBusLocations)();
-        const locationsInViewport = locations.filter(location => {
+        const locationsInViewport = locations.filter((location) => {
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
             if (!pointMatch)
                 return false;
@@ -52,9 +52,11 @@ router.get('/viewport', async (req, res) => {
                 longitude >= viewport.minLng &&
                 longitude <= viewport.maxLng);
         });
-        const formattedLocations = locationsInViewport.map(location => {
+        const formattedLocations = locationsInViewport.map((location) => {
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
-            const [longitude, latitude] = pointMatch ? pointMatch[1].split(' ').map(Number) : [0, 0];
+            const [longitude, latitude] = pointMatch
+                ? pointMatch[1].split(' ').map(Number)
+                : [0, 0];
             return {
                 busId: location.bus_id,
                 driverId: location.driver_id,

@@ -2,6 +2,8 @@ import { BusLocation, BusInfo, Bus } from '../types';
 import { IBusService } from './interfaces/IBusService';
 import { apiService } from './api';
 
+import { logger } from '../utils/logger';
+
 interface BusData {
   [busId: string]: BusInfo;
 }
@@ -127,7 +129,7 @@ class BusService implements IBusService {
         if (response.success && response.data) {
           apiData = response.data;
         } else {
-          console.error('❌ Failed to fetch bus data from API for bus:', busId);
+          logger.error('Error occurred', 'component', { error: '❌ Failed to fetch bus data from API for bus:', busId });
           return;
         }
       }
@@ -157,7 +159,7 @@ class BusService implements IBusService {
         };
       }
     } catch (error) {
-      console.error('❌ Error syncing bus data from API:', error);
+      logger.error('Error occurred', 'component', { error });
     }
   }
 
@@ -171,7 +173,7 @@ class BusService implements IBusService {
         });
       }
     } catch (error) {
-      console.error('❌ Error syncing all buses from API:', error);
+      logger.error('Error occurred', 'component', { error });
     }
   }
 

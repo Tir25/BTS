@@ -115,29 +115,31 @@ const validateRouteData = (routeData) => {
     if (routeData.description.trim().length === 0) {
         return 'Description cannot be empty';
     }
-    if (!routeData.coordinates || !Array.isArray(routeData.coordinates)) {
-        return 'Coordinates are required and must be an array';
-    }
-    if (routeData.coordinates.length < 2) {
-        return 'Route must have at least 2 coordinate points';
-    }
-    for (let i = 0; i < routeData.coordinates.length; i++) {
-        const coord = routeData.coordinates[i];
-        if (!Array.isArray(coord) || coord.length !== 2) {
-            return `Coordinate ${i + 1} must be an array with 2 elements [longitude, latitude]`;
+    if (routeData.coordinates !== undefined) {
+        if (!Array.isArray(routeData.coordinates)) {
+            return 'Coordinates must be an array if provided';
         }
-        const [lng, lat] = coord;
-        if (typeof lng !== 'number' || isNaN(lng)) {
-            return `Longitude at coordinate ${i + 1} must be a valid number`;
+        if (routeData.coordinates.length > 0 && routeData.coordinates.length < 2) {
+            return 'Route must have at least 2 coordinate points if coordinates are provided';
         }
-        if (lng < -180 || lng > 180) {
-            return `Longitude at coordinate ${i + 1} must be between -180 and 180 degrees`;
-        }
-        if (typeof lat !== 'number' || isNaN(lat)) {
-            return `Latitude at coordinate ${i + 1} must be a valid number`;
-        }
-        if (lat < -90 || lat > 90) {
-            return `Latitude at coordinate ${i + 1} must be between -90 and 90 degrees`;
+        for (let i = 0; i < routeData.coordinates.length; i++) {
+            const coord = routeData.coordinates[i];
+            if (!Array.isArray(coord) || coord.length !== 2) {
+                return `Coordinate ${i + 1} must be an array with 2 elements [longitude, latitude]`;
+            }
+            const [lng, lat] = coord;
+            if (typeof lng !== 'number' || isNaN(lng)) {
+                return `Longitude at coordinate ${i + 1} must be a valid number`;
+            }
+            if (lng < -180 || lng > 180) {
+                return `Longitude at coordinate ${i + 1} must be between -180 and 180 degrees`;
+            }
+            if (typeof lat !== 'number' || isNaN(lat)) {
+                return `Latitude at coordinate ${i + 1} must be a valid number`;
+            }
+            if (lat < -90 || lat > 90) {
+                return `Latitude at coordinate ${i + 1} must be between -90 and 90 degrees`;
+            }
         }
     }
     if (typeof routeData.distance_km !== 'number' ||

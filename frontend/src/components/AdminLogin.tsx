@@ -6,6 +6,8 @@ import GlassyCard from './ui/GlassyCard';
 import PremiumButton from './ui/PremiumButton';
 import { useTransition } from './transitions';
 
+import { logger } from '../utils/logger';
+
 interface AdminLoginProps {
   onLoginSuccess?: () => void;
 }
@@ -17,14 +19,13 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [twoFactorCode, setTwoFactorCode] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
 
   // Try to recover session on component mount
   useEffect(() => {
     const attemptSessionRecovery = async () => {
       try {
-        console.log('🔄 Attempting automatic session recovery...');
+        logger.info('🔄 Attempting automatic session recovery...', 'component');
 
         // Wait for auth service to be fully initialized
         while (!authService.isInitialized()) {
@@ -33,16 +34,13 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
 
         const result = await authService.recoverSession();
         if (result.success && authService.isAdmin()) {
-          console.log('✅ Session recovered, redirecting to admin panel');
+          logger.info('✅ Session recovered, redirecting to admin panel', 'component');
           handleLoginSuccess();
         } else {
-          console.log(
-            '📝 Session recovery failed or user is not admin:',
-            result.error
-          );
+          logger.debug('Session recovery failed or user is not admin', 'AdminLogin', { error: result.error });
         }
       } catch (error) {
-        console.log('📝 No valid session to recover:', error);
+        logger.debug('No valid session to recover', 'AdminLogin', { error: String(error) });
       }
     };
 
@@ -57,54 +55,73 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     setSuccess(null);
 
     try {
-      // Add timeout to prevent infinite loading - REDUCED TIMEOUT
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Login timeout')), 5000); // Reduced from 8s to 5s
-      });
-
-      const loginPromise = authService.signIn(email, password);
-
-      const result = (await Promise.race([loginPromise, timeoutPromise])) as {
-        success: boolean;
-        user?: { role: string };
-        error?: string;
-      };
+      // Use the improved authService.signIn method directly
+      // It already handles timeouts and has better error handling
+      const result = await authService.signIn(email, password);
 
       if (result.success && result.user) {
+        // Check if the user has admin role
         if (result.user.role === 'admin') {
           setSuccess('Login successful! Loading admin dashboard...');
+          
+          // Slight delay for better UI transition
           setTimeout(() => {
             handleLoginSuccess();
-          }, 500); // Reduced from 1s to 500ms
+          }, 500);
         } else {
-          setError('Access denied. Admin privileges required.');
+          // Specific error message for role mismatch
+          const userRole = result.user.role || 'unknown';
+          setError(`Access denied. Admin privileges required. Your current role is: ${userRole}`);
+          
+          // Log this security event
+          logger.warn('Non-admin user attempted to access admin panel', 'admin-login', {
+            userEmail: email,
+            userRole: userRole,
+            timestamp: new Date().toISOString()
+          });
+          
+          // Sign out immediately for security
           await authService.signOut();
         }
       } else {
-        setError(
-          result.error || 'Login failed. Please check your credentials.'
-        );
+        // Display the error returned from authService
+        setError(result.error || 'Login failed. Please check your credentials.');
+        
+        // Log the error for monitoring
+        logger.error('Authentication error during admin login', 'admin-login', {
+          error: result.error || 'Unknown authentication error',
+          userEmail: email
+        });
       }
     } catch (err) {
-      console.error('❌ Login error:', err);
-      if (err instanceof Error && err.message === 'Login timeout') {
-        setError(
-          'Login timed out. This might be due to slow network or profile loading. Please try again.'
-        );
-      } else if (
-        err instanceof Error &&
-        err.message.includes('environment variables')
-      ) {
-        setError('Configuration error. Please check your environment setup.');
-      } else if (
-        err instanceof Error &&
-        err.message.includes('Profile loading timeout')
-      ) {
-        setError(
-          'Profile loading is taking longer than expected. Please try again.'
-        );
+      // Log the unexpected error
+      logger.error('Unexpected error in admin login process', 'admin-login', { 
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined
+      });
+      
+      // Provide user-friendly error messages based on error type
+      if (err instanceof Error) {
+        // Handle specific error cases
+        if (err.message.includes('timeout') || err.message.includes('Timeout')) {
+          setError(
+            'The login process is taking longer than expected. This might be due to network issues. Please try again.'
+          );
+        } else if (err.message.includes('environment') || err.message.includes('config')) {
+          setError('System configuration error. Please contact the administrator.');
+        } else if (err.message.includes('network') || err.message.includes('connection')) {
+          setError('Network connection error. Please check your internet connection and try again.');
+        } else if (err.message.includes('profile') || err.message.includes('Profile')) {
+          setError(
+            'Unable to load your user profile. Please try again or contact support.'
+          );
+        } else {
+          // Generic error message for other cases
+          setError('An unexpected error occurred. Please try again or contact support.');
+        }
       } else {
-        setError('Network error. Please check your connection and try again.');
+        // Handle non-Error objects
+        setError('An unexpected error occurred. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -296,33 +313,6 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               </div>
             </motion.div>
 
-            {/* 2FA Code Input (Optional) */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.7, duration: 0.6 }}
-            >
-              <label
-                htmlFor="twoFactorCode"
-                className="block text-sm font-medium text-blue-200/80 mb-2"
-              >
-                2FA Code <span className="text-blue-200/50">(Optional)</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="twoFactorCode"
-                  name="twoFactorCode"
-                  type="text"
-                  autoComplete="one-time-code"
-                  value={twoFactorCode}
-                  onChange={(e) => setTwoFactorCode(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl text-white placeholder-blue-200/30 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent transition-all duration-300"
-                  placeholder="Enter 2FA code if enabled"
-                  disabled={isLoading}
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-xl opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-              </div>
-            </motion.div>
 
             {/* Loading State */}
             <AnimatePresence>

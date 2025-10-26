@@ -1,4 +1,5 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "builds": [
     {
@@ -9,22 +10,16 @@
       }
     }
   ],
+  "buildCommand": "cd frontend && npm run build:vercel",
+  "outputDirectory": "frontend/dist",
+  "framework": "vite",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./frontend",
   "rewrites": [
     {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
-  "env": {
-    "NODE_ENV": "production",
-    "VITE_API_URL": "https://bus-tracking-backend-sxh8.onrender.com",
-    "VITE_WEBSOCKET_URL": "wss://bus-tracking-backend-sxh8.onrender.com"
-  },
-  "functions": {
-    "frontend/dist/**/*.js": {
-      "maxDuration": 30
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
@@ -44,6 +39,10 @@
         {
           "key": "Referrer-Policy",
           "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(), microphone=(), camera=()"
         }
       ]
     },

@@ -1,8 +1,10 @@
+import { logger } from '../../utils/logger';
+
 // Offline-First Architecture with IndexedDB
 export interface OfflineData {
   id: string;
   type: 'bus' | 'route' | 'location' | 'driver' | 'user';
-  data: any;
+  data: Record<string, unknown>;
   timestamp: number;
   version: number;
   syncStatus: 'synced' | 'pending' | 'failed';
@@ -12,7 +14,7 @@ export interface SyncQueueItem {
   id: string;
   operation: 'create' | 'update' | 'delete';
   endpoint: string;
-  data: any;
+  data: Record<string, unknown>;
   timestamp: number;
   retryCount: number;
 }
@@ -50,13 +52,13 @@ class OfflineStorage {
       const request = indexedDB.open(this.config.dbName, this.config.dbVersion);
 
       request.onerror = () => {
-        console.error('❌ Failed to open IndexedDB:', request.error);
+        logger.error('❌ Failed to open IndexedDB', 'component', { error: request.error });
         reject(request.error);
       };
 
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('✅ IndexedDB initialized successfully');
+        logger.info('✅ IndexedDB initialized successfully', 'component');
         resolve();
       };
 
@@ -65,19 +67,23 @@ class OfflineStorage {
 
         // Create object stores
         if (!db.objectStoreNames.contains('offlineData')) {
-          const dataStore = db.createObjectStore('offlineData', { keyPath: 'id' });
+          const dataStore = db.createObjectStore('offlineData', {
+            keyPath: 'id',
+          });
           dataStore.createIndex('type', 'type', { unique: false });
           dataStore.createIndex('timestamp', 'timestamp', { unique: false });
           dataStore.createIndex('syncStatus', 'syncStatus', { unique: false });
         }
 
         if (!db.objectStoreNames.contains('syncQueue')) {
-          const queueStore = db.createObjectStore('syncQueue', { keyPath: 'id' });
+          const queueStore = db.createObjectStore('syncQueue', {
+            keyPath: 'id',
+          });
           queueStore.createIndex('timestamp', 'timestamp', { unique: false });
           queueStore.createIndex('retryCount', 'retryCount', { unique: false });
         }
 
-        console.log('✅ IndexedDB schema upgraded');
+        logger.info('✅ IndexedDB schema upgraded', 'component');
       };
     });
   }
@@ -86,13 +92,13 @@ class OfflineStorage {
   private setupNetworkListeners(): void {
     window.addEventListener('online', () => {
       this.isOnline = true;
-      console.log('🌐 Network connection restored');
+      logger.info('🌐 Network connection restored', 'component');
       this.syncPendingData();
     });
 
     window.addEventListener('offline', () => {
       this.isOnline = false;
-      console.log('📴 Network connection lost');
+      logger.info('📴 Network connection lost', 'component');
     });
   }
 
@@ -110,7 +116,11 @@ class OfflineStorage {
   }
 
   // Store data offline
-  async storeData(type: OfflineData['type'], id: string, data: any): Promise<void> {
+  async storeData(
+    type: OfflineData['type'],
+    id: string,
+    data: Record<string, unknown>
+  ): Promise<void> {
     if (!this.db) {
       throw new Error('IndexedDB not initialized');
     }
@@ -130,19 +140,19 @@ class OfflineStorage {
       const request = store.put(offlineData);
 
       request.onsuccess = () => {
-        console.log(`💾 Stored ${type} data offline:`, id);
+        logger.debug('Debug info', 'component', { data: `💾 Stored ${type} data offline: ${id}` });
         resolve();
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to store data offline:', request.error);
+        logger.error('❌ Failed to store data offline', 'component', { error: request.error });
         reject(request.error);
       };
     });
   }
 
   // Get data from offline storage
-  async getData(type: OfflineData['type'], id: string): Promise<any | null> {
+  async getData(type: OfflineData['type'], id: string): Promise<Record<string, unknown> | null> {
     if (!this.db) {
       return null;
     }
@@ -169,14 +179,14 @@ class OfflineStorage {
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to get data from offline storage:', request.error);
+        logger.error('❌ Failed to get data from offline storage', 'component', { error: request.error });
         reject(request.error);
       };
     });
   }
 
   // Get all data of a specific type
-  async getAllData(type: OfflineData['type']): Promise<any[]> {
+  async getAllData(type: OfflineData['type']): Promise<Record<string, unknown>[]> {
     if (!this.db) {
       return [];
     }
@@ -190,13 +200,13 @@ class OfflineStorage {
       request.onsuccess = () => {
         const results = request.result;
         const freshData = results
-          .filter(item => Date.now() - item.timestamp < this.config.maxAge)
-          .map(item => item.data);
+          .filter((item) => Date.now() - item.timestamp < this.config.maxAge)
+          .map((item) => item.data);
         resolve(freshData);
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to get all data from offline storage:', request.error);
+        logger.error('❌ Failed to get all data from offline storage', 'component', { error: request.error });
         reject(request.error);
       };
     });
@@ -214,19 +224,23 @@ class OfflineStorage {
       const request = store.delete(id);
 
       request.onsuccess = () => {
-        console.log(`🗑️ Removed ${type} data from offline storage:`, id);
+        logger.debug('Debug info', 'component', { data: `🗑️ Removed ${type} data from offline storage: ${id}` });
         resolve();
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to remove data from offline storage:', request.error);
+        logger.error('❌ Failed to remove data from offline storage', 'component', { error: request.error });
         reject(request.error);
       };
     });
   }
 
   // Add item to sync queue
-  async addToSyncQueue(operation: SyncQueueItem['operation'], endpoint: string, data: any): Promise<void> {
+  async addToSyncQueue(
+    operation: SyncQueueItem['operation'],
+    endpoint: string,
+    data: Record<string, unknown>
+  ): Promise<void> {
     if (!this.db) {
       throw new Error('IndexedDB not initialized');
     }
@@ -246,12 +260,12 @@ class OfflineStorage {
       const request = store.put(queueItem);
 
       request.onsuccess = () => {
-        console.log(`📋 Added to sync queue:`, queueItem.id);
+        logger.debug('Debug info', 'component', { data: `📋 Added to sync queue: ${queueItem.id}` });
         resolve();
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to add to sync queue:', request.error);
+        logger.error('❌ Failed to add to sync queue', 'component', { error: request.error });
         reject(request.error);
       };
     });
@@ -273,7 +287,7 @@ class OfflineStorage {
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to get sync queue:', request.error);
+        logger.error('❌ Failed to get sync queue', 'component', { error: request.error });
         reject(request.error);
       };
     });
@@ -291,12 +305,12 @@ class OfflineStorage {
       const request = store.delete(id);
 
       request.onsuccess = () => {
-        console.log(`✅ Removed from sync queue:`, id);
+        logger.debug('Debug info', 'component', { data: `✅ Removed from sync queue:`, id });
         resolve();
       };
 
       request.onerror = () => {
-        console.error('❌ Failed to remove from sync queue:', request.error);
+        logger.error('❌ Failed to remove from sync queue', 'component', { error: request.error });
         reject(request.error);
       };
     });
@@ -332,7 +346,7 @@ class OfflineStorage {
   // Sync pending data
   async syncPendingData(): Promise<void> {
     if (!this.isOnline) {
-      console.log('📴 Skipping sync - offline');
+      logger.info('📴 Skipping sync - offline', 'component');
       return;
     }
 
@@ -341,7 +355,7 @@ class OfflineStorage {
       return;
     }
 
-    console.log(`🔄 Syncing ${queueItems.length} pending items...`);
+    logger.info('🔄 Syncing pending items', 'component', { data: `${queueItems.length} items` });
 
     for (const item of queueItems) {
       try {
@@ -351,18 +365,19 @@ class OfflineStorage {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: item.operation !== 'delete' ? JSON.stringify(item.data) : undefined,
+          body:
+            item.operation !== 'delete' ? JSON.stringify(item.data) : null,
         });
 
         if (response.ok) {
           await this.removeFromSyncQueue(item.id);
-          console.log(`✅ Synced item:`, item.id);
+          logger.debug('Debug info', 'component', { data: `✅ Synced item: ${item.id}` });
         } else {
           throw new Error(`HTTP ${response.status}`);
         }
       } catch (error) {
-        console.error(`❌ Failed to sync item ${item.id}:`, error);
-        
+        logger.error('❌ Failed to sync item', 'component', { error: error instanceof Error ? error.message : String(error), itemId: item.id });
+
         // Increment retry count
         const newRetryCount = item.retryCount + 1;
         await this.updateRetryCount(item.id, newRetryCount);
@@ -370,7 +385,7 @@ class OfflineStorage {
         // Remove item if max retries exceeded
         if (newRetryCount >= 5) {
           await this.removeFromSyncQueue(item.id);
-          console.log(`🗑️ Removed item ${item.id} after max retries`);
+          logger.info('🗑️ Removed item after max retries', 'component', { data: item.id });
         }
       }
     }
@@ -383,7 +398,10 @@ class OfflineStorage {
     }
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offlineData', 'syncQueue'], 'readwrite');
+      const transaction = this.db!.transaction(
+        ['offlineData', 'syncQueue'],
+        'readwrite'
+      );
       const dataStore = transaction.objectStore('offlineData');
       const queueStore = transaction.objectStore('syncQueue');
 
@@ -392,7 +410,7 @@ class OfflineStorage {
 
       dataRequest.onsuccess = () => {
         queueRequest.onsuccess = () => {
-          console.log('🗑️ Cleared all offline data');
+          logger.info('🗑️ Cleared all offline data', 'component');
           resolve();
         };
         queueRequest.onerror = () => reject(queueRequest.error);
@@ -413,7 +431,10 @@ class OfflineStorage {
     }
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['offlineData', 'syncQueue'], 'readonly');
+      const transaction = this.db!.transaction(
+        ['offlineData', 'syncQueue'],
+        'readonly'
+      );
       const dataStore = transaction.objectStore('offlineData');
       const queueStore = transaction.objectStore('syncQueue');
 
@@ -426,7 +447,7 @@ class OfflineStorage {
           const queueItems = queueRequest.result;
 
           const dataByType: Record<string, number> = {};
-          dataItems.forEach(item => {
+          dataItems.forEach((item) => {
             dataByType[item.type] = (dataByType[item.type] || 0) + 1;
           });
 
@@ -434,7 +455,9 @@ class OfflineStorage {
             totalItems: dataItems.length,
             dataByType,
             queueItems: queueItems.length,
-            totalSize: JSON.stringify(dataItems).length + JSON.stringify(queueItems).length,
+            totalSize:
+              JSON.stringify(dataItems).length +
+              JSON.stringify(queueItems).length,
           });
         };
         queueRequest.onerror = () => reject(queueRequest.error);

@@ -1,258 +1,325 @@
-// Comprehensive Error Handler for Real-time Services
-export interface ErrorContext {
-  service: 'websocket' | 'supabase' | 'sse' | 'api' | 'ui' | 'map' | 'network';
-  operation: string;
-  timestamp: string;
-  userAgent: string;
-  url: string;
-  networkInfo?: {
-    effectiveType?: string;
-    downlink?: number;
-    rtt?: number;
-    saveData?: boolean;
-  };
+/**
+ * Centralized Error Handling Utilities
+ * Provides consistent error handling across the frontend application
+ */
+
+import { logger } from './logger';
+
+export interface AppError extends Error {
+  code: string;
+  statusCode?: number;
+  isOperational?: boolean;
+  userMessage?: string;
 }
 
-export interface ErrorReport {
-  message: string;
-  context: ErrorContext;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  retryable: boolean;
-  suggestions: string[];
+export class CustomError extends Error implements AppError {
+  public code: string;
+  public statusCode: number;
+  public isOperational: boolean;
+  public userMessage: string;
+
+  constructor(
+    message: string,
+    code: string = 'UNKNOWN_ERROR',
+    statusCode: number = 500,
+    userMessage?: string,
+    isOperational: boolean = true
+  ) {
+    super(message);
+    this.code = code;
+    this.statusCode = statusCode;
+    this.isOperational = isOperational;
+    this.userMessage = userMessage || message;
+
+    Error.captureStackTrace(this, this.constructor);
+  }
 }
 
-class ErrorHandler {
-  private errorLog: ErrorReport[] = [];
-  private maxLogSize = 100;
+// Predefined error types
+export const createNetworkError = (message: string = 'Network connection failed') =>
+  new CustomError(message, 'NETWORK_ERROR', 0, 'Please check your internet connection');
 
-  // Log an error with context
-  logError(
-    error: Error | string | Event | unknown,
-    context: Partial<ErrorContext>,
-    severity: 'low' | 'medium' | 'high' | 'critical' = 'medium'
-  ): ErrorReport {
-    // Handle different error types
-    let errorMessage: string;
-    
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    } else if (typeof error === 'string') {
-      errorMessage = error;
-    } else if (error instanceof Event) {
-      errorMessage = `Event error: ${error.type}`;
-    } else {
-      errorMessage = 'Unknown error';
+export const createValidationError = (message: string = 'Invalid data provided') =>
+  new CustomError(message, 'VALIDATION_ERROR', 400, 'Please check your input and try again');
+
+export const createAuthenticationError = (message: string = 'Authentication failed') =>
+  new CustomError(message, 'AUTH_ERROR', 401, 'Please log in again');
+
+export const createAuthorizationError = (message: string = 'Access denied') =>
+  new CustomError(message, 'AUTHZ_ERROR', 403, 'You do not have permission for this action');
+
+export const createNotFoundError = (message: string = 'Resource not found') =>
+  new CustomError(message, 'NOT_FOUND', 404, 'The requested resource was not found');
+
+export const createConflictError = (message: string = 'Resource already exists') =>
+  new CustomError(message, 'CONFLICT', 409, 'This resource already exists');
+
+export const createRateLimitError = (message: string = 'Too many requests') =>
+  new CustomError(message, 'RATE_LIMIT', 429, 'Please wait a moment before trying again');
+
+export const createServerError = (message: string = 'Server error') =>
+  new CustomError(message, 'SERVER_ERROR', 500, 'Something went wrong. Please try again later');
+
+export const createServiceUnavailableError = (message: string = 'Service unavailable') =>
+  new CustomError(message, 'SERVICE_UNAVAILABLE', 503, 'Service is temporarily unavailable');
+
+// Error handler class
+export class ErrorHandler {
+  private static instance: ErrorHandler;
+
+  static getInstance(): ErrorHandler {
+    if (!ErrorHandler.instance) {
+      ErrorHandler.instance = new ErrorHandler();
     }
-    
-    // Add network information if available
-    let networkInfo = {};
-    if (typeof navigator !== 'undefined' && 'connection' in navigator) {
-      const conn = (navigator as any).connection;
-      if (conn) {
-        networkInfo = {
-          effectiveType: conn.effectiveType,
-          downlink: conn.downlink,
-          rtt: conn.rtt,
-          saveData: conn.saveData,
-        };
+    return ErrorHandler.instance;
+  }
+
+  // Handle different types of errors
+  handleError(error: unknown, context?: string): AppError {
+    let appError: AppError;
+
+    if (error instanceof CustomError) {
+      appError = error;
+    } else if (error instanceof Error) {
+      // Convert generic Error to AppError
+      appError = new CustomError(
+        error.message,
+        'UNKNOWN_ERROR',
+        500,
+        'An unexpected error occurred'
+      );
+    } else {
+      // Handle non-Error objects
+      appError = new CustomError(
+        String(error),
+        'UNKNOWN_ERROR',
+        500,
+        'An unexpected error occurred'
+      );
+    }
+
+    // Log the error
+    logger.error(
+      `Error in ${context || 'unknown context'}`,
+      context || 'error-handler',
+      {
+        error: appError.message,
+        code: appError.code,
+        statusCode: appError.statusCode,
+        stack: appError.stack,
       }
-    }
-    
-    const errorReport: ErrorReport = {
-      message: errorMessage,
-      context: {
-        service: context.service || 'api',
-        operation: context.operation || 'unknown',
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent,
-        url: window.location.href,
-        networkInfo: networkInfo as any,
-        ...context,
-      },
-      severity,
-      retryable: this.isRetryableError(error),
-      suggestions: this.getSuggestions(error, context),
-    };
+    );
 
-    this.errorLog.push(errorReport);
-    
-    // Keep log size manageable
-    if (this.errorLog.length > this.maxLogSize) {
-      this.errorLog.shift();
-    }
-
-    // Log to console with appropriate level
-    this.logToConsole(errorReport);
-
-    return errorReport;
+    return appError;
   }
 
-  // Check if an error is retryable
-  private isRetryableError(error: Error | string | Event | unknown): boolean {
-    let message: string;
-    
-    if (error instanceof Error) {
-      message = error.message;
-    } else if (typeof error === 'string') {
-      message = error;
-    } else if (error instanceof Event) {
-      message = error.type;
+  // Handle API errors
+  handleApiError(error: unknown, endpoint?: string): AppError {
+    let appError: AppError;
+
+    if (error instanceof CustomError) {
+      appError = error;
+    } else if (error instanceof Error) {
+      // Check for specific error patterns
+      if (error.message.includes('Network Error') || error.message.includes('fetch')) {
+        appError = createNetworkError('Failed to connect to server');
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        appError = createAuthenticationError('Please log in again');
+      } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
+        appError = createAuthorizationError('You do not have permission for this action');
+      } else if (error.message.includes('404') || error.message.includes('Not Found')) {
+        appError = createNotFoundError('The requested resource was not found');
+      } else if (error.message.includes('409') || error.message.includes('Conflict')) {
+        appError = createConflictError('This resource already exists');
+      } else if (error.message.includes('429') || error.message.includes('Too Many Requests')) {
+        appError = createRateLimitError('Please wait a moment before trying again');
+      } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
+        appError = createServerError('Server error occurred');
+      } else if (error.message.includes('503') || error.message.includes('Service Unavailable')) {
+        appError = createServiceUnavailableError('Service is temporarily unavailable');
+      } else {
+        appError = new CustomError(
+          error.message,
+          'API_ERROR',
+          500,
+          'Request failed. Please try again.'
+        );
+      }
     } else {
-      message = 'Unknown error';
+      appError = new CustomError(
+        String(error),
+        'API_ERROR',
+        500,
+        'Request failed. Please try again.'
+      );
     }
-    
-    // Network-related errors are usually retryable
-    const retryablePatterns = [
-      /network/i,
-      /timeout/i,
-      /connection/i,
-      /cors/i,
-      /fetch/i,
-      /websocket/i,
-      /sse/i,
-      /socket\.io/i,
-      /error/i,
-      /failed/i,
-      /disconnect/i,
-    ];
 
-    return retryablePatterns.some(pattern => pattern.test(message));
+    // Log the API error
+    logger.error(
+      `API Error in ${endpoint || 'unknown endpoint'}`,
+      'api-error-handler',
+      {
+        error: appError.message,
+        code: appError.code,
+        statusCode: appError.statusCode,
+        endpoint,
+        stack: appError.stack,
+      }
+    );
+
+    return appError;
   }
 
-  // Get suggestions for fixing the error
-  private getSuggestions(error: Error | string | Event | unknown, _context: Partial<ErrorContext>): string[] {
-    let message: string;
-    
-    if (error instanceof Error) {
-      message = error.message;
-    } else if (typeof error === 'string') {
-      message = error;
-    } else if (error instanceof Event) {
-      message = error.type;
+  // Handle WebSocket errors
+  handleWebSocketError(error: unknown, context?: string): AppError {
+    let appError: AppError;
+
+    if (error instanceof CustomError) {
+      appError = error;
+    } else if (error instanceof Error) {
+      if (error.message.includes('connection')) {
+        appError = createNetworkError('WebSocket connection failed');
+      } else if (error.message.includes('timeout')) {
+        appError = new CustomError(
+          'WebSocket connection timeout',
+          'WEBSOCKET_TIMEOUT',
+          0,
+          'Connection timed out. Please try again.'
+        );
+      } else {
+        appError = new CustomError(
+          error.message,
+          'WEBSOCKET_ERROR',
+          0,
+          'Connection error occurred'
+        );
+      }
     } else {
-      message = 'Unknown error';
-    }
-    const suggestions: string[] = [];
-
-    if (message.includes('CORS')) {
-      suggestions.push('Check CORS configuration on the server');
-      suggestions.push('Verify the API endpoint is accessible');
-    }
-
-    if (message.includes('timeout')) {
-      suggestions.push('Increase connection timeout settings');
-      suggestions.push('Check network connectivity');
+      appError = new CustomError(
+        String(error),
+        'WEBSOCKET_ERROR',
+        0,
+        'Connection error occurred'
+      );
     }
 
-    if (message.includes('websocket')) {
-      suggestions.push('Verify WebSocket server is running');
-      suggestions.push('Check WebSocket URL configuration');
-    }
+    // Log the WebSocket error
+    logger.error(
+      `WebSocket Error in ${context || 'unknown context'}`,
+      'websocket-error-handler',
+      {
+        error: appError.message,
+        code: appError.code,
+        context,
+      }
+    );
 
-    if (message.includes('sse')) {
-      suggestions.push('Verify SSE endpoint is implemented on server');
-      suggestions.push('Check SSE URL configuration');
-    }
-
-    if (message.includes('supabase')) {
-      suggestions.push('Verify Supabase configuration');
-      suggestions.push('Check Supabase service status');
-    }
-
-    if (suggestions.length === 0) {
-      suggestions.push('Check network connectivity');
-      suggestions.push('Verify server is running');
-      suggestions.push('Check browser console for more details');
-    }
-
-    return suggestions;
+    return appError;
   }
 
-  // Log to console with appropriate styling
-  private logToConsole(errorReport: ErrorReport): void {
-    const { message, context, severity, retryable, suggestions } = errorReport;
-    
-    const severityColors = {
-      low: 'color: #6b7280',
-      medium: 'color: #f59e0b',
-      high: 'color: #ef4444',
-      critical: 'color: #dc2626; font-weight: bold',
-    };
+  // Handle location errors
+  handleLocationError(error: unknown): AppError {
+    let appError: AppError;
 
-    const color = severityColors[severity];
-    const retryableText = retryable ? '🔄 Retryable' : '❌ Not Retryable';
-
-    console.group(`%c${severity.toUpperCase()} ERROR - ${context.service.toUpperCase()}`, color);
-    console.error(`Message: ${message}`);
-    console.error(`Service: ${context.service}`);
-    console.error(`Operation: ${context.operation}`);
-    console.error(`Status: ${retryableText}`);
-    console.error(`Timestamp: ${context.timestamp}`);
-    
-    if (suggestions.length > 0) {
-      console.warn('Suggestions:');
-      suggestions.forEach(suggestion => console.warn(`  • ${suggestion}`));
+    if (error instanceof GeolocationPositionError) {
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          appError = new CustomError(
+            'Location access denied',
+            'LOCATION_PERMISSION_DENIED',
+            0,
+            'Please allow location access to use this feature'
+          );
+          break;
+        case error.POSITION_UNAVAILABLE:
+          appError = new CustomError(
+            'Location unavailable',
+            'LOCATION_UNAVAILABLE',
+            0,
+            'Location information is not available'
+          );
+          break;
+        case error.TIMEOUT:
+          appError = new CustomError(
+            'Location timeout',
+            'LOCATION_TIMEOUT',
+            0,
+            'Location request timed out. Please try again.'
+          );
+          break;
+        default:
+          appError = new CustomError(
+            'Location error',
+            'LOCATION_ERROR',
+            0,
+            'Failed to get location information'
+          );
+      }
+    } else if (error instanceof Error) {
+      appError = new CustomError(
+        error.message,
+        'LOCATION_ERROR',
+        0,
+        'Failed to get location information'
+      );
+    } else {
+      appError = new CustomError(
+        String(error),
+        'LOCATION_ERROR',
+        0,
+        'Failed to get location information'
+      );
     }
-    
-    console.groupEnd();
+
+    // Log the location error
+    logger.error(
+      'Location Error',
+      'location-error-handler',
+      {
+        error: appError.message,
+        code: appError.code,
+        stack: appError.stack,
+      }
+    );
+
+    return appError;
   }
 
-  // Get error statistics
-  getErrorStats(): {
-    total: number;
-    byService: Record<string, number>;
-    bySeverity: Record<string, number>;
-    recentErrors: ErrorReport[];
-  } {
-    const byService: Record<string, number> = {};
-    const bySeverity: Record<string, number> = {};
-
-    this.errorLog.forEach(error => {
-      byService[error.context.service] = (byService[error.context.service] || 0) + 1;
-      bySeverity[error.severity] = (bySeverity[error.severity] || 0) + 1;
-    });
-
-    return {
-      total: this.errorLog.length,
-      byService,
-      bySeverity,
-      recentErrors: this.errorLog.slice(-10), // Last 10 errors
-    };
+  // Get user-friendly error message
+  getUserMessage(error: AppError): string {
+    return error.userMessage || error.message;
   }
 
-  // Clear error log
-  clearLog(): void {
-    this.errorLog = [];
-  }
-
-  // Get all errors
-  getErrors(): ErrorReport[] {
-    return [...this.errorLog];
-  }
-
-  // Check if there are critical errors
-  hasCriticalErrors(): boolean {
-    return this.errorLog.some(error => error.severity === 'critical');
-  }
-
-  // Get retryable errors
-  getRetryableErrors(): ErrorReport[] {
-    return this.errorLog.filter(error => error.retryable);
+  // Check if error is operational (can be handled gracefully)
+  isOperational(error: AppError): boolean {
+    return error.isOperational !== false;
   }
 }
 
-// Create singleton instance
-export const errorHandler = new ErrorHandler();
+// Export singleton instance
+export const errorHandler = ErrorHandler.getInstance();
 
-// Export utility functions
-export const logError = (
-  error: Error | string | Event | unknown,
-  context: Partial<ErrorContext>,
-  severity?: 'low' | 'medium' | 'high' | 'critical'
-) => errorHandler.logError(error, context, severity);
+// Convenience functions
+export const handleError = (error: unknown, context?: string) =>
+  errorHandler.handleError(error, context);
 
-export const getErrorStats = () => errorHandler.getErrorStats();
-export const hasCriticalErrors = () => errorHandler.hasCriticalErrors();
-export const getRetryableErrors = () => errorHandler.getRetryableErrors();
+export const handleApiError = (error: unknown, endpoint?: string) =>
+  errorHandler.handleApiError(error, endpoint);
 
-export default errorHandler;
+export const handleWebSocketError = (error: unknown, context?: string) =>
+  errorHandler.handleWebSocketError(error, context);
+
+export const handleLocationError = (error: unknown) =>
+  errorHandler.handleLocationError(error);
+
+export const getUserMessage = (error: AppError) =>
+  errorHandler.getUserMessage(error);
+
+export const isOperational = (error: AppError) =>
+  errorHandler.isOperational(error);
+
+// Legacy compatibility function
+export const logError = (error: unknown, context?: string) => {
+  const appError = errorHandler.handleError(error, context);
+  return appError;
+};

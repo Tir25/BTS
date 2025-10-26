@@ -43,9 +43,12 @@ const VirtualBusList: React.FC<VirtualBusListProps> = ({
   }, []);
 
   // Handle bus selection
-  const handleBusClick = useCallback((bus: BusInfo) => {
-    onBusSelect?.(bus);
-  }, [onBusSelect]);
+  const handleBusClick = useCallback(
+    (bus: BusInfo) => {
+      onBusSelect?.(bus);
+    },
+    [onBusSelect]
+  );
 
   if (buses.length === 0) {
     return (
@@ -105,9 +108,7 @@ const VirtualBusList: React.FC<VirtualBusListProps> = ({
                       <h3 className="text-white font-semibold">
                         {bus.busNumber}
                       </h3>
-                      <p className="text-white/70 text-sm">
-                        {bus.routeName}
-                      </p>
+                      <p className="text-white/70 text-sm">{bus.routeName}</p>
                     </div>
                   </div>
                   <div className="text-right">

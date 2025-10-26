@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllBuses = exports.getBusInfo = exports.getBusLocationHistory = exports.getCurrentBusLocations = exports.getDriverBusInfo = exports.saveLocationUpdate = void 0;
+exports.getBusInfo = exports.getBusLocationHistory = exports.getCurrentBusLocations = exports.getDriverBusInfo = exports.saveLocationUpdate = void 0;
 const supabase_1 = require("../config/supabase");
 const database_1 = __importDefault(require("../config/database"));
 const saveLocationUpdate = async (data) => {
@@ -47,8 +47,8 @@ const getDriverBusInfo = async (driverId) => {
         console.log('🔍 Fetching bus info for driver:', driverId);
         const { data: busData, error: busError } = await supabase_1.supabaseAdmin
             .from('buses')
-            .select('id, number_plate, route_id')
-            .eq('assigned_driver_id', driverId)
+            .select('id, bus_number, vehicle_no, route_id')
+            .eq('assigned_driver_profile_id', driverId)
             .eq('is_active', true)
             .limit(1)
             .maybeSingle();
@@ -60,7 +60,7 @@ const getDriverBusInfo = async (driverId) => {
         }
         let driverName = 'Unknown Driver';
         const { data: profileData } = await supabase_1.supabaseAdmin
-            .from('profiles')
+            .from('user_profiles')
             .select('full_name')
             .eq('id', driverId)
             .maybeSingle();
@@ -95,7 +95,7 @@ const getDriverBusInfo = async (driverId) => {
         }
         const busInfo = {
             bus_id: busData.id,
-            bus_number: busData.number_plate || '',
+            bus_number: busData.bus_number || busData.vehicle_no || '',
             route_id: busData.route_id || '',
             route_name: routeName,
             driver_id: driverId,
@@ -216,52 +216,4 @@ const getBusInfo = async (busId) => {
     }
 };
 exports.getBusInfo = getBusInfo;
-const getAllBuses = async () => {
-    try {
-        const { data, error } = await supabase_1.supabaseAdmin
-            .from('buses')
-            .select(`
-        id,
-        number_plate,
-        route_id,
-        assigned_driver_id,
-        bus_image_url,
-        routes!inner(
-          name,
-          city
-        ),
-        profiles!inner(
-          full_name
-        )
-      `)
-            .eq('is_active', true);
-        if (error) {
-            console.error('❌ Error fetching all buses:', error);
-            return [];
-        }
-        return (data || []).map((item) => {
-            const routeData = Array.isArray(item.routes)
-                ? item.routes[0]
-                : item.routes;
-            const profileData = Array.isArray(item.profiles)
-                ? item.profiles[0]
-                : item.profiles;
-            return {
-                bus_id: item.id,
-                bus_number: item.number_plate || '',
-                route_id: item.route_id || '',
-                route_name: routeData?.name || '',
-                route_city: routeData?.city || '',
-                driver_id: item.assigned_driver_id || '',
-                driver_name: profileData?.full_name || 'Unknown Driver',
-                bus_image_url: item.bus_image_url || null,
-            };
-        });
-    }
-    catch (error) {
-        console.error('❌ Error in getAllBuses:', error);
-        return [];
-    }
-};
-exports.getAllBuses = getAllBuses;
 //# sourceMappingURL=locationService.js.map

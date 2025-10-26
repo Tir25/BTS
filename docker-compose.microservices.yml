@@ -1,0 +1,383 @@
+version: '3.8'
+
+services:
+  # Service Discovery - Consul
+  consul:
+    image: consul:latest
+    container_name: bus-tracking-consul
+    ports:
+      - "8500:8500"
+    environment:
+      - CONSUL_BIND_INTERFACE=eth0
+    command: >
+      consul agent
+      -server
+      -bootstrap-expect=1
+      -ui
+      -client=0.0.0.0
+      -bind=0.0.0.0
+      -retry-join=consul
+    networks:
+      - bus-tracking-network
+
+  # Load Balancer - HAProxy
+  haproxy:
+    image: haproxy:latest
+    container_name: bus-tracking-haproxy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404"
+    volumes:
+      - ./infrastructure/load-balancer/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./infrastructure/ssl:/etc/ssl/certs:ro
+    depends_on:
+      - user-service
+      - bus-service
+      - route-service
+      - assignment-service
+      - location-service
+      - storage-service
+      - monitoring-service
+    networks:
+      - bus-tracking-network
+
+  # User Service
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: bus-tracking-user-service
+    ports:
+      - "3001:3001"
+      - "9091:9090"
+    environment:
+      - NODE_ENV=production
+      - USER_SERVICE_PORT=3001
+      - USER_DATABASE_URL=postgresql://postgres:password@postgres:5432/user_service
+      - USER_REDIS_URL=redis://redis:6379
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CONSUL_URL=http://consul:8500
+    depends_on:
+      - postgres
+      - redis
+      - consul
+    networks:
+      - bus-tracking-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Bus Service
+  bus-service:
+    build:
+      context: ./services/bus-service
+      dockerfile: Dockerfile
+    container_name: bus-tracking-bus-service
+    ports:
+      - "3002:3002"
+      - "9092:9090"
+    environment:
+      - NODE_ENV=production
+      - BUS_SERVICE_PORT=3002
+      - BUS_DATABASE_URL=postgresql://postgres:password@postgres:5432/bus_service
+      - BUS_REDIS_URL=redis://redis:6379
+      - CONSUL_URL=http://consul:8500
+    depends_on:
+      - postgres
+      - redis
+      - consul
+    networks:
+      - bus-tracking-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Route Service
+  route-service:
+    build:
+      context: ./services/route-service
+      dockerfile: Dockerfile
+    container_name: bus-tracking-route-service
+    ports:
+      - "3003:3003"
+      - "9093:9090"
+    environment:
+      - NODE_ENV=production
+      - ROUTE_SERVICE_PORT=3003
+      - ROUTE_DATABASE_URL=postgresql://postgres:password@postgres:5432/route_service
+      - ROUTE_REDIS_URL=redis://redis:6379
+      - CONSUL_URL=http://consul:8500
+    depends_on:
+      - postgres
+      - redis
+      - consul
+    networks:
+      - bus-tracking-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Assignment Service
+  assignment-service:
+    build:
+      context: ./services/assignment-service
+      dockerfile: Dockerfile
+    container_name: bus-tracking-assignment-service
+    ports:
+      - "3004:3004"
+      - "9094:9090"
+    environment:
+      - NODE_ENV=production
+      - ASSIGNMENT_SERVICE_PORT=3004
+      - ASSIGNMENT_DATABASE_URL=postgresql://postgres:password@postgres:5432/assignment_service
+      - ASSIGNMENT_REDIS_URL=redis://redis:6379
+      - CONSUL_URL=http://consul:8500
+    depends_on:
+      - postgres
+      - redis
+      - consul
+    networks:
+      - bus-tracking-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Location Service
+  location-service:
+    build:
+      context: ./services/location-service
+      dockerfile: Dockerfile
+    container_name: bus-tracking-location-service
+    ports:
+      - "3005:3005"
+      - "9095:9090"
+    environment:
+      - NODE_ENV=production
+      - LOCATION_SERVICE_PORT=3005
+      - LOCATION_DATABASE_URL=postgresql://postgres:password@postgres:5432/location_service
+      - LOCATION_REDIS_URL=redis://redis:6379
+      - CONSUL_URL=http://consul:8500
+    depends_on:
+      - postgres
+      - redis
+      - consul
+    networks:
+      - bus-tracking-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Storage Service
+  storage-service:
+    build:
+      context: ./services/storage-service
+      dockerfile: Dockerfile
+    container_name: bus-tracking-storage-service
+    ports:
+      - "3006:3006"
+      - "9096:9090"
+    environment:
+      - NODE_ENV=production
+      - STORAGE_SERVICE_PORT=3006
+      - STORAGE_DATABASE_URL=postgresql://postgres:password@postgres:5432/storage_service
+      - STORAGE_REDIS_URL=redis://redis:6379
+      - CONSUL_URL=http://consul:8500
+    volumes:
+      - storage_data:/app/uploads
+    depends_on:
+      - postgres
+      - redis
+      - consul
+    networks:
+      - bus-tracking-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring Service
+  monitoring-service:
+    build:
+      context: ./services/monitoring-service
+      dockerfile: Dockerfile
+    container_name: bus-tracking-monitoring-service
+    ports:
+      - "3007:3007"
+      - "9097:9090"
+    environment:
+      - NODE_ENV=production
+      - MONITORING_SERVICE_PORT=3007
+      - MONITORING_DATABASE_URL=postgresql://postgres:password@postgres:5432/monitoring_service
+      - MONITORING_REDIS_URL=redis://redis:6379
+      - CONSUL_URL=http://consul:8500
+    depends_on:
+      - postgres
+      - redis
+      - consul
+    networks:
+      - bus-tracking-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # WebSocket Service
+  websocket-service:
+    build:
+      context: ./services/websocket-service
+      dockerfile: Dockerfile
+    container_name: bus-tracking-websocket-service
+    ports:
+      - "3008:3008"
+      - "9098:9090"
+    environment:
+      - NODE_ENV=production
+      - WEBSOCKET_SERVICE_PORT=3008
+      - WEBSOCKET_DATABASE_URL=postgresql://postgres:password@postgres:5432/websocket_service
+      - WEBSOCKET_REDIS_URL=redis://redis:6379
+      - CONSUL_URL=http://consul:8500
+    depends_on:
+      - postgres
+      - redis
+      - consul
+    networks:
+      - bus-tracking-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: bus-tracking-postgres
+    environment:
+      POSTGRES_DB: bustracking
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bus-tracking-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: bus-tracking-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bus-tracking-network
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bus-tracking-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - bus-tracking-network
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bus-tracking-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infrastructure/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - bus-tracking-network
+
+  # Jaeger Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: bus-tracking-jaeger
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - bus-tracking-network
+
+  # Backup Service
+  backup-service:
+    build:
+      context: ./infrastructure/backup
+      dockerfile: Dockerfile
+    container_name: bus-tracking-backup-service
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY}
+    volumes:
+      - backup_data:/backups
+      - ./infrastructure/backup:/app/backup
+    depends_on:
+      - postgres
+    networks:
+      - bus-tracking-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  backup_data:
+  storage_data:
+
+networks:
+  bus-tracking-network:
+    driver: bridge

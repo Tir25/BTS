@@ -26,7 +26,6 @@ const upload = multer({
 });
 
 // Upload bus image
-// @ts-ignore
 router.post(
   '/upload/bus-image',
   authenticateUser,
@@ -77,7 +76,6 @@ router.post(
 );
 
 // Upload driver profile photo
-// @ts-ignore
 router.post(
   '/upload/driver-photo',
   authenticateUser,
@@ -128,7 +126,6 @@ router.post(
 );
 
 // Upload route map
-// @ts-ignore
 router.post(
   '/upload/route-map',
   authenticateUser,

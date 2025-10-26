@@ -1,0 +1,216 @@
+# Alert Rules for Bus Tracking System Microservices
+
+groups:
+- name: microservices.rules
+  rules:
+  # High error rate
+  - alert: HighErrorRate
+    expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+    for: 2m
+    labels:
+      severity: critical
+      service: "{{ $labels.service }}"
+    annotations:
+      summary: "High error rate detected"
+      description: "Service {{ $labels.service }} has error rate of {{ $value }} errors per second"
+
+  # High response time
+  - alert: HighResponseTime
+    expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+    for: 5m
+    labels:
+      severity: warning
+      service: "{{ $labels.service }}"
+    annotations:
+      summary: "High response time detected"
+      description: "Service {{ $labels.service }} has 95th percentile response time of {{ $value }} seconds"
+
+  # Service down
+  - alert: ServiceDown
+    expr: up == 0
+    for: 1m
+    labels:
+      severity: critical
+      service: "{{ $labels.job }}"
+    annotations:
+      summary: "Service is down"
+      description: "Service {{ $labels.job }} has been down for more than 1 minute"
+
+  # High memory usage
+  - alert: HighMemoryUsage
+    expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+    for: 5m
+    labels:
+      severity: warning
+      node: "{{ $labels.instance }}"
+    annotations:
+      summary: "High memory usage detected"
+      description: "Node {{ $labels.instance }} has memory usage of {{ $value | humanizePercentage }}"
+
+  # High CPU usage
+  - alert: HighCPUUsage
+    expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 5m
+    labels:
+      severity: warning
+      node: "{{ $labels.instance }}"
+    annotations:
+      summary: "High CPU usage detected"
+      description: "Node {{ $labels.instance }} has CPU usage of {{ $value }}%"
+
+  # Database connection issues
+  - alert: DatabaseConnectionIssues
+    expr: pg_up == 0
+    for: 1m
+    labels:
+      severity: critical
+      database: "{{ $labels.instance }}"
+    annotations:
+      summary: "Database connection issues"
+      description: "Database {{ $labels.instance }} is not responding"
+
+  # Redis connection issues
+  - alert: RedisConnectionIssues
+    expr: redis_up == 0
+    for: 1m
+    labels:
+      severity: critical
+      redis: "{{ $labels.instance }}"
+    annotations:
+      summary: "Redis connection issues"
+      description: "Redis {{ $labels.instance }} is not responding"
+
+  # Circuit breaker open
+  - alert: CircuitBreakerOpen
+    expr: circuit_breaker_state == 1
+    for: 0m
+    labels:
+      severity: critical
+      service: "{{ $labels.service }}"
+    annotations:
+      summary: "Circuit breaker is open"
+      description: "Circuit breaker for service {{ $labels.service }} is open"
+
+  # High request rate
+  - alert: HighRequestRate
+    expr: rate(http_requests_total[5m]) > 1000
+    for: 2m
+    labels:
+      severity: warning
+      service: "{{ $labels.service }}"
+    annotations:
+      summary: "High request rate detected"
+      description: "Service {{ $labels.service }} is receiving {{ $value }} requests per second"
+
+  # Disk space low
+  - alert: DiskSpaceLow
+    expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+    for: 5m
+    labels:
+      severity: critical
+      node: "{{ $labels.instance }}"
+    annotations:
+      summary: "Disk space is low"
+      description: "Node {{ $labels.instance }} has only {{ $value | humanizePercentage }} disk space available"
+
+  # Pod restarting frequently
+  - alert: PodRestartingFrequently
+    expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+      pod: "{{ $labels.pod }}"
+      namespace: "{{ $labels.namespace }}"
+    annotations:
+      summary: "Pod is restarting frequently"
+      description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting frequently"
+
+  # Deployment not ready
+  - alert: DeploymentNotReady
+    expr: kube_deployment_status_replicas_ready / kube_deployment_status_replicas < 1
+    for: 5m
+    labels:
+      severity: critical
+      deployment: "{{ $labels.deployment }}"
+      namespace: "{{ $labels.namespace }}"
+    annotations:
+      summary: "Deployment is not ready"
+      description: "Deployment {{ $labels.deployment }} in namespace {{ $labels.namespace }} is not ready"
+
+  # HPA scaling issues
+  - alert: HPAScalingIssues
+    expr: kube_horizontalpodautoscaler_status_current_replicas / kube_horizontalpodautoscaler_spec_max_replicas > 0.8
+    for: 5m
+    labels:
+      severity: warning
+      hpa: "{{ $labels.horizontalpodautoscaler }}"
+      namespace: "{{ $labels.namespace }}"
+    annotations:
+      summary: "HPA is near maximum replicas"
+      description: "HPA {{ $labels.horizontalpodautoscaler }} in namespace {{ $labels.namespace }} is using {{ $value | humanizePercentage }} of max replicas"
+
+  # WebSocket connection issues
+  - alert: WebSocketConnectionIssues
+    expr: websocket_connections_total < 1
+    for: 2m
+    labels:
+      severity: warning
+      service: "{{ $labels.service }}"
+    annotations:
+      summary: "No WebSocket connections"
+      description: "Service {{ $labels.service }} has no active WebSocket connections"
+
+  # Location service latency
+  - alert: LocationServiceLatency
+    expr: histogram_quantile(0.95, rate(location_service_request_duration_seconds_bucket[5m])) > 0.5
+    for: 3m
+    labels:
+      severity: warning
+      service: "location-service"
+    annotations:
+      summary: "Location service high latency"
+      description: "Location service has 95th percentile latency of {{ $value }} seconds"
+
+  # Assignment service errors
+  - alert: AssignmentServiceErrors
+    expr: rate(assignment_service_errors_total[5m]) > 0.05
+    for: 2m
+    labels:
+      severity: critical
+      service: "assignment-service"
+    annotations:
+      summary: "Assignment service high error rate"
+      description: "Assignment service has error rate of {{ $value }} errors per second"
+
+  # Storage service disk usage
+  - alert: StorageServiceDiskUsage
+    expr: storage_service_disk_usage_percent > 85
+    for: 5m
+    labels:
+      severity: warning
+      service: "storage-service"
+    annotations:
+      summary: "Storage service high disk usage"
+      description: "Storage service has disk usage of {{ $value }}%"
+
+  # User service authentication failures
+  - alert: UserServiceAuthFailures
+    expr: rate(user_service_auth_failures_total[5m]) > 0.1
+    for: 2m
+    labels:
+      severity: warning
+      service: "user-service"
+    annotations:
+      summary: "User service authentication failures"
+      description: "User service has authentication failure rate of {{ $value }} failures per second"
+
+  # Bus service location updates
+  - alert: BusServiceLocationUpdates
+    expr: rate(bus_service_location_updates_total[5m]) < 0.1
+    for: 5m
+    labels:
+      severity: warning
+      service: "bus-service"
+    annotations:
+      summary: "Low bus location update rate"
+      description: "Bus service has low location update rate of {{ $value }} updates per second"

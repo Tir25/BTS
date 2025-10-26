@@ -5,13 +5,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const locationService_1 = require("../services/locationService");
+const UnifiedDatabaseService_1 = require("../services/UnifiedDatabaseService");
 const router = express_1.default.Router();
 router.get('/', async (req, res) => {
     try {
         const { driver_id } = req.query;
         if (driver_id) {
-            const buses = await (0, locationService_1.getAllBuses)();
-            const filteredBuses = buses.filter(bus => bus.driver_id === driver_id || bus.assigned_driver_id === driver_id);
+            const buses = await UnifiedDatabaseService_1.UnifiedDatabaseService.getAllBuses();
+            const filteredBuses = buses.filter((bus) => bus.driver_id === driver_id);
             res.json({
                 success: true,
                 data: filteredBuses,
@@ -19,7 +20,7 @@ router.get('/', async (req, res) => {
             });
         }
         else {
-            const buses = await (0, locationService_1.getAllBuses)();
+            const buses = await UnifiedDatabaseService_1.UnifiedDatabaseService.getAllBuses();
             res.json({
                 success: true,
                 data: buses,
@@ -53,7 +54,7 @@ router.get('/viewport', async (req, res) => {
             maxLat: parseFloat(maxLat),
         };
         const currentLocations = await (0, locationService_1.getCurrentBusLocations)();
-        const locationsInViewport = currentLocations.filter(location => {
+        const locationsInViewport = currentLocations.filter((location) => {
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
             if (!pointMatch)
                 return false;
@@ -63,21 +64,27 @@ router.get('/viewport', async (req, res) => {
                 longitude >= viewport.minLng &&
                 longitude <= viewport.maxLng);
         });
-        const busIds = [...new Set(locationsInViewport.map(loc => loc.bus_id))];
+        const busIds = [...new Set(locationsInViewport.map((loc) => loc.bus_id))];
         const busesInViewport = [];
         for (const busId of busIds) {
             const busInfo = await (0, locationService_1.getBusInfo)(busId);
             if (busInfo) {
-                const location = locationsInViewport.find(loc => loc.bus_id === busId);
+                const location = locationsInViewport.find((loc) => loc.bus_id === busId);
                 busesInViewport.push({
                     ...busInfo,
-                    currentLocation: location ? {
-                        latitude: parseFloat(location.location.match(/POINT\([^)]+\)/)?.[1]?.split(' ')[1] || '0'),
-                        longitude: parseFloat(location.location.match(/POINT\([^)]+\)/)?.[1]?.split(' ')[0] || '0'),
-                        timestamp: location.timestamp,
-                        speed: location.speed,
-                        heading: location.heading,
-                    } : null,
+                    currentLocation: location
+                        ? {
+                            latitude: parseFloat(location.location
+                                .match(/POINT\([^)]+\)/)?.[1]
+                                ?.split(' ')[1] || '0'),
+                            longitude: parseFloat(location.location
+                                .match(/POINT\([^)]+\)/)?.[1]
+                                ?.split(' ')[0] || '0'),
+                            timestamp: location.timestamp,
+                            speed: location.speed,
+                            heading: location.heading,
+                        }
+                        : null,
                 });
             }
         }
@@ -114,7 +121,7 @@ router.get('/clusters', async (req, res) => {
             zoom: zoom ? parseInt(zoom) : 12,
         };
         const currentLocations = await (0, locationService_1.getCurrentBusLocations)();
-        const locationsInViewport = currentLocations.filter(location => {
+        const locationsInViewport = currentLocations.filter((location) => {
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
             if (!pointMatch)
                 return false;
@@ -127,7 +134,7 @@ router.get('/clusters', async (req, res) => {
         const clusterRadius = Math.max(0.001, 0.01 / Math.pow(2, viewport.zoom - 10));
         const clusters = [];
         const processedLocations = new Set();
-        locationsInViewport.forEach(location => {
+        locationsInViewport.forEach((location) => {
             if (processedLocations.has(location.id))
                 return;
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
@@ -143,13 +150,16 @@ router.get('/clusters', async (req, res) => {
                 buses: [location],
                 count: 1,
             };
-            locationsInViewport.forEach(otherLocation => {
-                if (otherLocation.id === location.id || processedLocations.has(otherLocation.id))
+            locationsInViewport.forEach((otherLocation) => {
+                if (otherLocation.id === location.id ||
+                    processedLocations.has(otherLocation.id))
                     return;
                 const otherPointMatch = otherLocation.location.match(/POINT\(([^)]+)\)/);
                 if (!otherPointMatch)
                     return;
-                const [otherLongitude, otherLatitude] = otherPointMatch[1].split(' ').map(Number);
+                const [otherLongitude, otherLatitude] = otherPointMatch[1]
+                    .split(' ')
+                    .map(Number);
                 const distance = Math.sqrt(Math.pow(latitude - otherLatitude, 2) +
                     Math.pow(longitude - otherLongitude, 2));
                 if (distance <= clusterRadius) {

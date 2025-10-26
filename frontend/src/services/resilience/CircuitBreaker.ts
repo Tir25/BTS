@@ -1,3 +1,5 @@
+import { logger } from '../../utils/logger';
+
 // Circuit Breaker Pattern Implementation
 export interface CircuitBreakerConfig {
   failureThreshold: number; // Number of failures before opening circuit
@@ -53,7 +55,7 @@ class CircuitBreaker {
       if (this.shouldAttemptReset()) {
         this.transitionToHalfOpen();
       } else {
-        console.warn(`🚨 Circuit breaker '${this.name}' is OPEN, using fallback`);
+        logger.warn('🚨 Circuit breaker is OPEN, using fallback', 'component', { data: this.name });
         if (fallback) {
           return fallback();
         }
@@ -67,13 +69,13 @@ class CircuitBreaker {
       return result;
     } catch (error) {
       this.onFailure(error);
-      
+
       // If we have a fallback, use it
       if (fallback) {
-        console.log(`🔄 Using fallback for '${this.name}' due to error:`, error);
+        logger.debug('Debug info', 'component', { data: `🔄 Using fallback for '${this.name}' due to error:`, error });
         return fallback();
       }
-      
+
       throw error;
     }
   }
@@ -82,7 +84,7 @@ class CircuitBreaker {
     this.successfulRequests++;
     this.lastSuccessTime = Date.now();
     this.failureCount = 0;
-    
+
     if (this.state === 'HALF_OPEN') {
       this.transitionToClosed();
     }
@@ -94,13 +96,13 @@ class CircuitBreaker {
 
     // Check if this is an expected error
     const errorMessage = error?.message || error?.toString() || '';
-    const isExpectedError = this.config.expectedErrors.some(pattern =>
+    const isExpectedError = this.config.expectedErrors.some((pattern) =>
       errorMessage.includes(pattern)
     );
 
     if (!isExpectedError) {
       this.failureCount++;
-      
+
       if (this.failureCount >= this.config.failureThreshold) {
         this.transitionToOpen();
       }
@@ -109,26 +111,28 @@ class CircuitBreaker {
 
   private transitionToOpen(): void {
     if (this.state !== 'OPEN') {
-      console.warn(`🚨 Circuit breaker '${this.name}' transitioning to OPEN`);
+      logger.warn('🚨 Circuit breaker transitioning to OPEN', 'component', { data: this.name });
       this.state = 'OPEN';
       this.nextAttemptTime = Date.now() + this.config.recoveryTimeout;
     }
   }
 
   private transitionToHalfOpen(): void {
-    console.log(`🔄 Circuit breaker '${this.name}' transitioning to HALF_OPEN`);
+    logger.info('🔄 Circuit breaker transitioning to HALF_OPEN', 'component', { data: this.name });
     this.state = 'HALF_OPEN';
   }
 
   private transitionToClosed(): void {
-    console.log(`✅ Circuit breaker '${this.name}' transitioning to CLOSED`);
+    logger.info('✅ Circuit breaker transitioning to CLOSED', 'component', { data: this.name });
     this.state = 'CLOSED';
     this.failureCount = 0;
     this.nextAttemptTime = undefined;
   }
 
   private shouldAttemptReset(): boolean {
-    return this.nextAttemptTime !== undefined && Date.now() >= this.nextAttemptTime;
+    return (
+      this.nextAttemptTime !== undefined && Date.now() >= this.nextAttemptTime
+    );
   }
 
   private startMonitoring(): void {
@@ -139,13 +143,19 @@ class CircuitBreaker {
 
   private logMetrics(): void {
     const metrics = this.getMetrics();
-    console.log(`📊 Circuit Breaker '${this.name}' Metrics:`, {
-      state: metrics.currentState,
-      successRate: metrics.totalRequests > 0 
-        ? ((metrics.successfulRequests / metrics.totalRequests) * 100).toFixed(2) + '%'
-        : '0%',
-      failureCount: metrics.failureCount,
-      totalRequests: metrics.totalRequests,
+    logger.debug('Debug info', 'component', { 
+      data: `📊 Circuit Breaker '${this.name}' Metrics:`,
+      metrics: {
+        state: metrics.currentState,
+        successRate: metrics.totalRequests > 0
+            ? (
+                (metrics.successfulRequests / metrics.totalRequests) *
+                100
+              ).toFixed(2) + '%'
+            : '0%',
+        failureCount: metrics.failureCount,
+        totalRequests: metrics.totalRequests
+      }
     });
   }
 
@@ -164,7 +174,7 @@ class CircuitBreaker {
 
   // Reset circuit to closed state
   reset(): void {
-    console.log(`🔄 Resetting circuit breaker '${this.name}'`);
+    logger.info('🔄 Resetting circuit breaker', 'component', { data: this.name });
     this.transitionToClosed();
   }
 
@@ -180,10 +190,7 @@ class CircuitBreaker {
 class CircuitBreakerRegistry {
   private breakers: Map<string, CircuitBreaker> = new Map();
 
-  create(
-    name: string,
-    config?: CircuitBreakerConfig
-  ): CircuitBreaker {
+  create(name: string, config?: CircuitBreakerConfig): CircuitBreaker {
     if (this.breakers.has(name)) {
       return this.breakers.get(name)!;
     }
@@ -209,11 +216,11 @@ class CircuitBreakerRegistry {
   }
 
   resetAll(): void {
-    this.breakers.forEach(breaker => breaker.reset());
+    this.breakers.forEach((breaker) => breaker.reset());
   }
 
   destroy(): void {
-    this.breakers.forEach(breaker => breaker.destroy());
+    this.breakers.forEach((breaker) => breaker.destroy());
     this.breakers.clear();
   }
 }
@@ -229,18 +236,24 @@ export const apiCircuitBreaker = circuitBreakerRegistry.create('api', {
   monitorInterval: 15000, // 15 seconds
 });
 
-export const websocketCircuitBreaker = circuitBreakerRegistry.create('websocket', {
-  failureThreshold: 5,
-  recoveryTimeout: 60000, // 1 minute
-  expectedErrors: [],
-  monitorInterval: 30000, // 30 seconds
-});
+export const websocketCircuitBreaker = circuitBreakerRegistry.create(
+  'websocket',
+  {
+    failureThreshold: 5,
+    recoveryTimeout: 60000, // 1 minute
+    expectedErrors: [],
+    monitorInterval: 30000, // 30 seconds
+  }
+);
 
-export const supabaseCircuitBreaker = circuitBreakerRegistry.create('supabase', {
-  failureThreshold: 3,
-  recoveryTimeout: 45000, // 45 seconds
-  expectedErrors: ['401', '403'],
-  monitorInterval: 20000, // 20 seconds
-});
+export const supabaseCircuitBreaker = circuitBreakerRegistry.create(
+  'supabase',
+  {
+    failureThreshold: 3,
+    recoveryTimeout: 45000, // 45 seconds
+    expectedErrors: ['401', '403'],
+    monitorInterval: 20000, // 20 seconds
+  }
+);
 
 export default CircuitBreaker;
