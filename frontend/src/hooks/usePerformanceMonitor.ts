@@ -3,7 +3,7 @@
  * Tracks component performance and provides optimization insights
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { logger } from '../utils/logger';
 
 interface PerformanceMetrics {
@@ -41,56 +41,85 @@ export function usePerformanceMonitor(
     isSlowRender: false
   });
 
-  // Track render start
-  useEffect(() => {
+  // Track render start - PRODUCTION FIX: Use useLayoutEffect to prevent infinite loops
+  useLayoutEffect(() => {
     lastRenderStartRef.current = performance.now();
   });
 
-  // Track render end
-  useEffect(() => {
-    const renderTime = performance.now() - lastRenderStartRef.current;
-    renderCountRef.current += 1;
-    
-    renderTimesRef.current.push(renderTime);
-    
-    // Keep only last 10 render times for average calculation
-    if (renderTimesRef.current.length > 10) {
-      renderTimesRef.current.shift();
+  // Track render end - PRODUCTION FIX: Optimized to prevent re-render loops
+  const rafIdRef = useRef<number | null>(null);
+  
+  useLayoutEffect(() => {
+    // Cancel any pending RAF to prevent accumulation
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
     }
+    
+    // Use requestAnimationFrame to defer the state update until after render
+    rafIdRef.current = requestAnimationFrame(() => {
+      const renderTime = performance.now() - lastRenderStartRef.current;
+      renderCountRef.current += 1;
+      
+      renderTimesRef.current.push(renderTime);
+      
+      // Keep only last 10 render times for average calculation
+      if (renderTimesRef.current.length > 10) {
+        renderTimesRef.current.shift();
+      }
 
-    const averageRenderTime = renderTimesRef.current.reduce((a, b) => a + b, 0) / renderTimesRef.current.length;
-    const isSlowRender = renderTime > slowRenderThreshold;
+      const averageRenderTime = renderTimesRef.current.reduce((a, b) => a + b, 0) / renderTimesRef.current.length;
+      const isSlowRender = renderTime > slowRenderThreshold;
 
-    const newMetrics: PerformanceMetrics = {
-      renderCount: renderCountRef.current,
-      averageRenderTime,
-      lastRenderTime: renderTime,
-      memoryUsage: trackMemory ? (performance as any).memory?.usedJSHeapSize || 0 : 0,
-      isSlowRender
-    };
+      // OPTIMIZATION: Only update state if metrics actually changed significantly (>5% or new slow render)
+      setMetrics(prev => {
+        const avgChanged = Math.abs(prev.averageRenderTime - averageRenderTime) > 0.5;
+        const renderTimeChanged = Math.abs(prev.lastRenderTime - renderTime) > 0.5;
+        const slowRenderChanged = prev.isSlowRender !== isSlowRender;
+        
+        // Only update if significant change detected
+        if (!avgChanged && !renderTimeChanged && !slowRenderChanged && prev.renderCount === renderCountRef.current - 1) {
+          return prev; // Return previous value to prevent re-render
+        }
 
-    setMetrics(newMetrics);
-
-    // Log performance issues
-    if (logPerformance && isSlowRender) {
-      logger.warn(`Slow render detected in ${componentName}`, 'performance-monitor', {
-        renderTime,
-        threshold: slowRenderThreshold,
-        renderCount: renderCountRef.current
+        return {
+          renderCount: renderCountRef.current,
+          averageRenderTime,
+          lastRenderTime: renderTime,
+          memoryUsage: trackMemory ? (performance as any).memory?.usedJSHeapSize || 0 : 0,
+          isSlowRender
+        };
       });
-    }
 
-    // Log memory usage if tracking is enabled
-    if (trackMemory && (performance as any).memory) {
-      const memory = (performance as any).memory;
-      if (memory.usedJSHeapSize > memory.jsHeapSizeLimit * 0.8) {
-        logger.warn(`High memory usage detected in ${componentName}`, 'performance-monitor', {
-          used: memory.usedJSHeapSize,
-          limit: memory.jsHeapSizeLimit,
-          percentage: (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100
+      // Log performance issues - throttled to prevent log spam
+      if (logPerformance && isSlowRender && renderCountRef.current % 5 === 0) {
+        logger.warn(`Slow render detected in ${componentName}`, 'performance-monitor', {
+          renderTime: renderTime.toFixed(2),
+          threshold: slowRenderThreshold,
+          renderCount: renderCountRef.current
         });
       }
-    }
+
+      // Log memory usage if tracking is enabled - throttled
+      if (trackMemory && (performance as any).memory && renderCountRef.current % 10 === 0) {
+        const memory = (performance as any).memory;
+        if (memory.usedJSHeapSize > memory.jsHeapSizeLimit * 0.8) {
+          logger.warn(`High memory usage detected in ${componentName}`, 'performance-monitor', {
+            used: memory.usedJSHeapSize,
+            limit: memory.jsHeapSizeLimit,
+            percentage: (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100
+          });
+        }
+      }
+      
+      rafIdRef.current = null;
+    });
+    
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
   });
 
   // Performance optimization suggestions

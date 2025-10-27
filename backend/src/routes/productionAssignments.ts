@@ -5,7 +5,7 @@
  */
 
 import express from 'express';
-import { authenticateUser, requireAdmin } from '../middleware/auth';
+import { authenticateUser, requireAdmin, requireAdminOrDriver } from '../middleware/auth';
 import { ProductionAssignmentService } from '../services/ProductionAssignmentService';
 import { logger } from '../utils/logger';
 
@@ -13,12 +13,11 @@ const router = express.Router();
 
 // Apply authentication middleware to all assignment routes
 router.use(authenticateUser);
-router.use(requireAdmin);
 
 // ===== PRODUCTION ASSIGNMENT MANAGEMENT ENDPOINTS =====
 
-// Get all assignments with comprehensive data
-router.get('/', async (req, res) => {
+// Get all assignments with comprehensive data (Admin only)
+router.get('/', requireAdmin, async (req, res) => {
   try {
     const assignments = await ProductionAssignmentService.getAllAssignments();
     res.json({
@@ -36,8 +35,54 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get assignment dashboard
-router.get('/dashboard', async (req, res) => {
+// Get driver's own assignment (Driver only)
+router.get('/my-assignment', requireAdminOrDriver, async (req, res) => {
+  try {
+    const driverId = req.user?.id;
+    if (!driverId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+        message: 'User ID not found in request',
+      });
+    }
+
+    // Check if user is requesting their own assignment or if admin
+    if (req.user?.role !== 'admin' && req.user?.role !== 'driver') {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'Only drivers and admins can access assignment data',
+      });
+    }
+
+    const assignment = await ProductionAssignmentService.getDriverAssignment(driverId);
+    
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        error: 'No assignment found',
+        message: 'No active assignment found for this driver',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: assignment,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Error fetching driver assignment', 'production-assignments', { error: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch assignment',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// Get assignment dashboard (Admin only)
+router.get('/dashboard', requireAdmin, async (req, res) => {
   try {
     const dashboard = await ProductionAssignmentService.getAssignmentDashboard();
     res.json({
@@ -55,8 +100,8 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-// Get assignment by bus ID
-router.get('/bus/:busId', async (req, res) => {
+// Get assignment by bus ID (Admin only)
+router.get('/bus/:busId', requireAdmin, async (req, res) => {
   try {
     const { busId } = req.params;
     const assignment = await ProductionAssignmentService.getAssignmentByBus(busId);
@@ -84,8 +129,8 @@ router.get('/bus/:busId', async (req, res) => {
   }
 });
 
-// Get assignment history for a bus
-router.get('/bus/:busId/history', async (req, res) => {
+// Get assignment history for a bus (Admin only)
+router.get('/bus/:busId/history', requireAdmin, async (req, res) => {
   try {
     const { busId } = req.params;
     const history = await ProductionAssignmentService.getAssignmentHistory(busId);
@@ -105,8 +150,8 @@ router.get('/bus/:busId/history', async (req, res) => {
   }
 });
 
-// Create new assignment
-router.post('/', async (req, res) => {
+// Create new assignment (Admin only)
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { driver_id, bus_id, route_id, notes, status } = req.body;
 
@@ -164,8 +209,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Update assignment
-router.put('/bus/:busId', async (req, res) => {
+// Update assignment (Admin only)
+router.put('/bus/:busId', requireAdmin, async (req, res) => {
   try {
     const { busId } = req.params;
     const { driver_id, route_id, notes, status } = req.body;
@@ -213,8 +258,8 @@ router.put('/bus/:busId', async (req, res) => {
   }
 });
 
-// Remove assignment
-router.delete('/bus/:busId', async (req, res) => {
+// Remove assignment (Admin only)
+router.delete('/bus/:busId', requireAdmin, async (req, res) => {
   try {
     const { busId } = req.params;
     const { notes } = req.body;
@@ -254,8 +299,8 @@ router.delete('/bus/:busId', async (req, res) => {
   }
 });
 
-// Validate assignment before creating
-router.post('/validate', async (req, res) => {
+// Validate assignment before creating (Admin only)
+router.post('/validate', requireAdmin, async (req, res) => {
   try {
     const { driver_id, bus_id, route_id } = req.body;
 
@@ -284,8 +329,8 @@ router.post('/validate', async (req, res) => {
   }
 });
 
-// Bulk assignment operations
-router.post('/bulk', async (req, res) => {
+// Bulk assignment operations (Admin only)
+router.post('/bulk', requireAdmin, async (req, res) => {
   try {
     const { assignments } = req.body;
 
@@ -331,8 +376,8 @@ router.post('/bulk', async (req, res) => {
   }
 });
 
-// Get available drivers for assignment
-router.get('/available/drivers', async (req, res) => {
+// Get available drivers for assignment (Admin only)
+router.get('/available/drivers', requireAdmin, async (req, res) => {
   try {
     const drivers = await ProductionAssignmentService.getAvailableDrivers();
     res.json({
@@ -350,8 +395,8 @@ router.get('/available/drivers', async (req, res) => {
   }
 });
 
-// Get available buses for assignment
-router.get('/available/buses', async (req, res) => {
+// Get available buses for assignment (Admin only)
+router.get('/available/buses', requireAdmin, async (req, res) => {
   try {
     const buses = await ProductionAssignmentService.getAvailableBuses();
     res.json({
@@ -369,8 +414,8 @@ router.get('/available/buses', async (req, res) => {
   }
 });
 
-// Get available routes for assignment
-router.get('/available/routes', async (req, res) => {
+// Get available routes for assignment (Admin only)
+router.get('/available/routes', requireAdmin, async (req, res) => {
   try {
     const routes = await ProductionAssignmentService.getAvailableRoutes();
     res.json({
@@ -388,8 +433,8 @@ router.get('/available/routes', async (req, res) => {
   }
 });
 
-// Get assigned drivers (moved from admin routes)
-router.get('/assigned-drivers', async (req, res) => {
+// Get assigned drivers (Admin only)
+router.get('/assigned-drivers', requireAdmin, async (req, res) => {
   try {
     const assignedDrivers = await ProductionAssignmentService.getAssignedDrivers();
     res.json({

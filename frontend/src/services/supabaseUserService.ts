@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { environment } from '../config/environment';
+import { authService } from './authService';
 
 import { logger } from '../utils/logger';
 
@@ -76,8 +77,8 @@ class SupabaseUserService {
       // Then get all assigned driver IDs
       const { data: assignedDrivers, error: assignedError } = await supabase
         .from('buses')
-        .select('assigned_driver_id')
-        .not('assigned_driver_id', 'is', null);
+        .select('assigned_driver_profile_id')
+        .not('assigned_driver_profile_id', 'is', null);
 
       if (assignedError) {
         logger.error('Error occurred', 'component', { error: '❌ Error fetching assigned drivers:', assignedError });
@@ -88,7 +89,7 @@ class SupabaseUserService {
 
       // Filter out assigned drivers
       const assignedDriverIds = new Set(
-        assignedDrivers?.map((bus) => bus.assigned_driver_id) || []
+        assignedDrivers?.map((bus) => bus.assigned_driver_profile_id) || []
       );
       const unassignedDrivers =
         allDrivers?.filter((driver) => !assignedDriverIds.has(driver.id)) || [];
@@ -176,7 +177,7 @@ class SupabaseUserService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.getAccessToken()}`,
+          Authorization: `Bearer ${authService.getAccessToken()}`,
         },
         body: JSON.stringify({
           email,
@@ -209,7 +210,7 @@ class SupabaseUserService {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.getAccessToken()}`,
+            Authorization: `Bearer ${authService.getAccessToken()}`,
           },
           body: JSON.stringify(metadata),
         }
@@ -227,37 +228,9 @@ class SupabaseUserService {
     }
   }
 
-  // Helper method to get access token
-  private getAccessToken(): string | null {
-    try {
-      // Try multiple localStorage keys that Supabase might use
-      const possibleKeys = [
-        'supabase.auth.token',
-        'sb-gthwmwfwvhyriygpcdlr-auth-token',
-        'supabase.auth.session',
-      ];
-
-      for (const key of possibleKeys) {
-        const storedSession = localStorage.getItem(key);
-        if (storedSession) {
-          const parsedSession = JSON.parse(storedSession);
-          const token =
-            parsedSession?.currentSession?.access_token ||
-            parsedSession?.access_token ||
-            parsedSession?.session?.access_token ||
-            null;
-
-          if (token) {
-            return token;
-          }
-        }
-      }
-    } catch (error) {
-      logger.warn('Warning', 'component', { data: '⚠️ Error reading token from localStorage:', error });
-    }
-
-    return null;
-  }
+  // PRODUCTION FIX: Use centralized authService for token management
+  // Removed redundant getAccessToken method - now using authService.getAccessToken()
+  // This ensures consistent token validation and expiration checking across the app
 }
 
 export const supabaseUserService = new SupabaseUserService();

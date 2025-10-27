@@ -6,10 +6,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const auth_1 = require("../middleware/auth");
 const locationService_1 = require("../services/locationService");
+const OptimizedLocationService_1 = require("../services/OptimizedLocationService");
 const router = express_1.default.Router();
 router.get('/current', async (req, res) => {
     try {
-        const locations = await (0, locationService_1.getCurrentBusLocations)();
+        const locations = await OptimizedLocationService_1.optimizedLocationService.getCurrentBusLocations();
         res.json({
             success: true,
             data: locations,
@@ -41,7 +42,7 @@ router.get('/viewport', async (req, res) => {
             maxLng: parseFloat(maxLng),
             maxLat: parseFloat(maxLat),
         };
-        const locations = await (0, locationService_1.getCurrentBusLocations)();
+        const locations = await OptimizedLocationService_1.optimizedLocationService.getCurrentBusLocations();
         const locationsInViewport = locations.filter((location) => {
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
             if (!pointMatch)

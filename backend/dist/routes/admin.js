@@ -5,10 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const auth_1 = require("../middleware/auth");
-const locationService_1 = require("../services/locationService");
+const OptimizedLocationService_1 = require("../services/OptimizedLocationService");
 const routeController_1 = require("../controllers/routeController");
 const ConsolidatedAdminService_1 = require("../services/ConsolidatedAdminService");
 const logger_1 = require("../utils/logger");
+const BackendDriverVerificationService_1 = require("../services/BackendDriverVerificationService");
 const router = express_1.default.Router();
 router.use(auth_1.authenticateUser);
 router.use(auth_1.requireAdmin);
@@ -96,7 +97,7 @@ router.post('/buses', async (req, res) => {
     try {
         const busData = req.body;
         const busNumber = busData.bus_number || busData.code;
-        const vehicleNo = busData.vehicle_no || busData.number_plate;
+        const vehicleNo = busData.vehicle_no || busData.bus_number;
         const capacity = busData.capacity;
         if (!busNumber || !vehicleNo || !capacity) {
             return res.status(400).json({
@@ -113,7 +114,7 @@ router.post('/buses', async (req, res) => {
             model: busData.model || null,
             year: busData.year ? parseInt(busData.year) : null,
             bus_image_url: busData.bus_image_url || null,
-            assigned_driver_profile_id: busData.assigned_driver_profile_id || busData.assigned_driver_id,
+            assigned_driver_profile_id: busData.assigned_driver_profile_id,
             route_id: busData.route_id || null,
             is_active: busData.is_active === 'on' || busData.is_active === true || busData.is_active === 'true'
         };
@@ -274,7 +275,7 @@ router.get('/drivers/:driverId', async (req, res) => {
 router.get('/drivers/:driverId/bus', async (req, res) => {
     try {
         const { driverId } = req.params;
-        const busInfo = await (0, locationService_1.getDriverBusInfo)(driverId);
+        const busInfo = await OptimizedLocationService_1.optimizedLocationService.getDriverBusInfo(driverId);
         if (!busInfo) {
             return res.status(404).json({
                 success: false,
@@ -488,6 +489,27 @@ router.post('/clear-all-data', async (req, res) => {
         return res.status(500).json({
             success: false,
             error: 'Failed to clear all data',
+            message: error instanceof Error ? error.message : 'Unknown error',
+        });
+    }
+});
+router.get('/verify-driver-system', async (req, res) => {
+    try {
+        logger_1.logger.info('🔍 Admin requested driver system verification', 'admin');
+        const verificationResult = await BackendDriverVerificationService_1.backendDriverVerificationService.verifyBackendDriverSystem();
+        res.json({
+            success: true,
+            data: verificationResult,
+            summary: BackendDriverVerificationService_1.backendDriverVerificationService.getVerificationSummary(verificationResult),
+            isReady: BackendDriverVerificationService_1.backendDriverVerificationService.isBackendReady(verificationResult),
+            timestamp: new Date().toISOString(),
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Error verifying driver system', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to verify driver system',
             message: error instanceof Error ? error.message : 'Unknown error',
         });
     }

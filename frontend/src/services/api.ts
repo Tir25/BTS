@@ -139,7 +139,8 @@ class ApiService implements IApiService {
     timestamp: string;
   }> {
     try {
-      // Use backend API instead of direct Supabase call
+      // PRODUCTION FIX: backendRequest already extracts data from resilientApiService response
+      // So response is directly the backend response structure
       const response = await this.backendRequest<{
         success: boolean;
         data: Bus[];
@@ -147,14 +148,37 @@ class ApiService implements IApiService {
         timestamp: string;
       }>('/buses');
 
-      if (response.success && response.data) {
+      // PRODUCTION FIX: Check if response is already the backend structure or just data
+      if (response && typeof response === 'object' && 'success' in response) {
+        // Response is the backend structure {success, data, timestamp}
+        if (response.success && response.data) {
+          return {
+            success: true,
+            data: Array.isArray(response.data) ? response.data : [],
+            timestamp: response.timestamp || new Date().toISOString(),
+          };
+        } else {
+          logger.error('Error occurred', 'component', { error: `❌ Error fetching buses from backend: ${response.error || 'Unknown error'}` });
+          return {
+            success: false,
+            data: [],
+            timestamp: response.timestamp || new Date().toISOString(),
+          };
+        }
+      } else if (Array.isArray(response)) {
+        // PRODUCTION FIX: Handle case where backendRequest returns data directly (legacy support)
+        logger.info('✅ Buses fetched as direct array', 'component', { count: response.length });
         return {
           success: true,
-          data: response.data,
+          data: response,
           timestamp: new Date().toISOString(),
         };
       } else {
-        logger.error('Error occurred', 'component', { error: `❌ Error fetching buses from backend: ${response.error}` });
+        // Unexpected response format
+        logger.warn('⚠️ Unexpected response format from getAllBuses', 'component', {
+          responseType: typeof response,
+          isArray: Array.isArray(response)
+        });
         return {
           success: false,
           data: [],
@@ -216,30 +240,77 @@ class ApiService implements IApiService {
     timestamp: string;
   }> {
     try {
-      // Use backend API instead of direct Supabase call
-      const response = await this.backendRequest<{
+      // PRODUCTION FIX: backendRequest returns the backend's response structure
+      // Backend: {success: true, data: Route[], timestamp}
+      // resilientApiService wraps: {success: true, data: {success: true, data: Route[], timestamp}, timestamp}
+      // backendRequest extracts: {success: true, data: Route[], timestamp}
+      const backendResponse = await this.backendRequest<{
         success: boolean;
         data: Route[];
         error?: string;
         timestamp: string;
       }>('/routes');
 
-      if (response.success && response.data) {
+      // Extract routes from backend response structure
+      if (backendResponse && typeof backendResponse === 'object') {
+        // Handle standard backend response format
+        if ('success' in backendResponse && backendResponse.success && 'data' in backendResponse) {
+          const routesArray = Array.isArray(backendResponse.data) ? backendResponse.data : [];
+          
+          if (routesArray.length > 0) {
+            logger.info('✅ Routes fetched successfully', 'component', { count: routesArray.length });
+            return {
+              success: true,
+              data: routesArray,
+              timestamp: backendResponse.timestamp || new Date().toISOString(),
+            };
+          } else {
+            logger.warn('⚠️ No routes found in response', 'component');
+            return {
+              success: true, // Success but empty
+              data: [],
+              timestamp: backendResponse.timestamp || new Date().toISOString(),
+            };
+          }
+        } else if ('success' in backendResponse && !backendResponse.success) {
+          // Error response from backend
+          const errorMsg = backendResponse.error || 'Failed to fetch routes';
+          logger.error('❌ Error fetching routes from backend', 'component', { error: errorMsg });
+          return {
+            success: false,
+            data: [],
+            timestamp: backendResponse.timestamp || new Date().toISOString(),
+          };
+        }
+      }
+      
+      // Fallback: Check if response is directly an array (legacy support)
+      if (Array.isArray(backendResponse)) {
+        logger.info('✅ Routes fetched as direct array', 'component', { count: backendResponse.length });
         return {
           success: true,
-          data: response.data,
-          timestamp: new Date().toISOString(),
-        };
-      } else {
-        logger.error('Error occurred', 'component', { error: `❌ Error fetching routes from backend: ${response.error}` });
-        return {
-          success: false,
-          data: [],
+          data: backendResponse,
           timestamp: new Date().toISOString(),
         };
       }
+
+      // If we get here, response format is unexpected
+      logger.warn('⚠️ Unexpected response format', 'component', {
+        responseType: typeof backendResponse,
+        hasSuccess: backendResponse && typeof backendResponse === 'object' && 'success' in backendResponse,
+        hasData: backendResponse && typeof backendResponse === 'object' && 'data' in backendResponse
+      });
+      
+      return {
+        success: false,
+        data: [],
+        timestamp: new Date().toISOString(),
+      };
     } catch (error) {
-      logger.error('Error occurred', 'component', { error });
+      logger.error('❌ Failed to fetch routes', 'component', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       return {
         success: false,
         data: [],
@@ -370,7 +441,7 @@ class ApiService implements IApiService {
     timestamp: string;
   }> {
     try {
-      // Use backend API instead of direct Supabase call
+      // PRODUCTION FIX: backendRequest already extracts data from resilientApiService response
       const response = await this.backendRequest<{
         success: boolean;
         data: BusLocation[];
@@ -378,14 +449,37 @@ class ApiService implements IApiService {
         timestamp: string;
       }>('/locations/current');
 
-      if (response.success && response.data) {
+      // PRODUCTION FIX: Check if response is already the backend structure or just data
+      if (response && typeof response === 'object' && 'success' in response) {
+        // Response is the backend structure {success, data, timestamp}
+        if (response.success && response.data) {
+          return {
+            success: true,
+            data: Array.isArray(response.data) ? response.data : [],
+            timestamp: response.timestamp || new Date().toISOString(),
+          };
+        } else {
+          logger.error('Error occurred', 'component', { error: `❌ Error fetching live locations from backend: ${response.error || 'Unknown error'}` });
+          return {
+            success: false,
+            data: [],
+            timestamp: response.timestamp || new Date().toISOString(),
+          };
+        }
+      } else if (Array.isArray(response)) {
+        // PRODUCTION FIX: Handle case where backendRequest returns data directly (legacy support)
+        logger.info('✅ Live locations fetched as direct array', 'component', { count: response.length });
         return {
           success: true,
-          data: response.data,
+          data: response,
           timestamp: new Date().toISOString(),
         };
       } else {
-        logger.error('Error occurred', 'component', { error: `❌ Error fetching live locations from backend: ${response.error}` });
+        // Unexpected response format
+        logger.warn('⚠️ Unexpected response format from getLiveLocations', 'component', {
+          responseType: typeof response,
+          isArray: Array.isArray(response)
+        });
         return {
           success: false,
           data: [],

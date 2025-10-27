@@ -2,9 +2,8 @@ import express from 'express';
 import helmet from 'helmet';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { corsMiddleware, handlePreflight } from './middleware/cors';
+import { handlePreflight } from './middleware/cors';
 import { corsMiddleware as enhancedCorsMiddleware, websocketCors } from './middleware/corsEnhanced';
-import { rateLimitMiddleware } from './middleware/rateLimit';
 import { notFoundHandler, globalErrorHandler, unhandledRejectionHandler, uncaughtExceptionHandler } from './middleware/errorHandler';
 import { requestIdMiddleware, addRequestIdToError } from './middleware/requestId';
 import { securityMiddleware, apiRateLimit, authRateLimit, validateRequest, corsSecurity } from './middleware/security';
@@ -27,6 +26,7 @@ import {
 import { redisCache } from './services/RedisCacheService';
 import { logger } from './utils/logger';
 import healthRoutes from './routes/health';
+import authRoutes from './routes/auth';
 import busRoutes from './routes/buses';
 import routeRoutes from './routes/routes';
 import adminRoutes from './routes/admin';
@@ -49,6 +49,7 @@ import { memoryOptimizationMiddleware, memoryLeakDetection, getMemoryStats, forc
 import { logRotationMiddleware, getLogRotationStats, forceLogRotation, logRotator } from './utils/logRotation';
 import { detectDeadCode, getDeadCodeReport, deadCodeDetector } from './utils/deadCodeDetector';
 import { apiRateLimits, userTierRateLimits, operationRateLimits } from './middleware/advancedRateLimit';
+import { locationArchiveService } from './services/LocationArchiveService';
 
 // Initialize environment configuration - REMOVED, now imported
 // const config = initializeEnvironment();
@@ -189,6 +190,7 @@ app.use(addRequestIdToError);
 
 // Enhanced routes with Redis caching, security, and advanced rate limiting
 app.use('/health', healthRoutes);
+app.use('/auth', authRateLimit, authRoutes);
 app.use('/admin', apiRateLimits.admin, fileUploadValidator, adminRoutes);
 app.use('/assignments', apiRateLimits.assignments, securityManager.getAuthRateLimitConfig(), productionAssignmentRoutes);
 app.use('/production-assignments', apiRateLimits.assignments, securityManager.getAuthRateLimitConfig(), productionAssignmentRoutes);
@@ -321,6 +323,11 @@ const startServer = async () => {
     // Start system validator
     systemValidator.startValidation();
     logger.info('🔍 System validator started', 'server');
+    
+    // Start location archive service
+    locationArchiveService.startAutoArchive(60); // Archive every hour
+    locationArchiveService.startAutoCleanup(24); // Cleanup daily
+    logger.info('📦 Location archive service started', 'server');
 
     // Start server
     logger.info(`🌐 Starting server on port ${PORT}...`, 'server');
@@ -372,6 +379,10 @@ const gracefulShutdown = async (signal: string) => {
     // Stop log rotator
     logRotator.stop();
     logger.info('Log rotator stopped', 'server');
+    
+    // Stop location archive service
+    locationArchiveService.stop();
+    logger.info('Location archive service stopped', 'server');
     
     // Close Redis cache connection
     await redisCache.disconnect();

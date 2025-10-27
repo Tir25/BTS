@@ -115,7 +115,7 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
       model: bus.model || '',
       year: bus.year || new Date().getFullYear(),
       bus_image_url: bus.bus_image_url || '',
-      assigned_driver_profile_id: bus.assigned_driver_id || bus.driver_id || '',
+      assigned_driver_profile_id: bus.assigned_driver_profile_id || bus.driver_id || '',
       route_id: bus.route_id || '',
       is_active: bus.is_active !== false
     });
@@ -131,14 +131,14 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
       let result;
       // Convert BusFormData to the format expected by the API
       const apiData = {
-        bus_number: formData.bus_number,
-        vehicle_no: formData.vehicle_no,
+        bus_number: formData.bus_number,  // Fixed: send bus_number as bus_number
+        vehicle_no: formData.vehicle_no,  // Fixed: send vehicle_no as vehicle_no
         capacity: formData.capacity,
         model: formData.model,
         year: formData.year,
         bus_image_url: formData.bus_image_url,
-        assigned_driver_profile_id: formData.assigned_driver_profile_id || null,
-        route_id: formData.route_id || null,
+        assigned_driver_profile_id: formData.assigned_driver_profile_id || undefined,
+        route_id: formData.route_id || undefined,
         is_active: formData.is_active !== false // Ensure is_active is true unless explicitly false
       };
       

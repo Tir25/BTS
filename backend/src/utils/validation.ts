@@ -7,6 +7,24 @@ interface LocationData {
   heading?: number;
 }
 
+// Track last valid locations for teleport detection
+const lastValidLocations = new Map<string, { latitude: number; longitude: number; timestamp: number }>();
+
+// Calculate distance between two coordinates (Haversine formula)
+function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export const validateLocationData = (data: LocationData): string | null => {
   // Validate required fields
   if (!data.driverId || typeof data.driverId !== 'string') {
@@ -18,8 +36,8 @@ export const validateLocationData = (data: LocationData): string | null => {
   }
 
   // Validate latitude
-  if (typeof data.latitude !== 'number' || isNaN(data.latitude)) {
-    return 'Latitude must be a valid number';
+  if (typeof data.latitude !== 'number' || isNaN(data.latitude) || !isFinite(data.latitude)) {
+    return 'Latitude must be a valid finite number';
   }
 
   if (data.latitude < -90 || data.latitude > 90) {
@@ -27,12 +45,34 @@ export const validateLocationData = (data: LocationData): string | null => {
   }
 
   // Validate longitude
-  if (typeof data.longitude !== 'number' || isNaN(data.longitude)) {
-    return 'Longitude must be a valid number';
+  if (typeof data.longitude !== 'number' || isNaN(data.longitude) || !isFinite(data.longitude)) {
+    return 'Longitude must be a valid finite number';
   }
 
   if (data.longitude < -180 || data.longitude > 180) {
     return 'Longitude must be between -180 and 180 degrees';
+  }
+
+  // Check for invalid coordinate patterns (common GPS errors)
+  // Null Island
+  if (data.latitude === 0 && data.longitude === 0) {
+    return 'Invalid coordinates (0, 0) - Null Island';
+  }
+
+  // Common invalid input patterns
+  const invalidPatterns = [
+    [999, 999],
+    [-999, -999],
+    [999.999, 999.999],
+  ];
+
+  for (const [invalidLat, invalidLng] of invalidPatterns) {
+    if (
+      Math.abs(data.latitude - invalidLat) < 0.001 &&
+      Math.abs(data.longitude - invalidLng) < 0.001
+    ) {
+      return `Invalid coordinates detected (${data.latitude}, ${data.longitude})`;
+    }
   }
 
   // Validate timestamp
@@ -80,6 +120,55 @@ export const validateLocationData = (data: LocationData): string | null => {
     if (data.heading < 0 || data.heading > 360) {
       return 'Heading must be between 0 and 360 degrees';
     }
+  }
+
+  // Teleport detection - check for impossible location jumps
+  const lastLocation = lastValidLocations.get(data.driverId);
+  if (lastLocation) {
+    const timeDiffMs = timestamp.getTime() - lastLocation.timestamp;
+    const timeDiffHours = Math.max(timeDiffMs, 1000) / (1000 * 60 * 60); // Minimum 1 second
+    const distanceKm = calculateDistanceKm(
+      lastLocation.latitude,
+      lastLocation.longitude,
+      data.latitude,
+      data.longitude
+    );
+    const distanceMeters = distanceKm * 1000;
+    const calculatedSpeedKmh = distanceKm / timeDiffHours;
+
+    // Check for impossible jump (> 5km in less than reasonable time)
+    if (distanceMeters > 5000) {
+      return `Impossible location jump detected: ${distanceMeters.toFixed(0)}m in ${(timeDiffMs / 1000).toFixed(1)}s`;
+    }
+
+    // Check for unrealistic speed (> 120 km/h for short intervals)
+    if (calculatedSpeedKmh > 120 && distanceMeters > 1000) {
+      return `Unrealistic speed detected: ${calculatedSpeedKmh.toFixed(1)} km/h for ${distanceMeters.toFixed(0)}m jump`;
+    }
+
+    // Cross-check with reported speed if available
+    if (data.speed !== undefined && data.speed > 0) {
+      const speedDiff = Math.abs(calculatedSpeedKmh - data.speed);
+      if (speedDiff > 50 && distanceMeters > 100) {
+        return `Speed mismatch: calculated ${calculatedSpeedKmh.toFixed(1)} km/h vs reported ${data.speed.toFixed(1)} km/h`;
+      }
+    }
+  }
+
+  // Update last valid location
+  lastValidLocations.set(data.driverId, {
+    latitude: data.latitude,
+    longitude: data.longitude,
+    timestamp: timestamp.getTime(),
+  });
+
+  // Clean up old entries (keep only last 100)
+  if (lastValidLocations.size > 100) {
+    const entries = Array.from(lastValidLocations.entries());
+    lastValidLocations.clear();
+    entries.slice(-50).forEach(([key, value]) => {
+      lastValidLocations.set(key, value);
+    });
   }
 
   return null; // No validation errors

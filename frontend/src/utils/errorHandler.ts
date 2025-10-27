@@ -4,6 +4,7 @@
  */
 
 import { logger } from './logger';
+import { translateError } from './errorMessageTranslator';
 
 export interface AppError extends Error {
   code: string;
@@ -120,29 +121,29 @@ export class ErrorHandler {
     if (error instanceof CustomError) {
       appError = error;
     } else if (error instanceof Error) {
-      // Check for specific error patterns
+      // Check for specific error patterns and use translated messages
       if (error.message.includes('Network Error') || error.message.includes('fetch')) {
-        appError = createNetworkError('Failed to connect to server');
+        appError = createNetworkError(error.message);
       } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-        appError = createAuthenticationError('Please log in again');
+        appError = createAuthenticationError(error.message);
       } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
-        appError = createAuthorizationError('You do not have permission for this action');
+        appError = createAuthorizationError(error.message);
       } else if (error.message.includes('404') || error.message.includes('Not Found')) {
-        appError = createNotFoundError('The requested resource was not found');
+        appError = createNotFoundError(error.message);
       } else if (error.message.includes('409') || error.message.includes('Conflict')) {
-        appError = createConflictError('This resource already exists');
+        appError = createConflictError(error.message);
       } else if (error.message.includes('429') || error.message.includes('Too Many Requests')) {
-        appError = createRateLimitError('Please wait a moment before trying again');
+        appError = createRateLimitError(error.message);
       } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
-        appError = createServerError('Server error occurred');
+        appError = createServerError(error.message);
       } else if (error.message.includes('503') || error.message.includes('Service Unavailable')) {
-        appError = createServiceUnavailableError('Service is temporarily unavailable');
+        appError = createServiceUnavailableError(error.message);
       } else {
         appError = new CustomError(
           error.message,
           'API_ERROR',
           500,
-          'Request failed. Please try again.'
+          translateError(error.message, 'Request failed. Please try again.')
         );
       }
     } else {
@@ -150,7 +151,7 @@ export class ErrorHandler {
         String(error),
         'API_ERROR',
         500,
-        'Request failed. Please try again.'
+        translateError(String(error), 'Request failed. Please try again.')
       );
     }
 

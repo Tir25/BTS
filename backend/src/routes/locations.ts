@@ -15,10 +15,30 @@ const router = express.Router();
 // Get current bus locations
 router.get('/current', async (req, res) => {
   try {
-    const locations = await getCurrentBusLocations();
+    const locations = await optimizedLocationService.getCurrentBusLocations();
+    
+    // Convert PostGIS POINT format to frontend-friendly format with lat/lng
+    const formattedLocations = locations.map((location) => {
+      // Parse PostGIS Point format: "POINT(longitude latitude)"
+      const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
+      const [longitude, latitude] = pointMatch
+        ? pointMatch[1].split(' ').map(Number)
+        : [0, 0];
+
+      return {
+        busId: location.bus_id,
+        driverId: location.driver_id || '',
+        latitude,
+        longitude,
+        timestamp: location.timestamp || new Date().toISOString(),
+        speed: location.speed,
+        heading: location.heading,
+      };
+    });
+    
     res.json({
       success: true,
-      data: locations,
+      data: formattedLocations,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -51,7 +71,7 @@ router.get('/viewport', async (req, res) => {
       maxLat: parseFloat(maxLat as string),
     };
 
-    const locations = await getCurrentBusLocations();
+    const locations = await optimizedLocationService.getCurrentBusLocations();
 
     // Filter locations within viewport
     const locationsInViewport = locations.filter((location) => {

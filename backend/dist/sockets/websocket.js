@@ -1,12 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.initializeWebSocket = void 0;
+exports.initializeWebSocket = exports.globalIO = void 0;
 const locationService_1 = require("../services/locationService");
+const OptimizedLocationService_1 = require("../services/OptimizedLocationService");
 const routeService_1 = require("../services/routeService");
 const validation_1 = require("../utils/validation");
 const websocketAuth_1 = require("../middleware/websocketAuth");
 const logger_1 = require("../utils/logger");
+exports.globalIO = null;
 const initializeWebSocket = (io) => {
+    exports.globalIO = io;
     logger_1.logger.websocket('WebSocket server initialized');
     io.engine.opts.pingTimeout = 60000;
     io.engine.opts.pingInterval = 25000;
@@ -73,32 +76,50 @@ const initializeWebSocket = (io) => {
             socket.lastActivity = Date.now();
             logger_1.logger.debug('Ping received', 'websocket', { socketId: socket.id });
         });
-        socket.on('driver:authenticate', async (data) => {
+        socket.on('driver:initialize', async () => {
             try {
                 if (!socket.isAuthenticated || !socket.userId) {
-                    socket.emit('driver:authentication_failed', {
+                    logger_1.logger.websocket('Driver initialization failed: Not authenticated', {
+                        socketId: socket.id
+                    });
+                    socket.emit('driver:initialization_failed', {
                         message: 'Authentication required',
                         code: 'NOT_AUTHENTICATED',
                     });
                     return;
                 }
                 if (socket.userRole !== 'driver' && socket.userRole !== 'admin') {
-                    socket.emit('driver:authentication_failed', {
+                    logger_1.logger.websocket('Driver initialization failed: Insufficient permissions', {
+                        socketId: socket.id,
+                        userRole: socket.userRole,
+                        userId: socket.userId
+                    });
+                    socket.emit('driver:initialization_failed', {
                         message: 'Driver role required',
                         code: 'INSUFFICIENT_PERMISSIONS',
                     });
                     return;
                 }
-                logger_1.logger.websocket('Driver authentication', {
+                logger_1.logger.websocket('Driver initialization', {
                     userId: socket.userId,
                     role: socket.userRole
                 });
-                const busInfo = await (0, locationService_1.getDriverBusInfo)(socket.userId);
-                logger_1.logger.websocket('Bus info retrieved', { userId: socket.userId, busInfo });
+                const busInfo = await OptimizedLocationService_1.optimizedLocationService.getDriverBusInfo(socket.userId);
+                logger_1.logger.websocket('Bus info retrieved', {
+                    userId: socket.userId,
+                    busInfo: busInfo ? {
+                        bus_id: busInfo.bus_id,
+                        bus_number: busInfo.bus_number,
+                        route_id: busInfo.route_id
+                    } : null
+                });
                 if (!busInfo) {
-                    logger_1.logger.websocket('No bus assigned to driver', { userId: socket.userId });
-                    socket.emit('driver:authentication_failed', {
-                        message: 'No bus assigned to driver',
+                    logger_1.logger.websocket('No bus assigned to driver', {
+                        userId: socket.userId,
+                        userRole: socket.userRole
+                    });
+                    socket.emit('driver:initialization_failed', {
+                        message: 'No bus assigned to driver. Please contact your administrator.',
                         code: 'NO_BUS_ASSIGNED',
                     });
                     return;
@@ -108,23 +129,45 @@ const initializeWebSocket = (io) => {
                 socket.lastActivity = Date.now();
                 socket.join(`driver:${socket.userId}`);
                 socket.join(`bus:${busInfo.bus_id}`);
-                logger_1.logger.websocket('Driver authenticated and assigned', {
+                logger_1.logger.websocket('Driver initialized and assigned', {
                     driverId: socket.userId,
                     busId: busInfo.bus_id
                 });
-                const authResponse = {
+                const initResponse = {
                     driverId: socket.userId,
                     busId: busInfo.bus_id,
                     busInfo: busInfo,
                 };
-                logger_1.logger.websocket('Sending authentication response', { authResponse });
-                socket.emit('driver:authenticated', authResponse);
+                logger_1.logger.websocket('Sending initialization response', {
+                    driverId: initResponse.driverId,
+                    busId: initResponse.busId,
+                    busNumber: initResponse.busInfo?.bus_number
+                });
+                socket.emit('driver:initialized', initResponse);
+                socket.emit('driver:assignmentUpdate', {
+                    type: 'initial',
+                    assignment: {
+                        driverId: socket.userId,
+                        busId: busInfo.bus_id,
+                        busNumber: busInfo.bus_number,
+                        routeId: busInfo.route_id,
+                        routeName: busInfo.route_name,
+                        driverName: busInfo.driver_name,
+                        status: 'active',
+                        lastUpdated: new Date().toISOString()
+                    }
+                });
             }
             catch (error) {
-                logger_1.logger.error('Driver authentication error', 'websocket', { socketId: socket.id }, error);
-                socket.emit('driver:authentication_failed', {
-                    message: 'Authentication failed',
-                    code: 'AUTH_ERROR',
+                logger_1.logger.error('Driver initialization error', 'websocket', {
+                    socketId: socket.id,
+                    userId: socket.userId,
+                    userRole: socket.userRole,
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                }, error);
+                socket.emit('driver:initialization_failed', {
+                    message: 'Initialization failed. Please try again.',
+                    code: 'INIT_ERROR',
                 });
             }
         });
@@ -177,7 +220,7 @@ const initializeWebSocket = (io) => {
                     });
                     return;
                 }
-                const busInfo = await (0, locationService_1.getDriverBusInfo)(data.driverId);
+                const busInfo = await OptimizedLocationService_1.optimizedLocationService.getDriverBusInfo(data.driverId);
                 let etaInfo = null;
                 let nearStopInfo = null;
                 if (busInfo?.route_id) {
@@ -278,6 +321,49 @@ const initializeWebSocket = (io) => {
                 });
             }
         });
+        socket.on('driver:requestAssignmentUpdate', async () => {
+            try {
+                if (!socket.isAuthenticated || !socket.userId || socket.userRole !== 'driver') {
+                    socket.emit('error', {
+                        message: 'Authentication required',
+                        code: 'NOT_AUTHENTICATED',
+                    });
+                    return;
+                }
+                const busInfo = await OptimizedLocationService_1.optimizedLocationService.getDriverBusInfo(socket.userId);
+                if (busInfo) {
+                    socket.emit('driver:assignmentUpdate', {
+                        type: 'refresh',
+                        assignment: {
+                            driverId: socket.userId,
+                            busId: busInfo.bus_id,
+                            busNumber: busInfo.bus_number,
+                            routeId: busInfo.route_id,
+                            routeName: busInfo.route_name,
+                            driverName: busInfo.driver_name,
+                            status: 'active',
+                            lastUpdated: new Date().toISOString()
+                        }
+                    });
+                }
+                else {
+                    socket.emit('driver:assignmentUpdate', {
+                        type: 'no_assignment',
+                        assignment: null
+                    });
+                }
+            }
+            catch (error) {
+                logger_1.logger.error('Error handling assignment update request', 'websocket', {
+                    socketId: socket.id,
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                });
+                socket.emit('error', {
+                    message: 'Failed to get assignment update',
+                    code: 'ASSIGNMENT_UPDATE_ERROR',
+                });
+            }
+        });
         socket.on('disconnect', (reason) => {
             try {
                 activeConnections--;
@@ -329,6 +415,37 @@ const initializeWebSocket = (io) => {
             }
         });
     }, 60000);
+    const broadcastAssignmentUpdate = (driverId, assignment) => {
+        logger_1.logger.websocket('Broadcasting assignment update', {
+            driverId,
+            busId: assignment.busId,
+            type: assignment.type
+        });
+        io.to(`driver:${driverId}`).emit('driver:assignmentUpdate', {
+            type: 'admin_update',
+            assignment: {
+                driverId: assignment.driverId,
+                busId: assignment.busId,
+                busNumber: assignment.busNumber,
+                routeId: assignment.routeId,
+                routeName: assignment.routeName,
+                driverName: assignment.driverName,
+                status: assignment.status || 'active',
+                lastUpdated: new Date().toISOString()
+            }
+        });
+    };
+    const broadcastAssignmentRemoval = (driverId, busId) => {
+        logger_1.logger.websocket('Broadcasting assignment removal', { driverId, busId });
+        io.to(`driver:${driverId}`).emit('driver:assignmentUpdate', {
+            type: 'removed',
+            assignment: null,
+            message: 'Your bus assignment has been removed by an administrator'
+        });
+    };
+    io.broadcastAssignmentUpdate = broadcastAssignmentUpdate;
+    io.broadcastAssignmentRemoval = broadcastAssignmentRemoval;
+    exports.globalIO = io;
     return io;
 };
 exports.initializeWebSocket = initializeWebSocket;

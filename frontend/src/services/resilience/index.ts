@@ -17,6 +17,11 @@ export {
   default as ResilientApiService,
   resilientApiService,
 } from './ResilientApiService';
+export {
+  default as ResilientSupabaseService,
+  resilientSupabase,
+  resilientQuery,
+} from './ResilientSupabaseService';
 
 // Export types
 export type {
@@ -26,3 +31,4 @@ export type {
 } from './CircuitBreaker';
 export type { BackoffConfig, BackoffResult } from './ExponentialBackoff';
 export type { ApiRequestConfig, ApiResponse } from './ResilientApiService';
+export type { SupabaseQueryOptions, SupabaseQueryResult } from './ResilientSupabaseService';

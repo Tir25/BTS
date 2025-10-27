@@ -249,7 +249,7 @@ class OptimizedLocationService {
                 route_name: row.route_name || 'Unknown Route',
                 driver_id: row.driver_id,
                 driver_name: row.driver_name || 'Unknown Driver',
-                assigned_driver_id: row.driver_id,
+                assigned_driver_profile_id: row.driver_id,
                 route_city: row.route_city,
                 bus_image_url: row.bus_image_url,
             };

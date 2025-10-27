@@ -64,13 +64,13 @@ export interface DatabaseBus {
     id: string;
     code: string;
     name?: string;
-    number_plate: string;
+    bus_number: string;
     capacity: number;
     model?: string;
     year?: number;
     bus_image_url?: string;
     photo_url?: string;
-    assigned_driver_id?: string;
+    assigned_driver_profile_id?: string;
     driver_id?: string;
     route_id?: string;
     is_active: boolean;

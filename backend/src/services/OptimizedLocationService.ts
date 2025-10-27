@@ -25,7 +25,7 @@ interface BusInfo {
   route_name: string;
   driver_id: string;
   driver_name: string;
-  assigned_driver_id?: string;
+  assigned_driver_profile_id?: string;
   route_city?: string;
   bus_image_url?: string | null;
 }
@@ -86,42 +86,79 @@ class OptimizedLocationService {
       // Convert coordinates to PostGIS Point format
       const point = `POINT(${data.longitude} ${data.latitude})`;
 
-      // Optimized query with spatial indexing
-      const query = `
-        INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
-        VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
-        RETURNING id, bus_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
-      `;
+      // Use transaction to ensure both tables are updated atomically
+      const client = await this.connectionPool.connect();
+      
+      try {
+        await client.query('BEGIN');
 
-      const result = await this.connectionPool.query(query, [
-        data.busId,
-        point,
-        data.speed,
-        data.heading,
-        data.timestamp,
-      ]);
+        // Insert into live_locations (for real-time queries)
+        const liveQuery = `
+          INSERT INTO live_locations (bus_id, driver_id, location, speed_kmh, heading_degrees, recorded_at)
+          VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6)
+          RETURNING id, bus_id, driver_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
+        `;
 
-      if (result.rows.length === 0) {
-        logger.error('Error saving location: No rows returned', 'location-service');
-        return null;
+        const liveResult = await client.query(liveQuery, [
+          data.busId,
+          data.driverId,
+          point,
+          data.speed,
+          data.heading,
+          data.timestamp,
+        ]);
+
+        if (liveResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          logger.error('Error saving location: No rows returned from live_locations', 'location-service');
+          return null;
+        }
+
+        // Also insert into locations table (for historical data)
+        const historicalQuery = `
+          INSERT INTO locations (bus_id, driver_id, location, speed_kmh, heading_degrees, recorded_at)
+          VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6)
+          ON CONFLICT DO NOTHING;
+        `;
+
+        try {
+          await client.query(historicalQuery, [
+            data.busId,
+            data.driverId,
+            point,
+            data.speed,
+            data.heading,
+            data.timestamp,
+          ]);
+        } catch (historicalError) {
+          // Log but don't fail if historical insert fails (non-critical)
+          logger.warn('Warning: Failed to save to historical locations table', 'location-service', { error: historicalError });
+        }
+
+        await client.query('COMMIT');
+
+        const savedLocation = liveResult.rows[0];
+        const locationData: SavedLocation = {
+          id: savedLocation.id,
+          driver_id: data.driverId,
+          bus_id: savedLocation.bus_id,
+          location: savedLocation.location,
+          timestamp: savedLocation.recorded_at,
+          speed: savedLocation.speed_kmh,
+          heading: savedLocation.heading_degrees,
+        };
+
+        // Invalidate cache for this bus
+        this.invalidateCache(`bus_${data.busId}`);
+
+        logger.info('Location saved successfully', 'location-service', { busId: data.busId });
+        return locationData;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
-
-      const savedLocation = result.rows[0];
-      const locationData: SavedLocation = {
-        id: savedLocation.id,
-        driver_id: data.driverId,
-        bus_id: savedLocation.bus_id,
-        location: savedLocation.location,
-        timestamp: savedLocation.recorded_at,
-        speed: savedLocation.speed_kmh,
-        heading: savedLocation.heading_degrees,
-      };
-
-      // Invalidate cache for this bus
-      this.invalidateCache(`bus_${data.busId}`);
-
-      logger.info('Location saved successfully', 'location-service', { busId: data.busId });
-      return locationData;
     } catch (error) {
       logger.error('Error in saveLocationUpdate', 'location-service', { error, data });
       return null;
@@ -146,6 +183,7 @@ class OptimizedLocationService {
         SELECT 
           ll.id, 
           ll.bus_id, 
+          ll.driver_id,
           ST_AsText(ll.location) as location, 
           ll.speed_kmh, 
           ll.heading_degrees, 
@@ -155,7 +193,7 @@ class OptimizedLocationService {
           u.full_name as driver_name
         FROM live_locations ll
         LEFT JOIN buses b ON ll.bus_id = b.id
-        LEFT JOIN user_profiles u ON b.assigned_driver_profile_id = u.id
+        LEFT JOIN user_profiles u ON ll.driver_id = u.id
         WHERE ll.recorded_at >= NOW() - INTERVAL '${options.timeWindow || 5} minutes'
       `;
 
@@ -192,7 +230,7 @@ class OptimizedLocationService {
       
       const locations = result.rows.map((row: any) => ({
         id: row.id,
-        driver_id: row.driver_name ? 'driver' : '',
+        driver_id: row.driver_id || '',
         bus_id: row.bus_id,
         location: row.location,
         timestamp: row.recorded_at,
@@ -302,29 +340,28 @@ class OptimizedLocationService {
     busId: string,
     startTime: string,
     endTime: string,
-    limit: number = 100
+    limit: number = 1000
   ): Promise<SavedLocation[]> {
     try {
+      // Use the database function to get combined history from both tables
       const query = `
         SELECT 
           id, 
           bus_id, 
-          ST_AsText(location) as location, 
+          driver_id,
+          location, 
           speed_kmh, 
           heading_degrees, 
           recorded_at
-        FROM live_locations 
-        WHERE bus_id = $1 
-        AND recorded_at BETWEEN $2 AND $3
-        ORDER BY recorded_at DESC
-        LIMIT $4
+        FROM get_location_history($1, $2, $3, $4)
+        ORDER BY recorded_at ASC;
       `;
 
       const result = await this.connectionPool.query(query, [busId, startTime, endTime, limit]);
       
       return result.rows.map((row: any) => ({
         id: row.id,
-        driver_id: '',
+        driver_id: row.driver_id || '',
         bus_id: row.bus_id,
         location: row.location,
         timestamp: row.recorded_at,
@@ -333,7 +370,37 @@ class OptimizedLocationService {
       }));
     } catch (error) {
       logger.error('Error in getBusLocationHistory', 'location-service', { error, busId });
-      return [];
+      // Fallback to live_locations only if function fails
+      try {
+        const fallbackQuery = `
+          SELECT 
+            id, 
+            bus_id, 
+            driver_id,
+            ST_AsText(location) as location, 
+            speed_kmh, 
+            heading_degrees, 
+            recorded_at
+          FROM live_locations 
+          WHERE bus_id = $1 
+          AND recorded_at BETWEEN $2 AND $3
+          ORDER BY recorded_at DESC
+          LIMIT $4
+        `;
+        const fallbackResult = await this.connectionPool.query(fallbackQuery, [busId, startTime, endTime, limit]);
+        return fallbackResult.rows.map((row: any) => ({
+          id: row.id,
+          driver_id: row.driver_id || '',
+          bus_id: row.bus_id,
+          location: row.location,
+          timestamp: row.recorded_at,
+          speed: row.speed_kmh,
+          heading: row.heading_degrees,
+        }));
+      } catch (fallbackError) {
+        logger.error('Error in fallback query', 'location-service', { error: fallbackError, busId });
+        return [];
+      }
     }
   }
 
@@ -375,7 +442,7 @@ class OptimizedLocationService {
         route_name: row.route_name || 'Unknown Route',
         driver_id: row.driver_id,
         driver_name: row.driver_name || 'Unknown Driver',
-        assigned_driver_id: row.driver_id,
+        assigned_driver_profile_id: row.driver_id,
         route_city: row.route_city,
         bus_image_url: row.bus_image_url,
       };

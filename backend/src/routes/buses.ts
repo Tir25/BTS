@@ -1,8 +1,8 @@
 import express from 'express';
 import {
   getBusInfo,
-  getCurrentBusLocations,
 } from '../services/locationService';
+import { optimizedLocationService } from '../services/OptimizedLocationService';
 import { UnifiedDatabaseService } from '../services/UnifiedDatabaseService';
 
 const router = express.Router();

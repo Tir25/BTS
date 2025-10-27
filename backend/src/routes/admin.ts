@@ -1,9 +1,10 @@
 import express from 'express';
 import { authenticateUser, requireAdmin } from '../middleware/auth';
-import { getDriverBusInfo } from '../services/locationService';
+import { optimizedLocationService } from '../services/OptimizedLocationService';
 import { RouteController } from '../controllers/routeController';
 import { ConsolidatedAdminService as AdminService } from '../services/ConsolidatedAdminService';
 import { logger } from '../utils/logger';
+import { backendDriverVerificationService } from '../services/BackendDriverVerificationService';
 
 const router = express.Router();
 
@@ -106,9 +107,9 @@ router.post('/buses', async (req, res) => {
   try {
     const busData = req.body;
 
-    // Support both naming conventions (code/number_plate and bus_number/vehicle_no)
+    // Support both naming conventions (code/bus_number and bus_number/vehicle_no)
     const busNumber = busData.bus_number || busData.code;
-    const vehicleNo = busData.vehicle_no || busData.number_plate;
+    const vehicleNo = busData.vehicle_no || busData.bus_number;
     const capacity = busData.capacity;
 
     // Enhanced validation
@@ -130,7 +131,7 @@ router.post('/buses', async (req, res) => {
       year: busData.year ? parseInt(busData.year) : null, // Convert to number if provided
       bus_image_url: busData.bus_image_url || null,
       // Map driver field from frontend format to backend format
-      assigned_driver_profile_id: busData.assigned_driver_profile_id || busData.assigned_driver_id,
+      assigned_driver_profile_id: busData.assigned_driver_profile_id,
       route_id: busData.route_id || null,
       // Handle boolean conversion
       is_active: busData.is_active === 'on' || busData.is_active === true || busData.is_active === 'true'
@@ -317,7 +318,7 @@ router.get('/drivers/:driverId', async (req, res) => {
 router.get('/drivers/:driverId/bus', async (req, res) => {
   try {
     const { driverId } = req.params;
-    const busInfo = await getDriverBusInfo(driverId);
+    const busInfo = await optimizedLocationService.getDriverBusInfo(driverId);
 
     if (!busInfo) {
       return res.status(404).json({
@@ -576,6 +577,32 @@ router.post('/clear-all-data', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to clear all data',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// ===== DRIVER VERIFICATION ENDPOINT =====
+
+// Verify driver system functionality
+router.get('/verify-driver-system', async (req, res) => {
+  try {
+    logger.info('🔍 Admin requested driver system verification', 'admin');
+    
+    const verificationResult = await backendDriverVerificationService.verifyBackendDriverSystem();
+    
+    res.json({
+      success: true,
+      data: verificationResult,
+      summary: backendDriverVerificationService.getVerificationSummary(verificationResult),
+      isReady: backendDriverVerificationService.isBackendReady(verificationResult),
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Error verifying driver system', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to verify driver system',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }

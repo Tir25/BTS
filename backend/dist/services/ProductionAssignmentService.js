@@ -201,6 +201,27 @@ class ProductionAssignmentService {
                 assigned_at: new Date().toISOString()
             });
             logger_1.logger.info('Assignment updated successfully', 'production-assignment-service', { busId });
+            try {
+                const { globalIO } = require('../sockets/websocket');
+                if (globalIO && globalIO.broadcastAssignmentUpdate) {
+                    const assignmentData = {
+                        driverId: newDriverId,
+                        busId: busId,
+                        busNumber: updatedBus.bus_number,
+                        routeId: newRouteId,
+                        routeName: updatedBus.route_name,
+                        driverName: updatedBus.driver_full_name,
+                        status: status || currentAssignment.status,
+                        type: 'update'
+                    };
+                    globalIO.broadcastAssignmentUpdate(newDriverId, assignmentData);
+                }
+            }
+            catch (wsError) {
+                logger_1.logger.warn('Failed to broadcast WebSocket update', 'production-assignment-service', {
+                    error: wsError instanceof Error ? wsError.message : 'Unknown error'
+                });
+            }
             return {
                 id: updatedBus.id,
                 driver_id: newDriverId,
@@ -294,6 +315,63 @@ class ProductionAssignmentService {
         }
         catch (error) {
             logger_1.logger.error('Error in getAssignmentByBus', 'production-assignment-service', { error, busId });
+            throw error;
+        }
+    }
+    static async getDriverAssignment(driverId) {
+        try {
+            const { data, error } = await supabase_1.supabaseAdmin
+                .from('buses')
+                .select(`
+          id,
+          bus_number,
+          vehicle_no,
+          assigned_driver_profile_id,
+          route_id,
+          assignment_status,
+          assignment_notes,
+          updated_at
+        `)
+                .eq('assigned_driver_profile_id', driverId)
+                .eq('is_active', true)
+                .single();
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    return null;
+                }
+                logger_1.logger.error('Error fetching assignment by driver', 'production-assignment-service', { error, driverId });
+                throw error;
+            }
+            if (!data || !data.route_id) {
+                return null;
+            }
+            const { data: routeData } = await supabase_1.supabaseAdmin
+                .from('routes')
+                .select('name')
+                .eq('id', data.route_id)
+                .single();
+            const { data: driverData } = await supabase_1.supabaseAdmin
+                .from('user_profiles')
+                .select('full_name')
+                .eq('id', driverId)
+                .single();
+            return {
+                id: data.id,
+                driver_id: driverId,
+                bus_id: data.id,
+                route_id: data.route_id,
+                assigned_by: 'system',
+                notes: data.assignment_notes,
+                assigned_at: data.updated_at,
+                status: data.assignment_status || 'active',
+                bus_number: data.bus_number,
+                vehicle_no: data.vehicle_no,
+                route_name: routeData?.name || '',
+                driver_name: driverData?.full_name || '',
+            };
+        }
+        catch (error) {
+            logger_1.logger.error('Error in getDriverAssignment', 'production-assignment-service', { error, driverId });
             throw error;
         }
     }

@@ -316,10 +316,15 @@ export class RouteService {
         .delete()
         .eq('route_id', routeId);
 
-      // 5. Delete from driver_bus_assignments
+      // 5. Update buses table to remove route assignments
       await supabaseAdmin
-        .from('driver_bus_assignments')
-        .delete()
+        .from('buses')
+        .update({
+          route_id: null,
+          assignment_status: 'unassigned',
+          assignment_notes: 'Route deleted',
+          updated_at: new Date().toISOString()
+        })
         .eq('route_id', routeId);
 
       // 6. Delete from bus_route_shifts

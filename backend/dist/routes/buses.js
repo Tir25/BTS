@@ -53,7 +53,7 @@ router.get('/viewport', async (req, res) => {
             maxLng: parseFloat(maxLng),
             maxLat: parseFloat(maxLat),
         };
-        const currentLocations = await (0, locationService_1.getCurrentBusLocations)();
+        const currentLocations = await getCurrentBusLocations();
         const locationsInViewport = currentLocations.filter((location) => {
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
             if (!pointMatch)
@@ -120,7 +120,7 @@ router.get('/clusters', async (req, res) => {
             maxLat: parseFloat(maxLat),
             zoom: zoom ? parseInt(zoom) : 12,
         };
-        const currentLocations = await (0, locationService_1.getCurrentBusLocations)();
+        const currentLocations = await getCurrentBusLocations();
         const locationsInViewport = currentLocations.filter((location) => {
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
             if (!pointMatch)

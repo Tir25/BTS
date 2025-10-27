@@ -76,28 +76,36 @@ export interface Bus {
   id: string;
   code: string;
   name?: string;
-  number_plate: string;
+  bus_number: string;
   capacity: number;
   model?: string;
   year?: number;
   bus_image_url?: string;
   photo_url?: string;
-  assigned_driver_id?: string;
+  assigned_driver_profile_id?: string;
   driver_id?: string;
   route_id?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
   // Additional properties for compatibility
-  bus_number?: string;
   vehicle_no?: string;
   bus_id?: string; // Alternative ID field
+  busId?: string; // Alternative ID field (camelCase)
   // Joined data from queries
   driver_full_name?: string;
   driver_email?: string;
   driver_first_name?: string;
   driver_last_name?: string;
   route_name?: string;
+  // Live location tracking properties (for Student Map)
+  location?: { lat: number; lng: number; timestamp?: string };
+  speed?: number;
+  label?: string;
+  // Nested meta object support
+  meta?: { id?: string | number; [key: string]: unknown };
+  // Route ID variations for compatibility
+  routeId?: string; // camelCase variation
 }
 
 // BusData interface for API responses (with optional id)
@@ -105,13 +113,13 @@ export interface BusData {
   id?: string;
   code: string;
   name?: string;
-  number_plate: string;
+  bus_number: string;
   capacity: number;
   model?: string;
   year?: number;
   bus_image_url?: string;
   photo_url?: string;
-  assigned_driver_id?: string;
+  assigned_driver_profile_id?: string;
   driver_id?: string;
   route_id?: string;
   is_active: boolean;
@@ -143,8 +151,10 @@ export interface Route {
   id: string;
   name: string;
   description?: string;
-  geom: any; // PostGIS geometry
-  stops?: any; // PostGIS geometry
+  geom?: { coordinates?: [number, number][] } | any; // PostGIS geometry or GeoJSON
+  stops?: Array<{ lat: number; lng: number; coordinates?: [number, number]; location?: { lat: number; lng: number } }> | any; // PostGIS geometry or array
+  coordinates?: [number, number][]; // Direct coordinates array for map rendering
+  color?: string; // Route color for map display
   total_distance_m?: number;
   distance_km?: number;
   estimated_duration_minutes?: number;
@@ -416,6 +426,12 @@ export interface BusInfo {
   driverName: string;
   currentLocation: BusLocation;
   eta?: number;
+  // CRITICAL FIX: Added missing properties for bus info sync
+  driverId?: string;
+  routeId?: string;
+  id?: string; // For compatibility with API responses
+  bus_id?: string; // For compatibility with API responses
+  route_id?: string; // For compatibility with API responses
 }
 
 // ===== WEBSOCKET TYPES =====

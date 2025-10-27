@@ -17,19 +17,18 @@ interface ApiResponse<T = unknown> {
 interface BusData {
   id?: string;
   code: string;
-  number_plate: string;
+  bus_number: string;
   capacity: number;
   model?: string;
   year?: number;
   is_active: boolean;
-  assigned_driver_id?: string;
+  assigned_driver_profile_id?: string;
   route_id?: string;
   driver_full_name?: string;
   driver_email?: string;
   driver_first_name?: string;
   driver_last_name?: string;
   route_name?: string;
-  bus_number?: string;
   vehicle_no?: string;
   created_at?: string;
   updated_at?: string;
@@ -166,15 +165,15 @@ class AdminApiService {
         } else if (response.status === 404) {
           throw new Error('Resource not found.');
         } else if (response.status === 409) {
-          throw new Error(data.message || 'Resource already exists');
+          throw new Error((data as any)?.message || 'Resource already exists');
         } else if (response.status >= 500) {
           throw new Error('Server error. Please try again later.');
         } else {
-          throw new Error(data.message || data.error || 'Request failed');
+          throw new Error((data as any)?.message || (data as any)?.error || 'Request failed');
         }
       }
 
-      return data;
+      return data || { success: false, error: 'No data received' };
     } catch (error) {
       if (timeoutId) clearTimeout(timeoutId);
       logger.error(`❌ API request failed for ${endpoint}:`, 'component', { error });
@@ -273,7 +272,8 @@ class AdminApiService {
 
   async getAssignedDrivers(): Promise<ApiResponse<any[]>> {
     logger.info('🚌 Fetching assigned drivers...', 'component');
-    const result = await this.makeRequest<any[]>('/assigned-drivers');
+    // Use the correct endpoint path for production assignments
+    const result = await this.makeRequest<any[]>('/production-assignments/assigned-drivers');
     logger.debug('Debug info', 'component', { data: `🚌 Assigned drivers result: ${result.success ? `${result.data?.length || 0} assigned drivers` : result.error}` });
     return result;
   }
@@ -404,6 +404,14 @@ class AdminApiService {
 
   async getAssignmentByBus(busId: string): Promise<ApiResponse<any>> {
     return this.makeRequest<any>(`/production-assignments/bus/${busId}`);
+  }
+
+  // Driver-specific method to get their own assignment
+  async getMyAssignment(): Promise<ApiResponse<any>> {
+    logger.info('🔗 Fetching driver assignment...', 'component');
+    const result = await this.makeRequest<any>('/production-assignments/my-assignment');
+    logger.debug('Debug info', 'component', { data: `🔗 Driver assignment result: ${result.success ? 'Assignment loaded' : result.error}` });
+    return result;
   }
 
   async getAssignmentHistory(busId: string): Promise<ApiResponse<any[]>> {

@@ -1,13 +1,17 @@
 import { BusLocation, BusInfo, Bus } from '../types';
 import { IBusService } from './interfaces/IBusService';
 import { apiService } from './api';
-
 import { logger } from '../utils/logger';
 
-interface BusData {
-  [busId: string]: BusInfo;
-}
-
+/**
+ * CRITICAL FIX: Refactored BusService to eliminate redundant state storage
+ * 
+ * Changes:
+ * 1. Removed internal state storage (buses, previousLocations)
+ * 2. MapStore is now the single source of truth for bus data
+ * 3. BusService only handles API sync and speed calculations
+ * 4. Previous locations stored in MapStore via lastBusLocations
+ */
 interface PreviousLocation {
   latitude: number;
   longitude: number;
@@ -15,8 +19,29 @@ interface PreviousLocation {
 }
 
 class BusService implements IBusService {
-  private buses: BusData = {};
+  // CRITICAL FIX: Remove state storage - MapStore is now single source of truth
+  // Keep only previousLocations for speed calculation (ephemeral cache)
   private previousLocations: { [busId: string]: PreviousLocation } = {};
+  
+  // CRITICAL FIX: Store reference to MapStore for state updates
+  private mapStore: any = null;
+  
+  /**
+   * Set MapStore reference for state updates
+   * Called during initialization to enable bus info sync
+   */
+  setMapStore(store: any): void {
+    this.mapStore = store;
+    logger.info('✅ BusService: MapStore reference set', 'busService');
+  }
+  
+  /**
+   * Helper to get MapStore state and actions
+   */
+  private getMapStoreState() {
+    if (!this.mapStore) return null;
+    return this.mapStore.getState();
+  }
 
   // Calculate speed between two points using Haversine formula
   private calculateSpeed(
@@ -50,78 +75,103 @@ class BusService implements IBusService {
     return degrees * (Math.PI / 180);
   }
 
-  // Update bus location and calculate speed
-  updateBusLocation(location: BusLocation): void {
+  /**
+   * CRITICAL FIX: Calculate speed from location update
+   * Now returns calculated speed instead of updating internal state
+   * MapStore handles state updates via updateBusLocation action
+   */
+  calculateSpeedFromLocation(location: BusLocation, previousLocation?: PreviousLocation): number | undefined {
+    if (!previousLocation) return undefined;
+    
+    const { latitude, longitude, timestamp } = location;
+    const timeDiff = new Date(timestamp).getTime() - new Date(previousLocation.timestamp).getTime();
+    
+    if (timeDiff > 0) {
+      return this.calculateSpeed(
+        previousLocation.latitude,
+        previousLocation.longitude,
+        latitude,
+        longitude,
+        timeDiff
+      );
+    }
+    
+    return undefined;
+  }
+
+  /**
+   * CRITICAL FIX: Update bus location with speed calculation
+   * Now updates MapStore instead of internal state
+   * Returns location with calculated speed for MapStore update
+   */
+  updateBusLocation(location: BusLocation): BusLocation {
     const { busId, latitude, longitude, timestamp } = location;
 
     // Get previous location for speed calculation
     const previousLocation = this.previousLocations[busId];
 
-    let speed: number | undefined;
-    if (previousLocation) {
-      const timeDiff =
-        new Date(timestamp).getTime() -
-        new Date(previousLocation.timestamp).getTime();
-      if (timeDiff > 0) {
-        speed = this.calculateSpeed(
-          previousLocation.latitude,
-          previousLocation.longitude,
-          latitude,
-          longitude,
-          timeDiff
-        );
-      }
-    }
-
-    // Update or create bus info
-    if (!this.buses[busId]) {
-      this.buses[busId] = {
-        busId,
-        busNumber: `Bus ${busId}`, // Default name, will be updated from API
-        routeName: 'Route TBD', // Default route, will be updated from API
-        driverName: 'Driver TBD', // Default name, will be updated from API
-        currentLocation: {
-          ...location,
-          speed: speed || location.speed,
-        },
-        eta: location.eta?.estimated_arrival_minutes,
-      };
-    } else {
-      this.buses[busId].currentLocation = {
-        ...location,
-        speed: speed || location.speed,
-      };
-      // Update ETA from location data
-      this.buses[busId].eta = location.eta?.estimated_arrival_minutes;
-    }
-
+    // Calculate speed if we have previous location
+    const calculatedSpeed = this.calculateSpeedFromLocation(location, previousLocation);
+    
     // Store current location as previous for next calculation
     this.previousLocations[busId] = {
       latitude,
       longitude,
       timestamp,
     };
+
+    // CRITICAL FIX: Return location with calculated speed
+    // MapStore's updateBusLocation will handle state update
+    return {
+      ...location,
+      speed: calculatedSpeed || location.speed,
+    };
   }
 
-  // Get bus information by ID
+  /**
+   * CRITICAL FIX: Get bus info from MapStore instead of internal state
+   * If MapStore not available, return null (should not happen in production)
+   */
   getBus(busId: string): BusInfo | null {
-    return this.buses[busId] || null;
+    if (!this.mapStore) {
+      logger.warn('⚠️ BusService: MapStore not available', 'busService', { busId });
+      return null;
+    }
+    
+    const state = this.mapStore.getState();
+    return state.buses.find((bus: BusInfo) => bus.busId === busId) || null;
   }
 
-  // Get all buses
+  /**
+   * CRITICAL FIX: Get all buses from MapStore
+   */
   getAllBuses(): BusInfo[] {
-    return Object.values(this.buses);
+    if (!this.mapStore) {
+      logger.warn('⚠️ BusService: MapStore not available', 'busService');
+      return [];
+    }
+    
+    return this.mapStore.getState().buses;
   }
 
-  // Get buses by route name
+  /**
+   * CRITICAL FIX: Get buses by route from MapStore
+   */
   getBusesByRoute(routeName: string): BusInfo[] {
-    return Object.values(this.buses).filter(
-      (bus) => bus.routeName === routeName
-    );
+    if (!this.mapStore) {
+      logger.warn('⚠️ BusService: MapStore not available', 'busService', { routeName });
+      return [];
+    }
+    
+    const state = this.mapStore.getState();
+    return state.buses.filter((bus: BusInfo) => bus.routeName === routeName);
   }
 
-  // Sync bus data from API
-  async syncBusFromAPI(busId: string, apiData?: Bus): Promise<void> {
+  /**
+   * CRITICAL FIX: Sync bus data from API to MapStore
+   * Updates MapStore with bus metadata (number, route, driver)
+   */
+  async syncBusFromAPI(busId: string, apiData?: Bus): Promise<BusInfo | null> {
     try {
       // If no API data provided, fetch it from the backend
       if (!apiData) {
@@ -129,114 +179,193 @@ class BusService implements IBusService {
         if (response.success && response.data) {
           apiData = response.data;
         } else {
-          logger.error('Error occurred', 'component', { error: '❌ Failed to fetch bus data from API for bus:', busId });
-          return;
+          logger.error('❌ Failed to fetch bus data from API', 'busService', { busId });
+          return null;
         }
       }
 
-      if (this.buses[busId]) {
-        // Update existing bus with API data
-        this.buses[busId] = {
-          ...this.buses[busId],
-          busNumber: apiData.number_plate || apiData.code || `Bus ${busId}`,
-          routeName: apiData.route_name || 'Route TBD',
-          driverName: apiData.driver_full_name || 'Driver TBD',
-        };
-      } else {
-        // Create new bus from API data
-        this.buses[busId] = {
+      // CRITICAL FIX: Create BusInfo from API data
+      const busInfo: BusInfo = {
+        busId,
+        busNumber: apiData.bus_number || apiData.code || `Bus ${busId}`,
+        routeName: apiData.route_name || 'Route TBD',
+        driverName: apiData.driver_full_name || 'Driver TBD',
+        driverId: apiData.assigned_driver_profile_id || '',
+        routeId: apiData.route_id || '',
+        currentLocation: {
           busId,
-          busNumber: apiData.number_plate || apiData.code || `Bus ${busId}`,
-          routeName: apiData.route_name || 'Route TBD',
-          driverName: apiData.driver_full_name || 'Driver TBD',
-          currentLocation: {
-            busId,
-            driverId: apiData.assigned_driver_id || '',
-            latitude: 0,
-            longitude: 0,
-            timestamp: new Date().toISOString(),
-          },
-        };
+          driverId: apiData.assigned_driver_profile_id || '',
+          latitude: 0,
+          longitude: 0,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      // CRITICAL FIX: Update MapStore with bus info
+      if (this.mapStore) {
+        const storeState = this.mapStore.getState();
+        const existingBus = storeState.buses.find((b: BusInfo) => b.busId === busId);
+        
+        if (existingBus) {
+          // Update existing bus with API data, preserve current location
+          const updatedBuses = storeState.buses.map((bus: BusInfo) =>
+            bus.busId === busId
+              ? {
+                  ...bus,
+                  ...busInfo,
+                  currentLocation: bus.currentLocation || busInfo.currentLocation,
+                }
+              : bus
+          );
+          // CRITICAL FIX: Zustand actions are available on getState() result
+          storeState.setBuses(updatedBuses);
+        } else {
+          // Add new bus to MapStore
+          // CRITICAL FIX: Zustand actions are available on getState() result
+          storeState.setBuses([...storeState.buses, busInfo]);
+        }
+        
+        logger.info('✅ Bus info synced to MapStore', 'busService', {
+          busId,
+          busNumber: busInfo.busNumber,
+          routeName: busInfo.routeName,
+        });
+      } else {
+        logger.warn('⚠️ MapStore not available, cannot sync bus info', 'busService', { busId });
       }
+
+      return busInfo;
     } catch (error) {
-      logger.error('Error occurred', 'component', { error });
+      logger.error('❌ Error syncing bus from API', 'busService', { error, busId });
+      return null;
     }
   }
 
-  // Sync all buses from API
-  async syncAllBusesFromAPI(): Promise<void> {
+  /**
+   * CRITICAL FIX: Sync all buses from API to MapStore
+   */
+  async syncAllBusesFromAPI(): Promise<BusInfo[]> {
     try {
       const response = await apiService.getAllBuses();
       if (response.success && response.data) {
-        response.data.forEach((bus: Bus) => {
-          this.syncBusFromAPI(bus.id, bus);
+        const busInfos: BusInfo[] = [];
+        
+        // Sync each bus to MapStore
+        for (const bus of response.data) {
+          const busInfo = await this.syncBusFromAPI(bus.id, bus);
+          if (busInfo) {
+            busInfos.push(busInfo);
+          }
+        }
+        
+        logger.info('✅ All buses synced to MapStore', 'busService', {
+          count: busInfos.length,
         });
+        
+        return busInfos;
       }
+      
+      return [];
     } catch (error) {
-      logger.error('Error occurred', 'component', { error });
+      logger.error('❌ Error syncing all buses from API', 'busService', { error });
+      return [];
     }
   }
 
-  // Clear all buses
+  /**
+   * CRITICAL FIX: Clear previous locations cache (MapStore manages bus state)
+   */
   clearBuses(): void {
-    this.buses = {};
     this.previousLocations = {};
+    logger.info('✅ BusService: Previous locations cache cleared', 'busService');
   }
 
-  // Get bus statistics
+  /**
+   * CRITICAL FIX: Get bus statistics from MapStore
+   */
   getBusStats(): {
     totalBuses: number;
     activeBuses: number;
     busesByRoute: { [routeName: string]: number };
   } {
-    const buses = Object.values(this.buses);
+    if (!this.mapStore) {
+      return { totalBuses: 0, activeBuses: 0, busesByRoute: {} };
+    }
+    
+    const state = this.mapStore.getState();
+    const buses = state.buses;
     const busesByRoute: { [routeName: string]: number } = {};
 
-    buses.forEach((bus) => {
+    buses.forEach((bus: BusInfo) => {
       const routeName = bus.routeName;
       busesByRoute[routeName] = (busesByRoute[routeName] || 0) + 1;
     });
 
     return {
       totalBuses: buses.length,
-      activeBuses: buses.filter((bus) => bus.currentLocation).length,
+      activeBuses: buses.filter((bus: BusInfo) => bus.currentLocation).length,
       busesByRoute,
     };
   }
 
-  // Get buses with recent activity (within last 5 minutes)
+  /**
+   * CRITICAL FIX: Get active buses from MapStore
+   */
   getActiveBuses(): BusInfo[] {
+    if (!this.mapStore) return [];
+    
+    const state = this.mapStore.getState();
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    return Object.values(this.buses).filter((bus) => {
+    
+    return state.buses.filter((bus: BusInfo) => {
+      if (!bus.currentLocation) return false;
       const lastUpdate = new Date(bus.currentLocation.timestamp);
       return lastUpdate > fiveMinutesAgo;
     });
   }
 
-  // Get bus location history (simplified - in real app, this would come from API)
+  /**
+   * CRITICAL FIX: Get bus location history from MapStore
+   */
   getBusLocationHistory(busId: string): BusLocation[] {
-    // This is a simplified implementation
-    // In a real application, this would fetch from the backend API
-    const bus = this.buses[busId];
-    if (!bus) return [];
-
-    return [bus.currentLocation];
+    if (!this.mapStore) return [];
+    
+    const state = this.mapStore.getState();
+    const location = state.lastBusLocations[busId];
+    
+    return location ? [location] : [];
   }
 
-  // Update bus ETA
+  /**
+   * CRITICAL FIX: Update bus ETA in MapStore
+   */
   updateBusETA(busId: string, eta: number): void {
-    if (this.buses[busId]) {
-      this.buses[busId].eta = eta;
-    }
+    if (!this.mapStore) return;
+    
+    const storeState = this.mapStore.getState();
+    const updatedBuses = storeState.buses.map((bus: BusInfo) =>
+      bus.busId === busId ? { ...bus, eta } : bus
+    );
+    
+    // CRITICAL FIX: Zustand actions are available on getState() result
+    storeState.setBuses(updatedBuses);
   }
 
-  // Get buses near a specific location
+  /**
+   * CRITICAL FIX: Get buses near location from MapStore
+   */
   getBusesNearLocation(
     latitude: number,
     longitude: number,
     radiusKm: number = 5
   ): BusInfo[] {
-    return Object.values(this.buses).filter((bus) => {
+    if (!this.mapStore) return [];
+    
+    const state = this.mapStore.getState();
+    
+    return state.buses.filter((bus: BusInfo) => {
+      if (!bus.currentLocation) return false;
+      
       const busLat = bus.currentLocation.latitude;
       const busLng = bus.currentLocation.longitude;
 

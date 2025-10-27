@@ -18,6 +18,7 @@ const redisCache_1 = require("./middleware/redisCache");
 const RedisCacheService_1 = require("./services/RedisCacheService");
 const logger_1 = require("./utils/logger");
 const health_1 = __importDefault(require("./routes/health"));
+const auth_1 = __importDefault(require("./routes/auth"));
 const buses_1 = __importDefault(require("./routes/buses"));
 const routes_1 = __importDefault(require("./routes/routes"));
 const admin_1 = __importDefault(require("./routes/admin"));
@@ -132,6 +133,7 @@ app.use(express_1.default.json({
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestId_1.addRequestIdToError);
 app.use('/health', health_1.default);
+app.use('/auth', security_1.authRateLimit, auth_1.default);
 app.use('/admin', advancedRateLimit_1.apiRateLimits.admin, securityEnhanced_1.fileUploadValidator, admin_1.default);
 app.use('/assignments', advancedRateLimit_1.apiRateLimits.assignments, securityEnhanced_1.securityManager.getAuthRateLimitConfig(), productionAssignments_1.default);
 app.use('/production-assignments', advancedRateLimit_1.apiRateLimits.assignments, securityEnhanced_1.securityManager.getAuthRateLimitConfig(), productionAssignments_1.default);

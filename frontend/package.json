@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:restart": "node scripts/restart-dev-server.js",
     "dev:local": "vite --mode development",
     "build": "node scripts/unified-build.js --profile=production",
     "build:dev": "node scripts/unified-build.js --profile=development",
@@ -79,6 +80,7 @@
     "jsdom": "^27.0.1",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
+    "puppeteer": "^24.26.1",
     "typescript": "^5.2.2",
     "vite": "^5.4.21",
     "vite-bundle-analyzer": "^1.2.3",

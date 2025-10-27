@@ -88,18 +88,37 @@ class OfflineStorage {
     });
   }
 
-  // Setup network status listeners
+  // Setup network status listeners with proper cleanup tracking
+  private onlineHandler: (() => void) | null = null;
+  private offlineHandler: (() => void) | null = null;
+  
   private setupNetworkListeners(): void {
-    window.addEventListener('online', () => {
+    // Create named handlers for proper cleanup
+    this.onlineHandler = () => {
       this.isOnline = true;
       logger.info('🌐 Network connection restored', 'component');
       this.syncPendingData();
-    });
+    };
 
-    window.addEventListener('offline', () => {
+    this.offlineHandler = () => {
       this.isOnline = false;
       logger.info('📴 Network connection lost', 'component');
-    });
+    };
+
+    window.addEventListener('online', this.onlineHandler);
+    window.addEventListener('offline', this.offlineHandler);
+  }
+  
+  // Remove network listeners
+  private removeNetworkListeners(): void {
+    if (this.onlineHandler) {
+      window.removeEventListener('online', this.onlineHandler);
+      this.onlineHandler = null;
+    }
+    if (this.offlineHandler) {
+      window.removeEventListener('offline', this.offlineHandler);
+      this.offlineHandler = null;
+    }
   }
 
   // Start sync timer
@@ -470,7 +489,13 @@ class OfflineStorage {
   destroy(): void {
     if (this.syncTimer) {
       clearInterval(this.syncTimer);
+      this.syncTimer = null;
     }
+    
+    // Remove network listeners
+    this.removeNetworkListeners();
+    
+    logger.info('OfflineStorage destroyed - all listeners and timers cleared', 'component');
   }
 }
 

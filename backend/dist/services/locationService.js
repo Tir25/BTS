@@ -43,6 +43,7 @@ const saveLocationUpdate = async (data) => {
 };
 exports.saveLocationUpdate = saveLocationUpdate;
 const getDriverBusInfo = async (driverId) => {
+    console.warn('⚠️ DEPRECATED: getDriverBusInfo is deprecated. Use optimizedLocationService.getDriverBusInfo() instead.');
     try {
         console.log('🔍 Fetching bus info for driver:', driverId);
         const { data: busData, error: busError } = await supabase_1.supabaseAdmin
@@ -111,6 +112,7 @@ const getDriverBusInfo = async (driverId) => {
 };
 exports.getDriverBusInfo = getDriverBusInfo;
 const getCurrentBusLocations = async () => {
+    console.warn('⚠️ DEPRECATED: getCurrentBusLocations is deprecated. Use optimizedLocationService.getCurrentBusLocations() instead.');
     try {
         const query = `
       SELECT 
@@ -180,9 +182,9 @@ const getBusInfo = async (busId) => {
             .from('buses')
             .select(`
         id,
-        number_plate,
+        bus_number,
         route_id,
-        assigned_driver_id,
+        assigned_driver_profile_id,
         routes!inner(
           name
         ),
@@ -203,10 +205,10 @@ const getBusInfo = async (busId) => {
             : data.profiles;
         return {
             bus_id: data.id,
-            bus_number: data.number_plate || '',
+            bus_number: data.bus_number || '',
             route_id: data.route_id || '',
             route_name: routeData?.name || '',
-            driver_id: data.assigned_driver_id || '',
+            driver_id: data.assigned_driver_profile_id || '',
             driver_name: profileData?.full_name || 'Unknown Driver',
         };
     }

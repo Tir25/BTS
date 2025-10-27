@@ -7,6 +7,10 @@ export interface AssignmentData {
     notes?: string;
     assigned_at?: string;
     status: 'active' | 'inactive' | 'pending';
+    bus_number?: string;
+    vehicle_no?: string;
+    route_name?: string;
+    driver_name?: string;
 }
 export interface AssignmentValidation {
     is_valid: boolean;
@@ -40,6 +44,7 @@ export declare class ProductionAssignmentService {
     static updateAssignment(busId: string, updateData: Partial<Omit<AssignmentData, 'id' | 'assigned_at'>>): Promise<AssignmentData>;
     static removeAssignment(busId: string, assignedBy: string, notes?: string): Promise<boolean>;
     static getAssignmentByBus(busId: string): Promise<AssignmentData | null>;
+    static getDriverAssignment(driverId: string): Promise<AssignmentData | null>;
     static validateAssignment(driverId: string, busId: string, routeId: string): Promise<AssignmentValidation>;
     static bulkAssignDrivers(assignments: Array<Omit<AssignmentData, 'id' | 'assigned_at'>>): Promise<BulkAssignmentResult>;
     static getAssignmentHistory(busId: string): Promise<any[]>;

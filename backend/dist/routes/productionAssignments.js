@@ -9,8 +9,7 @@ const ProductionAssignmentService_1 = require("../services/ProductionAssignmentS
 const logger_1 = require("../utils/logger");
 const router = express_1.default.Router();
 router.use(auth_1.authenticateUser);
-router.use(auth_1.requireAdmin);
-router.get('/', async (req, res) => {
+router.get('/', auth_1.requireAdmin, async (req, res) => {
     try {
         const assignments = await ProductionAssignmentService_1.ProductionAssignmentService.getAllAssignments();
         res.json({
@@ -28,7 +27,47 @@ router.get('/', async (req, res) => {
         });
     }
 });
-router.get('/dashboard', async (req, res) => {
+router.get('/my-assignment', auth_1.requireAdminOrDriver, async (req, res) => {
+    try {
+        const driverId = req.user?.id;
+        if (!driverId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Authentication required',
+                message: 'User ID not found in request',
+            });
+        }
+        if (req.user?.role !== 'admin' && req.user?.role !== 'driver') {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied',
+                message: 'Only drivers and admins can access assignment data',
+            });
+        }
+        const assignment = await ProductionAssignmentService_1.ProductionAssignmentService.getDriverAssignment(driverId);
+        if (!assignment) {
+            return res.status(404).json({
+                success: false,
+                error: 'No assignment found',
+                message: 'No active assignment found for this driver',
+            });
+        }
+        res.json({
+            success: true,
+            data: assignment,
+            timestamp: new Date().toISOString(),
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Error fetching driver assignment', 'production-assignments', { error: error instanceof Error ? error.message : 'Unknown error' });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch assignment',
+            message: error instanceof Error ? error.message : 'Unknown error',
+        });
+    }
+});
+router.get('/dashboard', auth_1.requireAdmin, async (req, res) => {
     try {
         const dashboard = await ProductionAssignmentService_1.ProductionAssignmentService.getAssignmentDashboard();
         res.json({
@@ -46,7 +85,7 @@ router.get('/dashboard', async (req, res) => {
         });
     }
 });
-router.get('/bus/:busId', async (req, res) => {
+router.get('/bus/:busId', auth_1.requireAdmin, async (req, res) => {
     try {
         const { busId } = req.params;
         const assignment = await ProductionAssignmentService_1.ProductionAssignmentService.getAssignmentByBus(busId);
@@ -72,7 +111,7 @@ router.get('/bus/:busId', async (req, res) => {
         });
     }
 });
-router.get('/bus/:busId/history', async (req, res) => {
+router.get('/bus/:busId/history', auth_1.requireAdmin, async (req, res) => {
     try {
         const { busId } = req.params;
         const history = await ProductionAssignmentService_1.ProductionAssignmentService.getAssignmentHistory(busId);
@@ -91,7 +130,7 @@ router.get('/bus/:busId/history', async (req, res) => {
         });
     }
 });
-router.post('/', async (req, res) => {
+router.post('/', auth_1.requireAdmin, async (req, res) => {
     try {
         const { driver_id, bus_id, route_id, notes, status } = req.body;
         if (!driver_id || !bus_id || !route_id) {
@@ -140,7 +179,7 @@ router.post('/', async (req, res) => {
         });
     }
 });
-router.put('/bus/:busId', async (req, res) => {
+router.put('/bus/:busId', auth_1.requireAdmin, async (req, res) => {
     try {
         const { busId } = req.params;
         const { driver_id, route_id, notes, status } = req.body;
@@ -182,7 +221,7 @@ router.put('/bus/:busId', async (req, res) => {
         });
     }
 });
-router.delete('/bus/:busId', async (req, res) => {
+router.delete('/bus/:busId', auth_1.requireAdmin, async (req, res) => {
     try {
         const { busId } = req.params;
         const { notes } = req.body;
@@ -217,7 +256,7 @@ router.delete('/bus/:busId', async (req, res) => {
         });
     }
 });
-router.post('/validate', async (req, res) => {
+router.post('/validate', auth_1.requireAdmin, async (req, res) => {
     try {
         const { driver_id, bus_id, route_id } = req.body;
         if (!driver_id || !bus_id || !route_id) {
@@ -243,7 +282,7 @@ router.post('/validate', async (req, res) => {
         });
     }
 });
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', auth_1.requireAdmin, async (req, res) => {
     try {
         const { assignments } = req.body;
         if (!Array.isArray(assignments) || assignments.length === 0) {
@@ -282,7 +321,7 @@ router.post('/bulk', async (req, res) => {
         });
     }
 });
-router.get('/available/drivers', async (req, res) => {
+router.get('/available/drivers', auth_1.requireAdmin, async (req, res) => {
     try {
         const drivers = await ProductionAssignmentService_1.ProductionAssignmentService.getAvailableDrivers();
         res.json({
@@ -300,7 +339,7 @@ router.get('/available/drivers', async (req, res) => {
         });
     }
 });
-router.get('/available/buses', async (req, res) => {
+router.get('/available/buses', auth_1.requireAdmin, async (req, res) => {
     try {
         const buses = await ProductionAssignmentService_1.ProductionAssignmentService.getAvailableBuses();
         res.json({
@@ -318,7 +357,7 @@ router.get('/available/buses', async (req, res) => {
         });
     }
 });
-router.get('/available/routes', async (req, res) => {
+router.get('/available/routes', auth_1.requireAdmin, async (req, res) => {
     try {
         const routes = await ProductionAssignmentService_1.ProductionAssignmentService.getAvailableRoutes();
         res.json({
@@ -336,7 +375,7 @@ router.get('/available/routes', async (req, res) => {
         });
     }
 });
-router.get('/assigned-drivers', async (req, res) => {
+router.get('/assigned-drivers', auth_1.requireAdmin, async (req, res) => {
     try {
         const assignedDrivers = await ProductionAssignmentService_1.ProductionAssignmentService.getAssignedDrivers();
         res.json({

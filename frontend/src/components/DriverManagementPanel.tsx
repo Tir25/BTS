@@ -432,7 +432,7 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
                       </button>
                       {driver.assigned_bus_id ? (
                         <button
-                          onClick={() => handleUnassign(driver.id, driver.assigned_bus_id)}
+                          onClick={() => driver.assigned_bus_id && handleUnassign(driver.id, driver.assigned_bus_id)}
                           className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded transition-colors"
                         >
                           Unassign

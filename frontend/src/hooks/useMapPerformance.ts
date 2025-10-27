@@ -289,14 +289,14 @@ export const useMapPerformance = (config: Partial<PerformanceConfig> = {}) => {
       const cleanup = startMonitoring();
       return cleanup;
     }
-  }, [mergedConfig.enableMonitoring, startMonitoring]);
+  }, [mergedConfig.enableMonitoring]); // Removed startMonitoring to prevent infinite loops
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopMonitoring();
     };
-  }, [stopMonitoring]);
+  }, []); // Removed stopMonitoring to prevent infinite loops
 
   return {
     metrics,

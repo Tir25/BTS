@@ -47,6 +47,16 @@ export class ErrorBoundary extends Component<Props, State> {
       this.props.onError(error, errorInfo);
     }
 
+    // Handle dynamic import errors specifically
+    if (error.message.includes('dynamically imported module') || 
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('Loading chunk')) {
+      console.warn('Dynamic import error detected in ErrorBoundary, will reload page');
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    }
+
     // Report to error tracking service in production
     if (import.meta.env.PROD) {
       this.reportError(error, errorInfo);
@@ -94,7 +104,12 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             <h2 className="text-2xl font-bold text-white mb-4">Something went wrong</h2>
             <p className="text-white/70 mb-6">
-              We're sorry, but something unexpected happened. Please try refreshing the page.
+              {this.state.error?.message.includes('dynamically imported module') || 
+               this.state.error?.message.includes('Failed to fetch') ||
+               this.state.error?.message.includes('Loading chunk')
+                ? 'The application needs to reload to get the latest updates. This will happen automatically in a moment.'
+                : 'We\'re sorry, but something unexpected happened. Please try refreshing the page.'
+              }
             </p>
             <div className="space-y-3">
               <button

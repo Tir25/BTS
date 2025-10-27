@@ -36,7 +36,7 @@ const MapOfflineMode: React.FC<MapOfflineModeProps> = ({
       const parseResult = safeJsonParse(cached, null, 'offline-data-cache');
       if (parseResult.success && parseResult.data) {
         setOfflineData(parseResult.data);
-        setLastSync(parseResult.data.lastUpdate);
+        setLastSync((parseResult.data as any)?.lastUpdate || null);
         setCacheSize(JSON.stringify(parseResult.data).length);
         return true;
       } else {

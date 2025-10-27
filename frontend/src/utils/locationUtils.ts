@@ -215,11 +215,14 @@ export const isMobileDevice = (): boolean => {
 
 /**
  * Gets optimal location tracking options based on device
+ * PRODUCTION FIX: Mobile devices with GPS should use high accuracy
  */
 export const getLocationOptions = (isMobile: boolean = false): PositionOptions => {
+  // CRITICAL FIX: Mobile devices with GPS hardware SHOULD use high accuracy
+  // Desktop browsers without GPS cannot improve accuracy even with enableHighAccuracy: true
   return {
-    enableHighAccuracy: !isMobile, // Reduce battery drain on mobile
-    timeout: isMobile ? 15000 : 30000, // Shorter timeout for mobile
-    maximumAge: isMobile ? 5000 : 0, // Allow some caching on mobile
+    enableHighAccuracy: isMobile, // Mobile devices have GPS - use high accuracy
+    timeout: isMobile ? 15000 : 10000, // Shorter timeout for both (faster failure)
+    maximumAge: isMobile ? 5000 : 60000, // Mobile: fresh data, Desktop: allow cached IP location
   };
 };

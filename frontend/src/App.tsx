@@ -3,13 +3,34 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useAuthStore } from './stores/useAuthStore';
 import { useHealthCheck } from './hooks/useApiQueries';
 import { authService } from './services/authService';
-// Lazy load components for better performance
-const UnifiedDriverInterface = React.lazy(() => import('./components/UnifiedDriverInterface'));
-const DriverLogin = React.lazy(() => import('./components/DriverLogin'));
-const StudentMap = React.lazy(() => import('./components/StudentMap'));
-const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'));
-const AdminLogin = React.lazy(() => import('./components/AdminLogin'));
-const PremiumHomepage = React.lazy(() => import('./components/PremiumHomepage'));
+import { DriverAuthProvider } from './contexts/DriverAuthContext';
+// Enhanced lazy loading with retry logic for dynamic imports
+const lazyWithRetry = (importFunction: () => Promise<any>) => {
+  return React.lazy(() =>
+    importFunction().catch((error) => {
+      console.error('Retrying import due to error:', error);
+      // Retry the import once
+      return importFunction().catch((retryError) => {
+        console.error('Import retry failed:', retryError);
+        // If retry fails, reload the page to get fresh modules
+        if (retryError.message.includes('dynamically imported module') || 
+            retryError.message.includes('Failed to fetch')) {
+          console.warn('Dynamic import failed, reloading page to get fresh modules...');
+          setTimeout(() => window.location.reload(), 1000);
+        }
+        throw retryError;
+      });
+    })
+  );
+};
+
+// Lazy load components for better performance with retry logic
+const UnifiedDriverInterface = lazyWithRetry(() => import('./components/UnifiedDriverInterface'));
+const DriverLogin = lazyWithRetry(() => import('./components/DriverLogin'));
+const StudentMap = lazyWithRetry(() => import('./components/StudentMap'));
+const AdminDashboard = lazyWithRetry(() => import('./components/AdminDashboard'));
+const AdminLogin = lazyWithRetry(() => import('./components/AdminLogin'));
+const PremiumHomepage = lazyWithRetry(() => import('./components/PremiumHomepage'));
 import {
   TransitionProvider,
   GlobalTransitionWrapper,
@@ -22,6 +43,43 @@ import { logger } from './utils/logger';
 
 function App() {
   logger.componentMount('App');
+
+  // Add global Vite preload error handling
+  useEffect(() => {
+    const handlePreloadError = (event: Event) => {
+      console.warn('Vite preload error detected:', event);
+      // Reload the page to get fresh modules
+      setTimeout(() => {
+        console.log('Reloading page due to preload error...');
+        window.location.reload();
+      }, 1000);
+    };
+
+    // Listen for Vite preload errors
+    window.addEventListener('vite:preloadError', handlePreloadError);
+
+    // Also listen for general module loading errors
+    const handleModuleError = (event: ErrorEvent) => {
+      if (event.error && (
+        event.error.message.includes('dynamically imported module') ||
+        event.error.message.includes('Failed to fetch') ||
+        event.error.message.includes('Loading chunk')
+      )) {
+        console.warn('Module loading error detected:', event.error);
+        setTimeout(() => {
+          console.log('Reloading page due to module loading error...');
+          window.location.reload();
+        }, 1000);
+      }
+    };
+
+    window.addEventListener('error', handleModuleError);
+
+    return () => {
+      window.removeEventListener('vite:preloadError', handlePreloadError);
+      window.removeEventListener('error', handleModuleError);
+    };
+  }, []);
 
   // Zustand auth store
   const {
@@ -185,46 +243,52 @@ function App() {
               <Route 
                 path="/driver-login" 
                 element={
-                  <Suspense fallback={
-                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
-                      <div className="text-center">
-                        <div className="loading-spinner mx-auto mb-4" />
-                        <p className="text-white text-lg">Loading Driver Login...</p>
+                  <DriverAuthProvider>
+                    <Suspense fallback={
+                      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                        <div className="text-center">
+                          <div className="loading-spinner mx-auto mb-4" />
+                          <p className="text-white text-lg">Loading Driver Login...</p>
+                        </div>
                       </div>
-                    </div>
-                  }>
-                    <DriverLogin />
-                  </Suspense>
+                    }>
+                      <DriverLogin />
+                    </Suspense>
+                  </DriverAuthProvider>
                 } 
               />
               <Route 
                 path="/driver-dashboard" 
                 element={
-                  <Suspense fallback={
-                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
-                      <div className="text-center">
-                        <div className="loading-spinner mx-auto mb-4" />
-                        <p className="text-white text-lg">Loading Driver Dashboard...</p>
+                  <DriverAuthProvider>
+                    <Suspense fallback={
+                      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                        <div className="text-center">
+                          <div className="loading-spinner mx-auto mb-4" />
+                          <p className="text-white text-lg">Loading Driver Dashboard...</p>
+                        </div>
                       </div>
-                    </div>
-                  }>
-                    <UnifiedDriverInterface />
-                  </Suspense>
+                    }>
+                      <UnifiedDriverInterface mode="dashboard" />
+                    </Suspense>
+                  </DriverAuthProvider>
                 } 
               />
               <Route 
                 path="/driver-interface" 
                 element={
-                  <Suspense fallback={
-                    <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
-                      <div className="text-center">
-                        <div className="loading-spinner mx-auto mb-4" />
-                        <p className="text-white text-lg">Loading Driver Interface...</p>
+                  <DriverAuthProvider>
+                    <Suspense fallback={
+                      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                        <div className="text-center">
+                          <div className="loading-spinner mx-auto mb-4" />
+                          <p className="text-white text-lg">Loading Driver Interface...</p>
+                        </div>
                       </div>
-                    </div>
-                  }>
-                    <UnifiedDriverInterface />
-                  </Suspense>
+                    }>
+                      <UnifiedDriverInterface mode="dashboard" />
+                    </Suspense>
+                  </DriverAuthProvider>
                 } 
               />
 

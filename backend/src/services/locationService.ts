@@ -18,7 +18,7 @@ interface BusInfo {
   route_name: string;
   driver_id: string;
   driver_name: string;
-  assigned_driver_id?: string; // Added for compatibility with filter
+  assigned_driver_profile_id?: string; // Added for compatibility with filter
   route_city?: string;
   bus_image_url?: string | null;
 }
@@ -42,44 +42,89 @@ export const saveLocationUpdate = async (
     // Convert coordinates to PostGIS Point format
     const point = `POINT(${data.longitude} ${data.latitude})`;
 
-    const query = `
-      INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
-      VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
-      RETURNING id, bus_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
-    `;
+    // Use transaction to ensure both tables are updated atomically
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
 
-    const result = await pool.query(query, [
-      data.busId,
-      point,
-      data.speed,
-      data.heading,
-      data.timestamp,
-    ]);
+      // Insert into live_locations (for real-time queries)
+      const liveQuery = `
+        INSERT INTO live_locations (bus_id, driver_id, location, speed_kmh, heading_degrees, recorded_at)
+        VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6)
+        RETURNING id, bus_id, driver_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
+      `;
 
-    if (result.rows.length === 0) {
-      console.error('❌ Error saving location: No rows returned');
-      return null;
+      const liveResult = await client.query(liveQuery, [
+        data.busId,
+        data.driverId,
+        point,
+        data.speed,
+        data.heading,
+        data.timestamp,
+      ]);
+
+      if (liveResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error saving location: No rows returned from live_locations');
+        return null;
+      }
+
+      // Also insert into locations table (for historical data)
+      const historicalQuery = `
+        INSERT INTO locations (bus_id, driver_id, location, speed_kmh, heading_degrees, recorded_at)
+        VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6)
+        ON CONFLICT DO NOTHING;
+      `;
+
+      try {
+        await client.query(historicalQuery, [
+          data.busId,
+          data.driverId,
+          point,
+          data.speed,
+          data.heading,
+          data.timestamp,
+        ]);
+      } catch (historicalError) {
+        // Log but don't fail if historical insert fails (non-critical)
+        console.warn('⚠️ Warning: Failed to save to historical locations table:', historicalError);
+      }
+
+      await client.query('COMMIT');
+
+      const savedLocation = liveResult.rows[0];
+      return {
+        id: savedLocation.id,
+        driver_id: data.driverId,
+        bus_id: savedLocation.bus_id,
+        location: savedLocation.location,
+        timestamp: savedLocation.recorded_at,
+        speed: savedLocation.speed_kmh,
+        heading: savedLocation.heading_degrees,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    const savedLocation = result.rows[0];
-    return {
-      id: savedLocation.id,
-      driver_id: data.driverId,
-      bus_id: savedLocation.bus_id,
-      location: savedLocation.location,
-      timestamp: savedLocation.recorded_at,
-      speed: savedLocation.speed_kmh,
-      heading: savedLocation.heading_degrees,
-    };
   } catch (error) {
     console.error('❌ Error in saveLocationUpdate:', error);
     return null;
   }
 };
 
+/**
+ * @deprecated This function has been replaced by optimizedLocationService.getDriverBusInfo()
+ * which eliminates N+1 query problems and provides better performance.
+ * Use optimizedLocationService.getDriverBusInfo() instead.
+ */
 export const getDriverBusInfo = async (
   driverId: string
 ): Promise<BusInfo | null> => {
+  console.warn('⚠️ DEPRECATED: getDriverBusInfo is deprecated. Use optimizedLocationService.getDriverBusInfo() instead.');
+  
   try {
     console.log('🔍 Fetching bus info for driver:', driverId);
 
@@ -163,7 +208,13 @@ export const getDriverBusInfo = async (
   }
 };
 
+/**
+ * @deprecated This function has been replaced by optimizedLocationService.getCurrentBusLocations()
+ * which provides better performance with caching and spatial optimization.
+ * Use optimizedLocationService.getCurrentBusLocations() instead.
+ */
 export const getCurrentBusLocations = async (): Promise<SavedLocation[]> => {
+  console.warn('⚠️ DEPRECATED: getCurrentBusLocations is deprecated. Use optimizedLocationService.getCurrentBusLocations() instead.');
   try {
     const query = `
       SELECT 
@@ -200,25 +251,24 @@ export const getBusLocationHistory = async (
   endTime: string
 ): Promise<SavedLocation[]> => {
   try {
+    // Use the database function to get combined history from both tables
     const query = `
       SELECT 
         id, 
         bus_id, 
-        ST_AsText(location) as location, 
+        driver_id,
+        location, 
         speed_kmh, 
         heading_degrees, 
         recorded_at
-      FROM live_locations 
-      WHERE bus_id = $1 
-        AND recorded_at >= $2 
-        AND recorded_at <= $3
+      FROM get_location_history($1, $2, $3, 1000)
       ORDER BY recorded_at ASC;
     `;
 
     const result = await pool.query(query, [busId, startTime, endTime]);
     return result.rows.map((row) => ({
       id: row.id,
-      driver_id: '', // Not stored in live_locations table
+      driver_id: row.driver_id || '',
       bus_id: row.bus_id,
       location: row.location,
       timestamp: row.recorded_at,
@@ -227,7 +277,37 @@ export const getBusLocationHistory = async (
     }));
   } catch (error) {
     console.error('❌ Error in getBusLocationHistory:', error);
-    return [];
+    // Fallback to live_locations only if function fails
+    try {
+      const fallbackQuery = `
+        SELECT 
+          id, 
+          bus_id, 
+          driver_id,
+          ST_AsText(location) as location, 
+          speed_kmh, 
+          heading_degrees, 
+          recorded_at
+        FROM live_locations 
+        WHERE bus_id = $1 
+          AND recorded_at >= $2 
+          AND recorded_at <= $3
+        ORDER BY recorded_at ASC;
+      `;
+      const fallbackResult = await pool.query(fallbackQuery, [busId, startTime, endTime]);
+      return fallbackResult.rows.map((row) => ({
+        id: row.id,
+        driver_id: row.driver_id || '',
+        bus_id: row.bus_id,
+        location: row.location,
+        timestamp: row.recorded_at,
+        speed: row.speed_kmh,
+        heading: row.heading_degrees,
+      }));
+    } catch (fallbackError) {
+      console.error('❌ Error in fallback query:', fallbackError);
+      return [];
+    }
   }
 };
 
@@ -238,9 +318,9 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
       .select(
         `
         id,
-        number_plate,
+        bus_number,
         route_id,
-        assigned_driver_id,
+        assigned_driver_profile_id,
         routes!inner(
           name
         ),
@@ -266,10 +346,10 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
 
     return {
       bus_id: data.id,
-      bus_number: data.number_plate || '',
+      bus_number: data.bus_number || '',
       route_id: data.route_id || '',
       route_name: routeData?.name || '',
-      driver_id: data.assigned_driver_id || '',
+      driver_id: data.assigned_driver_profile_id || '',
       driver_name: profileData?.full_name || 'Unknown Driver',
     };
   } catch (error) {
