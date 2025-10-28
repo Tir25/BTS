@@ -1,7 +1,7 @@
 /**
- * Unified WebSocket Service
- * Industry-grade WebSocket implementation with comprehensive error handling
- * Consolidates all WebSocket functionality into a single, maintainable service
+ * Unified WebSocket Service - PRODUCTION REFACTORED
+ * Eliminates race conditions and simplifies connection management
+ * Industry-grade WebSocket implementation with atomic operations
  */
 
 import { io, Socket } from 'socket.io-client';
@@ -25,6 +25,7 @@ export interface BusLocation {
   };
 }
 
+// PRODUCTION FIX: Simplified configuration with atomic operations
 interface WebSocketConfig {
   maxReconnectAttempts: number;
   baseReconnectDelay: number;
@@ -34,9 +35,12 @@ interface WebSocketConfig {
   mobileOptimizations: boolean;
 }
 
+// PRODUCTION FIX: Single source of truth for connection state
+type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+
 interface ConnectionStats {
   isConnected: boolean;
-  connectionState: string;
+  connectionState: ConnectionState;
   reconnectAttempts: number;
   lastHeartbeat: number;
   uptime: number;
@@ -45,43 +49,53 @@ interface ConnectionStats {
 }
 
 class UnifiedWebSocketService {
+  // PRODUCTION FIX: Atomic state management - single source of truth
   private socket: Socket | null = null;
-  private _isConnected: boolean = false;
-  private connectionState: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' = 'disconnected';
+  private connectionState: ConnectionState = 'disconnected';
+  private clientType: 'student' | 'driver' | 'admin' = 'student';
+  private isShuttingDown: boolean = false;
   
-  // PRODUCTION FIX: Add authentication state tracking for different client types
-  private _isStudentAuthenticated: boolean = false;
-  private _isDriverAuthenticated: boolean = false;
-  private studentConnectionTimeout: NodeJS.Timeout | null = null;
+  // PRODUCTION FIX: Simplified authentication state
+  private authenticationState: {
+    isAuthenticated: boolean;
+    userId?: string;
+    userRole?: string;
+  } = { isAuthenticated: false };
   
+  // PRODUCTION FIX: Optimized configuration
   private config: WebSocketConfig = {
-    maxReconnectAttempts: 3, // Reduced to prevent infinite retries
-    baseReconnectDelay: 2000, // Increased base delay
-    maxReconnectDelay: 8000, // Reduced max delay
+    maxReconnectAttempts: 5, // Reasonable retry limit
+    baseReconnectDelay: 1000, // Faster initial retry
+    maxReconnectDelay: 10000, // Max delay
     heartbeatInterval: 30000,
-    connectionTimeout: 8000, // Reduced timeout
+    connectionTimeout: 15000, // Single timeout
     mobileOptimizations: true,
   };
 
+  // PRODUCTION FIX: Atomic counters and timers
   private reconnectAttempts: number = 0;
-  private heartbeatInterval: NodeJS.Timeout | null = null;
-  private connectionTimeout: NodeJS.Timeout | null = null;
   private lastHeartbeat: number = 0;
-  private isShuttingDown: boolean = false;
-  private connectionMonitorInterval: NodeJS.Timeout | null = null;
-  private clientType: 'student' | 'driver' | 'admin' = 'student';
-  
-  // PRODUCTION FIX: Connection state change listeners for event-driven updates
-  private connectionStateListeners: Set<(state: { isConnected: boolean; isAuthenticated: boolean; connectionState: string }) => void> = new Set();
-
-  // Atomic connection lock to prevent race conditions
-  private connectionLock: Promise<void> | null = null;
-  private connectionLockResolve: (() => void) | null = null;
-
-  // Connection statistics
+  private connectionStartTime: number = 0;
   private totalConnections: number = 0;
   private failedConnections: number = 0;
-  private connectionStartTime: number = 0;
+  
+  // PRODUCTION FIX: Single timer management
+  private timers: {
+    heartbeat?: NodeJS.Timeout;
+    connection?: NodeJS.Timeout;
+    reconnect?: NodeJS.Timeout;
+  } = {};
+  
+  // PRODUCTION FIX: Event-driven state management
+  private connectionStateListeners: Set<(state: { 
+    isConnected: boolean; 
+    isAuthenticated: boolean; 
+    connectionState: ConnectionState;
+    error?: string;
+  }) => void> = new Set();
+
+  // PRODUCTION FIX: Atomic connection lock with proper cleanup
+  private connectionLock: Promise<void> | null = null;
 
   // Mobile detection
   private isMobile: boolean = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -95,17 +109,16 @@ class UnifiedWebSocketService {
   private errorListeners: Set<(error: any) => void> = new Set();
   private driverAssignmentUpdateListeners: Set<(data: any) => void> = new Set();
 
-  // Location update deduplication and throttling
-  // ENHANCED: Multiple layers of deduplication to prevent 16ms duplicate issue
+  // CRITICAL FIX: Reduced throttling for desktop GPS support
   private lastSentLocation: {
     latitude: number;
     longitude: number;
     timestamp: number;
   } | null = null;
   private lastSendTime: number = 0;
-  private readonly MIN_SEND_INTERVAL = 1000; // Minimum 1 second between sends
-  private readonly MIN_DISTANCE_THRESHOLD = 5; // Minimum 5 meters distance change
-  private readonly RAPID_DUPLICATE_THRESHOLD = 100; // Block duplicates within 100ms
+  private readonly MIN_SEND_INTERVAL = 500; // CRITICAL FIX: Reduced from 1000ms to 500ms for desktop GPS
+  private readonly MIN_DISTANCE_THRESHOLD = 1; // CRITICAL FIX: Reduced from 5m to 1m for desktop GPS
+  private readonly RAPID_DUPLICATE_THRESHOLD = 50; // CRITICAL FIX: Reduced from 100ms to 50ms
   private sendThrottleTimeout: NodeJS.Timeout | null = null;
   // PRODUCTION FIX: Use array-based queue instead of single pending update to prevent data loss
   private pendingLocationUpdatesQueue: Array<{
@@ -154,193 +167,196 @@ class UnifiedWebSocketService {
   }
 
   /**
-   * Connect to WebSocket server with authentication - SIMPLIFIED & ROBUST
-   * ATOMIC CONNECTION: Uses promise-based lock to prevent duplicate connections
+   * PRODUCTION FIX: Atomic connection with race condition elimination
+   * Single method that handles all connection logic atomically
    */
   async connect(): Promise<void> {
-    // If already connected, return immediately
-    if (this.socket?.connected) {
+    // PRODUCTION FIX: Atomic check - if already connected, return immediately
+    if (this.connectionState === 'connected' && this.socket?.connected) {
       logger.info('🔌 WebSocket already connected', 'component');
       return;
     }
 
-    // If another connection is in progress, wait for it
+    // PRODUCTION FIX: Atomic lock - prevent concurrent connections
     if (this.connectionLock) {
-      logger.info('🔌 WebSocket connection already in progress, waiting...', 'component');
+      logger.info('🔌 WebSocket connection in progress, waiting...', 'component');
       await this.connectionLock;
-      // Check again after waiting
-      if (this.socket?.connected) {
-        logger.info('✅ WebSocket connected while waiting', 'component');
-        return;
-      }
+      return;
     }
 
-    // Reset shutting down flag if we're trying to connect again
-    if (this.isShuttingDown) {
-      logger.info('🔄 Resetting WebSocket service state for reconnection', 'component');
-      this.isShuttingDown = false;
-    }
-
-    // Create atomic connection lock
-    let lockResolve: () => void;
-    this.connectionLock = new Promise<void>((resolve) => {
-      lockResolve = resolve;
-      this.connectionLockResolve = resolve;
-    });
-
+    // PRODUCTION FIX: Create atomic connection lock
+    this.connectionLock = this.performConnection();
+    
     try {
-      this.connectionState = 'connecting';
+      await this.connectionLock;
+    } finally {
+      this.connectionLock = null;
+    }
+  }
+
+  /**
+   * PRODUCTION FIX: Internal connection method with atomic operations
+   */
+  private async performConnection(): Promise<void> {
+    try {
+      // PRODUCTION FIX: Atomic state transition
+      this.updateConnectionState('connecting');
       this.connectionStartTime = Date.now();
       this.totalConnections++;
       
       logger.info('🔌 Connecting to WebSocket server...', 'component');
 
-      // Get WebSocket URL with fallback
-      const wsUrl = environment.api.websocketUrl;
-      logger.debug('Debug info', 'component', { data: '🔌 WebSocket URL:', wsUrl });
-
-      // PRODUCTION FIX: Validate token before WebSocket authentication
-      let authToken = authService.getAccessToken();
+      // PRODUCTION FIX: Simplified token handling
+      const authToken = await this.getValidAuthToken();
       
-      if (this.clientType !== 'student') {
-        // For driver/admin clients, token validation is required
-        if (!authToken) {
-          logger.warn('⚠️ No auth token, attempting to refresh session...', 'component');
-          try {
-            const refreshResult = await authService.refreshSession();
-            if (refreshResult.success) {
-              authToken = authService.getAccessToken();
-              logger.info('✅ Session refreshed, token obtained', 'component');
-            }
-          } catch (refreshError) {
-            logger.error('❌ Session refresh failed', 'component', { error: refreshError });
-          }
-        }
-        
-        // PRODUCTION FIX: Validate token before using it for WebSocket
-        if (authToken) {
-          try {
-            const tokenValidation = await authService.validateTokenForAPI();
-            if (!tokenValidation.valid || !tokenValidation.token) {
-              logger.error('❌ Token validation failed before WebSocket connection', 'component', {
-                valid: tokenValidation.valid,
-                refreshed: tokenValidation.refreshed
-              });
-              
-              // Try to refresh session if validation failed
-              const refreshResult = await authService.refreshSession();
-              if (refreshResult.success) {
-                authToken = authService.getAccessToken();
-                // Re-validate after refresh
-                const reValidation = await authService.validateTokenForAPI();
-                if (!reValidation.valid || !reValidation.token) {
-                  throw new Error('Token validation failed after refresh');
-                }
-                authToken = reValidation.token;
-                logger.info('✅ Token validated after refresh', 'component');
-              } else {
-                throw new Error('Session refresh failed');
-              }
-            } else {
-              // Use validated token
-              authToken = tokenValidation.token;
-              logger.info('✅ Token validated successfully before WebSocket connection', 'component');
-            }
-          } catch (validationError) {
-            logger.error('❌ Token validation error before WebSocket connection', 'component', { 
-              error: validationError instanceof Error ? validationError.message : String(validationError)
-            });
-            throw new Error('Token validation failed: ' + (validationError instanceof Error ? validationError.message : String(validationError)));
-          }
-        }
-        
-        if (!authToken) {
-          logger.error('❌ No valid authentication token available for WebSocket connection', 'component', {
-            clientType: this.clientType
-          });
-          throw new Error('No valid authentication token available');
-        }
-      }
-
-      // Simplified Socket.IO configuration for better reliability
-      this.socket = io(wsUrl, {
-        transports: ['websocket', 'polling'],
-        upgrade: true,
-        timeout: 15000, // Increased timeout
-        forceNew: true, // Force new connection for reliability
-        reconnection: false, // We handle reconnection manually
-        autoConnect: false,
-        auth: {
-          token: authToken || '',
-          clientType: this.clientType,
-        },
-        query: {
-          clientType: this.clientType,
-          version: '2.0.0',
-          timestamp: Date.now().toString(),
-        },
-        // Simplified mobile optimizations
-        ...(this.isMobile && {
-          pingTimeout: 60000,
-          pingInterval: 25000,
-        }),
-      });
-
-      // Set up connection timeout
-      this.connectionTimeout = setTimeout(() => {
-        if (this.connectionState === 'connecting') {
-          logger.error('❌ WebSocket connection timeout', 'component');
-          this.handleConnectionError(new Error('Connection timeout'));
-        }
-      }, 15000); // Increased timeout
-
-      // Set up event listeners
+      // PRODUCTION FIX: Create socket with optimized configuration
+      this.socket = this.createSocket(authToken);
+      
+      // PRODUCTION FIX: Set up event listeners before connecting
       this.setupEventListeners();
-
-      // Connect to server
-      this.socket.connect();
-
-      // Wait for connection with improved error handling
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Connection timeout'));
-        }, 15000);
-
-        this.socket!.once('connect', () => {
-          clearTimeout(timeout);
-          this.handleConnect();
-          resolve();
-        });
-
-        this.socket!.once('connect_error', (error) => {
-          clearTimeout(timeout);
-          logger.error('❌ WebSocket connection error', 'component', { error: error.message });
-          reject(error);
-        });
-
-        this.socket!.once('disconnect', (reason) => {
-          clearTimeout(timeout);
-          logger.warn('⚠️ WebSocket disconnected during connection', 'component', { reason });
-          reject(new Error(`Connection failed: ${reason}`));
-        });
-      });
-
+      
+      // PRODUCTION FIX: Connect with single timeout
+      await this.connectWithTimeout();
+      
+      logger.info('✅ WebSocket connected successfully', 'component');
+      
     } catch (error) {
-      logger.error('Error occurred', 'component', { error });
-      this.handleConnectionError(error as Error);
+      logger.error('❌ WebSocket connection failed', 'component', { error });
+      this.updateConnectionState('error', error instanceof Error ? error.message : 'Connection failed');
+      this.failedConnections++;
       throw error;
-    } finally {
-      // Release connection lock
-      if (this.connectionLockResolve) {
-        this.connectionLockResolve();
-        this.connectionLock = null;
-        this.connectionLockResolve = null;
-      }
     }
   }
 
   /**
-   * Disconnect from WebSocket server
+   * SIMPLIFIED: Get authentication token without refresh attempts
+   */
+  private async getValidAuthToken(): Promise<string | null> {
+    if (this.clientType === 'student') {
+      return null; // Students don't need authentication
+    }
+
+    let token = authService.getAccessToken();
+    
+    if (!token) {
+      logger.warn('⚠️ No auth token available for WebSocket', 'component');
+      return null;
+    }
+
+    return token;
+  }
+
+  /**
+   * PRODUCTION FIX: Optimized socket creation
+   */
+  private createSocket(authToken: string | null): Socket {
+    const wsUrl = environment.api.websocketUrl;
+    
+    return io(wsUrl, {
+      transports: ['websocket', 'polling'],
+      upgrade: true,
+      timeout: this.config.connectionTimeout,
+      forceNew: true,
+      reconnection: false, // We handle reconnection manually
+      autoConnect: false,
+      auth: {
+        token: authToken || '',
+        clientType: this.clientType,
+      },
+      query: {
+        clientType: this.clientType,
+        version: '3.0.0', // Updated version
+        timestamp: Date.now().toString(),
+      },
+      // Mobile optimizations
+      ...(this.isMobile && {
+        pingTimeout: 60000,
+        pingInterval: 25000,
+      }),
+    });
+  }
+
+  /**
+   * PRODUCTION FIX: Connection with single timeout
+   */
+  private async connectWithTimeout(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      // PRODUCTION FIX: Single timeout timer
+      this.timers.connection = setTimeout(() => {
+        reject(new Error('Connection timeout'));
+      }, this.config.connectionTimeout);
+
+      // PRODUCTION FIX: Single event handler setup
+      const cleanup = () => {
+        if (this.timers.connection) {
+          clearTimeout(this.timers.connection);
+          this.timers.connection = undefined;
+        }
+        this.socket?.off('connect', onConnect);
+        this.socket?.off('connect_error', onError);
+        this.socket?.off('disconnect', onDisconnect);
+      };
+
+      const onConnect = () => {
+        cleanup();
+        this.handleConnect();
+        resolve();
+      };
+
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+
+      const onDisconnect = (reason: string) => {
+        cleanup();
+        reject(new Error(`Connection failed: ${reason}`));
+      };
+
+      this.socket?.once('connect', onConnect);
+      this.socket?.once('connect_error', onError);
+      this.socket?.once('disconnect', onDisconnect);
+
+      // Start connection
+      this.socket?.connect();
+    });
+  }
+
+  /**
+   * PRODUCTION FIX: Atomic state update with event notification
+   */
+  private updateConnectionState(state: ConnectionState, error?: string): void {
+    this.connectionState = state;
+    
+    // Notify all listeners of state change
+    this.connectionStateListeners.forEach(listener => {
+      try {
+        listener({
+          isConnected: state === 'connected',
+          isAuthenticated: this.authenticationState.isAuthenticated,
+          connectionState: state,
+          error
+        });
+      } catch (listenerError) {
+        logger.error('Error in connection state listener', 'component', { error: listenerError });
+      }
+    });
+  }
+
+  /**
+   * PRODUCTION FIX: Cleanup all timers atomically
+   */
+  private cleanupTimers(): void {
+    Object.values(this.timers).forEach(timer => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    });
+    this.timers = {};
+  }
+
+  /**
+   * PRODUCTION FIX: Simplified disconnect with atomic cleanup
    */
   disconnect(): void {
     if (this.isShuttingDown) {
@@ -350,92 +366,71 @@ class UnifiedWebSocketService {
     this.isShuttingDown = true;
     logger.info('🔌 Disconnecting from WebSocket server...', 'component');
 
-    // Release connection lock if present
-    if (this.connectionLockResolve) {
-      this.connectionLockResolve();
-      this.connectionLock = null;
-      this.connectionLockResolve = null;
-    }
-
-    // Clear timeouts and intervals
-    if (this.connectionTimeout) {
-      clearTimeout(this.connectionTimeout);
-      this.connectionTimeout = null;
-    }
-
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-
-    if (this.connectionMonitorInterval) {
-      clearInterval(this.connectionMonitorInterval);
-      this.connectionMonitorInterval = null;
-    }
-
+    // PRODUCTION FIX: Atomic cleanup
+    this.cleanupTimers();
+    
     // Disconnect socket
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
 
-    this._isConnected = false;
-    this.connectionState = 'disconnected';
+    // PRODUCTION FIX: Reset state atomically
+    this.updateConnectionState('disconnected');
+    this.authenticationState = { isAuthenticated: false };
     this.lastHeartbeat = 0;
 
     logger.info('🔌 WebSocket disconnected', 'component');
   }
 
   /**
-   * Set up event listeners
+   * PRODUCTION FIX: Simplified event listener setup
    */
   private setupEventListeners(): void {
     if (!this.socket) return;
 
+    // PRODUCTION FIX: Core connection events
     this.socket.on('connect', this.handleConnect.bind(this));
     this.socket.on('disconnect', this.handleDisconnect.bind(this));
     this.socket.on('connect_error', this.handleConnectionError.bind(this));
     this.socket.on('error', this.handleError.bind(this));
 
-    // Bus location updates - CRITICAL: This is how students receive real-time updates
+    // PRODUCTION FIX: Business logic events
     this.socket.on('bus:locationUpdate', (location: BusLocation) => {
-      logger.info('📍 Bus location update received from WebSocket', 'component', {
+      logger.info('📍 Bus location update received', 'component', {
         busId: location.busId,
-        driverId: location.driverId,
         latitude: location.latitude,
         longitude: location.longitude,
         timestamp: location.timestamp,
-        hasEta: !!location.eta,
-        hasNearStop: !!location.nearStop,
         listenersCount: this.busLocationListeners.size
       });
       
-      // Notify all registered listeners (StudentMap components)
-      let listenerCount = 0;
+      // Notify all registered listeners
       this.busLocationListeners.forEach(listener => {
         try {
           listener(location);
-          listenerCount++;
         } catch (listenerError) {
           logger.error('Error in bus location listener', 'component', {
             error: listenerError instanceof Error ? listenerError.message : String(listenerError)
           });
         }
       });
-      
-      if (listenerCount === 0) {
-        logger.warn('⚠️ No listeners registered for bus location updates - StudentMap may not be connected', 'component', {
-          busId: location.busId
-        });
-      } else {
-        logger.debug('✅ Location update delivered to listeners', 'component', {
-          listenerCount,
-          busId: location.busId
-        });
-      }
     });
 
-    // Driver events
+    // PRODUCTION FIX: Authentication events
+    this.socket.on('student:connected', (data?: { timestamp?: string; userId?: string }) => {
+      logger.info('🎓 Student authenticated successfully', 'component', { data });
+      this.authenticationState = { 
+        isAuthenticated: true, 
+        userId: data?.userId,
+        userRole: 'student'
+      };
+      this.updateConnectionState('connected');
+      
+      this.studentConnectedListeners.forEach(listener => listener());
+    });
+
+    // PRODUCTION FIX: Driver events
     this.socket.on('driver:connected', (data: any) => {
       logger.debug('🚌 Driver connected:', 'component', { data });
       this.driverConnectedListeners.forEach(listener => listener(data));
@@ -446,31 +441,12 @@ class UnifiedWebSocketService {
       this.driverDisconnectedListeners.forEach(listener => listener(data));
     });
 
-    // Student events - PRODUCTION FIX: Enhanced authentication handling
-    this.socket.on('student:connected', (data?: { timestamp?: string; userId?: string }) => {
-      logger.info('🎓 Student authenticated successfully', 'component', { data });
-      this._isStudentAuthenticated = true;
-      
-      // Clear connection timeout
-      if (this.studentConnectionTimeout) {
-        clearTimeout(this.studentConnectionTimeout);
-        this.studentConnectionTimeout = null;
-      }
-      
-      // Notify listeners
-      this.studentConnectedListeners.forEach(listener => listener());
-      
-      // PRODUCTION FIX: Notify connection state listeners
-      this.notifyConnectionStateChange();
-    });
-    
-    // Bus arriving events
+    // PRODUCTION FIX: Other events
     this.socket.on('bus:arriving', (data: any) => {
       logger.debug('🚌 Bus arriving:', 'component', { data });
       this.busArrivingListeners.forEach(listener => listener(data));
     });
 
-    // Driver assignment update events
     this.socket.on('driver:assignmentUpdate', (data: any) => {
       logger.info('📋 Driver assignment update received:', 'component', { 
         type: data.type,
@@ -478,296 +454,94 @@ class UnifiedWebSocketService {
       });
       this.driverAssignmentUpdateListeners.forEach(listener => listener(data));
     });
-
-    // Error handling - PRODUCTION FIX: Enhanced student authentication error handling
-    this.socket.on('error', (error: any) => {
-      logger.error('WebSocket error received', 'component', { error });
-      
-      // PRODUCTION FIX: Check if it's a student authentication error
-      if (error.code === 'NOT_AUTHENTICATED' || error.code === 'INSUFFICIENT_PERMISSIONS') {
-        this._isStudentAuthenticated = false;
-        logger.error('❌ Student authentication failed', 'component', { 
-          code: error.code,
-          message: error.message 
-        });
-        
-        // PRODUCTION FIX: Clear authentication timeout on error
-        if (this.studentConnectionTimeout) {
-          clearTimeout(this.studentConnectionTimeout);
-          this.studentConnectionTimeout = null;
-        }
-        
-        this.notifyConnectionStateChange();
-      }
-      
-      // PRODUCTION FIX: Handle recoverable errors differently
-      const isRecoverable = error.code === 'NETWORK_ERROR' || 
-                           error.code === 'TIMEOUT' ||
-                           error.message?.includes('network') ||
-                           error.message?.includes('timeout');
-      
-      if (isRecoverable && this.clientType === 'student') {
-        logger.warn('⚠️ Recoverable WebSocket error - will attempt reconnection', 'component', {
-          code: error.code,
-          message: error.message
-        });
-        // Connection monitoring will handle reconnection
-      }
-      
-      this.errorListeners.forEach(listener => {
-        try {
-          listener(error);
-        } catch (listenerError) {
-          logger.error('Error in error listener', 'component', { error: listenerError });
-        }
-      });
-    });
   }
 
   /**
-   * Handle successful connection - IMPROVED
-   * PRODUCTION FIX: Enhanced student authentication flow
+   * PRODUCTION FIX: Simplified connection handler
    */
   private handleConnect(): void {
     logger.info('✅ WebSocket connected successfully', 'component');
-    this._isConnected = true;
-    this.connectionState = 'connected';
+    
+    // PRODUCTION FIX: Atomic state update
+    this.updateConnectionState('connected');
     this.reconnectAttempts = 0;
     this.lastHeartbeat = Date.now();
 
-    // PRODUCTION FIX: Reset authentication state on reconnect
-    if (this.clientType === 'student') {
-      this._isStudentAuthenticated = false;
-    }
-
-    // Clear connection timeout
-    if (this.connectionTimeout) {
-      clearTimeout(this.connectionTimeout);
-      this.connectionTimeout = null;
-    }
-
-    // Release connection lock
-    if (this.connectionLockResolve) {
-      this.connectionLockResolve();
-      this.connectionLock = null;
-      this.connectionLockResolve = null;
-    }
-
-    // Start heartbeat
+    // PRODUCTION FIX: Start heartbeat
     this.startHeartbeat();
 
-    // Start connection monitoring
-    this.startConnectionMonitoring();
-
-    // Emit appropriate connection event based on client type with error handling
+    // PRODUCTION FIX: Emit appropriate connection event based on client type
     try {
       if (this.clientType === 'student') {
         logger.info('🎓 Emitting student:connect for authentication', 'component');
         this.socket?.emit('student:connect');
-        
-        // PRODUCTION FIX: Set timeout for student authentication response with retry mechanism
-        this.studentConnectionTimeout = setTimeout(() => {
-          if (!this._isStudentAuthenticated) {
-            logger.warn('⚠️ Student authentication timeout - retrying connection', 'component');
-            this._isStudentAuthenticated = false;
-            
-            // PRODUCTION FIX: Retry authentication once before failing
-            if (this.socket && this.socket.connected) {
-              logger.info('🔄 Retrying student authentication', 'component');
-              try {
-                this.socket.emit('student:connect');
-                
-                // Set a shorter timeout for retry (5 seconds)
-                if (this.studentConnectionTimeout) {
-                  clearTimeout(this.studentConnectionTimeout);
-                }
-                this.studentConnectionTimeout = setTimeout(() => {
-                  if (!this._isStudentAuthenticated) {
-                    logger.error('❌ Student authentication failed after retry', 'component');
-                    this._isStudentAuthenticated = false;
-                    this.notifyConnectionStateChange();
-                  }
-                }, 5000);
-              } catch (retryError) {
-                logger.error('❌ Error retrying student authentication', 'component', { error: retryError });
-                this._isStudentAuthenticated = false;
-                this.notifyConnectionStateChange();
-              }
-            } else {
-              // Socket not connected, no point retrying
-              logger.error('❌ Student authentication timeout - socket not connected', 'component');
-              this.notifyConnectionStateChange();
-            }
-          }
-        }, 10000); // 10 second timeout for authentication
       } else if (this.clientType === 'driver') {
         this.socket?.emit('driver:connect');
       } else if (this.clientType === 'admin') {
         this.socket?.emit('admin:connect');
       }
-      
-      // PRODUCTION FIX: Notify connection state listeners
-      this.notifyConnectionStateChange();
     } catch (emitError) {
       logger.warn('⚠️ Error emitting connection event', 'component', { error: emitError });
     }
   }
-  
-  /**
-   * PRODUCTION FIX: Notify all connection state listeners of state changes
-   */
-  private notifyConnectionStateChange(): void {
-    const isAuthenticated = this.clientType === 'student' 
-      ? this._isStudentAuthenticated 
-      : this._isDriverAuthenticated;
-    
-    const state = {
-      isConnected: this._isConnected,
-      isAuthenticated,
-      connectionState: this.connectionState,
-    };
-    
-    this.connectionStateListeners.forEach(listener => {
-      try {
-        listener(state);
-      } catch (error) {
-        logger.error('Error in connection state listener', 'component', { error });
-      }
-    });
-  }
-  
-  /**
-   * PRODUCTION FIX: Subscribe to connection state changes (event-driven alternative to polling)
-   */
-  onConnectionStateChange(listener: (state: { isConnected: boolean; isAuthenticated: boolean; connectionState: string }) => void): () => void {
-    this.connectionStateListeners.add(listener);
-    
-    // Immediately notify with current state
-    const isAuthenticated = this.clientType === 'student' 
-      ? this._isStudentAuthenticated 
-      : this._isDriverAuthenticated;
-    
-    listener({
-      isConnected: this._isConnected,
-      isAuthenticated,
-      connectionState: this.connectionState,
-    });
-    
-    // Return unsubscribe function
-    return () => {
-      this.connectionStateListeners.delete(listener);
-    };
-  }
-  
-  /**
-   * PRODUCTION FIX: Get student authentication status
-   */
-  isStudentAuthenticated(): boolean {
-    return this._isStudentAuthenticated;
-  }
 
   /**
-   * Handle disconnection
-   * PRODUCTION FIX: Reset authentication state on disconnect
+   * PRODUCTION FIX: Simplified disconnect handler
    */
   private handleDisconnect(reason: string): void {
-    logger.debug('Debug info', 'component', { data: '🔌 WebSocket disconnected:', reason });
-    this._isConnected = false;
-    this.connectionState = 'disconnected';
+    logger.debug('🔌 WebSocket disconnected:', 'component', { reason });
     
-    // PRODUCTION FIX: Reset authentication state
-    this._isStudentAuthenticated = false;
-    this._isDriverAuthenticated = false;
-    
-    // Clear student connection timeout
-    if (this.studentConnectionTimeout) {
-      clearTimeout(this.studentConnectionTimeout);
-      this.studentConnectionTimeout = null;
-    }
+    // PRODUCTION FIX: Atomic state update
+    this.updateConnectionState('disconnected');
+    this.authenticationState = { isAuthenticated: false };
+    this.lastHeartbeat = 0;
 
-    // Stop heartbeat
+    // PRODUCTION FIX: Stop heartbeat
     this.stopHeartbeat();
 
-    // Stop connection monitoring
-    this.stopConnectionMonitoring();
-    
-    // PRODUCTION FIX: Notify connection state listeners
-    this.notifyConnectionStateChange();
-
-    // Attempt reconnection if not shutting down
+    // PRODUCTION FIX: Attempt reconnection if not shutting down
     if (!this.isShuttingDown && this.reconnectAttempts < this.config.maxReconnectAttempts) {
       this.attemptReconnection();
     }
   }
 
   /**
-   * Handle connection errors
+   * PRODUCTION FIX: Simplified error handler
    */
   private handleConnectionError(error: Error): void {
-    logger.error('Error occurred', 'component', { error });
+    logger.error('❌ WebSocket connection error', 'component', { error: error.message });
     this.failedConnections++;
-    this.connectionState = 'disconnected';
-    this._isConnected = false;
+    
+    // PRODUCTION FIX: Atomic state update
+    this.updateConnectionState('error', error.message);
 
-    // Clear connection timeout
-    if (this.connectionTimeout) {
-      clearTimeout(this.connectionTimeout);
-      this.connectionTimeout = null;
-    }
-
-    // Release connection lock on error
-    if (this.connectionLockResolve) {
-      this.connectionLockResolve();
-      this.connectionLock = null;
-      this.connectionLockResolve = null;
-    }
-
-    // Attempt reconnection if not shutting down
+    // PRODUCTION FIX: Attempt reconnection if not shutting down
     if (!this.isShuttingDown && this.reconnectAttempts < this.config.maxReconnectAttempts) {
       this.attemptReconnection();
     }
   }
 
   /**
-   * Handle general errors
+   * PRODUCTION FIX: Simplified general error handler
    */
   private handleError(error: Error): void {
-    logger.error('Error occurred', 'component', { error });
-    this.errorListeners.forEach(listener => listener(error));
-  }
-
-  /**
-   * Attempt reconnection with exponential backoff
-   */
-  private attemptReconnection(): void {
-    if (this.isShuttingDown) return;
-
-    this.connectionState = 'reconnecting';
-    this.reconnectAttempts++;
-
-    const delay = Math.min(
-      this.config.baseReconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
-      this.config.maxReconnectDelay
-    );
-
-    logger.info('🔄 Attempting reconnection', 'component', { data: `${this.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms` });
-
-    setTimeout(() => {
-      if (!this.isShuttingDown) {
-        this.connect().catch(error => {
-          logger.error('Error occurred', 'component', { error });
-        });
+    logger.error('❌ WebSocket error', 'component', { error: error.message });
+    this.errorListeners.forEach(listener => {
+      try {
+        listener(error);
+      } catch (listenerError) {
+        logger.error('Error in error listener', 'component', { error: listenerError });
       }
-    }, delay);
+    });
   }
-
+  
   /**
-   * Start heartbeat to keep connection alive
+   * PRODUCTION FIX: Simplified heartbeat management
    */
   private startHeartbeat(): void {
     this.stopHeartbeat(); // Clear any existing heartbeat
 
-    this.heartbeatInterval = setInterval(() => {
+    this.timers.heartbeat = setInterval(() => {
       if (this.socket?.connected) {
         this.socket.emit('ping');
         this.lastHeartbeat = Date.now();
@@ -776,57 +550,57 @@ class UnifiedWebSocketService {
   }
 
   /**
-   * Stop heartbeat
+   * PRODUCTION FIX: Simplified heartbeat stop
    */
   private stopHeartbeat(): void {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
+    if (this.timers.heartbeat) {
+      clearInterval(this.timers.heartbeat);
+      this.timers.heartbeat = undefined;
     }
   }
 
   /**
-   * Start connection monitoring
+   * PRODUCTION FIX: Simplified reconnection with exponential backoff
    */
-  private startConnectionMonitoring(): void {
-    this.stopConnectionMonitoring(); // Clear any existing monitoring
+  private attemptReconnection(): void {
+    if (this.isShuttingDown) return;
 
-    this.connectionMonitorInterval = setInterval(() => {
-      if (this.socket?.connected) {
-        const now = Date.now();
-        const timeSinceLastHeartbeat = now - this.lastHeartbeat;
-        
-        if (timeSinceLastHeartbeat > this.config.heartbeatInterval * 2) {
-          logger.warn('⚠️ WebSocket connection appears stale, attempting reconnection', 'component');
-          this.handleDisconnect('stale_connection');
-        }
+    this.updateConnectionState('reconnecting');
+    this.reconnectAttempts++;
+
+    const delay = Math.min(
+      this.config.baseReconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+      this.config.maxReconnectDelay
+    );
+
+    logger.info('🔄 Attempting reconnection', 'component', { 
+      attempt: this.reconnectAttempts,
+      maxAttempts: this.config.maxReconnectAttempts,
+      delay: `${delay}ms`
+    });
+
+    this.timers.reconnect = setTimeout(() => {
+      if (!this.isShuttingDown) {
+        this.connect().catch(error => {
+          logger.error('❌ Reconnection failed', 'component', { error });
+        });
       }
-    }, this.config.heartbeatInterval);
+    }, delay);
   }
 
   /**
-   * Stop connection monitoring
-   */
-  private stopConnectionMonitoring(): void {
-    if (this.connectionMonitorInterval) {
-      clearInterval(this.connectionMonitorInterval);
-      this.connectionMonitorInterval = null;
-    }
-  }
-
-  /**
-   * Get connection status
+   * PRODUCTION FIX: Simplified connection status check
    */
   getConnectionStatus(): boolean {
-    return this._isConnected && this.socket?.connected === true;
+    return this.connectionState === 'connected' && this.socket?.connected === true;
   }
 
   /**
-   * Get connection statistics
+   * PRODUCTION FIX: Simplified connection statistics
    */
   getConnectionStats(): ConnectionStats {
     return {
-      isConnected: this._isConnected,
+      isConnected: this.connectionState === 'connected',
       connectionState: this.connectionState,
       reconnectAttempts: this.reconnectAttempts,
       lastHeartbeat: this.lastHeartbeat,
@@ -834,6 +608,37 @@ class UnifiedWebSocketService {
       totalConnections: this.totalConnections,
       failedConnections: this.failedConnections,
     };
+  }
+
+  /**
+   * PRODUCTION FIX: Event-driven connection state subscription
+   */
+  onConnectionStateChange(listener: (state: { 
+    isConnected: boolean; 
+    isAuthenticated: boolean; 
+    connectionState: ConnectionState;
+    error?: string;
+  }) => void): () => void {
+    this.connectionStateListeners.add(listener);
+    
+    // Immediately notify with current state
+    listener({
+      isConnected: this.connectionState === 'connected',
+      isAuthenticated: this.authenticationState.isAuthenticated,
+      connectionState: this.connectionState,
+    });
+    
+    // Return unsubscribe function
+    return () => {
+      this.connectionStateListeners.delete(listener);
+    };
+  }
+
+  /**
+   * PRODUCTION FIX: Simplified authentication status check
+   */
+  isAuthenticated(): boolean {
+    return this.authenticationState.isAuthenticated;
   }
 
   /**
@@ -912,7 +717,7 @@ class UnifiedWebSocketService {
     if (!this.socket?.connected) {
       logger.error('❌ Cannot send location update: WebSocket not connected', 'component', {
         socketConnected: this.socket?.connected,
-        isConnected: this._isConnected,
+        isConnected: this.connectionState === 'connected',
         connectionState: this.connectionState,
       });
       return;
@@ -987,14 +792,14 @@ class UnifiedWebSocketService {
   }
 
   /**
-   * Send location update (for drivers) with ENHANCED deduplication and throttling
-   * Prevents duplicate sends within short timeframes (16ms issue)
+   * Send location update (for drivers) with CRITICAL FIXES for desktop GPS
+   * CRITICAL FIX: Reduced throttling and deduplication for desktop browsers
    * 
-   * Multiple layers of protection:
-   * 1. Rapid duplicate detection (< 100ms)
-   * 2. Exact coordinate matching
-   * 3. Distance-based deduplication (< 5m)
-   * 4. Time-based throttling (1 second minimum)
+   * Simplified layers of protection:
+   * 1. Rapid duplicate detection (< 50ms) - reduced from 100ms
+   * 2. Exact coordinate matching - only for very recent duplicates
+   * 3. Distance-based deduplication (< 1m) - reduced from 5m
+   * 4. Time-based throttling (500ms minimum) - reduced from 1000ms
    */
   sendLocationUpdate(locationData: {
     driverId: string;
@@ -1038,14 +843,15 @@ class UnifiedWebSocketService {
     const now = Date.now();
     const timeSinceLastSend = now - this.lastSendTime;
 
-    // LAYER 1: Rapid duplicate detection (< 100ms) - catches 16ms duplicates
+    // LAYER 1: CRITICAL FIX - Rapid duplicate detection (< 50ms) - only block true duplicates
     if (timeSinceLastSend < this.RAPID_DUPLICATE_THRESHOLD) {
       // Create a location key for exact matching
       const locationKey = `${locationData.latitude.toFixed(6)}_${locationData.longitude.toFixed(6)}`;
       const lastSendTimeForLocation = this.locationMessageQueue.get(locationKey);
       
+      // CRITICAL FIX: Only block if it's truly the same location AND very recent
       if (lastSendTimeForLocation && (now - lastSendTimeForLocation) < this.RAPID_DUPLICATE_THRESHOLD) {
-        logger.debug('🚫 BLOCKED: Rapid duplicate location update (< 100ms)', 'component', {
+        logger.debug('🚫 BLOCKED: Rapid duplicate location update (< 50ms)', 'component', {
           timeSinceLastSend,
           lastSendTime: lastSendTimeForLocation,
           locationKey,
@@ -1071,7 +877,7 @@ class UnifiedWebSocketService {
         return; // Block exact duplicate
       }
 
-      // LAYER 3: Distance-based deduplication
+      // LAYER 3: CRITICAL FIX - Distance-based deduplication (reduced threshold)
       const distance = this.calculateDistance(
         this.lastSentLocation.latitude,
         this.lastSentLocation.longitude,
@@ -1079,9 +885,10 @@ class UnifiedWebSocketService {
         locationData.longitude
       );
 
-      // If location hasn't changed significantly and was sent recently, skip
+      // CRITICAL FIX: Only block if location hasn't changed AND was sent very recently
+      // Reduced distance threshold from 5m to 1m for desktop GPS support
       if (distance < this.MIN_DISTANCE_THRESHOLD && timeSinceLastSend < this.MIN_SEND_INTERVAL) {
-        logger.debug('🚫 BLOCKED: Duplicate location (distance < 5m, time < 1s)', 'component', {
+        logger.debug('🚫 BLOCKED: Duplicate location (distance < 1m, time < 500ms)', 'component', {
           distance: distance.toFixed(2),
           timeSinceLastSend,
           lastLat: this.lastSentLocation.latitude,
@@ -1223,7 +1030,7 @@ class UnifiedWebSocketService {
   /**
    * Remove specific event listener by type
    */
-  offEvent(eventType: string, callback?: Function): void {
+  offEvent(eventType: string, callback?: (...args: any[]) => void): void {
     if (!this.socket) return;
     
     if (callback) {

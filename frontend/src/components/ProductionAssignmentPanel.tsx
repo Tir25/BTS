@@ -336,10 +336,11 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
                     onChange={handleInputChange}
                     required
                     className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    style={{ color: 'white' }}
                   >
-                    <option value="">Select Driver</option>
+                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Driver</option>
                     {drivers.map((driver) => (
-                      <option key={driver.id} value={driver.id}>
+                      <option key={driver.id} value={driver.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
                         {driver.first_name} {driver.last_name} ({driver.email})
                       </option>
                     ))}
@@ -356,10 +357,11 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
                     onChange={handleInputChange}
                     required
                     className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    style={{ color: 'white' }}
                   >
-                    <option value="">Select Bus</option>
+                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Bus</option>
                     {buses.map((bus) => (
-                      <option key={bus.id} value={bus.id}>
+                      <option key={bus.id} value={bus.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
                         {bus.bus_number} - {bus.vehicle_no}
                       </option>
                     ))}
@@ -376,10 +378,11 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
                     onChange={handleInputChange}
                     required
                     className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    style={{ color: 'white' }}
                   >
-                    <option value="">Select Route</option>
+                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Route</option>
                     {routes.map((route) => (
-                      <option key={route.id} value={route.id}>
+                      <option key={route.id} value={route.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
                         {route.name} ({route.city})
                       </option>
                     ))}
@@ -395,10 +398,11 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
                     value={formData.status}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    style={{ color: 'white' }}
                   >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="pending">Pending</option>
+                    <option value="active" style={{ backgroundColor: '#1f2937', color: 'white' }}>Active</option>
+                    <option value="inactive" style={{ backgroundColor: '#1f2937', color: 'white' }}>Inactive</option>
+                    <option value="pending" style={{ backgroundColor: '#1f2937', color: 'white' }}>Pending</option>
                   </select>
                 </div>
               </div>

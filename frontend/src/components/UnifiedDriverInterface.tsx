@@ -501,19 +501,22 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
     enableInternationalization: false,
   }), []);
   
-  // OPTIMIZED: Memoize driver location to prevent unnecessary StudentMap re-renders
+  // PRODUCTION-GRADE: Optimized driver location memoization to prevent unnecessary StudentMap re-renders
   const memoizedDriverLocation = useMemo(() => {
     if (!locationState.currentLocation) return undefined;
     
+    // Create stable object with normalized values to prevent identity changes
+    const coords = locationState.currentLocation.coords;
     return {
-      latitude: locationState.currentLocation.coords.latitude,
-      longitude: locationState.currentLocation.coords.longitude,
-      accuracy: locationState.currentLocation.coords.accuracy,
-      heading: locationState.currentLocation.coords.heading || undefined,
-      speed: locationState.currentLocation.coords.speed || undefined,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracy: coords.accuracy || undefined, // Normalize null to undefined
+      heading: coords.heading || undefined,   // Normalize null to undefined
+      speed: coords.speed || undefined,       // Normalize null to undefined
       timestamp: locationState.currentLocation.timestamp,
     };
   }, [
+    // PRODUCTION FIX: Only depend on actual values, not object identity
     locationState.currentLocation?.coords.latitude,
     locationState.currentLocation?.coords.longitude,
     locationState.currentLocation?.coords.accuracy,

@@ -53,12 +53,17 @@ export const initializeWebSocket = (io: SocketIOServer) => {
   // SECURITY FIX: Apply authentication middleware at connection level
   io.use(websocketAuthMiddleware);
 
-  // Enhanced connection monitoring with limits
+  // PRODUCTION-GRADE: Enhanced connection monitoring with proper cleanup
   let totalConnections = 0;
   let activeConnections = 0;
   const MAX_CONNECTIONS = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS || '1000');
   const MAX_CONNECTIONS_PER_IP = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS_PER_IP || '10');
   const connectionCounts = new Map<string, number>(); // IP -> connection count
+  
+  // PRODUCTION FIX: Track active connections for proper cleanup
+  const activeSockets = new Map<string, AuthenticatedSocket>(); // socketId -> socket
+  const connectionTimestamps = new Map<string, number>(); // socketId -> timestamp
+  const heartbeatIntervals = new Map<string, NodeJS.Timeout>(); // socketId -> interval
 
   io.on('connection', async (socket: AuthenticatedSocket) => {
     const clientIP = socket.handshake.address;
@@ -98,6 +103,10 @@ export const initializeWebSocket = (io: SocketIOServer) => {
     activeConnections++;
     connectionCounts.set(clientIP, ipConnections + 1);
     socket.lastActivity = Date.now();
+    
+    // PRODUCTION FIX: Track socket for proper cleanup
+    activeSockets.set(socket.id, socket);
+    connectionTimestamps.set(socket.id, Date.now());
 
     logger.wsConnection(socket.id, socket.userId, { 
       totalConnections, 
@@ -114,12 +123,31 @@ export const initializeWebSocket = (io: SocketIOServer) => {
       }
     });
 
-    // Handle ping/pong for connection health
+    // PRODUCTION FIX: Enhanced heartbeat mechanism with timeout detection
     socket.on('ping', () => {
       socket.emit('pong');
       socket.lastActivity = Date.now();
       logger.debug('Ping received', 'websocket', { socketId: socket.id });
     });
+
+    // PRODUCTION FIX: Start heartbeat monitoring for this socket
+    const heartbeatInterval = setInterval(() => {
+      const now = Date.now();
+      const lastActivity = socket.lastActivity || 0;
+      const inactiveTime = now - lastActivity;
+      
+      // If socket has been inactive for more than 5 minutes, disconnect it
+      if (inactiveTime > 5 * 60 * 1000) {
+        logger.warn('Disconnecting inactive socket', 'websocket', {
+          socketId: socket.id,
+          inactiveTime: Math.round(inactiveTime / 1000),
+          userId: socket.userId
+        });
+        socket.disconnect(true);
+      }
+    }, 60000); // Check every minute
+    
+    heartbeatIntervals.set(socket.id, heartbeatInterval);
 
     // SECURITY FIX: Enhanced driver initialization using middleware authentication
     socket.on('driver:initialize', async () => {
@@ -454,7 +482,7 @@ export const initializeWebSocket = (io: SocketIOServer) => {
       }
     });
 
-    // Enhanced disconnect handling with connection cleanup
+    // PRODUCTION FIX: Enhanced disconnect handling with comprehensive cleanup
     socket.on('disconnect', (reason) => {
       try {
         activeConnections--;
@@ -464,6 +492,17 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         const ipConnections = connectionCounts.get(clientIP) || 0;
         if (ipConnections > 0) {
           connectionCounts.set(clientIP, ipConnections - 1);
+        }
+        
+        // PRODUCTION FIX: Clean up tracking maps
+        activeSockets.delete(socket.id);
+        connectionTimestamps.delete(socket.id);
+        
+        // PRODUCTION FIX: Clear heartbeat interval
+        const heartbeatInterval = heartbeatIntervals.get(socket.id);
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+          heartbeatIntervals.delete(socket.id);
         }
         
         logger.wsDisconnection(socket.id, reason, socket.userId);
@@ -485,8 +524,17 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           });
         }
 
-        // Clean up event listeners to prevent memory leaks
+        // PRODUCTION FIX: Comprehensive cleanup to prevent memory leaks
         socket.removeAllListeners();
+        
+        // Clear any remaining references
+        socket.userId = undefined;
+        socket.userRole = undefined;
+        socket.driverId = undefined;
+        socket.busId = undefined;
+        socket.isAuthenticated = false;
+        socket.lastActivity = undefined;
+        
       } catch (error) {
         logger.error('Error handling disconnect', 'websocket', { socketId: socket.id }, error as Error);
       }
@@ -504,22 +552,57 @@ export const initializeWebSocket = (io: SocketIOServer) => {
     });
   });
 
-  // Server-wide monitoring
+  // PRODUCTION FIX: Enhanced server-wide monitoring with connection cleanup
   setInterval(() => {
     const now = Date.now();
     const inactiveThreshold = 5 * 60 * 1000; // 5 minutes
+    const staleThreshold = 10 * 60 * 1000; // 10 minutes
 
-    io.sockets.sockets.forEach((socket: AuthenticatedSocket) => {
-      if (
-        socket.lastActivity &&
-        now - socket.lastActivity > inactiveThreshold
-      ) {
+    // Clean up stale connections
+    const staleConnections: string[] = [];
+    
+    activeSockets.forEach((socket, socketId) => {
+      const connectionTime = connectionTimestamps.get(socketId) || 0;
+      const lastActivity = socket.lastActivity || 0;
+      const inactiveTime = now - lastActivity;
+      const connectionAge = now - connectionTime;
+      
+      // Mark for cleanup if inactive for too long
+      if (inactiveTime > inactiveThreshold) {
         logger.debug('Inactive socket detected', 'websocket', {
-          socketId: socket.id,
-          lastActivity: new Date(socket.lastActivity).toISOString()
+          socketId,
+          inactiveTime: Math.round(inactiveTime / 1000),
+          userId: socket.userId
         });
       }
+      
+      // Mark for cleanup if connection is too old and stale
+      if (connectionAge > staleThreshold && inactiveTime > inactiveThreshold) {
+        staleConnections.push(socketId);
+      }
     });
+    
+    // Disconnect stale connections
+    staleConnections.forEach(socketId => {
+      const socket = activeSockets.get(socketId);
+      if (socket) {
+        logger.warn('Disconnecting stale connection', 'websocket', {
+          socketId,
+          userId: socket.userId
+        });
+        socket.disconnect(true);
+      }
+    });
+    
+    // Log connection statistics
+    if (activeConnections > 0 && totalConnections % 100 === 0) {
+      logger.info('WebSocket connection statistics', 'websocket', {
+        activeConnections,
+        totalConnections,
+        staleConnections: staleConnections.length,
+        heartbeatIntervals: heartbeatIntervals.size
+      });
+    }
   }, 60000); // Check every minute
 
   // Function to broadcast assignment updates to affected drivers

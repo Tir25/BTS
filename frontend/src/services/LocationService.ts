@@ -335,8 +335,8 @@ class LocationService {
           speed: position.coords.speed ? position.coords.speed * 3.6 : undefined, // Convert m/s to km/h
         };
 
-        // CRITICAL FIX: More lenient validation for low accuracy GPS
-        // Accept locations even with poor accuracy (but warn)
+        // CRITICAL FIX: Accept ALL valid coordinates, regardless of accuracy
+        // Desktop browsers with IP-based positioning should NOT be rejected
         const validation = validateGPSLocation({
           latitude: location.latitude,
           longitude: location.longitude,
@@ -347,14 +347,15 @@ class LocationService {
         });
 
         // PRODUCTION FIX: Only reject locations that are truly invalid (coordinates, stale, teleport)
-        // Accept locations with poor accuracy but log warning
+        // NEVER reject based on accuracy - desktop IP-based positioning is valid
         if (!validation.isValid && validation.shouldReject) {
-          logger.warn('GPS location rejected', 'LocationService', {
+          logger.warn('GPS location rejected - invalid coordinates or stale data', 'LocationService', {
             latitude: location.latitude,
             longitude: location.longitude,
             accuracy: location.accuracy,
             error: validation.error,
             rejectionReason: validation.rejectionReason,
+            deviceType: this.deviceInfo.deviceType,
           });
           
           // Increment failure counter for rejected locations
@@ -503,12 +504,17 @@ class LocationService {
     }, 5000); // Check every 5 seconds for faster detection
   }
 
-  // PRODUCTION FIX: Proactive polling fallback for low-accuracy scenarios
+  // CRITICAL FIX: Enhanced polling fallback for desktop browsers
   private startPollFallback(): void {
     // Clear existing poll fallback if any
     if (this.pollFallbackInterval) {
       clearInterval(this.pollFallbackInterval);
     }
+
+    // CRITICAL FIX: More aggressive polling for desktop browsers
+    const pollInterval = this.deviceInfo.hasGPSHardware ? 
+      this.POLL_FALLBACK_INTERVAL_MS : 
+      Math.min(this.POLL_FALLBACK_INTERVAL_MS, 3000); // 3 seconds for desktop
 
     // Start periodic polling as fallback
     this.pollFallbackInterval = setInterval(async () => {
@@ -516,16 +522,20 @@ class LocationService {
         return; // Stop polling if tracking stopped
       }
 
-      // PRODUCTION FIX: Prevent overlapping requests
+      // CRITICAL FIX: Less restrictive overlapping prevention for desktop
       const now = Date.now();
       const timeSinceLastPoll = now - this.lastPollAttempt;
-      if (timeSinceLastPoll < this.POLL_FALLBACK_INTERVAL_MS) {
+      const minPollInterval = this.deviceInfo.hasGPSHardware ? 2000 : 1000; // 1s for desktop, 2s for mobile
+      
+      if (timeSinceLastPoll < minPollInterval) {
         return; // Skip if previous poll hasn't completed
       }
 
-      // Skip if we've had a recent update (within last 3 seconds)
+      // CRITICAL FIX: More frequent updates for desktop browsers
       const timeSinceLastUpdate = now - this.lastUpdateTime;
-      if (timeSinceLastUpdate < 3000) {
+      const minUpdateInterval = this.deviceInfo.hasGPSHardware ? 3000 : 1000; // 1s for desktop, 3s for mobile
+      
+      if (timeSinceLastUpdate < minUpdateInterval) {
         return; // Recent update, skip polling
       }
 
@@ -534,6 +544,8 @@ class LocationService {
         this.isUsingPollFallback = true;
         logger.debug('Polling fallback: Requesting location', 'LocationService', {
           timeSinceLastUpdate: Math.round(timeSinceLastUpdate / 1000) + 's',
+          deviceType: this.deviceInfo.deviceType,
+          hasGPSHardware: this.deviceInfo.hasGPSHardware,
         });
         
         const location = await this.getCurrentLocation();
@@ -546,10 +558,10 @@ class LocationService {
           this.lastUpdateTime = Date.now();
           this.consecutiveFailures = 0;
           
-          // PRODUCTION FIX: For desktop/IP-based positioning, accept location even if coordinates don't change
-          // but update timestamp to maintain update stream
-          if (this.lastLocation && location.accuracy > 1000) {
-            // IP-based positioning - coordinates rarely change, but we should still send updates
+          // CRITICAL FIX: Always send updates for desktop browsers, even if coordinates don't change
+          // Desktop IP-based positioning rarely changes coordinates, but we need frequent updates
+          if (this.lastLocation && !this.deviceInfo.hasGPSHardware) {
+            // Desktop/IP-based positioning - send heartbeat updates even if coordinates unchanged
             const distance = this.calculateDistance(
               this.lastLocation.latitude,
               this.lastLocation.longitude,
@@ -557,17 +569,20 @@ class LocationService {
               location.longitude
             );
             
-            // If location hasn't changed significantly (< 100m), use last known location but update timestamp
-            if (distance < 100) {
-              logger.debug('Polling fallback: Location unchanged, sending heartbeat update', 'LocationService', {
+            // CRITICAL FIX: For desktop, always send updates regardless of distance
+            // This ensures continuous location updates even with IP-based positioning
+            if (distance < 50) { // 50m threshold for desktop
+              logger.debug('Polling fallback: Desktop location unchanged, sending heartbeat update', 'LocationService', {
                 distance: Math.round(distance) + 'm',
                 accuracy: location.accuracy,
+                deviceType: this.deviceInfo.deviceType,
               });
               
               // Create location update with same coordinates but new timestamp
               const heartbeatLocation: LocationData = {
                 ...this.lastLocation,
                 timestamp: Date.now(), // Update timestamp for heartbeat
+                accuracy: location.accuracy, // Update accuracy from new reading
               };
               
               // Notify listeners with heartbeat location
@@ -599,22 +614,28 @@ class LocationService {
             latitude: location.latitude,
             longitude: location.longitude,
             accuracy: location.accuracy,
+            deviceType: this.deviceInfo.deviceType,
           });
         } else {
           // Location request failed or returned null
-          logger.debug('Polling fallback: No location obtained', 'LocationService');
+          logger.debug('Polling fallback: No location obtained', 'LocationService', {
+            deviceType: this.deviceInfo.deviceType,
+          });
         }
       } catch (error) {
         this.isUsingPollFallback = false;
         logger.warn('Polling fallback: Failed to get location', 'LocationService', { 
           error: error instanceof Error ? error.message : String(error),
+          deviceType: this.deviceInfo.deviceType,
         });
       }
-    }, this.POLL_FALLBACK_INTERVAL_MS);
+    }, pollInterval);
     
-    logger.info('Polling fallback started', 'LocationService', {
-      interval: this.POLL_FALLBACK_INTERVAL_MS / 1000 + 's',
+    logger.info('Enhanced polling fallback started', 'LocationService', {
+      interval: pollInterval / 1000 + 's',
       deviceType: this.deviceInfo.deviceType,
+      hasGPSHardware: this.deviceInfo.hasGPSHardware,
+      aggressiveMode: !this.deviceInfo.hasGPSHardware,
     });
   }
 

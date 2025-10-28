@@ -28,14 +28,14 @@ export interface SignedUrlResult {
 }
 
 export class StorageService {
-  // Helper function to make authenticated requests
+  // SIMPLIFIED: Helper function to make authenticated requests
   private static async makeRequest(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<Response> {
     let token = authService.getAccessToken();
 
-    // If no token, only try to refresh if user is authenticated
+    // SIMPLIFIED: Only try to refresh if user is authenticated and no token
     if (!token && authService.isAuthenticated()) {
       logger.info('🔄 No token found but user is authenticated, attempting to refresh session...', 'component');
       const refreshResult = await authService.refreshSession();

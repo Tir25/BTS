@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../config/supabase';
-import { DriverAuthService, DriverAuthResult } from '../services/DriverAuthService';
 import { DriverBusAssignment, authService } from '../services/authService';
 import { unifiedWebSocketService } from '../services/UnifiedWebSocketService';
 import { offlineStorage } from '../services/offline/OfflineStorage';
@@ -56,9 +55,6 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
   const [isWebSocketAuthenticated, setIsWebSocketAuthenticated] = useState(false);
   const [isWebSocketInitializing, setIsWebSocketInitializing] = useState(false);
 
-  // Initialize DriverAuthService
-  const driverAuthService = DriverAuthService.getInstance();
-  
   // Enhanced concurrency control for initialization
   const initializationRef = useRef<Promise<void> | null>(null);
   const initializationInProgressRef = useRef<boolean>(false);
@@ -116,7 +112,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
         initializationRequestIdRef.current = null;
       }
     }
-  }, [driverAuthService]);
+  }, []);
 
   // Internal initialization function with request ID tracking
   const performInitialization = async (requestId: string): Promise<void> => {
@@ -140,8 +136,8 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
       }
       
       if (session?.user) {
-        // Validate existing session instead of calling authenticateDriver
-        const validationResult = await driverAuthService.validateCurrentSession();
+        // SIMPLIFIED: Use centralized authService for session validation
+        const validationResult = await authService.validateDriverSession();
         
         // Verify request is still current after validation
         if (initializationRequestIdRef.current !== requestId) {
@@ -149,22 +145,20 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
           return;
         }
         
-        if (validationResult.success && validationResult.driverId) {
+        if (validationResult.isValid && validationResult.assignment) {
           setIsAuthenticated(true);
           setIsDriver(true);
-          setDriverId(validationResult.driverId);
+          setDriverId(validationResult.assignment.driver_id);
           setDriverEmail(session.user.email || null);
-          setDriverName(validationResult.driverName || null);
-          setBusAssignment(validationResult.busAssignment || null);
+          setDriverName(validationResult.assignment.driver_name);
+          setBusAssignment(validationResult.assignment);
           
           // Store assignment data offline for reliability
-          if (validationResult.busAssignment) {
-            offlineStorage.storeData('driver', `assignment_${validationResult.driverId}`, validationResult.busAssignment as unknown as Record<string, unknown>);
-          }
+          offlineStorage.storeData('driver', `assignment_${validationResult.assignment.driver_id}`, validationResult.assignment as unknown as Record<string, unknown>);
           
           logger.info('✅ Driver session validated successfully', 'driver-auth', { requestId });
         } else {
-          logger.warn('❌ Driver validation failed', 'driver-auth', { error: validationResult.error, requestId });
+          logger.warn('❌ Driver validation failed', 'driver-auth', { error: validationResult.errorMessage, requestId });
           setIsAuthenticated(false);
           setIsDriver(false);
           
@@ -236,11 +230,8 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
       // Use centralized timeout configuration
       const loginTimeoutMs = timeoutConfig.api.default; // Use centralized config
       
-      // Create login promise with progress callback
-      const loginPromise = driverAuthService.authenticateDriver(email, password, (step: string, progress: number) => {
-        logger.debug('Authentication progress', 'driver-auth', { step, progress });
-        // The progress is handled by the UnifiedDriverInterface loading state
-      });
+      // SIMPLIFIED: Use centralized authService for login
+      const loginPromise = authService.signIn(email, password);
 
       // Create timeout promise that checks if request is still current
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -256,7 +247,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
       // Execute login with proper cancellation support
       // FIXED: Use a better pattern that checks login completion before timing out
       let loginCompleted = false;
-      let loginResult: DriverAuthResult | null = null;
+      let loginResult: { success: boolean; error?: string; user?: any } | null = null;
       
       try {
         // Start login promise with completion tracking
@@ -338,21 +329,28 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
         }
         
         // Process result
-        if (result.success) {
-          setIsAuthenticated(true);
-          setIsDriver(true);
-          setDriverId(result.driverId || null);
-          setDriverEmail(email);
-          setDriverName(result.driverName || null);
-          setBusAssignment(result.busAssignment || null);
+        if (result.success && result.user) {
+          // SIMPLIFIED: Get driver assignment after successful login
+          const assignment = await authService.getDriverBusAssignment(result.user.id);
           
-          // Store assignment data offline for reliability
-          if (result.busAssignment) {
-            offlineStorage.storeData('driver', `assignment_${result.driverId}`, result.busAssignment as unknown as Record<string, unknown>);
+          if (assignment) {
+            setIsAuthenticated(true);
+            setIsDriver(true);
+            setDriverId(result.user.id);
+            setDriverEmail(email);
+            setDriverName(assignment.driver_name);
+            setBusAssignment(assignment);
+            
+            // Store assignment data offline for reliability
+            offlineStorage.storeData('driver', `assignment_${result.user.id}`, assignment as unknown as Record<string, unknown>);
+            
+            logger.info('✅ Driver login successful', 'driver-auth', { driverId: result.user.id });
+            return { success: true };
+          } else {
+            logger.warn('❌ No bus assignment found after login', 'driver-auth');
+            await authService.signOut(); // Sign out if no assignment
+            return { success: false, error: 'No bus assignment found. Please contact your administrator.' };
           }
-          
-          logger.info('✅ Driver login successful', 'driver-auth', { driverId: result.driverId });
-          return { success: true };
         } else {
           const errorMsg = result.error || 'Login failed';
           setError(errorMsg);
@@ -397,7 +395,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
         loginTimeoutRef.current = null;
       }
     }
-  }, [driverAuthService]);
+  }, []);
 
   // Cleanup login resources on unmount
   useEffect(() => {
@@ -582,17 +580,14 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
     };
   }, [initializeAuth]);
 
-  // WebSocket connection management with proper cleanup
-  // PRODUCTION FIX: Prevent race condition by tracking initialization state
+  // PRODUCTION FIX: Simplified WebSocket connection management with event-driven state
   useEffect(() => {
     let isMounted = true;
-    let connectionTimeout: NodeJS.Timeout | null = null;
 
     const connectWebSocket = async () => {
       if (!isMounted) return;
 
       try {
-        // PRODUCTION FIX: Set initializing state BEFORE connection
         setIsWebSocketInitializing(true);
         setIsWebSocketConnected(false);
         setIsWebSocketAuthenticated(false);
@@ -600,49 +595,22 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
         // Set client type for WebSocket
         unifiedWebSocketService.setClientType('driver');
         
-        // Set connection timeout
-        connectionTimeout = setTimeout(() => {
-          if (isMounted) {
-            logger.warn('WebSocket connection timeout', 'driver-auth');
-            setIsWebSocketInitializing(false);
-            setIsWebSocketConnected(false);
-            setIsWebSocketAuthenticated(false);
-          }
-        }, 10000); // 10 second timeout for complete connection + auth
-
         // Connect to WebSocket
         await unifiedWebSocketService.connect();
         
-        if (!isMounted) return;
-        
-        // PRODUCTION FIX: Don't set connected yet - wait for authentication
-        
-        // Get access token for WebSocket authentication
-        const token = authService.getAccessToken();
-        if (!token) {
-          logger.error('No access token available for WebSocket authentication', 'driver-auth');
-          setIsWebSocketInitializing(false);
-          setIsWebSocketConnected(false);
-          setIsWebSocketAuthenticated(false);
-          return;
-        }
-
-        // Initialize as driver (authentication already handled by middleware)
+        // Initialize as driver
         const initResult = await unifiedWebSocketService.initializeAsDriver();
         
-        if (!isMounted) return;
-        
-        // PRODUCTION FIX: Only set connected and authenticated states AFTER successful initialization
-        if (initResult) {
+        if (isMounted) {
+          setIsWebSocketInitializing(false);
           setIsWebSocketConnected(true);
-          setIsWebSocketAuthenticated(true);
-          setIsWebSocketInitializing(false);
-          logger.info('✅ WebSocket connected and authenticated as driver', 'driver-auth');
-        } else {
-          logger.error('❌ WebSocket driver initialization failed', 'driver-auth');
-          setIsWebSocketInitializing(false);
-          setIsWebSocketConnected(false);
-          setIsWebSocketAuthenticated(false);
+          setIsWebSocketAuthenticated(initResult);
+          
+          if (initResult) {
+            logger.info('✅ WebSocket connected and authenticated as driver', 'driver-auth');
+          } else {
+            logger.error('❌ WebSocket driver initialization failed', 'driver-auth');
+          }
         }
       } catch (err) {
         if (isMounted) {
@@ -651,13 +619,17 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
           setIsWebSocketConnected(false);
           setIsWebSocketAuthenticated(false);
         }
-      } finally {
-        if (connectionTimeout) {
-          clearTimeout(connectionTimeout);
-          connectionTimeout = null;
-        }
       }
     };
+
+    // PRODUCTION FIX: Event-driven connection state management
+    const unsubscribeConnectionState = unifiedWebSocketService.onConnectionStateChange((state) => {
+      if (!isMounted) return;
+      
+      setIsWebSocketInitializing(state.connectionState === 'connecting' || state.connectionState === 'reconnecting');
+      setIsWebSocketConnected(state.isConnected);
+      setIsWebSocketAuthenticated(state.isAuthenticated);
+    });
 
     if (isAuthenticated && isDriver) {
       connectWebSocket();
@@ -671,9 +643,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
 
     return () => {
       isMounted = false;
-      if (connectionTimeout) {
-        clearTimeout(connectionTimeout);
-      }
+      unsubscribeConnectionState();
       unifiedWebSocketService.disconnect();
     };
   }, [isAuthenticated, isDriver]);

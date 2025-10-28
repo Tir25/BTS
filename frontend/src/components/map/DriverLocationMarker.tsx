@@ -147,51 +147,67 @@ const DriverLocationMarker: React.FC<DriverLocationMarkerProps> = memo(
     }, [map, markerElement, handleMarkerClick]); // Removed onMarkerClick from dependencies to prevent unnecessary recreations
 
     // Update marker position and popup content when location changes
-    // CRITICAL: This updates the EXISTING marker instead of creating a new one
+    // PRODUCTION FIX: Throttled updates to prevent excessive re-renders
     useEffect(() => {
       if (!markerRef.current) return;
 
-      // Update marker position smoothly
-      markerRef.current.setLngLat([longitude, latitude]);
-
-      // Update popup content
-      if (popupRef.current) {
-        const updateTime = formatTime(timestamp);
-        const popupContent = `
-          <div class="driver-popup-container">
-            <div class="driver-popup-header">
-              <div class="driver-popup-icon">🚗</div>
-              <div class="driver-popup-title">Your Location</div>
-            </div>
-            <div class="driver-popup-content">
-              <div class="driver-popup-item">
-                <span class="driver-popup-label">Status:</span>
-                <span class="driver-popup-value ${isTracking ? 'tracking' : 'stopped'}">
-                  ${isTracking ? 'Tracking Active' : 'Tracking Stopped'}
-                </span>
-              </div>
-              <div class="driver-popup-item">
-                <span class="driver-popup-label">Speed:</span>
-                <span class="driver-popup-value">${speed ? `${Math.round(speed)} km/h` : 'N/A'}</span>
-              </div>
-              <div class="driver-popup-item">
-                <span class="driver-popup-label">Accuracy:</span>
-                <span class="driver-popup-value">±${accuracy ? Math.round(accuracy) : '?'} meters</span>
-              </div>
-              <div class="driver-popup-item">
-                <span class="driver-popup-label">Heading:</span>
-                <span class="driver-popup-value">${heading ? `${Math.round(heading)}°` : 'N/A'}</span>
-              </div>
-              <div class="driver-popup-item">
-                <span class="driver-popup-label">Last Update:</span>
-                <span class="driver-popup-value">${updateTime}</span>
-              </div>
-            </div>
-          </div>
-        `;
-        popupRef.current.setHTML(popupContent);
+      // PRODUCTION FIX: Throttle position updates to prevent excessive marker movement
+      const currentPos = markerRef.current.getLngLat();
+      const distance = Math.sqrt(
+        Math.pow(currentPos.lng - longitude, 2) + 
+        Math.pow(currentPos.lat - latitude, 2)
+      );
+      
+      // Only update position if moved more than ~0.0001 degrees (~10m)
+      if (distance > 0.0001) {
+        markerRef.current.setLngLat([longitude, latitude]);
       }
-    }, [longitude, latitude, timestamp, isTracking, speed, accuracy, heading]);
+
+      // PRODUCTION FIX: Throttle popup updates to reduce render overhead
+      if (popupRef.current) {
+        const lastUpdate = (popupRef.current as any)._lastUpdate || 0;
+        const now = Date.now();
+        
+        // Only update popup every 3 seconds to prevent excessive re-renders
+        if (now - lastUpdate > 3000) {
+          const updateTime = formatTime(timestamp);
+          const popupContent = `
+            <div class="driver-popup-container">
+              <div class="driver-popup-header">
+                <div class="driver-popup-icon">🚗</div>
+                <div class="driver-popup-title">Your Location</div>
+              </div>
+              <div class="driver-popup-content">
+                <div class="driver-popup-item">
+                  <span class="driver-popup-label">Status:</span>
+                  <span class="driver-popup-value ${isTracking ? 'tracking' : 'stopped'}">
+                    ${isTracking ? 'Tracking Active' : 'Tracking Stopped'}
+                  </span>
+                </div>
+                <div class="driver-popup-item">
+                  <span class="driver-popup-label">Speed:</span>
+                  <span class="driver-popup-value">${speed ? `${Math.round(speed)} km/h` : 'N/A'}</span>
+                </div>
+                <div class="driver-popup-item">
+                  <span class="driver-popup-label">Accuracy:</span>
+                  <span class="driver-popup-value">±${accuracy ? Math.round(accuracy) : '?'} meters</span>
+                </div>
+                <div class="driver-popup-item">
+                  <span class="driver-popup-label">Heading:</span>
+                  <span class="driver-popup-value">${heading ? `${Math.round(heading)}°` : 'N/A'}</span>
+                </div>
+                <div class="driver-popup-item">
+                  <span class="driver-popup-label">Last Update:</span>
+                  <span class="driver-popup-value">${updateTime}</span>
+                </div>
+              </div>
+            </div>
+          `;
+          popupRef.current.setHTML(popupContent);
+          (popupRef.current as any)._lastUpdate = now;
+        }
+      }
+    }, [longitude, latitude, timestamp, isTracking]); // Removed speed, accuracy, heading to reduce update frequency
 
     return null; // This component doesn't render anything visible
   }

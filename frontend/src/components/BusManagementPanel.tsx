@@ -327,10 +327,11 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
                     value={formData.assigned_driver_profile_id}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    style={{ color: 'white' }}
                   >
-                    <option value="">Select Driver</option>
+                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Driver</option>
                     {drivers.map((driver) => (
-                      <option key={driver.id} value={driver.id}>
+                      <option key={driver.id} value={driver.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
                         {driver.first_name} {driver.last_name}
                       </option>
                     ))}
@@ -346,10 +347,11 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
                     value={formData.route_id}
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    style={{ color: 'white' }}
                   >
-                    <option value="">Select Route</option>
+                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Route</option>
                     {routes.map((route) => (
-                      <option key={route.id} value={route.id}>
+                      <option key={route.id} value={route.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
                         {route.name}
                       </option>
                     ))}

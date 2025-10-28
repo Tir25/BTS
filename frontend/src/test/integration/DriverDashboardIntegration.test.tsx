@@ -12,7 +12,6 @@ import DriverDashboardTest from '../../components/DriverDashboardTest';
 import { DriverAuthProvider } from '../../contexts/DriverAuthContext';
 import { authService } from '../../services/authService';
 import { unifiedWebSocketService } from '../../services/UnifiedWebSocketService';
-import { driverVerificationService } from '../../services/DriverVerificationService';
 
 // Mock all external dependencies
 vi.mock('../../services/authService', () => ({
@@ -32,14 +31,6 @@ vi.mock('../../services/UnifiedWebSocketService', () => ({
     isAuthenticated: vi.fn(),
     sendLocationUpdate: vi.fn(),
     authenticateAsDriver: vi.fn(),
-  },
-}));
-
-vi.mock('../../services/DriverVerificationService', () => ({
-  driverVerificationService: {
-    verifyDriverFunctionality: vi.fn(),
-    getVerificationSummary: vi.fn(),
-    isDriverReady: vi.fn(),
   },
 }));
 

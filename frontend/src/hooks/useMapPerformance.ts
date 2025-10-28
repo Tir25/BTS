@@ -283,7 +283,7 @@ export const useMapPerformance = (config: Partial<PerformanceConfig> = {}) => {
     return recommendations;
   }, [metrics, mergedConfig]);
 
-  // Auto-start monitoring
+  // MEMORY LEAK FIX: Auto-start monitoring with proper cleanup
   useEffect(() => {
     if (mergedConfig.enableMonitoring) {
       const cleanup = startMonitoring();
@@ -291,10 +291,29 @@ export const useMapPerformance = (config: Partial<PerformanceConfig> = {}) => {
     }
   }, [mergedConfig.enableMonitoring]); // Removed startMonitoring to prevent infinite loops
 
-  // Cleanup on unmount
+  // MEMORY LEAK FIX: Comprehensive cleanup on unmount
   useEffect(() => {
     return () => {
+      // Stop monitoring
       stopMonitoring();
+      
+      // MEMORY LEAK FIX: Disconnect performance observer
+      if (observerRef.current) {
+        try {
+          observerRef.current.disconnect();
+        } catch (error) {
+          console.warn('Error disconnecting performance observer:', error);
+        }
+        observerRef.current = null;
+      }
+      
+      // MEMORY LEAK FIX: Clear all refs
+      frameCountRef.current = 0;
+      lastFrameTimeRef.current = performance.now();
+      longTasksRef.current = 0;
+      errorCountRef.current = 0;
+      totalOperationsRef.current = 0;
+      connectionLatencyRef.current = 0;
     };
   }, []); // Removed stopMonitoring to prevent infinite loops
 

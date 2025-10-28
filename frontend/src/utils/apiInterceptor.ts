@@ -15,13 +15,15 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
     try {
       let token = authService.getAccessToken();
 
-      // If no token, only try to refresh if user is authenticated
+      // SIMPLIFIED: Only try to refresh if user is authenticated and no token
       if (!token && authService.isAuthenticated()) {
         logger.info('🔄 No token found but user is authenticated, attempting to refresh session...', 'component');
         const refreshResult = await authService.refreshSession();
         if (refreshResult.success) {
           token = authService.getAccessToken();
           logger.info('✅ Session refreshed, new token obtained', 'component');
+        } else {
+          logger.warn('⚠️ Session refresh failed in interceptor', 'component', { error: refreshResult.error });
         }
       }
 

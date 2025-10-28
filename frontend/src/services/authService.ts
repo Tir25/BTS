@@ -784,134 +784,72 @@ class AuthService {
     return this.hasRole('student');
   }
 
-  // Token cache for performance optimization
-  private tokenCache: { token: string | null; timestamp: number; ttl: number; expiresAt?: number } = {
+  // SIMPLIFIED: In-memory token cache only (no localStorage)
+  private tokenCache: { token: string | null; expiresAt: number } = {
     token: null,
-    timestamp: 0,
-    ttl: 5 * 60 * 1000 // 5 minutes TTL
+    expiresAt: 0
   };
 
   // PRODUCTION FIX: Clear token cache method
   private clearTokenCache(): void {
-    this.tokenCache = { token: null, timestamp: 0, ttl: 5 * 60 * 1000 };
+    this.tokenCache = { token: null, expiresAt: 0 };
     logger.debug('🗑️ Token cache cleared', 'auth');
   }
 
-  // PRODUCTION FIX: Check if token is expired based on session expiration
-  private isTokenExpired(token: string | null, session: Session | null): boolean {
-    if (!token || !session || !session.expires_at) {
-      return false; // If we can't determine expiration, assume valid
+  // SIMPLIFIED: Check if token is expired
+  private isTokenExpired(): boolean {
+    if (!this.tokenCache.token || !this.tokenCache.expiresAt) {
+      return true;
     }
-
-    // Convert expires_at (Unix timestamp in seconds) to milliseconds
-    const expiresAt = session.expires_at * 1000;
     const now = Date.now();
-    const bufferTime = 60 * 1000; // 1 minute buffer before expiration
-
-    // Token is expired if current time is within 1 minute of expiration
-    return now >= (expiresAt - bufferTime);
+    const bufferTime = 60 * 1000; // 1 minute buffer
+    return now >= (this.tokenCache.expiresAt - bufferTime);
   }
 
-  // Get access token for API calls with caching and expiration checking
+  // SIMPLIFIED: Get access token with proper caching
   getAccessToken(): string | null {
-    const now = Date.now();
-    
-    // PRODUCTION FIX: Check cache validity (both TTL and token expiration)
-    if (this.tokenCache.token && (now - this.tokenCache.timestamp) < this.tokenCache.ttl) {
-      // Additional check: verify token hasn't expired based on session
-      if (!this.isTokenExpired(this.tokenCache.token, this.currentSession)) {
-        return this.tokenCache.token;
-      } else {
-        // Token expired, clear cache
-        logger.debug('🔑 Cached token expired, clearing cache', 'auth');
-        this.clearTokenCache();
-      }
+    // Check if cached token is still valid
+    if (this.tokenCache.token && !this.isTokenExpired()) {
+      return this.tokenCache.token;
     }
 
-    // First try to get from current session
-    let token = this.currentSession?.access_token || null;
-
-    // PRODUCTION FIX: Validate token expiration before caching
-    if (token && this.isTokenExpired(token, this.currentSession)) {
-      logger.warn('⚠️ Session token expired, cannot use', 'auth');
-      token = null;
+    // Get token from current session
+    const token = this.currentSession?.access_token || null;
+    
+    if (token && this.currentSession?.expires_at) {
+      // Cache the token with expiration
+      this.tokenCache = {
+        token,
+        expiresAt: this.currentSession.expires_at * 1000
+      };
+      
+      logger.debug('🔑 Token cached from session', 'auth', {
+        hasToken: !!token,
+        expiresAt: new Date(this.tokenCache.expiresAt).toISOString()
+      });
+    } else {
+      // Clear cache if no valid token
       this.clearTokenCache();
     }
-
-    // If no token in current session, try to get from localStorage as fallback
-    if (!token) {
-      try {
-        // Try multiple localStorage keys that Supabase might use
-        const possibleKeys = [
-          'supabase.auth.token',
-          'sb-gthwmwfwvhyriygpcdlr-auth-token', // Supabase project-specific key
-          'supabase.auth.session',
-        ];
-
-        for (const key of possibleKeys) {
-          const storedSession = localStorage.getItem(key);
-          if (storedSession) {
-            const parsedSession = JSON.parse(storedSession);
-            const storedToken =
-              parsedSession?.currentSession?.access_token ||
-              parsedSession?.access_token ||
-              parsedSession?.session?.access_token ||
-              null;
-
-            // PRODUCTION FIX: Check expiration of stored token
-            if (storedToken) {
-              const storedExpiresAt = parsedSession?.currentSession?.expires_at || 
-                                      parsedSession?.expires_at ||
-                                      parsedSession?.session?.expires_at;
-              
-              if (storedExpiresAt) {
-                const expiresAt = storedExpiresAt * 1000;
-                const bufferTime = 60 * 1000; // 1 minute buffer
-                if (Date.now() >= (expiresAt - bufferTime)) {
-                  logger.debug('🔑 Stored token expired, skipping', 'auth');
-                  continue; // Try next key
-                }
-              }
-              
-              token = storedToken;
-              logger.debug(`🔑 Retrieved token from localStorage fallback (${key})`, 'auth');
-              break;
-            }
-          }
-        }
-      } catch (error) {
-        logger.warn('⚠️ Error reading token from localStorage:', 'auth', { error: String(error) });
-      }
-    }
-
-    // PRODUCTION FIX: Cache the token with expiration info
-    const expiresAt = this.currentSession?.expires_at 
-      ? this.currentSession.expires_at * 1000 
-      : undefined;
-
-    this.tokenCache = {
-      token,
-      timestamp: now,
-      ttl: 5 * 60 * 1000, // 5 minutes TTL
-      expiresAt
-    };
-
-    logger.debug('🔑 getAccessToken called:', 'auth', {
-      hasToken: !!token,
-      hasSession: !!this.currentSession,
-      fromCache: false,
-      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : 'unknown'
-    });
     
     return token;
   }
 
-  // Enhanced token validation for API calls with automatic refresh
+  // SIMPLIFIED: Enhanced token validation with race condition protection
   async validateTokenForAPI(): Promise<{
     valid: boolean;
     token: string | null;
     refreshed: boolean;
   }> {
+    // Prevent concurrent validation calls
+    if (this.isRefreshingSession) {
+      logger.debug('🔄 Session refresh in progress, waiting...', 'auth');
+      // Wait for current refresh to complete
+      while (this.isRefreshingSession) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+
     let token = this.getAccessToken();
     let refreshed = false;
 
@@ -920,75 +858,58 @@ class AuthService {
     }
 
     try {
-      // First, try to validate the current token
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser(token);
+      // Validate the current token
+      const { data: { user }, error } = await supabase.auth.getUser(token);
 
       if (error || !user) {
-        console.log(
-          '🔄 Token validation failed, attempting refresh:',
-          error?.message
-        );
+        logger.debug('🔄 Token validation failed, attempting refresh', 'auth', { error: error?.message });
 
         // Try to refresh the session
         const refreshResult = await this.refreshSession();
         if (refreshResult.success) {
           token = this.getAccessToken();
           refreshed = true;
-          console.log('✅ Token refreshed successfully');
+          logger.info('✅ Token refreshed successfully', 'auth');
         } else {
-          console.log('❌ Token refresh failed:', refreshResult.error);
+          logger.warn('❌ Token refresh failed', 'auth', { error: refreshResult.error });
           return { valid: false, token: null, refreshed: false };
         }
       }
 
-      // Validate the token again (either original or refreshed)
-      if (token) {
-        const {
-          data: { user: validatedUser },
-          error: validationError,
-        } = await supabase.auth.getUser(token);
-
-        if (validationError || !validatedUser) {
-          console.log(
-            '❌ Final token validation failed:',
-            validationError?.message
-          );
-          return { valid: false, token: null, refreshed };
-        }
-
-        return { valid: true, token, refreshed };
-      }
-
-      return { valid: false, token: null, refreshed };
+      return { valid: true, token, refreshed };
     } catch (error) {
-      console.error('❌ Token validation error:', error);
+      logger.error('❌ Token validation error', 'auth', { error: String(error) });
       return { valid: false, token: null, refreshed: false };
     }
   }
 
-  // Refresh session
+  // SIMPLIFIED: Refresh session with proper race condition protection
   async refreshSession(): Promise<{ success: boolean; error?: string }> {
+    // Prevent concurrent refresh attempts
+    if (this.isRefreshingSession) {
+      logger.debug('🔄 Session refresh already in progress', 'auth');
+      return { success: false, error: 'Refresh already in progress' };
+    }
+
     try {
       // Check if we have a current session before attempting refresh
       if (!this.currentSession) {
-        console.log('🔄 No current session to refresh');
+        logger.debug('🔄 No current session to refresh', 'auth');
         return { success: false, error: 'No session to refresh' };
       }
+
+      this.isRefreshingSession = true;
+      logger.info('🔄 Starting session refresh', 'auth');
 
       const { data, error } = await supabase.auth.refreshSession();
 
       if (error) {
         // Don't log AuthSessionMissingError as an error since it's expected when no session exists
         if (error.message.includes('Auth session missing')) {
-          console.log(
-            '🔄 No session to refresh (expected for unauthenticated users)'
-          );
+          logger.debug('🔄 No session to refresh (expected for unauthenticated users)', 'auth');
           return { success: false, error: 'No session to refresh' };
         }
-        console.error('❌ Session refresh error:', error);
+        logger.error('❌ Session refresh error', 'auth', { error: error.message });
         return { success: false, error: error.message };
       }
 
@@ -1003,8 +924,10 @@ class AuthService {
 
       return { success: false, error: 'Session refresh failed' };
     } catch (error) {
-      console.error('❌ Session refresh error:', error);
+      logger.error('❌ Session refresh error', 'auth', { error: String(error) });
       return { success: false, error: 'Network error during session refresh' };
+    } finally {
+      this.isRefreshingSession = false;
     }
   }
 

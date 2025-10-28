@@ -191,7 +191,7 @@ export function isAccuracyAcceptable(accuracy: number, deviceInfo?: GPSDeviceInf
 
 /**
  * Gets optimal PositionOptions based on device capabilities
- * PRODUCTION FIX: Optimized for both mobile GPS and desktop IP-based positioning
+ * CRITICAL FIX: Optimized for desktop browsers with IP-based positioning
  */
 export function getOptimalPositionOptions(deviceInfo?: GPSDeviceInfo): PositionOptions {
   const device = deviceInfo || detectGPSDeviceInfo();
@@ -205,12 +205,12 @@ export function getOptimalPositionOptions(deviceInfo?: GPSDeviceInfo): PositionO
     };
   }
   
-  // Desktop/IP-based positioning - optimized for frequent polling fallback
-  // PRODUCTION FIX: Increased timeout for desktop browsers using IP-based geolocation
+  // CRITICAL FIX: Desktop/IP-based positioning - optimized for frequent updates
+  // Desktop browsers need more aggressive polling to maintain location updates
   return {
     enableHighAccuracy: false, // No point requesting high accuracy without GPS
-    timeout: 15000, // Increased timeout for IP-based positioning (desktop browsers need more time)
-    maximumAge: 30000, // Accept cached data up to 30 seconds (IP-based location rarely changes)
+    timeout: 10000, // Reduced timeout for faster polling fallback
+    maximumAge: 10000, // Accept cached data up to 10 seconds (more frequent updates)
   };
 }
 
