@@ -19,7 +19,8 @@ interface LocationData {
 }
 
 interface BusInfo {
-  bus_id: string;
+  id: string; // CRITICAL FIX: Primary ID field to match frontend expectations  
+  bus_id: string; // COMPATIBILITY: Keep for backward compatibility
   bus_number: string;
   route_id: string;
   route_name: string;
@@ -411,7 +412,7 @@ class OptimizedLocationService {
     try {
       const query = `
         SELECT 
-          b.id as bus_id,
+          b.id,
           b.bus_number,
           b.vehicle_no,
           b.route_id,
@@ -436,7 +437,8 @@ class OptimizedLocationService {
 
       const row = result.rows[0];
       return {
-        bus_id: row.bus_id,
+        id: row.id, // CRITICAL FIX: Use 'id' field to match frontend expectations
+        bus_id: row.id, // COMPATIBILITY: Keep bus_id for backward compatibility
         bus_number: row.bus_number,
         route_id: row.route_id,
         route_name: row.route_name || 'Unknown Route',

@@ -119,19 +119,15 @@ const StudentMap: React.FC<StudentMapProps> = ({
   driverLocation,
   isDriverTracking = false,
 }) => {
-  // Merge config with defaults - OPTIMIZED: Deep comparison to prevent unnecessary recalculations
-  const configRef = useRef(config);
+  // Merge config with defaults - CRITICAL FIX: Simplified logic without caching bugs
   const finalConfig = useMemo(() => {
-    // Only recalculate if config actually changed
-    const configStr = JSON.stringify(config);
-    const prevConfigStr = JSON.stringify(configRef.current);
-    
-    if (configStr === prevConfigStr) {
-      return configRef.current as StudentMapConfig;
+    // CRITICAL FIX: Handle undefined config properly
+    if (!config) {
+      return defaultConfig;
     }
     
-    configRef.current = config;
-    return { ...defaultConfig, ...config };
+    const mergedConfig = { ...defaultConfig, ...config };
+    return mergedConfig;
   }, [config]);
 
   // MEMORY LEAK FIX: Disable performance monitoring in production to eliminate render overhead
@@ -205,7 +201,6 @@ const StudentMap: React.FC<StudentMapProps> = ({
   // UI state
   const [isNavbarCollapsed, setIsNavbarCollapsed] = useState(false);
   const [isRouteFilterOpen, setIsRouteFilterOpen] = useState(true);
-  const [isActiveBusesOpen, setIsActiveBusesOpen] = useState(true);
 
   // CRITICAL FIX: Ultra-optimized debounced location update with minimal overhead
   const debouncedLocationUpdate = useCallback(
@@ -229,12 +224,29 @@ const StudentMap: React.FC<StudentMapProps> = ({
           // Use RAF to batch updates with browser repaint cycle
           rafId = requestAnimationFrame(() => {
             if (pendingUpdates.size > 0) {
+              // CRITICAL DEBUG: Log state update
+              logger.info('🔍 DEBUG: Updating lastBusLocations state', 'component', { 
+                pendingUpdatesCount: pendingUpdates.size,
+                busIds: Array.from(pendingUpdates.keys())
+              });
+              
               setLastBusLocations(prev => {
                 const updates = { ...prev };
                 pendingUpdates.forEach((loc, busId) => {
                   updates[busId] = loc;
+                  logger.info('🔍 DEBUG: Adding location to state', 'component', { 
+                    busId,
+                    timestamp: loc.timestamp 
+                  });
                 });
                 pendingUpdates.clear();
+                
+                // CRITICAL DEBUG: Log final state
+                logger.info('🔍 DEBUG: Final lastBusLocations state', 'component', { 
+                  totalLocations: Object.keys(updates).length,
+                  busIds: Object.keys(updates)
+                });
+                
                 return updates;
               });
             }
@@ -332,9 +344,55 @@ const StudentMap: React.FC<StudentMapProps> = ({
     (location: BusLocation) => {
       if (!map.current) return;
 
-      // Use cached bus info instead of searching array
-      const bus = busInfoCache.current.get(location.busId);
-      if (!bus) return;
+      // CRITICAL FIX: Use enhanced matching for bus lookup in updateBusMarker
+      let bus = busInfoCache.current.get(location.busId);
+      
+      // PRODUCTION FIX: If not found, try enhanced matching in cache
+      if (!bus) {
+        for (const [cacheKey, cachedBus] of busInfoCache.current.entries()) {
+          const exactMatch = cacheKey === location.busId;
+          const stringMatch = String(cacheKey) === String(location.busId);
+          const busNumberMatch = cachedBus.busNumber === location.busId;
+          const partialMatch = cacheKey.includes(location.busId) || location.busId.includes(cacheKey);
+          
+          if (exactMatch || stringMatch || busNumberMatch || partialMatch) {
+            bus = cachedBus;
+            logger.info('🔍 ENHANCED DEBUG: Found bus in updateBusMarker cache using enhanced matching', 'component', {
+              cacheKey: cacheKey,
+              incomingBusId: location.busId,
+              matchType: exactMatch ? 'exact' : stringMatch ? 'string' : busNumberMatch ? 'busNumber' : 'partial'
+            });
+            break;
+          }
+        }
+      }
+      
+      // PRODUCTION FIX: Handle missing bus info gracefully by creating a minimal bus object
+      if (!bus) {
+        logger.warn('⚠️ No bus info found for location update - creating minimal marker', 'component', {
+          busId: location.busId,
+          lat: location.latitude,
+          lng: location.longitude
+        });
+        
+        // Create minimal bus info for marker display
+        bus = {
+          busId: location.busId,
+          busNumber: location.busId.slice(0, 8) + '...', // Truncated bus ID as fallback
+          routeName: 'Unknown Route',
+          driverName: 'Unknown Driver',
+          driverId: location.driverId || '',
+          routeId: '',
+          currentLocation: location,
+          status: 'active',
+          lastUpdated: new Date().toISOString(),
+          capacity: 0,
+          model: ''
+        };
+        
+        // Add to cache for future use
+        busInfoCache.current.set(location.busId, bus);
+      }
 
       // Check if marker already exists
       let marker = markers.current[location.busId];
@@ -381,6 +439,16 @@ const StudentMap: React.FC<StudentMapProps> = ({
           .addTo(map.current);
 
         markers.current[location.busId] = marker;
+
+        // CRITICAL FIX: Auto-center map on first active bus location
+        logger.info('📍 New bus marker created - centering map', 'component', {
+          busId: location.busId,
+          coordinates: [location.longitude, location.latitude]
+        });
+        
+        // Center and zoom to show the bus location
+        map.current.setCenter([location.longitude, location.latitude]);
+        map.current.setZoom(15); // Good zoom level for city view
 
         // Create popup for new marker and track it
         const popup = new maplibregl.Popup({
@@ -573,38 +641,308 @@ const StudentMap: React.FC<StudentMapProps> = ({
 
     let isMounted = true;
 
-    // Load initial bus data
-    const loadBusData = async () => {
-      try {
-        const busesData = await busService.getAllBuses();
-        if (busesData && Array.isArray(busesData)) {
-          setBuses(busesData);
-          logger.info('📊 Initial bus data from API:', 'component', { 
-            count: busesData.length 
+  // CRITICAL FIX: Load bus data directly from API without MapStore dependency
+  const loadBusData = async (): Promise<BusInfo[]> => {
+    try {
+      logger.info('🔄 Loading initial bus data from API...', 'component');
+      
+      // CRITICAL FIX: Call API directly instead of relying on busService MapStore
+      const response = await apiService.getAllBuses();
+      
+      if (response.success && response.data && Array.isArray(response.data)) {
+        // CRITICAL FIX: Transform API data to BusInfo format directly
+        const busInfos: BusInfo[] = response.data.map((bus: any) => ({
+          busId: bus.id,
+          busNumber: bus.bus_number || bus.code || `Bus ${bus.id}`,
+          routeName: bus.route_name || 'Route TBD',
+          driverName: bus.driver_full_name || 'Driver TBD', 
+          driverId: bus.assigned_driver_profile_id || '',
+          routeId: bus.route_id || '',
+          currentLocation: {
+            busId: bus.id,
+            driverId: bus.assigned_driver_profile_id || '',
+            latitude: 0,
+            longitude: 0,
+            timestamp: new Date().toISOString(),
+          },
+        }));
+        
+        setBuses(busInfos);
+        logger.info('📊 Initial bus data loaded successfully:', 'component', { 
+          count: busInfos.length,
+          busIds: busInfos.map(bus => bus.busId),
+          sampleBus: busInfos[0] || null
+        });
+        
+        // CRITICAL DEBUG: Log each bus individually to ensure data is correct
+        busInfos.forEach((bus, index) => {
+          logger.info(`🚌 Bus ${index + 1}:`, 'component', {
+            busId: bus.busId,
+            busNumber: bus.busNumber,
+            routeName: bus.routeName,
+            driverName: bus.driverName
           });
-        } else {
-          logger.warn('⚠️ No bus data received or invalid format', 'component');
-          setBuses([]);
+        });
+
+        // PRODUCTION FIX: Sync existing location data with newly loaded buses
+        // This handles cases where location updates arrived before bus data was loaded
+        const pendingLocations = Object.values(lastBusLocations);
+        if (pendingLocations.length > 0) {
+          logger.info('🔄 Syncing pending location updates with loaded bus data', 'component', {
+            pendingLocationCount: pendingLocations.length,
+            loadedBusCount: busInfos.length
+          });
+          
+          pendingLocations.forEach(location => {
+            const matchingBus = busInfos.find(bus => bus.busId === location.busId);
+            if (matchingBus) {
+              logger.info('✅ Found matching bus for pending location', 'component', {
+                busId: location.busId,
+                busNumber: matchingBus.busNumber
+              });
+              
+              // Update the marker now that we have bus info
+              requestAnimationFrame(() => {
+                updateBusMarker(location);
+              });
+            }
+          });
         }
-      } catch (error) {
-        const busError = errorHandler.handleError(error, 'StudentMap-loadBuses');
-        logger.error('Bus loading error', 'component', { 
-          error: busError.message,
-          code: busError.code 
+
+        // CRITICAL FIX: Return loaded buses for sequential initialization
+        return busInfos;
+      } else {
+        logger.warn('⚠️ No bus data received or invalid format', 'component', {
+          hasSuccess: response?.success,
+          hasData: !!response?.data,
+          isArray: Array.isArray(response?.data)
         });
         setBuses([]);
-        setConnectionError(busError.userMessage || 'Failed to load bus data');
+        return [];
+      }
+    } catch (error) {
+      const busError = errorHandler.handleError(error, 'StudentMap-loadBuses');
+      logger.error('Bus loading error', 'component', { 
+        error: busError.message,
+        code: busError.code 
+      });
+      setBuses([]);
+      setConnectionError(busError.userMessage || 'Failed to load bus data');
+      return [];
+    }
+  };
+
+    // CRITICAL FIX: Initialize WebSocket connection for real-time updates
+    const initializeWebSocket = async (loadedBuses: BusInfo[]) => {
+      try {
+        logger.info('🔌 Initializing WebSocket connection for live bus updates...', 'component', {
+          busCount: loadedBuses.length,
+          busIds: loadedBuses.map(b => b.busId).slice(0, 3) // Log first 3 for debugging
+        });
+        unifiedWebSocketService.setClientType('student');
+        await unifiedWebSocketService.connect();
+        logger.info('✅ WebSocket connection established for student map', 'component');
+      } catch (error) {
+        const wsError = errorHandler.handleError(error, 'StudentMap-WebSocketInit');
+        logger.error('WebSocket connection error', 'component', { 
+          error: wsError.message,
+          code: wsError.code 
+        });
+        setConnectionError(wsError.userMessage || 'Failed to connect to live updates');
       }
     };
 
-    // Load bus data on mount
-    loadBusData();
+    // CRITICAL FIX: Sequential initialization - load buses FIRST, then WebSocket
+    const initializeSequentially = async () => {
+      try {
+        logger.info('🔄 Starting sequential initialization (buses first, then WebSocket)', 'component');
+        
+        // Step 1: Load bus data first
+        const loadedBuses = await loadBusData();
+        
+        if (!isMounted) {
+          logger.info('⚠️ Component unmounted during bus loading', 'component');
+          return;
+        }
+
+        // Step 2: Only initialize WebSocket after buses are loaded
+        logger.info('🔌 Buses loaded, now initializing WebSocket...', 'component', {
+          busCount: loadedBuses.length
+        });
+        await initializeWebSocket(loadedBuses);
+        
+        logger.info('✅ Sequential initialization complete', 'component', {
+          busCount: loadedBuses.length,
+          webSocketReady: true
+        });
+        
+      } catch (error) {
+        const initError = errorHandler.handleError(error, 'StudentMap-SequentialInit');
+        logger.error('Sequential initialization error', 'component', { 
+          error: initError.message,
+          code: initError.code 
+        });
+        setConnectionError(initError.userMessage || 'Failed to initialize map components');
+      }
+    };
+
+    // Start sequential initialization
+    initializeSequentially();
 
     // PRODUCTION FIX: Set up handlers using refs to prevent useEffect re-runs
     handleBusLocationUpdateRef.current = (location: BusLocation) => {
+      // CRITICAL DEBUG: Detailed WebSocket location data logging
+      logger.info('🔍 DETAILED DEBUG: WebSocket location received', 'component', { 
+        busId: location.busId,
+        busIdType: typeof location.busId,
+        busIdLength: location.busId?.length,
+        busIdString: String(location.busId),
+        timestamp: location.timestamp,
+        lat: location.latitude,
+        lng: location.longitude
+      });
+      
+      // CRITICAL DEBUG: Log all frontend bus IDs for comparison
+      const frontendBusIds = buses.map(bus => ({
+        busId: bus.busId,
+        busIdType: typeof bus.busId,
+        busIdLength: bus.busId?.length,
+        busIdString: String(bus.busId),
+        busNumber: bus.busNumber,
+        routeName: bus.routeName
+      }));
+      
+      logger.info('🔍 DETAILED DEBUG: All frontend buses', 'component', { 
+        totalBuses: buses.length,
+        incomingBusId: location.busId,
+        incomingBusIdType: typeof location.busId,
+        frontendBusIds: frontendBusIds
+      });
+      
+      // CRITICAL FIX: Enhanced bus matching with multiple ID format support
+      let busExists = buses.find(bus => {
+        const busId = bus.busId; // Use busId from BusInfo interface
+        const exactMatch = busId === location.busId;
+        const stringMatch = String(busId) === String(location.busId);
+        
+        // PRODUCTION FIX: Also try matching by bus number as fallback
+        const busNumberMatch = bus.busNumber === location.busId;
+        
+        // PRODUCTION FIX: Try matching if location.busId might be a partial UUID
+        const partialMatch = busId.includes(location.busId) || location.busId.includes(busId);
+        
+        const anyMatch = exactMatch || stringMatch || busNumberMatch || partialMatch;
+        
+        // Log each comparison attempt with all matching methods
+        logger.info('🔍 ENHANCED DEBUG: Bus ID comparison with multiple methods', 'component', {
+          frontendBusId: busId,
+          frontendBusIdType: typeof busId,
+          frontendBusNumber: bus.busNumber,
+          incomingBusId: location.busId,
+          incomingBusIdType: typeof location.busId,
+          exactMatch: exactMatch,
+          stringMatch: stringMatch,
+          busNumberMatch: busNumberMatch,
+          partialMatch: partialMatch,
+          finalMatch: anyMatch,
+          busNumber: bus.busNumber
+        });
+        
+        return anyMatch;
+      });
+
+      // PRODUCTION FIX: If bus not found in array, check cache with enhanced matching
+      if (!busExists) {
+        // Try direct cache lookup first
+        busExists = busInfoCache.current.get(location.busId);
+        
+        // CRITICAL FIX: If not found, try enhanced matching in cache
+        if (!busExists) {
+          for (const [cacheKey, cachedBus] of busInfoCache.current.entries()) {
+            const exactMatch = cacheKey === location.busId;
+            const stringMatch = String(cacheKey) === String(location.busId);
+            const busNumberMatch = cachedBus.busNumber === location.busId;
+            const partialMatch = cacheKey.includes(location.busId) || location.busId.includes(cacheKey);
+            
+            if (exactMatch || stringMatch || busNumberMatch || partialMatch) {
+              busExists = cachedBus;
+              logger.info('🔍 ENHANCED DEBUG: Found bus in cache using enhanced matching', 'component', {
+                cacheKey: cacheKey,
+                incomingBusId: location.busId,
+                matchType: exactMatch ? 'exact' : stringMatch ? 'string' : busNumberMatch ? 'busNumber' : 'partial'
+              });
+              break;
+            }
+          }
+        }
+        
+        logger.info('🔍 ENHANCED DEBUG: Cache lookup result', 'component', {
+          busId: location.busId,
+          foundInCache: !!busExists,
+          cacheSize: busInfoCache.current.size,
+          cacheKeys: Array.from(busInfoCache.current.keys())
+        });
+      }
+      
+      logger.info('🔍 DETAILED DEBUG: Final bus matching result', 'component', { 
+        busId: location.busId,
+        existsInArray: !!buses.find(b => b.busId === location.busId),
+        existsInCache: !!busInfoCache.current.get(location.busId),
+        finalBusExists: !!busExists,
+        totalBuses: buses.length,
+        totalCacheEntries: busInfoCache.current.size,
+        matchedBus: busExists ? {
+          busId: busExists.busId,
+          busNumber: busExists.busNumber,
+          routeName: busExists.routeName
+        } : null
+      });
+      
+      // CRITICAL FIX: Always process location update, even if bus not found yet
+      // This handles the race condition where location updates arrive before bus data
       requestAnimationFrame(() => {
+        // Store location update regardless of bus existence
+        setLastBusLocations(prev => ({
+          ...prev,
+          [location.busId]: location
+        }));
+        
+        // Call debounced update
         debouncedLocationUpdate(location);
+        
+        // Try to update marker (updateBusMarker handles missing bus gracefully)
         updateBusMarker(location);
+        
+        // PRODUCTION FIX: If bus doesn't exist, try to add it to cache for future updates
+        if (!busExists) {
+          logger.warn('⚠️ Location update for unknown bus - storing for later processing', 'component', {
+            busId: location.busId,
+            willRetryWhenBusLoaded: true
+          });
+          
+          // Create minimal bus info for cache to prevent future misses
+          const minimalBusInfo: BusInfo = {
+            busId: location.busId,
+            busNumber: `Bus ${location.busId.slice(0, 8)}...`, // Truncated for display
+            routeName: 'Loading...',
+            driverName: 'Loading...',
+            driverId: location.driverId || '',
+            routeId: '',
+            currentLocation: location,
+            status: 'active',
+            lastUpdated: new Date().toISOString(),
+            capacity: 0,
+            model: ''
+          };
+          
+          // Add to cache but not to buses array (will be replaced when real data loads)
+          busInfoCache.current.set(location.busId, minimalBusInfo);
+          
+          logger.info('📝 Added minimal bus info to cache for unknown bus', 'component', {
+            busId: location.busId,
+            cacheSize: busInfoCache.current.size
+          });
+        }
       });
     };
 
@@ -994,19 +1332,47 @@ const StudentMap: React.FC<StudentMapProps> = ({
     logger.info('Driver location marker clicked', 'StudentMap');
   }, []);
 
-  // Get buses with live locations
+  // Get buses with live locations - CRITICAL FIX: Include buses from cache
   const busesWithLiveLocations = useMemo(() => {
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const activeBuses = new Map<string, any>();
     
-    return buses.filter(bus => {
+    // First, add buses from main array that have live locations
+    buses.forEach(bus => {
       const busId = (bus as any).id || (bus as any).bus_id;
       const location = lastBusLocations[busId];
-      if (!location) return false;
-      
-      const lastUpdate = new Date(location.timestamp).getTime();
-      return lastUpdate > fiveMinutesAgo;
+      if (location) {
+        const lastUpdate = new Date(location.timestamp).getTime();
+        if (lastUpdate > fiveMinutesAgo) {
+          activeBuses.set(busId, bus);
+        }
+      }
     });
+    
+    // PRODUCTION FIX: Also include buses from cache that have recent location updates
+    for (const [busId, location] of Object.entries(lastBusLocations)) {
+      const lastUpdate = new Date(location.timestamp).getTime();
+      if (lastUpdate > fiveMinutesAgo && !activeBuses.has(busId)) {
+        const cachedBus = busInfoCache.current.get(busId);
+        if (cachedBus) {
+          activeBuses.set(busId, cachedBus);
+          logger.info('📊 Including cached bus in active count', 'component', { busId });
+        }
+      }
+    }
+    
+    return Array.from(activeBuses.values());
   }, [buses, lastBusLocations]);
+
+  // Center map on a specific bus by its latest known location
+  const handleCenterOnBus = useCallback((busId: string) => {
+    const location = lastBusLocations[busId];
+    if (!location || !map.current) return;
+    map.current.flyTo({
+      center: [location.longitude, location.latitude],
+      zoom: 15,
+    });
+  }, [lastBusLocations]);
 
   // Limit buses based on config
   const limitedBuses = useMemo(() => {
@@ -1039,69 +1405,34 @@ const StudentMap: React.FC<StudentMapProps> = ({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="h-full w-full relative"
+        className="h-full w-full flex relative"
       >
-        {/* Map Container */}
-        <div className="map-container h-full w-full relative">
-          <div
-            ref={mapContainer}
-            className="w-full h-full rounded-lg overflow-hidden"
-            style={{ minHeight: '400px' }}
-          />
-          
-          {/* Driver Location Marker */}
-          {map.current && driverLocation && (
-            <DriverLocationMarker
-              map={map.current}
-              location={driverLocation}
-              isTracking={isDriverTracking}
-              onMarkerClick={handleDriverMarkerClick}
-            />
-          )}
-          
-          {/* Loading overlay */}
-          {isLoading && (
-            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
-              <div className="text-white text-center">
-                <div className="loading-spinner mx-auto mb-4" />
-                <p>Loading map...</p>
+        {/* Left Sidebar - Filters */}
+        <motion.div
+          initial={false}
+          animate={{
+            width: isNavbarCollapsed ? '60px' : '320px',
+          }}
+          transition={{ duration: 0.3, ease: 'easeInOut' }}
+          className="flex-shrink-0 h-full relative z-20"
+        >
+          <GlassyCard className="h-full student-map-sidebar border-r border-gray-300">
+            <div className="p-4">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                {!isNavbarCollapsed && (
+                  <h2 className="text-xl font-bold text-white">🚌 Live Bus Tracking</h2>
+                )}
+                <button
+                  onClick={() => setIsNavbarCollapsed(!isNavbarCollapsed)}
+                  className="text-white hover:text-blue-300 transition-colors ml-auto"
+                  title={isNavbarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+                >
+                  {isNavbarCollapsed ? '▶️' : '◀️'}
+                </button>
               </div>
-            </div>
-          )}
 
-          {/* Error overlay */}
-          {connectionError && (
-            <div className="absolute top-4 right-4 z-10">
-              <GlassyCard className="p-4 bg-red-500 bg-opacity-20 border border-red-400">
-                <div className="flex items-center space-x-2">
-                  <span className="text-red-500">⚠️</span>
-                  <div>
-                    <h3 className="font-semibold text-red-700">
-                      Connection Error
-                    </h3>
-                    <p className="text-sm text-red-700 mt-1">{connectionError}</p>
-                  </div>
-                </div>
-              </GlassyCard>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <GlassyCard className="absolute top-4 left-4 w-80 max-h-[calc(100vh-2rem)] overflow-y-auto z-10">
-          <div className="p-4">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white">🚌 Live Bus Tracking</h2>
-              <button
-                onClick={() => setIsNavbarCollapsed(!isNavbarCollapsed)}
-                className="text-white hover:text-blue-300 transition-colors"
-              >
-                {isNavbarCollapsed ? '▶️' : '◀️'}
-              </button>
-            </div>
-
-            {!isNavbarCollapsed && (
+              {!isNavbarCollapsed && (
               <>
                 {/* Connection Status */}
                 <div className="mb-4 p-3 bg-blue-500 bg-opacity-20 rounded-lg">
@@ -1157,83 +1488,128 @@ const StudentMap: React.FC<StudentMapProps> = ({
                   )}
                 </div>
 
-                {/* Active Buses */}
+                {/* Buses list with Center on bus action */}
                 <div className="mb-4">
-                  <button
-                    onClick={() => setIsActiveBusesOpen(!isActiveBusesOpen)}
-                    className="flex items-center justify-between w-full p-2 bg-gray-700 bg-opacity-50 rounded-lg text-white hover:bg-opacity-70 transition-colors"
-                  >
-                    <span className="font-medium">🚌 Active Buses</span>
-                    <span>{isActiveBusesOpen ? '▼' : '▶'}</span>
-                  </button>
-                  
-                  {isActiveBusesOpen && (
-                    <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
-                      <AnimatePresence>
-                        {displayBuses.map((bus) => {
-                          const busId = (bus as any).id || (bus as any).bus_id;
-                          const location = lastBusLocations[busId];
-                          return (
-                            <motion.div
-                              key={busId}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10 }}
-                              className="p-3 bg-gray-700 bg-opacity-30 rounded-lg hover:bg-opacity-50 transition-colors"
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-lg">🚌</span>
-                                  <span className="font-medium text-white">
-                                    {bus.busNumber}
-                                  </span>
-                                  <span className="text-xs text-blue-600 opacity-75">
-                                    👆
-                                  </span>
-                                </div>
+                  <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                    <AnimatePresence>
+                      {displayBuses.map((bus) => {
+                        const busId = (bus as any).id || (bus as any).bus_id;
+                        const location = lastBusLocations[busId];
+                        return (
+                          <motion.div
+                            key={busId}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="p-3 bg-gray-700 bg-opacity-30 rounded-lg hover:bg-opacity-50 transition-colors cursor-pointer"
+                            onClick={() => handleCenterOnBus(busId)}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-lg">🚌</span>
+                                <span className="font-medium text-white">
+                                  {bus.busNumber}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-2">
                                 <div className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
                                   {bus.eta ? `${bus.eta} min` : 'ETA: --'}
                                 </div>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleCenterOnBus(busId); }}
+                                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                  aria-label={`Center map on ${bus.busNumber}`}
+                                  title={`Center on ${bus.busNumber}`}
+                                >
+                                  🎯
+                                </button>
                               </div>
+                            </div>
 
-                              {/* Bus Details */}
-                              <div className="space-y-1">
-                                <div className="text-xs text-gray-600">
-                                  📍 Route: {bus.routeName}
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                  👨‍💼 Driver: {bus.driverName}
-                                </div>
-                                {location && (
-                                  <div className="flex items-center justify-between text-xs">
-                                    <span className="text-green-600">
-                                      🕐{' '}
-                                      {new Date(
-                                        location.timestamp
-                                      ).toLocaleTimeString([], {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })}
-                                    </span>
-                                    <span className="text-blue-600">
-                                      {location.speed
-                                        ? `${location.speed} km/h`
-                                        : 'Speed: --'}
-                                    </span>
-                                  </div>
-                                )}
+                            {/* Bus Details */}
+                            <div className="space-y-1">
+                              <div className="text-xs text-gray-600">
+                                📍 Route: {bus.routeName}
                               </div>
-                            </motion.div>
-                          );
-                        })}
-                      </AnimatePresence>
-                    </div>
-                  )}
+                              <div className="text-xs text-gray-600">
+                                👨‍💼 Driver: {bus.driverName}
+                              </div>
+                              {location && (
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-green-600">
+                                    🕐{' '}
+                                    {new Date(
+                                      location.timestamp
+                                    ).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+                                  <span className="text-blue-600">
+                                    {location.speed
+                                      ? `${location.speed} km/h`
+                                      : 'Speed: --'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </div>
                 </div>
-              </>
-            )}
-          </div>
-        </GlassyCard>
+                </>
+              )}
+            </div>
+          </GlassyCard>
+        </motion.div>
+
+        {/* Right Side - Map Container */}
+        <div className="flex-1 h-full relative">
+          <div
+            ref={mapContainer}
+            className="w-full h-full rounded-lg overflow-hidden"
+            style={{ minHeight: '400px' }}
+          />
+          
+          {/* Driver Location Marker */}
+          {map.current && driverLocation && (
+            <DriverLocationMarker
+              map={map.current}
+              location={driverLocation}
+              isTracking={isDriverTracking}
+              onMarkerClick={handleDriverMarkerClick}
+            />
+          )}
+          
+          {/* Loading overlay */}
+          {isLoading && (
+            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+              <div className="text-white text-center">
+                <div className="loading-spinner mx-auto mb-4" />
+                <p>Loading map...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error overlay */}
+          {connectionError && (
+            <div className="absolute top-4 right-4 z-10">
+              <GlassyCard className="p-4 bg-red-500 bg-opacity-20 border border-red-400">
+                <div className="flex items-center space-x-2">
+                  <span className="text-red-500">⚠️</span>
+                  <div>
+                    <h3 className="font-semibold text-red-700">
+                      Connection Error
+                    </h3>
+                    <p className="text-sm text-red-700 mt-1">{connectionError}</p>
+                  </div>
+                </div>
+              </GlassyCard>
+            </div>
+          )}
+        </div>
       </motion.div>
     </div>
   );

@@ -218,11 +218,11 @@ export const isMobileDevice = (): boolean => {
  * PRODUCTION FIX: Mobile devices with GPS should use high accuracy
  */
 export const getLocationOptions = (isMobile: boolean = false): PositionOptions => {
-  // CRITICAL FIX: Mobile devices with GPS hardware SHOULD use high accuracy
-  // Desktop browsers without GPS cannot improve accuracy even with enableHighAccuracy: true
+  // Request high accuracy on all devices; browsers will use GPS/Wi‑Fi when available
+  // and gracefully fall back if unavailable. Keep a sane timeout and minimal cache.
   return {
-    enableHighAccuracy: isMobile, // Mobile devices have GPS - use high accuracy
-    timeout: isMobile ? 15000 : 10000, // Shorter timeout for both (faster failure)
-    maximumAge: isMobile ? 5000 : 60000, // Mobile: fresh data, Desktop: allow cached IP location
+    enableHighAccuracy: true,
+    timeout: 20000,
+    maximumAge: 0,
   };
 };

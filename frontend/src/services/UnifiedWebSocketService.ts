@@ -232,16 +232,25 @@ class UnifiedWebSocketService {
    * SIMPLIFIED: Get authentication token without refresh attempts
    */
   private async getValidAuthToken(): Promise<string | null> {
-    if (this.clientType === 'student') {
-      return null; // Students don't need authentication
-    }
-
+    // CRITICAL FIX: Always use authentication for consistent WebSocket context
     let token = authService.getAccessToken();
     
     if (!token) {
+      // For student clients, allow anonymous connections but log it
+      if (this.clientType === 'student') {
+        logger.info('🎓 Student connecting without authentication (anonymous mode)', 'component');
+        return null;
+      }
+      
       logger.warn('⚠️ No auth token available for WebSocket', 'component');
       return null;
     }
+
+    // CRITICAL FIX: Use authentication token for all clients when available
+    logger.info('🔐 Using authentication token for WebSocket', 'component', {
+      clientType: this.clientType,
+      hasToken: !!token
+    });
 
     return token;
   }
@@ -260,7 +269,7 @@ class UnifiedWebSocketService {
       reconnection: false, // We handle reconnection manually
       autoConnect: false,
       auth: {
-        token: authToken || '',
+        token: authToken || (this.clientType === 'student' ? null : ''),
         clientType: this.clientType,
       },
       query: {
@@ -397,12 +406,16 @@ class UnifiedWebSocketService {
 
     // PRODUCTION FIX: Business logic events
     this.socket.on('bus:locationUpdate', (location: BusLocation) => {
-      logger.info('📍 Bus location update received', 'component', {
+      logger.info('📍 DETAILED DEBUG: Bus location update received in WebSocket service', 'component', {
         busId: location.busId,
+        busIdType: typeof location.busId,
+        busIdLength: location.busId?.length,
+        busIdString: String(location.busId),
         latitude: location.latitude,
         longitude: location.longitude,
         timestamp: location.timestamp,
-        listenersCount: this.busLocationListeners.size
+        listenersCount: this.busLocationListeners.size,
+        fullLocationData: location
       });
       
       // Notify all registered listeners

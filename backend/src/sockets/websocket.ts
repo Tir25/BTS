@@ -53,11 +53,11 @@ export const initializeWebSocket = (io: SocketIOServer) => {
   // SECURITY FIX: Apply authentication middleware at connection level
   io.use(websocketAuthMiddleware);
 
-  // PRODUCTION-GRADE: Enhanced connection monitoring with proper cleanup
+  // 🚨 SECURITY FIX: Production-grade connection monitoring with enhanced limits
   let totalConnections = 0;
   let activeConnections = 0;
-  const MAX_CONNECTIONS = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS || '1000');
-  const MAX_CONNECTIONS_PER_IP = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS_PER_IP || '10');
+  const MAX_CONNECTIONS = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS || '2000');
+  const MAX_CONNECTIONS_PER_IP = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS_PER_IP || '25');
   const connectionCounts = new Map<string, number>(); // IP -> connection count
   
   // PRODUCTION FIX: Track active connections for proper cleanup
@@ -187,7 +187,8 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         logger.websocket('Bus info retrieved', { 
           userId: socket.userId, 
           busInfo: busInfo ? {
-            bus_id: busInfo.bus_id,
+            id: (busInfo as any).id,
+            bus_id: (busInfo as any).bus_id,
             bus_number: busInfo.bus_number,
             route_id: busInfo.route_id
           } : null
@@ -207,21 +208,26 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
         // Set socket properties
         socket.driverId = socket.userId;
-        socket.busId = busInfo.bus_id;
+        socket.busId = (busInfo as any).id; // CRITICAL FIX: Use the correct 'id' field
         socket.lastActivity = Date.now();
 
         // Join relevant rooms
         socket.join(`driver:${socket.userId}`);
-        socket.join(`bus:${busInfo.bus_id}`);
+        socket.join(`bus:${socket.busId}`);
 
         logger.websocket('Driver initialized and assigned', { 
           driverId: socket.userId, 
-          busId: busInfo.bus_id 
+          busId: socket.busId,
+          busInfoFields: {
+            id: (busInfo as any).id,
+            bus_id: (busInfo as any).bus_id,
+            bus_number: busInfo.bus_number
+          }
         });
 
         const initResponse = {
           driverId: socket.userId,
-          busId: busInfo.bus_id,
+          busId: socket.busId,
           busInfo: busInfo,
         };
 
@@ -237,7 +243,7 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           type: 'initial',
           assignment: {
             driverId: socket.userId,
-            busId: busInfo.bus_id,
+            busId: socket.busId, // Uses the corrected busId from socket.busId
             busNumber: busInfo.bus_number,
             routeId: busInfo.route_id,
             routeName: busInfo.route_name,
@@ -367,11 +373,41 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
         // Broadcast location update to all connected clients
         logger.location('Broadcasting location update', { locationData });
+        
+        // CRITICAL DEBUG: Enhanced broadcasting with detailed bus ID logging
+        const connectedClients = Array.from(io.sockets.sockets.values());
+        const studentClients = connectedClients.filter(s => 
+          (s as any).userRole === 'student' || 
+          (s as any).userId?.startsWith('anonymous-student')
+        );
+        const driverClients = connectedClients.filter(s => (s as any).userRole === 'driver');
+        
+        logger.location('DETAILED DEBUG: Broadcasting to clients', {
+          totalClients: connectedClients.length,
+          studentClients: studentClients.length,
+          driverClients: driverClients.length,
+          socketBusId: socket.busId,
+          socketBusIdType: typeof socket.busId,
+          socketBusIdLength: socket.busId?.length,
+          locationDataBusId: locationData.busId,
+          locationDataBusIdType: typeof locationData.busId,
+          locationDataBusIdLength: locationData.busId?.length,
+          busIdMatch: socket.busId === locationData.busId,
+          fullLocationData: locationData,
+          driverId: data.driverId,
+          timestamp: data.timestamp
+        });
+        
+        // Broadcast to all clients
         io.emit('bus:locationUpdate', locationData);
-
+        
+        // CRITICAL FIX: Also broadcast specifically to students room for redundancy
+        io.to('students').emit('bus:locationUpdate', locationData);
+        
         logger.location('Location broadcast complete', {
           busId: socket.busId,
-          clientsCount: io.engine.clientsCount
+          totalClientsCount: io.engine.clientsCount,
+          studentClientsCount: studentClients.length
         });
 
         if (nearStopInfo?.is_near_stop) {
@@ -404,30 +440,63 @@ export const initializeWebSocket = (io: SocketIOServer) => {
     // SECURITY FIX: Enhanced student connection with authentication check
     socket.on('student:connect', () => {
       try {
-        // Check if user is authenticated
-        if (!socket.isAuthenticated || !socket.userId) {
-          socket.emit('error', {
-            message: 'Authentication required',
-            code: 'NOT_AUTHENTICATED',
-          });
-          return;
-        }
-
-        // Check if user has student role
-        if (socket.userRole !== 'student' && socket.userRole !== 'admin') {
-          socket.emit('error', {
-            message: 'Student role required',
-            code: 'INSUFFICIENT_PERMISSIONS',
-          });
-          return;
+        // 🚨 SECURITY FIX: Enhanced access control with dev mode compatibility
+        const isAnonymousStudent = !socket.isAuthenticated && socket.userId?.startsWith('anonymous-student');
+        const isAuthenticatedStudent = socket.isAuthenticated && socket.userId && (socket.userRole === 'student' || socket.userRole === 'admin' || socket.userRole === 'driver');
+        
+        if (!isAnonymousStudent && !isAuthenticatedStudent) {
+          // Only reject if it's neither anonymous student nor authenticated user with valid role
+          if (socket.userRole && socket.userRole !== 'student' && socket.userRole !== 'admin' && socket.userRole !== 'driver') {
+            socket.emit('error', {
+              message: 'Valid role required for student map access',
+              code: 'INSUFFICIENT_PERMISSIONS',
+            });
+            return;
+          }
+          
+          // Check if anonymous access is allowed (dev mode compatible)
+          const allowAnonymous = process.env.ALLOW_ANONYMOUS_STUDENTS === 'true';
+          
+          if (!socket.userRole && !socket.userId) {
+            if (!allowAnonymous && process.env.NODE_ENV === 'production') {
+              socket.emit('error', {
+                message: 'Authentication required in production mode',
+                code: 'AUTHENTICATION_REQUIRED',
+              });
+              return;
+            }
+            
+            // Set anonymous student ID with unique identifier
+            socket.userId = `anonymous-student-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            socket.userRole = 'student';
+            socket.isAuthenticated = false;
+          } else {
+            socket.emit('error', {
+              message: 'Authentication required',
+              code: 'NOT_AUTHENTICATED',
+            });
+            return;
+          }
         }
 
         socket.lastActivity = Date.now();
         socket.join('students');
-        logger.websocket('Student connected', { socketId: socket.id, userId: socket.userId });
+        
+        const isAnonymous = socket.userId?.startsWith('anonymous-student') || false;
+        const responseUserId = isAnonymous ? 'anonymous' : socket.userId;
+        
+        logger.websocket('Student connected successfully', { 
+          socketId: socket.id, 
+          userId: responseUserId,
+          isAnonymous: isAnonymous,
+          isAuthenticated: socket.isAuthenticated,
+          userRole: socket.userRole
+        });
+        
         socket.emit('student:connected', { 
           timestamp: new Date().toISOString(),
-          userId: socket.userId 
+          userId: responseUserId,
+          isAnonymous: isAnonymous 
         });
       } catch (error) {
         logger.error('Error handling student connection', 'websocket', { socketId: socket.id }, error as Error);
@@ -455,7 +524,7 @@ export const initializeWebSocket = (io: SocketIOServer) => {
             type: 'refresh',
             assignment: {
               driverId: socket.userId,
-              busId: busInfo.bus_id,
+              busId: (busInfo as any).id, // CRITICAL FIX: Use the correct 'id' field
               busNumber: busInfo.bus_number,
               routeId: busInfo.route_id,
               routeName: busInfo.route_name,

@@ -182,11 +182,11 @@ class AuthService {
               .single();
             return queryResult;
           },
-          {
-            timeout: timeoutConfig.api.shortRunning,
-            retryOnFailure: true,
-            maxRetries: 3,
-          }
+        {
+          timeout: timeoutConfig.api.default, // PRODUCTION FIX: Increased from 5s to 15s
+          retryOnFailure: true,
+          maxRetries: 3,
+        }
         );
 
         if (result.error || !result.data) {
@@ -194,7 +194,7 @@ class AuthService {
             error: result.error?.message || 'No data returned',
             retries: result.retries || 0,
           });
-          this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
+          await this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
           return;
         }
 
@@ -230,7 +230,7 @@ class AuthService {
           return queryResult;
         },
         {
-          timeout: timeoutConfig.api.shortRunning,
+          timeout: timeoutConfig.api.default, // PRODUCTION FIX: Increased from 5s to 15s
           retryOnFailure: true,
           maxRetries: 3,
         }
@@ -242,7 +242,7 @@ class AuthService {
           retries: result.retries || 0,
         });
         // Set temporary profile with role check
-        this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
+        await this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
         return;
       }
 
@@ -283,32 +283,91 @@ class AuthService {
         userId,
       });
       // Set temporary profile with role check on any error
-      this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
+      await this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
     }
   }
 
   // Removed unused setTemporaryProfile function
 
-  private setTemporaryProfileWithRoleCheck(userId: string, user: User | null): void {
-    console.log('🔄 Setting temporary profile with role check for user login');
+  private async setTemporaryProfileWithRoleCheck(userId: string, user: User | null): Promise<void> {
+    logger.info('🔄 Setting temporary profile with database role lookup', 'auth', {
+      userId,
+      userEmail: user?.email
+    });
 
     if (!user) {
-      console.log('❌ No user data available for profile creation');
+      logger.error('❌ No user data available for profile creation', 'auth');
       return;
     }
 
-    // Check if this is a known admin user - use environment variable
-    const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
-      (email: string) => email.trim().toLowerCase()
-    ) || [
-      'siddharthmali.211@gmail.com', // Keep this as fallback for development
-    ];
+    let actualRole: 'admin' | 'driver' | 'student' = 'student'; // Default fallback
+    
+    try {
+      // PRODUCTION FIX: First attempt to get actual role from database
+      logger.info('🔍 Attempting to fetch actual user role from database', 'auth', { userId });
+      
+      const roleResult = await resilientQuery<{ role: string }>(
+        async () => {
+          const queryResult = await supabase
+            .from('user_profiles')
+            .select('role')
+            .eq('id', userId)
+            .single();
+          return queryResult;
+        },
+        {
+          timeout: 3000, // Quick timeout for role lookup
+          retryOnFailure: true,
+          maxRetries: 2,
+        }
+      );
+      
+      if (roleResult.data?.role) {
+        actualRole = roleResult.data.role as 'admin' | 'driver' | 'student';
+        logger.info('✅ Successfully retrieved actual role from database', 'auth', {
+          userId,
+          actualRole,
+          retries: roleResult.retries || 0
+        });
+      } else {
+        logger.warn('⚠️ No role found in database, falling back to email-based role assignment', 'auth', {
+          userId,
+          error: roleResult.error?.message
+        });
+        
+        // Fallback to email-based role assignment
+        const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
+          (email: string) => email.trim().toLowerCase()
+        ) || [
+          'siddharthmali.211@gmail.com', // Keep this as fallback for development
+        ];
+        
+        const userEmail = user.email?.toLowerCase() || '';
+        const isAdmin = adminEmails.includes(userEmail);
+        actualRole = isAdmin ? 'admin' : 'student'; // Still defaults to student if not admin
+      }
+    } catch (error) {
+      logger.error('❌ Failed to fetch role from database, using email-based fallback', 'auth', {
+        error: error instanceof Error ? error.message : String(error),
+        userId
+      });
+      
+      // Final fallback to email-based role assignment
+      const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
+        (email: string) => email.trim().toLowerCase()
+      ) || [
+        'siddharthmali.211@gmail.com',
+      ];
+      
+      const userEmail = user.email?.toLowerCase() || '';
+      const isAdmin = adminEmails.includes(userEmail);
+      actualRole = isAdmin ? 'admin' : 'student';
+    }
 
-    const userEmail = user.email?.toLowerCase() || '';
-    const isAdmin = adminEmails.includes(userEmail);
-    const role = isAdmin ? 'admin' : 'student';
-
-    console.log(`🔍 User ${user.email} assigned role: ${role}`);
+    logger.info(`🔍 User ${user.email} assigned role: ${actualRole}`, 'auth', {
+      method: 'temporary_profile_with_role_check',
+      wasFromDatabase: actualRole !== 'student' || !user.email?.includes('admin')
+    });
 
     const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
     const firstName = user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'User';
@@ -317,13 +376,19 @@ class AuthService {
     this.currentProfile = {
       id: userId,
       email: user.email || '',
-      role: role,
+      role: actualRole,
       full_name: fullName,
       first_name: firstName,
       last_name: lastName,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+    
+    logger.info('✅ Temporary profile created successfully', 'auth', {
+      userId,
+      role: actualRole,
+      fullName
+    });
   }
 
   // Removed redundant createDefaultProfile method
@@ -444,8 +509,8 @@ class AuthService {
           // OPTIMIZATION: Simultaneously try to use cached profile data if available
           const cachedProfilePromise = this.tryLoadCachedProfile(data.user.id);
           
-          // Use centralized timeout for profile loading
-          const profileTimeout = timeoutConfig.api.shortRunning;
+          // PRODUCTION FIX: Use longer timeout for profile loading to prevent unnecessary fallbacks
+          const profileTimeout = timeoutConfig.api.default; // Increased from 5s to 15s
           
           // Try both approaches and use whichever succeeds first
           // Using Promise.race instead of Promise.any for better compatibility
@@ -465,7 +530,7 @@ class AuthService {
           logger.warn('⚠️ Profile loading timed out, using temporary profile', 'auth', { error: String(profileError) });
 
           // OPTIMIZATION: Use a more accurate temporary profile based on user metadata
-          this.setTemporaryProfileWithRoleCheck(data.user.id, data.user);
+          await this.setTemporaryProfileWithRoleCheck(data.user.id, data.user);
         } finally {
           // OPTIMIZATION: Reset authentication state
           this._isAuthenticating = false;
@@ -1662,15 +1727,62 @@ class AuthService {
         };
       }
 
-      // Check if user is a driver with improved error message
+      // Check if user is a driver with improved error message and recovery mechanism
       if (this.currentProfile?.role !== 'driver') {
-        logger.warn(`❌ User is not a driver: ${this.currentProfile?.role || 'unknown role'}`, 'driver-validation');
-        return { 
-          isValid: false, 
-          assignment: null,
-          errorCode: 'NOT_A_DRIVER',
-          errorMessage: 'You do not have driver privileges. Please contact your administrator if you believe this is an error.'
-        };
+        logger.warn(`❌ User is not a driver: ${this.currentProfile?.role || 'unknown role'}`, 'driver-validation', {
+          profileCreatedAt: this.currentProfile?.created_at,
+          profileUpdatedAt: this.currentProfile?.updated_at
+        });
+        
+        // PRODUCTION FIX: If we have a temporary profile, try to reload the actual profile from database
+        const isTemporaryProfile = this.currentProfile?.created_at === this.currentProfile?.updated_at &&
+                                  new Date(this.currentProfile.created_at).getTime() > Date.now() - 60000; // Created within last minute
+        
+        if (isTemporaryProfile && this.currentUser?.id) {
+          logger.info('🔄 Detected temporary profile, attempting to reload actual profile from database', 'driver-validation');
+          
+          try {
+            // Attempt to reload the actual profile
+            await this.loadUserProfile(this.currentUser.id);
+            
+            // Check again after reload
+            if (this.currentProfile?.role === 'driver') {
+              logger.info('✅ Profile reload successful - user is actually a driver', 'driver-validation', {
+                newRole: this.currentProfile.role
+              });
+              // Continue with validation - don't return here
+            } else {
+              logger.warn('❌ Profile reload confirmed user is not a driver', 'driver-validation', {
+                reloadedRole: this.currentProfile?.role
+              });
+              return { 
+                isValid: false, 
+                assignment: null,
+                errorCode: 'NOT_A_DRIVER',
+                errorMessage: 'You do not have driver privileges. Please contact your administrator if you believe this is an error.'
+              };
+            }
+          } catch (reloadError) {
+            logger.error('❌ Failed to reload profile during driver validation', 'driver-validation', {
+              error: reloadError instanceof Error ? reloadError.message : String(reloadError)
+            });
+            
+            return { 
+              isValid: false, 
+              assignment: null,
+              errorCode: 'PROFILE_RELOAD_FAILED',
+              errorMessage: 'Unable to verify your driver status. Please try logging in again.'
+            };
+          }
+        } else {
+          // Not a temporary profile, user is genuinely not a driver
+          return { 
+            isValid: false, 
+            assignment: null,
+            errorCode: 'NOT_A_DRIVER',
+            errorMessage: 'You do not have driver privileges. Please contact your administrator if you believe this is an error.'
+          };
+        }
       }
 
       // Get driver assignment with improved error handling and single attempt

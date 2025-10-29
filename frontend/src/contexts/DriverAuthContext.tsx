@@ -136,8 +136,41 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
       }
       
       if (session?.user) {
-        // SIMPLIFIED: Use centralized authService for session validation
-        const validationResult = await authService.validateDriverSession();
+        // PRODUCTION FIX: Wait for AuthService to fully initialize before validation
+        // This prevents the timing issue where DriverAuthContext validates before profile loads
+        let validationResult;
+        let retryCount = 0;
+        const maxRetries = 8; // Increased from 3 to 8 to allow more time
+        const retryDelay = 500; // Reduced to 500ms for more frequent checks
+        
+        logger.debug('🔄 Waiting for AuthService initialization before validation', 'driver-auth', { requestId });
+        
+        while (retryCount < maxRetries) {
+          // Check if AuthService has completed initialization
+          if (authService.currentProfile) {
+            // AuthService is ready, proceed with validation
+            logger.info('✅ AuthService ready, proceeding with validation', 'driver-auth', { requestId, retryCount });
+            validationResult = await authService.validateDriverSession();
+            break;
+          } else {
+            // AuthService not ready yet, wait and retry
+            logger.debug(`🔄 AuthService not ready, waiting... (attempt ${retryCount + 1}/${maxRetries})`, 'driver-auth', { requestId });
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            retryCount++;
+            
+            // Verify request is still current after delay
+            if (initializationRequestIdRef.current !== requestId) {
+              logger.debug('⚠️ Initialization request superseded during retry wait', 'driver-auth', { requestId });
+              return;
+            }
+          }
+        }
+        
+        // If we still don't have a validation result, try once more (fallback)
+        if (!validationResult) {
+          logger.warn('⚠️ AuthService still not ready after retries, attempting validation anyway', 'driver-auth', { requestId, totalWaitTime: maxRetries * retryDelay });
+          validationResult = await authService.validateDriverSession();
+        }
         
         // Verify request is still current after validation
         if (initializationRequestIdRef.current !== requestId) {
