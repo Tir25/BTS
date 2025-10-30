@@ -8,16 +8,16 @@ import React, {
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import maplibregl from 'maplibre-gl';
-import { unifiedWebSocketService, BusLocation } from '../services/UnifiedWebSocketService';
+import { unifiedWebSocketService, BusLocation as WSBusLocation } from '../services/UnifiedWebSocketService';
 import { busService, BusInfo } from '../services/busService';
 import { apiService } from '../services/api';
 import { authService } from '../services/authService';
-import GlassyCard from './ui/GlassyCard';
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useMapPerformance } from '../hooks/useMapPerformance';
 import DriverLocationMarker from './map/DriverLocationMarker';
 import './StudentMap.css';
-import { Route } from '../types';
+import { Route, BusLocation } from '../types';
+import { onRouteStatusUpdated } from '../services/RouteStatusEvents';
 
 import { logger } from '../utils/logger';
 import { errorHandler } from '../utils/errorHandler';
@@ -167,6 +167,8 @@ const StudentMap: React.FC<StudentMapProps> = ({
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<{ [busId: string]: maplibregl.Marker }>({});
   const popups = useRef<{ [busId: string]: maplibregl.Popup }>({});
+  // Map various incoming IDs (uuid, legacy id, bus_number) to a single canonical busId
+  const busIdAliases = useRef<Map<string, string>>(new Map());
   const isMapInitialized = useRef(false);
   const addedRoutes = useRef<Set<string>>(new Set());
   const cleanupFunctions = useRef<(() => void)[]>([]);
@@ -179,7 +181,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
   const animationFrames = useRef<number[]>([]);
   
   // Store handlers in refs to prevent useEffect re-runs
-  const handleBusLocationUpdateRef = useRef<(location: BusLocation) => void>();
+  const handleBusLocationUpdateRef = useRef<(location: WSBusLocation) => void>();
   const handleDriverConnectedRef = useRef<(data: { driverId: string; busId: string; timestamp: string }) => void>();
   const handleDriverDisconnectedRef = useRef<(data: { driverId: string; busId: string; timestamp: string }) => void>();
   const handleBusArrivingRef = useRef<(data: { busId: string; routeId: string; stopId: string; eta: number; timestamp: string }) => void>();
@@ -193,6 +195,9 @@ const StudentMap: React.FC<StudentMapProps> = ({
   const [buses, setBuses] = useState<BusInfo[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>('all');
+  const [selectedShift, setSelectedShift] = useState<'Day' | 'Afternoon' | ''>('');
+  const [routeStatus, setRouteStatus] = useState<{ tracking_active: boolean; stops: { completed: any[]; next: any | null; remaining: any[] } } | null>(null);
+  const [routeStops, setRouteStops] = useState<Array<{ id: string; name?: string; sequence: number }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastBusLocations, setLastBusLocations] = useState<{
     [busId: string]: BusLocation;
@@ -207,9 +212,9 @@ const StudentMap: React.FC<StudentMapProps> = ({
     (() => {
       let timeoutId: NodeJS.Timeout;
       let rafId: number | null = null;
-      const pendingUpdates = new Map<string, BusLocation>();
+      const pendingUpdates = new Map<string, WSBusLocation>();
       
-      return (location: BusLocation) => {
+      return (location: WSBusLocation) => {
         // Store pending update
         pendingUpdates.set(location.busId, location);
         
@@ -233,7 +238,17 @@ const StudentMap: React.FC<StudentMapProps> = ({
               setLastBusLocations(prev => {
                 const updates = { ...prev };
                 pendingUpdates.forEach((loc, busId) => {
-                  updates[busId] = loc;
+                  // Convert WSBusLocation to BusLocation with required driverId
+                  const busLocation: BusLocation = {
+                    busId: loc.busId,
+                    driverId: (loc as any).driverId || '',
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    timestamp: loc.timestamp,
+                    speed: loc.speed,
+                    heading: loc.heading,
+                  };
+                  updates[busId] = busLocation;
                   logger.info('🔍 DEBUG: Adding location to state', 'component', { 
                     busId,
                     timestamp: loc.timestamp 
@@ -327,6 +342,40 @@ const StudentMap: React.FC<StudentMapProps> = ({
 
   // Cache for bus info to avoid repeated lookups
   const busInfoCache = useRef<Map<string, BusInfo>>(new Map());
+  // Resolve a canonical busId for any incoming identifier
+  const getCanonicalBusId = useCallback((incomingId: string): string => {
+    // 1) If we already mapped it, return cached canonical id
+    const existing = busIdAliases.current.get(incomingId);
+    if (existing) return existing;
+
+    // 2) Try direct match with loaded buses
+    const direct = buses.find(b => (b as any).id === incomingId || (b as any).busId === incomingId || (b as any).bus_id === incomingId);
+    if (direct) {
+      const canonical = (direct as any).id || (direct as any).busId || (direct as any).bus_id || incomingId;
+      busIdAliases.current.set(incomingId, canonical);
+      return canonical;
+    }
+
+    // 3) Try match by bus number
+    const numMatch = buses.find(b => (b as any).bus_number === incomingId || (b as any).code === incomingId || (b as any).busNumber === incomingId);
+    if (numMatch) {
+      const canonical = (numMatch as any).id || (numMatch as any).busId || (numMatch as any).bus_id || incomingId;
+      busIdAliases.current.set(incomingId, canonical);
+      return canonical;
+    }
+
+    // 4) Try any cached bus info keys
+    for (const [cacheKey, cachedBus] of busInfoCache.current.entries()) {
+      if (cacheKey === incomingId || String(cacheKey) === String(incomingId) || cachedBus.busNumber === incomingId) {
+        busIdAliases.current.set(incomingId, cacheKey);
+        return cacheKey;
+      }
+    }
+
+    // 5) As a last resort, use incoming id as canonical for now
+    busIdAliases.current.set(incomingId, incomingId);
+    return incomingId;
+  }, [buses]);
   
   // Update bus info cache when buses change
   useEffect(() => {
@@ -341,11 +390,14 @@ const StudentMap: React.FC<StudentMapProps> = ({
 
   // CRITICAL FIX: Ultra-optimized marker update with minimal DOM manipulation
   const updateBusMarker = useCallback(
-    (location: BusLocation) => {
+    (location: WSBusLocation) => {
       if (!map.current) return;
 
+      // Normalize bus id to avoid duplicate markers created by aliasing
+      const canonicalBusId = getCanonicalBusId(location.busId);
+
       // CRITICAL FIX: Use enhanced matching for bus lookup in updateBusMarker
-      let bus = busInfoCache.current.get(location.busId);
+      let bus = busInfoCache.current.get(canonicalBusId);
       
       // PRODUCTION FIX: If not found, try enhanced matching in cache
       if (!bus) {
@@ -357,6 +409,8 @@ const StudentMap: React.FC<StudentMapProps> = ({
           
           if (exactMatch || stringMatch || busNumberMatch || partialMatch) {
             bus = cachedBus;
+            // Record alias to canonical
+            busIdAliases.current.set(location.busId, cacheKey);
             logger.info('🔍 ENHANCED DEBUG: Found bus in updateBusMarker cache using enhanced matching', 'component', {
               cacheKey: cacheKey,
               incomingBusId: location.busId,
@@ -376,26 +430,35 @@ const StudentMap: React.FC<StudentMapProps> = ({
         });
         
         // Create minimal bus info for marker display
+        const minimalLocation = {
+          busId: location.busId,
+          driverId: (location as any).driverId || '',
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timestamp: location.timestamp,
+          speed: location.speed,
+          heading: location.heading,
+        } as BusLocation;
+        
         bus = {
           busId: location.busId,
           busNumber: location.busId.slice(0, 8) + '...', // Truncated bus ID as fallback
           routeName: 'Unknown Route',
           driverName: 'Unknown Driver',
-          driverId: location.driverId || '',
+          driverId: (location as any).driverId || '',
           routeId: '',
-          currentLocation: location,
-          status: 'active',
-          lastUpdated: new Date().toISOString(),
-          capacity: 0,
-          model: ''
+          currentLocation: minimalLocation,
         };
         
         // Add to cache for future use
-        busInfoCache.current.set(location.busId, bus);
+        if (bus) {
+          busInfoCache.current.set(canonicalBusId, bus);
+          busIdAliases.current.set(location.busId, canonicalBusId);
+        }
       }
 
       // Check if marker already exists
-      let marker = markers.current[location.busId];
+      let marker = markers.current[canonicalBusId];
 
       if (marker) {
         // CRITICAL FIX: Simplified position update - no distance calculations
@@ -409,36 +472,65 @@ const StudentMap: React.FC<StudentMapProps> = ({
         }
         
         // CRITICAL FIX: Reduce popup update frequency from 30s to 60s to minimize DOM manipulation
-        const popup = popups.current[location.busId];
-        if (popup) {
+        const popup = popups.current[canonicalBusId];
+        if (popup && bus) {
           const lastUpdate = (popup as any)._lastUpdate || 0;
           const now = Date.now();
           
           if (now - lastUpdate > 60000) { // Increased from 30000ms to 60000ms
             popup.setHTML(`
-              <div class="p-2">
-                <h3 class="font-bold text-lg">🚌 Bus ${bus.busNumber}</h3>
-                <p class="text-sm text-gray-600">Route: ${bus.routeName}</p>
-                <p class="text-sm text-gray-600">Driver: ${bus.driverName}</p>
-                <p class="text-xs text-gray-500">
-                  Last Update: ${formatTime(location.timestamp)}
-                </p>
-                ${location.speed ? `<p class="text-xs text-green-600">Speed: ${location.speed} km/h</p>` : ''}
+              <div class="p-4 min-w-[220px]">
+                <div class="flex items-center mb-3 pb-2 border-b border-slate-200">
+                  <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white text-xl mr-3">
+                    🚌
+                  </div>
+                  <h3 class="font-bold text-slate-900 text-lg">Bus ${bus.busNumber}</h3>
+                </div>
+                <div class="space-y-2">
+                  <div class="flex items-center text-sm">
+                    <span class="text-slate-500 w-16">Route:</span>
+                    <span class="font-medium text-slate-900">${bus.routeName}</span>
+                  </div>
+                  <div class="flex items-center text-sm">
+                    <span class="text-slate-500 w-16">Driver:</span>
+                    <span class="font-medium text-slate-900">${bus.driverName}</span>
+                  </div>
+                  <div class="flex items-center text-xs text-slate-600 mt-3 pt-2 border-t border-slate-200">
+                    <span>Last Update: ${formatTime(location.timestamp)}</span>
+                  </div>
+                  ${location.speed ? `
+                    <div class="flex items-center justify-between mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                      <span class="text-xs font-medium text-green-700">Speed</span>
+                      <span class="text-sm font-bold text-green-900">${location.speed} km/h</span>
+                    </div>
+                  ` : ''}
+                </div>
               </div>
             `);
             (popup as any)._lastUpdate = now;
           }
         }
       } else {
-        // Create new marker only if it doesn't exist
+        // Create new marker only if it doesn't exist with custom HTML element
+        const el = document.createElement('div');
+        el.className = 'bus-marker-container';
+        el.innerHTML = `
+          <div class="bus-marker-pulse"></div>
+          <div class="bus-marker-icon-wrapper">
+            <div class="bus-marker-icon">🚌</div>
+          </div>
+        `;
+        el.style.width = '50px';
+        el.style.height = '50px';
+        
         marker = new maplibregl.Marker({
-          color: '#ef4444',
-          scale: 1.2,
+          element: el,
+          anchor: 'center',
         })
           .setLngLat([location.longitude, location.latitude])
           .addTo(map.current);
 
-        markers.current[location.busId] = marker;
+        markers.current[canonicalBusId] = marker;
 
         // CRITICAL FIX: Auto-center map on first active bus location
         logger.info('📍 New bus marker created - centering map', 'component', {
@@ -455,24 +547,43 @@ const StudentMap: React.FC<StudentMapProps> = ({
           offset: 25,
           closeButton: true,
           closeOnClick: false,
+          className: 'bus-popup-clean'
         }).setHTML(`
-          <div class="p-2">
-            <h3 class="font-bold text-lg">🚌 Bus ${bus.busNumber}</h3>
-            <p class="text-sm text-gray-600">Route: ${bus.routeName}</p>
-            <p class="text-sm text-gray-600">Driver: ${bus.driverName}</p>
-            <p class="text-xs text-gray-500">
-              Last Update: ${formatTime(location.timestamp)}
-            </p>
-            ${location.speed ? `<p class="text-xs text-green-600">Speed: ${location.speed} km/h</p>` : ''}
+          <div class="p-4 min-w-[220px]">
+            <div class="flex items-center mb-3 pb-2 border-b border-slate-200">
+              <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white text-xl mr-3">
+                🚌
+              </div>
+              <h3 class="font-bold text-slate-900 text-lg">Bus ${bus ? bus.busNumber : 'Unknown'}</h3>
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-center text-sm">
+                <span class="text-slate-500 w-16">Route:</span>
+                <span class="font-medium text-slate-900">${bus ? bus.routeName : 'Unknown'}</span>
+              </div>
+              <div class="flex items-center text-sm">
+                <span class="text-slate-500 w-16">Driver:</span>
+                <span class="font-medium text-slate-900">${bus ? bus.driverName : 'Unknown'}</span>
+              </div>
+              <div class="flex items-center text-xs text-slate-600 mt-3 pt-2 border-t border-slate-200">
+                <span>Last Update: ${formatTime(location.timestamp)}</span>
+              </div>
+              ${location.speed ? `
+                <div class="flex items-center justify-between mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                  <span class="text-xs font-medium text-green-700">Speed</span>
+                  <span class="text-sm font-bold text-green-900">${location.speed} km/h</span>
+                </div>
+              ` : ''}
+            </div>
           </div>
         `);
         
         marker.setPopup(popup);
-        popups.current[location.busId] = popup;
+        popups.current[canonicalBusId] = popup;
         (popup as any)._lastUpdate = Date.now();
       }
     },
-    [] // Empty deps - use refs instead
+    [getCanonicalBusId] // Use canonical mapping
   );
 
   // MEMORY LEAK FIX: Enhanced marker removal with popup cleanup
@@ -630,10 +741,106 @@ const StudentMap: React.FC<StudentMapProps> = ({
     }
   }, []); // Removed loadRoutes dependency to prevent infinite loops
 
-  // Load routes when component mounts
+  // Load routes when component mounts (no-op until shift chosen)
   useEffect(() => {
-    loadRoutes();
-  }, []); // Removed loadRoutes dependency to prevent infinite loops
+    if (!selectedShift) {
+      setRoutes([]);
+      setSelectedRoute('all');
+      return;
+    }
+    (async () => {
+      try {
+        logger.info('Loading routes for shift', 'StudentMap', { shiftName: selectedShift });
+        const res = await apiService.getRoutesByShift({ shiftName: selectedShift });
+        logger.info('Routes API response', 'StudentMap', { 
+          success: res?.success, 
+          dataType: Array.isArray(res?.data) ? 'array' : typeof res?.data,
+          dataLength: Array.isArray(res?.data) ? res.data.length : 0,
+          data: res?.data 
+        });
+        if (res?.success && Array.isArray(res.data)) {
+          setRoutes(res.data as any);
+          logger.info('Routes set successfully', 'StudentMap', { count: res.data.length, routes: res.data });
+          // If current selected route isn't in list, reset to 'all'
+          if (selectedRoute !== 'all' && !res.data.find(r => r.id === selectedRoute)) {
+            setSelectedRoute('all');
+          }
+        } else {
+          logger.warn('Invalid response format or empty data', 'StudentMap', { response: res });
+          setRoutes([]);
+          setSelectedRoute('all');
+        }
+      } catch (error) {
+        logger.error('Failed to load routes for shift', 'StudentMap', { 
+          shiftName: selectedShift, 
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        setRoutes([]);
+        setSelectedRoute('all');
+      }
+    })();
+  }, [selectedShift]);
+
+  // Load student route status when a route is selected
+  useEffect(() => {
+    (async () => {
+      if (!selectedRoute || selectedRoute === 'all') {
+        setRouteStatus(null);
+        return;
+      }
+      try {
+        const params: any = {};
+        if (selectedShift) params.shiftName = selectedShift;
+        const res = await apiService.getStudentRouteStatus(selectedRoute, params);
+        if (res?.success) {
+          setRouteStatus(res.data);
+        } else {
+          setRouteStatus({ tracking_active: false, stops: { completed: [], next: null, remaining: [] } });
+        }
+      } catch (e) {
+        setRouteStatus({ tracking_active: false, stops: { completed: [], next: null, remaining: [] } });
+      }
+    })();
+  }, [selectedRoute, selectedShift]);
+
+  // Always load static route stops when a route is selected
+  useEffect(() => {
+    (async () => {
+      if (!selectedRoute || selectedRoute === 'all') {
+        setRouteStops([]);
+        return;
+      }
+      try {
+        const res = await apiService.getRouteStops(selectedRoute);
+        if (res?.success && Array.isArray(res.data)) {
+          setRouteStops(res.data);
+        } else {
+          setRouteStops([]);
+        }
+      } catch {
+        setRouteStops([]);
+      }
+    })();
+  }, [selectedRoute]);
+
+  // Listen for driver stop updates and refresh when matching route changes
+  useEffect(() => {
+    const unsubscribe = onRouteStatusUpdated((routeId) => {
+      if (!selectedRoute || selectedRoute === 'all') return;
+      if (routeId !== selectedRoute) return;
+      // Re-fetch status for current selection
+      (async () => {
+        try {
+          const params: any = {};
+          if (selectedShift) params.shiftName = selectedShift;
+          const res = await apiService.getStudentRouteStatus(selectedRoute, params);
+          if (res?.success) setRouteStatus(res.data);
+        } catch {}
+      })();
+    });
+    return () => unsubscribe();
+  }, [selectedRoute, selectedShift]);
 
   // PRODUCTION FIX: Simplified WebSocket event subscription with event-driven state management
   useEffect(() => {
@@ -790,7 +997,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
     initializeSequentially();
 
     // PRODUCTION FIX: Set up handlers using refs to prevent useEffect re-runs
-    handleBusLocationUpdateRef.current = (location: BusLocation) => {
+    handleBusLocationUpdateRef.current = (location: WSBusLocation) => {
       // CRITICAL DEBUG: Detailed WebSocket location data logging
       logger.info('🔍 DETAILED DEBUG: WebSocket location received', 'component', { 
         busId: location.busId,
@@ -902,16 +1109,26 @@ const StudentMap: React.FC<StudentMapProps> = ({
       // This handles the race condition where location updates arrive before bus data
       requestAnimationFrame(() => {
         // Store location update regardless of bus existence
+        const canonicalBusId = getCanonicalBusId(location.busId);
+        const busLocation: BusLocation = {
+          busId: canonicalBusId,
+          driverId: (location as any).driverId || '',
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timestamp: location.timestamp,
+          speed: location.speed,
+          heading: location.heading,
+        };
         setLastBusLocations(prev => ({
           ...prev,
-          [location.busId]: location
+          [canonicalBusId]: busLocation
         }));
         
         // Call debounced update
         debouncedLocationUpdate(location);
         
         // Try to update marker (updateBusMarker handles missing bus gracefully)
-        updateBusMarker(location);
+        updateBusMarker({ ...location, busId: canonicalBusId });
         
         // PRODUCTION FIX: If bus doesn't exist, try to add it to cache for future updates
         if (!busExists) {
@@ -921,22 +1138,30 @@ const StudentMap: React.FC<StudentMapProps> = ({
           });
           
           // Create minimal bus info for cache to prevent future misses
+          const minimalLocation = {
+            busId: location.busId,
+            driverId: (location as any).driverId || '',
+            latitude: location.latitude,
+            longitude: location.longitude,
+            timestamp: location.timestamp,
+            speed: location.speed,
+            heading: location.heading,
+          } as BusLocation;
+          
           const minimalBusInfo: BusInfo = {
             busId: location.busId,
             busNumber: `Bus ${location.busId.slice(0, 8)}...`, // Truncated for display
             routeName: 'Loading...',
             driverName: 'Loading...',
-            driverId: location.driverId || '',
+            driverId: (location as any).driverId || '',
             routeId: '',
-            currentLocation: location,
-            status: 'active',
-            lastUpdated: new Date().toISOString(),
-            capacity: 0,
-            model: ''
+            currentLocation: minimalLocation,
           };
           
           // Add to cache but not to buses array (will be replaced when real data loads)
-          busInfoCache.current.set(location.busId, minimalBusInfo);
+          const canonical = getCanonicalBusId(location.busId);
+          busInfoCache.current.set(canonical, minimalBusInfo);
+          busIdAliases.current.set(location.busId, canonical);
           
           logger.info('📝 Added minimal bus info to cache for unknown bus', 'component', {
             busId: location.busId,
@@ -956,6 +1181,19 @@ const StudentMap: React.FC<StudentMapProps> = ({
 
     handleBusArrivingRef.current = (data: { busId: string; routeId: string; stopId: string; eta: number; timestamp: string }) => {
       logger.debug('🚌 Bus arriving:', 'component', { data });
+      // Refresh route status if the event matches the currently selected route
+      try {
+        if (selectedRoute && selectedRoute !== 'all' && data?.routeId === selectedRoute) {
+          (async () => {
+            const params: any = {};
+            if (selectedShift) params.shiftName = selectedShift;
+            const res = await apiService.getStudentRouteStatus(selectedRoute, params);
+            if (res?.success) setRouteStatus(res.data);
+          })();
+        }
+      } catch (e) {
+        // Soft-fail on refresh errors
+      }
     };
 
     // PRODUCTION FIX: Event-driven connection state management
@@ -1399,8 +1637,48 @@ const StudentMap: React.FC<StudentMapProps> = ({
     }));
   }, [routes]);
 
+  // Subscribe to selected route updates via WebSocket and add polling fallback
+  useEffect(() => {
+    // Only when a specific route is selected
+    if (!finalConfig.enableRealTime || !selectedRoute || selectedRoute === 'all') {
+      return;
+    }
+
+    // Subscribe to route updates
+    try {
+      unifiedWebSocketService.subscribeToRoutes([selectedRoute]);
+      logger.info('📡 Subscribed to route updates', 'StudentMap', { routeId: selectedRoute });
+    } catch (e) {
+      logger.warn('⚠️ Failed to subscribe to route updates', 'StudentMap', { error: e instanceof Error ? e.message : String(e) });
+    }
+
+    // Polling fallback for route status (in case WS events are not received)
+    const POLL_INTERVAL = 15000; // 15s
+    const poller = setInterval(async () => {
+      try {
+        const params: any = {};
+        if (selectedShift) params.shiftName = selectedShift;
+        const res = await apiService.getStudentRouteStatus(selectedRoute, params);
+        if (res?.success) setRouteStatus(res.data);
+      } catch {
+        // Ignore polling errors
+      }
+    }, POLL_INTERVAL);
+
+    return () => {
+      // Cleanup
+      clearInterval(poller);
+      try {
+        unifiedWebSocketService.unsubscribeFromRoutes([selectedRoute]);
+        logger.info('📴 Unsubscribed from route updates', 'StudentMap', { routeId: selectedRoute });
+      } catch (e) {
+        // Ignore unsubscribe errors
+      }
+    };
+  }, [finalConfig.enableRealTime, selectedRoute, selectedShift]);
+
   return (
-    <div className={`student-map-container ${className}`}>
+    <div className={`student-map-container ${className} bg-white`}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1416,16 +1694,16 @@ const StudentMap: React.FC<StudentMapProps> = ({
           transition={{ duration: 0.3, ease: 'easeInOut' }}
           className="flex-shrink-0 h-full relative z-20"
         >
-          <GlassyCard className="h-full student-map-sidebar border-r border-gray-300">
+          <div className="h-full bg-white border-r border-slate-200 shadow-sm">
             <div className="p-4">
               {/* Header */}
               <div className="flex items-center justify-between mb-4">
                 {!isNavbarCollapsed && (
-                  <h2 className="text-xl font-bold text-white">🚌 Live Bus Tracking</h2>
+                  <h2 className="text-xl font-bold text-slate-900">🚌 Live Bus Tracking</h2>
                 )}
                 <button
                   onClick={() => setIsNavbarCollapsed(!isNavbarCollapsed)}
-                  className="text-white hover:text-blue-300 transition-colors ml-auto"
+                  className="text-slate-600 hover:text-slate-900 transition-colors ml-auto"
                   title={isNavbarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
                 >
                   {isNavbarCollapsed ? '▶️' : '◀️'}
@@ -1435,25 +1713,25 @@ const StudentMap: React.FC<StudentMapProps> = ({
               {!isNavbarCollapsed && (
               <>
                 {/* Connection Status */}
-                <div className="mb-4 p-3 bg-blue-500 bg-opacity-20 rounded-lg">
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <div className={`w-3 h-3 rounded-full ${
-                      isConnected ? 'bg-green-400' : 'bg-red-400'
+                      isConnected ? 'bg-green-500' : 'bg-red-500'
                     }`} />
-                    <span className="text-sm text-white">
+                    <span className="text-sm text-slate-900 font-medium">
                       {isConnected ? 'Connected' : 'Disconnected'}
                     </span>
                   </div>
-                  <p className="text-xs text-blue-200 mt-1">
+                  <p className="text-xs text-slate-600 mt-1">
                     {buses.length} buses • {busesWithLiveLocations.length} active
                   </p>
                 </div>
 
-                {/* Route Filter */}
+                {/* Route Filter (requires shift selection) */}
                 <div className="mb-4">
                   <button
                     onClick={() => setIsRouteFilterOpen(!isRouteFilterOpen)}
-                    className="flex items-center justify-between w-full p-2 bg-gray-700 bg-opacity-50 rounded-lg text-white hover:bg-opacity-70 transition-colors"
+                    className="flex items-center justify-between w-full p-2 bg-slate-100 rounded-lg text-slate-900 hover:bg-slate-200 transition-colors"
                   >
                     <span className="font-medium">🛣️ Routes</span>
                     <span>{isRouteFilterOpen ? '▼' : '▶'}</span>
@@ -1461,15 +1739,20 @@ const StudentMap: React.FC<StudentMapProps> = ({
                   
                   {isRouteFilterOpen && (
                     <div className="mt-2 space-y-1">
+                      {!selectedShift && (
+                        <div className="text-slate-600 text-sm p-2">Select a shift to view active routes.</div>
+                      )}
+                      {selectedShift && (
+                        <>
                       <button
                         onClick={() => setSelectedRoute('all')}
                         className={`w-full text-left p-2 rounded text-sm transition-colors ${
                           selectedRoute === 'all'
-                            ? 'bg-blue-500 text-white'
-                            : 'text-gray-300 hover:bg-gray-600'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-700 hover:bg-slate-100'
                         }`}
                       >
-                        All Routes ({buses.length})
+                            All Active Routes ({routes.length})
                       </button>
                       {routeOptions.map((route) => (
                         <button
@@ -1477,15 +1760,33 @@ const StudentMap: React.FC<StudentMapProps> = ({
                           onClick={() => setSelectedRoute(route.value)}
                           className={`w-full text-left p-2 rounded text-sm transition-colors ${
                             selectedRoute === route.value
-                              ? 'bg-blue-500 text-white'
-                              : 'text-gray-300 hover:bg-gray-600'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-slate-700 hover:bg-slate-100'
                           }`}
                         >
                           {route.label}
                         </button>
                       ))}
+                        </>
+                      )}
                     </div>
                   )}
+                </div>
+
+                {/* Shift Filter (required) */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between w-full p-2 bg-slate-100 rounded-lg">
+                    <span className="font-medium text-slate-900">⏱️ Shift</span>
+                    <select
+                      value={selectedShift}
+                      onChange={(e) => setSelectedShift(e.target.value as any)}
+                      className="ml-2 bg-white text-slate-900 text-sm rounded-lg px-3 py-1 border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="" disabled>Select shift</option>
+                      <option value="Day">Day</option>
+                      <option value="Afternoon">Afternoon</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Buses list with Center on bus action */}
@@ -1501,23 +1802,23 @@ const StudentMap: React.FC<StudentMapProps> = ({
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
-                            className="p-3 bg-gray-700 bg-opacity-30 rounded-lg hover:bg-opacity-50 transition-colors cursor-pointer"
+                            className="p-3 bg-white border border-slate-200 rounded-lg hover:border-blue-400 hover:shadow-sm transition-all cursor-pointer"
                             onClick={() => handleCenterOnBus(busId)}
                           >
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center space-x-2">
                                 <span className="text-lg">🚌</span>
-                                <span className="font-medium text-white">
+                                <span className="font-medium text-slate-900">
                                   {bus.busNumber}
                                 </span>
                               </div>
                               <div className="flex items-center space-x-2">
-                                <div className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                                <div className="text-xs text-slate-700 bg-slate-100 px-2 py-1 rounded">
                                   {bus.eta ? `${bus.eta} min` : 'ETA: --'}
                                 </div>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleCenterOnBus(busId); }}
-                                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                                   aria-label={`Center map on ${bus.busNumber}`}
                                   title={`Center on ${bus.busNumber}`}
                                 >
@@ -1528,15 +1829,15 @@ const StudentMap: React.FC<StudentMapProps> = ({
 
                             {/* Bus Details */}
                             <div className="space-y-1">
-                              <div className="text-xs text-gray-600">
+                              <div className="text-xs text-slate-600">
                                 📍 Route: {bus.routeName}
                               </div>
-                              <div className="text-xs text-gray-600">
+                              <div className="text-xs text-slate-600">
                                 👨‍💼 Driver: {bus.driverName}
                               </div>
                               {location && (
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="text-green-600">
+                                  <span className="text-green-600 font-medium">
                                     🕐{' '}
                                     {new Date(
                                       location.timestamp
@@ -1545,7 +1846,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
                                       minute: '2-digit',
                                     })}
                                   </span>
-                                  <span className="text-blue-600">
+                                  <span className="text-blue-600 font-medium">
                                     {location.speed
                                       ? `${location.speed} km/h`
                                       : 'Speed: --'}
@@ -1562,7 +1863,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
                 </>
               )}
             </div>
-          </GlassyCard>
+          </div>
         </motion.div>
 
         {/* Right Side - Map Container */}
@@ -1585,10 +1886,10 @@ const StudentMap: React.FC<StudentMapProps> = ({
           
           {/* Loading overlay */}
           {isLoading && (
-            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
-              <div className="text-white text-center">
+            <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-10">
+              <div className="text-slate-900 text-center">
                 <div className="loading-spinner mx-auto mb-4" />
-                <p>Loading map...</p>
+                <p className="font-medium">Loading map...</p>
               </div>
             </div>
           )}
@@ -1596,17 +1897,94 @@ const StudentMap: React.FC<StudentMapProps> = ({
           {/* Error overlay */}
           {connectionError && (
             <div className="absolute top-4 right-4 z-10">
-              <GlassyCard className="p-4 bg-red-500 bg-opacity-20 border border-red-400">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-xl shadow-lg">
                 <div className="flex items-center space-x-2">
-                  <span className="text-red-500">⚠️</span>
+                  <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                   <div>
-                    <h3 className="font-semibold text-red-700">
+                    <h3 className="font-semibold text-red-900">
                       Connection Error
                     </h3>
                     <p className="text-sm text-red-700 mt-1">{connectionError}</p>
                   </div>
                 </div>
-              </GlassyCard>
+              </div>
+            </div>
+          )}
+
+          {/* Route status panel for students */}
+          {selectedRoute !== 'all' && (
+            <div className="absolute bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 z-10">
+              <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-slate-900 font-semibold">🛑 Route Stops</h3>
+                  <button
+                    className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-200 transition-colors"
+                    onClick={async () => {
+                      try {
+                        const params: any = {};
+                        if (selectedShift) params.shiftName = selectedShift;
+                        const res = await apiService.getStudentRouteStatus(selectedRoute, params);
+                        if (res?.success) setRouteStatus(res.data);
+                        const stopsRes = await apiService.getRouteStops(selectedRoute);
+                        if (stopsRes?.success) setRouteStops(stopsRes.data);
+                      } catch {}
+                    }}
+                  >
+                    Refresh
+                  </button>
+                </div>
+                {!routeStatus?.tracking_active ? (
+                  <div className="space-y-3">
+                    <div className="text-slate-700 text-sm">Tracking is not active for this route{selectedShift ? ` (${selectedShift})` : ''}.</div>
+                    <div>
+                      <div className="text-slate-700 text-sm mb-1 font-medium">All Stops</div>
+                      <div className="flex flex-wrap gap-2">
+                        {routeStops.map((s:any) => (
+                          <div key={s.id} className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+                            {s.sequence}. {s.name || `Stop #${s.sequence}`}
+                          </div>
+                        ))}
+                        {routeStops.length === 0 && (
+                          <div className="text-slate-500 text-sm">No stops available</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-slate-700 text-sm mb-1 font-medium">Next Stop</div>
+                      <div className="px-3 py-2 rounded-lg bg-blue-50 text-blue-900 border border-blue-200 font-medium">
+                        {routeStatus?.stops.next?.name || `Stop #${routeStatus?.stops.next?.sequence || '-'}`}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-700 text-sm mb-1 font-medium">Remaining</div>
+                      <div className="flex flex-wrap gap-2">
+                        {(routeStatus?.stops.remaining || []).map((s:any) => (
+                          <div key={s.id} className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+                            {s.sequence}. {s.name || `Stop #${s.sequence}`}
+                          </div>
+                        ))}
+                        {routeStatus?.stops.remaining?.length === 0 && <div className="text-slate-500 text-sm">None</div>}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-700 text-sm mb-1 font-medium">Completed</div>
+                      <div className="flex flex-wrap gap-2">
+                        {(routeStatus?.stops.completed || []).map((s:any) => (
+                          <div key={s.id} className="text-xs px-2 py-1 rounded-lg bg-slate-50 text-slate-400 line-through border border-slate-200">
+                            {s.sequence}. {s.name || `Stop #${s.sequence}`}
+                          </div>
+                        ))}
+                        {routeStatus?.stops.completed?.length === 0 && <div className="text-slate-500 text-sm">None</div>}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

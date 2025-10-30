@@ -10,6 +10,7 @@ import DriverHeader from './driver/DriverHeader';
 import StudentMap from './StudentMap';
 import DriverControls from './driver/DriverControls';
 import DriverInstructions from './driver/DriverInstructions';
+import DriverStops from './driver/DriverStops';
 import DriverLogin from './DriverLogin';
 // Removed old DriverErrorBoundary - using new DriverDashboardErrorBoundary
 import DriverDashboardErrorBoundary from './error/DriverDashboardErrorBoundary';
@@ -59,6 +60,23 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
     busAssignment?.driver_id,
     busAssignment?.bus_id
   );
+
+  // Stops state from backend assignment
+  const [stopsState, setStopsState] = React.useState<{ completed: any[]; next: any | null; remaining: any[] } | null>(null);
+  const [currentShiftName, setCurrentShiftName] = React.useState<string | null>(null);
+  const refreshStops = React.useCallback(async () => {
+    if (!isAuthenticated || !busAssignment) return;
+    const { apiService } = await import('../services/api');
+    const res = await apiService.getDriverAssignmentWithStops(busAssignment.driver_id);
+    if (res?.success && res.data) {
+      setStopsState(res.data.stops);
+      setCurrentShiftName((res.data as any).shift_name || null);
+    }
+  }, [isAuthenticated, busAssignment?.driver_id]);
+
+  React.useEffect(() => {
+    refreshStops();
+  }, [refreshStops]);
   
   // Convert tracking state to location state format for UI components
   const locationState = useMemo(() => ({
@@ -412,71 +430,7 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
 
   // REMOVED: Old tracking handlers - now using useDriverTracking hook
 
-  const handleSignOut = useCallback(async () => {
-    try {
-      logger.info('🚪 Driver sign-out initiated', 'UnifiedDriverInterface');
-      
-      // Stop tracking first
-      driverActionsRef.current.stopTracking();
-      
-      // Disconnect WebSocket if connected
-      if (isWebSocketConnected) {
-        try {
-          await unifiedWebSocketService.disconnect();
-          logger.info('🔌 WebSocket disconnected during sign-out', 'UnifiedDriverInterface');
-        } catch (wsError) {
-          logger.warn('⚠️ Error disconnecting WebSocket during sign-out', 'UnifiedDriverInterface', { error: wsError });
-        }
-      }
-      
-      // Call logout from context
-      await logout();
-      
-      // Also call authService.signOut to ensure all tokens are cleared
-      await authService.signOut();
-      
-      // Clear all localStorage and sessionStorage items related to auth
-      try {
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-') || key.includes('driver_'))) {
-            keysToRemove.push(key);
-          }
-        }
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-        
-        // Clear sessionStorage as well
-        for (let i = 0; i < sessionStorage.length; i++) {
-          const key = sessionStorage.key(i);
-          if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-') || key.includes('driver_'))) {
-            sessionStorage.removeItem(key);
-          }
-        }
-        
-        logger.info('✅ All authentication data cleared from storage', 'UnifiedDriverInterface');
-      } catch (storageError) {
-        logger.warn('⚠️ Error clearing storage during sign-out', 'UnifiedDriverInterface', { error: storageError });
-      }
-      
-      // Navigate to landing page
-      logger.info('🔄 Redirecting to landing page', 'UnifiedDriverInterface');
-      navigate('/', { replace: true });
-    } catch (err) {
-      const appError = errorHandler.handleError(err, 'UnifiedDriverInterface-sign-out');
-      logger.error('❌ Sign-out error', 'UnifiedDriverInterface', { error: appError });
-      
-      // Even if there's an error, try to navigate to landing page
-      try {
-        navigate('/', { replace: true });
-      } catch (navError) {
-        logger.error('❌ Navigation error during sign-out', 'UnifiedDriverInterface', { error: navError });
-        // Last resort: force reload to landing page
-        window.location.href = '/';
-      }
-    }
-  }, [logout, navigate, isWebSocketConnected]);
-
+  // Add handleRetryConnection
   const handleRetryConnection = useCallback(async () => {
     try {
       driverActionsRef.current.setInitializationState({ initializationError: null });
@@ -488,6 +442,68 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
       });
     }
   }, [retryConnection]);
+
+  // Reintroduce logoutRef for current logout
+  const logoutRef = useRef(logout);
+  logoutRef.current = logout;
+
+  // Robust sign-out using refs to avoid stale closures
+  const handleSignOut = useCallback(async () => {
+    try {
+      logger.info('🚪 Driver sign-out initiated', 'UnifiedDriverInterface');
+
+      // Stop tracking first (soft-fail)
+      try { driverActionsRef.current.stopTracking?.(); } catch (err) { logger.warn('Tracking stop on signout failed', err ? String(err) : undefined); }
+
+      // Disconnect WebSocket (soft-fail)
+      try { await unifiedWebSocketService.disconnect?.(); } catch (wsError) { logger.warn('WebSocket signout disconnect error', wsError ? String(wsError) : undefined); }
+
+      // Context logout (use latest ref)
+      try { await logoutRef.current?.(); } catch (err) { logger.warn('Driver context logout not completed', err ? String(err) : undefined); }
+
+      // Global auth sign out (soft-fail)
+      try { await authService.signOut?.(); } catch (err) { logger.warn('authService.signOut failed', err ? String(err) : undefined); }
+
+      // Clear auth-related storage keys
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const localKeys: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-') || key.includes('driver_'))) {
+              localKeys.push(key);
+            }
+          }
+          localKeys.forEach(k => localStorage.removeItem(k));
+        }
+        if (typeof sessionStorage !== 'undefined') {
+          const sessionKeys: string[] = [];
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-') || key.includes('driver_'))) {
+              sessionKeys.push(key);
+            }
+          }
+          sessionKeys.forEach(k => sessionStorage.removeItem(k));
+        }
+        logger.info('✅ All authentication-related storage cleared', 'UnifiedDriverInterface');
+      } catch (storageError) {
+        logger.warn('⚠️ Error clearing storage during sign-out', storageError ? String(storageError) : undefined);
+      }
+
+      // Optional: reset store if available
+      if ((driverActionsRef.current as any).reset && typeof (driverActionsRef.current as any).reset === 'function') {
+        try { (driverActionsRef.current as any).reset(); } catch (e) { logger.warn('Driver store reset failed', e ? String(e) : undefined); }
+      }
+
+      // Final redirect
+      logger.info('🔄 Redirecting to /driver-login', 'UnifiedDriverInterface');
+      window.location.replace('/driver-login');
+    } catch (err) {
+      logger.error('❌ Sign-out fatal error', 'UnifiedDriverInterface', { error: err ? String(err) : undefined });
+      window.location.replace('/driver-login');
+    }
+  }, []);
 
   // Memoized StudentMap configuration for better performance
   const studentMapConfig = useMemo(() => ({
@@ -753,6 +769,7 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
             onRefreshAssignment={refreshAssignment}
             reconnectAttempts={0}
             lastHeartbeat={Date.now()}
+            shiftName={currentShiftName || undefined}
           />
 
           {/* Test Mode Toggle */}
@@ -873,8 +890,6 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                 {isAuthenticated && busAssignment ? (
                   <StudentMap 
                     config={studentMapConfig}
-                    driverLocation={memoizedDriverLocation}
-                    isDriverTracking={locationState.isTracking}
                   />
                 ) : (
                   <div className="h-full flex items-center justify-center bg-gray-100 rounded-lg">
@@ -898,8 +913,18 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                 isTracking={tracking.isTracking}
                 isAuthenticated={isAuthenticated}
                 connectionStatus={tracking.connectionStatus === 'reconnecting' ? 'connecting' : tracking.connectionStatus}
-                onStartTracking={tracking.startTracking}
-                onStopTracking={tracking.stopTracking}
+                onStartTracking={async () => {
+                  const { apiService } = await import('../services/api');
+                  await apiService.startTracking(busAssignment?.driver_id);
+                  await tracking.startTracking();
+                  await refreshStops();
+                }}
+                onStopTracking={async () => {
+                  const { apiService } = await import('../services/api');
+                  await apiService.stopTracking(busAssignment?.driver_id);
+                  tracking.stopTracking();
+                  await refreshStops();
+                }}
                 lastUpdateTime={tracking.lastUpdateTime ? tracking.lastUpdateTime.toString() : null}
                 updateCount={tracking.updateCount}
                 locationError={tracking.locationError}
@@ -909,6 +934,37 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                 accuracyLevel={tracking.accuracyLevel}
                 accuracyMessage={tracking.accuracyMessage}
                 accuracyWarning={tracking.accuracyWarning}
+              />
+
+              {/* Stops List */}
+              <DriverStops
+                completed={stopsState?.completed || []}
+                remaining={stopsState?.remaining || []}
+                next={stopsState?.next || null}
+                disabled={!isAuthenticated}
+                onRefresh={refreshStops}
+                onReachStop={async (stopId) => {
+                  const { apiService } = await import('../services/api');
+                  const { notifyRouteStatusUpdated } = await import('../services/RouteStatusEvents');
+                  try {
+                    // Ensure tracking session exists first (idempotent on backend)
+                    await apiService.startTracking(busAssignment?.driver_id);
+                    await apiService.markStopReached(busAssignment?.driver_id, stopId);
+                    // Notify students to refresh route status
+                    if (busAssignment?.route_id) notifyRouteStatusUpdated(busAssignment.route_id);
+                  } catch (e) {
+                    // Attempt to auto-start tracking, then retry once
+                    try {
+                      await apiService.startTracking(busAssignment?.driver_id);
+                      await apiService.markStopReached(busAssignment?.driver_id, stopId);
+                      if (busAssignment?.route_id) notifyRouteStatusUpdated(busAssignment.route_id);
+                    } catch {
+                      // Swallow; UI stays unchanged if both attempts fail
+                    }
+                  } finally {
+                    await refreshStops();
+                  }
+                }}
               />
 
               <DriverInstructions />

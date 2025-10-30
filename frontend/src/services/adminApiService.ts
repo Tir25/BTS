@@ -184,6 +184,31 @@ class AdminApiService {
     }
   }
 
+  // ===== SHIFTS MANAGEMENT ENDPOINTS =====
+  async getShifts(): Promise<ApiResponse<Array<{ id: string; name: string; is_active?: boolean; start_time?: string; end_time?: string; description?: string }>>> {
+    return this.makeRequest('/shifts');
+  }
+
+  async createShift(shift: { name: string; start_time?: string; end_time?: string; description?: string; is_active?: boolean }): Promise<ApiResponse<any>> {
+    return this.makeRequest('/shifts', {
+      method: 'POST',
+      body: JSON.stringify(shift),
+    });
+  }
+
+  async updateShift(id: string, shift: Partial<{ name: string; start_time?: string; end_time?: string; description?: string; is_active?: boolean }>): Promise<ApiResponse<any>> {
+    return this.makeRequest(`/shifts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(shift),
+    });
+  }
+
+  async deleteShift(id: string): Promise<ApiResponse<any>> {
+    return this.makeRequest(`/shifts/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // ===== ANALYTICS ENDPOINTS =====
 
   async getAnalytics(): Promise<ApiResponse<AnalyticsData>> {
@@ -422,6 +447,7 @@ class AdminApiService {
     driver_id: string;
     bus_id: string;
     route_id: string;
+    shift_id?: string;
     notes?: string;
   }): Promise<ApiResponse<any>> {
     return this.makeRequest<any>('/production-assignments', {
@@ -435,6 +461,7 @@ class AdminApiService {
     assignmentData: {
       driver_id?: string;
       route_id?: string;
+      shift_id?: string;
       notes?: string;
     }
   ): Promise<ApiResponse<any>> {
@@ -471,6 +498,38 @@ class AdminApiService {
     return this.makeRequest<any>('/production-assignments/bulk', {
       method: 'POST',
       body: JSON.stringify({ assignments }),
+    });
+  }
+
+  // ===== ROUTE STOPS MANAGEMENT =====
+  async getRouteStops(routeId: string): Promise<ApiResponse<Array<{ id: string; route_id: string; stop_id?: string; name?: string; sequence: number; is_active?: boolean }>>> {
+    return this.makeRequest(`/route-stops?routeId=${encodeURIComponent(routeId)}`);
+  }
+
+  async createRouteStop(routeId: string, stop: { name: string; sequence?: number; latitude?: number; longitude?: number; is_active?: boolean }): Promise<ApiResponse<any>> {
+    return this.makeRequest('/route-stops', {
+      method: 'POST',
+      body: JSON.stringify({ route_id: routeId, ...stop }),
+    });
+  }
+
+  async updateRouteStop(id: string, stop: Partial<{ name: string; sequence: number; latitude?: number; longitude?: number; is_active?: boolean }>): Promise<ApiResponse<any>> {
+    return this.makeRequest(`/route-stops/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(stop),
+    });
+  }
+
+  async deleteRouteStop(id: string): Promise<ApiResponse<any>> {
+    return this.makeRequest(`/route-stops/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async reorderRouteStops(routeId: string, orderedIds: string[]): Promise<ApiResponse<any>> {
+    return this.makeRequest('/route-stops/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ route_id: routeId, ordered_ids: orderedIds }),
     });
   }
 }

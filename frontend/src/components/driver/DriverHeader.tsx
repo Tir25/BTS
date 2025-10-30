@@ -1,7 +1,7 @@
 import React from 'react';
 import { BusInfo, DriverHeaderProps } from '../../types/driver';
 
-const DriverHeader: React.FC<DriverHeaderProps> = ({
+const DriverHeader: React.FC<DriverHeaderProps & { shiftName?: string | null }> = ({
   busInfo,
   connectionStatus,
   onSignOut,
@@ -9,6 +9,7 @@ const DriverHeader: React.FC<DriverHeaderProps> = ({
   onRefreshAssignment,
   reconnectAttempts = 0,
   lastHeartbeat = 0,
+  shiftName = null,
 }) => {
   const getConnectionStatusColor = () => {
     switch (connectionStatus) {
@@ -84,6 +85,14 @@ const DriverHeader: React.FC<DriverHeaderProps> = ({
                     {busInfo?.route_name || 'N/A'}
                   </span>
                 </span>
+                {shiftName && (
+                  <span className="text-yellow-300 truncate">
+                    ⏱️ Shift:{' '}
+                    <span className="font-semibold text-white">
+                      {shiftName}
+                    </span>
+                  </span>
+                )}
               </div>
             </div>
           </div>

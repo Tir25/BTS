@@ -45,13 +45,22 @@ class ApiService implements IApiService {
       let response;
 
       if (method === 'GET') {
-        response = await resilientApiService.get<T>(endpoint, { headers });
+        const isVolatile = (
+          endpoint.startsWith('/tracking/assignment') ||
+          endpoint.startsWith('/student/route-status') ||
+          endpoint.startsWith('/student/routes-by-shift') ||
+          endpoint.startsWith('/student/active-routes')
+        );
+        response = await resilientApiService.get<T>(endpoint, { headers, useOfflineStorage: !isVolatile, retryOnFailure: !isVolatile });
       } else if (method === 'POST') {
         const body = options?.body
           ? JSON.parse(options.body as string)
           : undefined;
         response = await resilientApiService.post<T>(endpoint, body, {
           headers,
+          // Avoid offline queue and relative-origin sync for critical writes
+          useOfflineStorage: false,
+          retryOnFailure: false,
         });
       } else if (method === 'PUT') {
         const body = options?.body
@@ -59,9 +68,11 @@ class ApiService implements IApiService {
           : undefined;
         response = await resilientApiService.put<T>(endpoint, body, {
           headers,
+          useOfflineStorage: false,
+          retryOnFailure: false,
         });
       } else if (method === 'DELETE') {
-        response = await resilientApiService.delete<T>(endpoint, { headers });
+        response = await resilientApiService.delete<T>(endpoint, { headers, useOfflineStorage: false, retryOnFailure: false });
       } else {
         throw new Error(`Unsupported HTTP method: ${method}`);
       }
@@ -670,6 +681,85 @@ class ApiService implements IApiService {
         timestamp: new Date().toISOString(),
       };
     }
+  }
+
+  // ===== Tracking endpoints =====
+  async startTracking(driverId?: string, shiftId?: string): Promise<{ success: boolean }>{
+    const body: any = {};
+    if (driverId) body.driverId = driverId;
+    if (shiftId) body.shiftId = shiftId;
+    const res = await this.backendRequest<{ success: boolean }>(`/tracking/start`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    return { success: !!(res as any).success };
+  }
+
+  async stopTracking(driverId?: string): Promise<{ success: boolean }>{
+    const body: any = {};
+    if (driverId) body.driverId = driverId;
+    const res = await this.backendRequest<{ success: boolean }>(`/tracking/stop`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    return { success: !!(res as any).success };
+  }
+
+  async markStopReached(driverId: string | undefined, stopId: string): Promise<{ success: boolean; last_stop_sequence?: number }>{
+    const body: any = { stopId };
+    if (driverId) body.driverId = driverId;
+    return await this.backendRequest<{ success: boolean; data?: { last_stop_sequence: number } }>(`/tracking/stop-reached`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }).then((r: any) => ({ success: !!r.success, last_stop_sequence: r?.data?.last_stop_sequence }));
+  }
+
+  async getDriverAssignmentWithStops(driverId?: string): Promise<{
+    success: boolean;
+    data?: { route_id: string; bus_id: string; shift_id: string | null; tracking_active: boolean; stops: { completed: any[]; next: any | null; remaining: any[] } };
+  }>{
+    const q = driverId ? `?driverId=${encodeURIComponent(driverId)}` : '';
+    return await this.backendRequest<any>(`/tracking/assignment${q}`, { method: 'GET' });
+  }
+
+  async getStudentRouteStatus(routeId: string, opts?: { shiftName?: string; shiftId?: string }): Promise<{
+    success: boolean;
+    data: { tracking_active: boolean; session?: any; stops: { completed: any[]; next: any | null; remaining: any[] } };
+  }>{
+    const search = new URLSearchParams();
+    search.set('routeId', routeId);
+    if (opts?.shiftId) search.set('shiftId', opts.shiftId);
+    if (opts?.shiftName) search.set('shiftName', opts.shiftName);
+    return await this.backendRequest<any>(`/student/route-status?${search.toString()}`, { method: 'GET' });
+  }
+
+  async getRouteStops(routeId: string): Promise<{
+    success: boolean;
+    data: Array<{ id: string; name?: string; sequence: number }>;
+  }>{
+    const search = new URLSearchParams();
+    search.set('routeId', routeId);
+    return await this.backendRequest<any>(`/student/route-stops?${search.toString()}`, { method: 'GET' });
+  }
+
+  async getActiveRoutesByShift(opts: { shiftName?: string; shiftId?: string }): Promise<{
+    success: boolean;
+    data: Array<{ id: string; name: string }>;
+  }>{
+    const search = new URLSearchParams();
+    if (opts.shiftId) search.set('shiftId', opts.shiftId);
+    if (opts.shiftName) search.set('shiftName', opts.shiftName);
+    return await this.backendRequest<any>(`/student/active-routes?${search.toString()}`, { method: 'GET' });
+  }
+
+  async getRoutesByShift(opts: { shiftName?: string; shiftId?: string }): Promise<{
+    success: boolean;
+    data: Array<{ id: string; name: string }>;
+  }>{
+    const search = new URLSearchParams();
+    if (opts.shiftId) search.set('shiftId', opts.shiftId);
+    if (opts.shiftName) search.set('shiftName', opts.shiftName);
+    return await this.backendRequest<any>(`/student/routes-by-shift?${search.toString()}`, { method: 'GET' });
   }
 
   async getLiveLocationsInViewport(

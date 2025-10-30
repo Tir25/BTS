@@ -5,6 +5,7 @@ import { RouteController } from '../controllers/routeController';
 import { ConsolidatedAdminService as AdminService } from '../services/ConsolidatedAdminService';
 import { logger } from '../utils/logger';
 import { backendDriverVerificationService } from '../services/BackendDriverVerificationService';
+import { supabaseAdmin } from '../config/supabase';
 
 const router = express.Router();
 
@@ -549,6 +550,188 @@ router.put('/routes/:routeId', RouteController.updateRoute);
 
 // Delete route
 router.delete('/routes/:routeId', RouteController.deleteRoute);
+
+// ===== ADMIN DIAGNOSTICS =====
+router.get('/diagnostics', async (req, res) => {
+  try {
+    const [{ data: shifts, error: e1 }, { data: rs, error: e2 }] = await Promise.all([
+      supabaseAdmin.from('shifts').select('id').limit(1),
+      supabaseAdmin.from('route_stops').select('id').limit(1)
+    ]);
+    if (e1 || e2) throw (e1 || e2);
+    res.json({ success: true, data: { shifts_count: (shifts || []).length, route_stops_count: (rs || []).length } });
+  } catch (error: any) {
+    logger.error('Diagnostics error', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Diagnostics failed', message: error?.message });
+  }
+});
+
+// ===== SHIFTS MANAGEMENT =====
+router.get('/shifts', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin.from('shifts').select('id, name, start_time, end_time, description').order('name');
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error: any) {
+    logger.error('Error fetching shifts', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Failed to fetch shifts', message: error?.message });
+  }
+});
+
+router.post('/shifts', async (req, res) => {
+  try {
+    const { name, start_time, end_time, description, is_active } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: 'Name required' });
+    const { data, error } = await supabaseAdmin
+      .from('shifts')
+      .insert({ name, start_time, end_time, description })
+      .select('id, name, start_time, end_time, description')
+      .single();
+    if (error) throw error;
+    res.status(201).json({ success: true, data });
+  } catch (error: any) {
+    logger.error('Error creating shift', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Failed to create shift', message: error?.message });
+  }
+});
+
+router.put('/shifts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, start_time, end_time, description, is_active } = req.body;
+    const update: any = {};
+    if (name !== undefined) update.name = name;
+    if (start_time !== undefined) update.start_time = start_time;
+    if (end_time !== undefined) update.end_time = end_time;
+    if (description !== undefined) update.description = description;
+    const { data, error } = await supabaseAdmin
+      .from('shifts')
+      .update(update)
+      .eq('id', id)
+      .select('id, name, start_time, end_time, description')
+      .single();
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error: any) {
+    logger.error('Error updating shift', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Failed to update shift', message: error?.message });
+  }
+});
+
+router.delete('/shifts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabaseAdmin.from('shifts').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error deleting shift', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Failed to delete shift', message: error?.message });
+  }
+});
+
+// ===== ROUTE STOPS MANAGEMENT =====
+router.get('/route-stops', async (req, res) => {
+  try {
+    const routeId = String(req.query.routeId || '');
+    if (!routeId) return res.status(400).json({ success: false, error: 'routeId required' });
+    const { data, error } = await supabaseAdmin
+      .from('route_stops')
+      .select('id, route_id, sequence, is_active, bus_stops:stop_id(name)')
+      .eq('route_id', routeId)
+      .order('sequence');
+    if (error) throw error;
+    const mapped = (data || []).map((r: any) => ({ id: r.id, route_id: r.route_id, name: r.bus_stops?.name, sequence: r.sequence, is_active: r.is_active }));
+    res.json({ success: true, data: mapped });
+  } catch (error: any) {
+    logger.error('Error fetching route stops', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Failed to fetch route stops', message: error?.message });
+  }
+});
+
+router.post('/route-stops', async (req, res) => {
+  try {
+    const { route_id, name } = req.body;
+    if (!route_id || !name) return res.status(400).json({ success: false, error: 'route_id and name required' });
+    // Create or find bus stop
+    const { data: busStop } = await supabaseAdmin
+      .from('bus_stops')
+      .insert({ name, is_active: true })
+      .select('id')
+      .single();
+    const stopId = busStop?.id;
+    // Determine next sequence
+    const { data: maxStop } = await supabaseAdmin
+      .from('route_stops')
+      .select('sequence')
+      .eq('route_id', route_id)
+      .order('sequence', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextSeq = (maxStop?.sequence || 0) + 1;
+    const { data, error } = await supabaseAdmin
+      .from('route_stops')
+      .insert({ route_id, stop_id: stopId, sequence: nextSeq, is_active: true })
+      .select('id')
+      .single();
+    if (error) throw error;
+    res.status(201).json({ success: true, data });
+  } catch (error: any) {
+    logger.error('Error creating route stop', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Failed to create route stop', message: error?.message });
+  }
+});
+
+router.put('/route-stops/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, sequence, is_active } = req.body;
+    // Load route_stops to get stop_id
+    const { data: rs } = await supabaseAdmin.from('route_stops').select('stop_id').eq('id', id).single();
+    if (!rs) return res.status(404).json({ success: false, error: 'Route stop not found' });
+    if (name !== undefined && rs.stop_id) {
+      await supabaseAdmin.from('bus_stops').update({ name }).eq('id', rs.stop_id);
+    }
+    if (sequence !== undefined || is_active !== undefined) {
+      const update: any = {};
+      if (sequence !== undefined) update.sequence = sequence;
+      if (is_active !== undefined) update.is_active = is_active;
+      await supabaseAdmin.from('route_stops').update(update).eq('id', id);
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error updating route stop', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Failed to update route stop', message: error?.message });
+  }
+});
+
+router.delete('/route-stops/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabaseAdmin.from('route_stops').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error deleting route stop', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Failed to delete route stop', message: error?.message });
+  }
+});
+
+router.post('/route-stops/reorder', async (req, res) => {
+  try {
+    const { route_id, ordered_ids } = req.body as { route_id: string; ordered_ids: string[] };
+    if (!route_id || !Array.isArray(ordered_ids)) return res.status(400).json({ success: false, error: 'route_id and ordered_ids required' });
+    // Update sequences in order
+    let seq = 1;
+    for (const id of ordered_ids) {
+      await supabaseAdmin.from('route_stops').update({ sequence: seq++ }).eq('id', id).eq('route_id', route_id);
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error('Error reordering route stops', 'admin', { error: error?.message });
+    res.status(500).json({ success: false, error: 'Failed to reorder route stops', message: error?.message });
+  }
+});
 
 // ===== SYSTEM MANAGEMENT ENDPOINTS =====
 

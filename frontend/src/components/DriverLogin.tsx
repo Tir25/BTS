@@ -33,42 +33,33 @@ const DriverLogin: React.FC = () => {
   const navigationRef = useRef(false);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // PRODUCTION FIX: Auto-redirect when authentication completes AND bus assignment is ready
-  // Enhanced to wait for bus assignment before redirecting
+  // PRODUCTION FIX: Auto-redirect when authentication completes
+  // Previously waited for busAssignment; now redirect immediately after auth
   useEffect(() => {
     // Only redirect if:
     // 1. User is authenticated
-    // 2. Not currently loading
-    // 3. Bus assignment is available
-    // 4. Haven't already initiated navigation
-    if (isAuthenticated && !isLoading && busAssignment && !navigationRef.current) {
-      // Mark navigation as initiated to prevent duplicate redirects
+    // 2. Not currently loading auth step
+    // 3. Haven't already initiated navigation
+    if (isAuthenticated && !isLoading && !navigationRef.current) {
       navigationRef.current = true;
-      
-      logger.info('🔄 Authentication complete, redirecting to dashboard', 'component', {
-        hasBusAssignment: !!busAssignment,
-        busNumber: busAssignment.bus_number,
-        routeName: busAssignment.route_name
+      logger.info('🔄 Auth complete, redirecting to driver dashboard (assignment will load there)', 'component', {
+        hasBusAssignment: !!busAssignment
       });
-      
-      // Clear any pending redirect timeout
+
       if (redirectTimeoutRef.current) {
         clearTimeout(redirectTimeoutRef.current);
       }
-      
-      // Small delay to ensure React state is fully propagated
+
       redirectTimeoutRef.current = setTimeout(() => {
         navigate('/driver-dashboard', { replace: true });
         redirectTimeoutRef.current = null;
       }, 150);
     }
-    
-    // Reset navigation guard if authentication is lost
+
     if (!isAuthenticated) {
       navigationRef.current = false;
     }
-    
-    // Cleanup timeout on unmount
+
     return () => {
       if (redirectTimeoutRef.current) {
         clearTimeout(redirectTimeoutRef.current);
@@ -208,27 +199,29 @@ const DriverLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-            <span className="text-2xl">🚌</span>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-500 rounded-2xl mb-4">
+            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Driver Login</h1>
-          <p className="text-blue-200">Sign in to start tracking your bus</p>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">Driver Login</h1>
+          <p className="text-slate-600">Sign in to start tracking your bus</p>
         </div>
 
         {/* Login Form */}
-        <div className="card-glass p-8">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-lg p-8">
           {/* PRODUCTION FIX: Show loading state while waiting for bus assignment after login */}
           {isAuthenticated && isLoading && !loginError && (
-            <div className="mb-6 p-4 bg-blue-500/20 border border-blue-400/30 rounded-lg">
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
               <div className="flex items-center space-x-3">
                 <div className="loading-spinner" />
                 <div>
-                  <p className="text-blue-200 font-medium">Authenticated successfully!</p>
-                  <p className="text-blue-300 text-sm mt-1">Loading your bus assignment...</p>
+                  <p className="text-blue-900 font-medium">Authenticated successfully!</p>
+                  <p className="text-blue-700 text-sm mt-1">Loading your bus assignment...</p>
                 </div>
               </div>
             </div>
@@ -237,7 +230,7 @@ const DriverLogin: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
                 Email Address
               </label>
               <input
@@ -248,18 +241,18 @@ const DriverLogin: React.FC = () => {
                 onChange={handleInputChange}
                 onBlur={handleBlur}
                 required
-                className={`w-full px-4 py-3 bg-white/10 border rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                className={`w-full px-4 py-3 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
                   touched.email && validationErrors.email
                     ? 'border-red-400 focus:ring-red-500'
-                    : 'border-white/20'
+                    : 'border-slate-300'
                 }`}
-                placeholder="Enter your email"
+                placeholder="driver@university.edu"
                 disabled={isLoading}
                 aria-invalid={touched.email && !!validationErrors.email}
                 aria-describedby={touched.email && validationErrors.email ? 'email-error' : undefined}
               />
               {touched.email && validationErrors.email && (
-                <p id="email-error" className="mt-1 text-sm text-red-400" role="alert">
+                <p id="email-error" className="mt-1 text-sm text-red-600" role="alert">
                   {validationErrors.email}
                 </p>
               )}
@@ -267,7 +260,7 @@ const DriverLogin: React.FC = () => {
 
             {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-2">
                 Password
               </label>
               <input
@@ -278,10 +271,10 @@ const DriverLogin: React.FC = () => {
                 onChange={handleInputChange}
                 onBlur={handleBlur}
                 required
-                className={`w-full px-4 py-3 bg-white/10 border rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                className={`w-full px-4 py-3 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
                   touched.password && validationErrors.password
                     ? 'border-red-400 focus:ring-red-500'
-                    : 'border-white/20'
+                    : 'border-slate-300'
                 }`}
                 placeholder="Enter your password"
                 disabled={isLoading}
@@ -289,7 +282,7 @@ const DriverLogin: React.FC = () => {
                 aria-describedby={touched.password && validationErrors.password ? 'password-error' : undefined}
               />
               {touched.password && validationErrors.password && (
-                <p id="password-error" className="mt-1 text-sm text-red-400" role="alert">
+                <p id="password-error" className="mt-1 text-sm text-red-600" role="alert">
                   {validationErrors.password}
                 </p>
               )}
@@ -297,10 +290,12 @@ const DriverLogin: React.FC = () => {
 
             {/* Error Message */}
             {(loginError || error) && (
-              <div className="bg-red-500/20 border border-red-400/30 rounded-lg p-4">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                 <div className="flex items-center">
-                  <span className="text-red-400 mr-2">⚠️</span>
-                  <p className="text-red-200 text-sm">{loginError || error}</p>
+                  <svg className="w-5 h-5 text-red-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-red-700 text-sm">{loginError || error}</p>
                 </div>
               </div>
             )}
@@ -309,10 +304,10 @@ const DriverLogin: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 ${
+              className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
                 isLoading
-                  ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-500/25'
+                  ? 'bg-slate-400 text-white cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
               }`}
             >
               {isLoading ? (
@@ -328,7 +323,7 @@ const DriverLogin: React.FC = () => {
 
           {/* Help Text */}
           <div className="mt-6 text-center">
-            <p className="text-white/70 text-sm">
+            <p className="text-slate-600 text-sm">
               Having trouble? Contact your administrator for assistance.
             </p>
           </div>
@@ -338,7 +333,7 @@ const DriverLogin: React.FC = () => {
         <div className="text-center mt-6">
           <button
             onClick={() => navigate('/')}
-            className="text-blue-300 hover:text-blue-200 text-sm underline"
+            className="text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
           >
             ← Back to Home
           </button>

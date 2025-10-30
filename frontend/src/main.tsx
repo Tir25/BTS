@@ -5,6 +5,7 @@ import './index.css';
 import { setupConsoleFilter } from './utils/consoleFilter';
 import './utils/apiInterceptor';
 import { QueryProvider } from './providers/QueryProvider';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { serviceWorkerManager } from './services/ServiceWorkerManager';
 import { logger } from './utils/logger';
 
@@ -79,8 +80,10 @@ document.head.appendChild(fontLink);
 // Ensure proper rendering
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <QueryProvider>
-      <App />
-    </QueryProvider>
+    <ThemeProvider>
+      <QueryProvider>
+        <App />
+      </QueryProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );

@@ -3,8 +3,9 @@ import BusManagementPanel from './BusManagementPanel';
 import DriverManagementPanel from './DriverManagementPanel';
 import RouteManagementPanel from './RouteManagementPanel';
 import ProductionAssignmentPanel from './ProductionAssignmentPanel';
+import ShiftsManager from './admin/ShiftsManager';
 
-type ManagementTab = 'buses' | 'drivers' | 'routes' | 'assignments';
+type ManagementTab = 'buses' | 'drivers' | 'routes' | 'assignments' | 'shifts';
 
 export default function UnifiedAdminManagement() {
   const [activeTab, setActiveTab] = useState<ManagementTab>('buses');
@@ -25,6 +26,7 @@ export default function UnifiedAdminManagement() {
               { id: 'drivers', label: 'Drivers' },
               { id: 'routes', label: 'Routes' },
               { id: 'assignments', label: 'Assignments' },
+              { id: 'shifts', label: 'Shifts' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -48,6 +50,7 @@ export default function UnifiedAdminManagement() {
         {activeTab === 'drivers' && <DriverManagementPanel />}
         {activeTab === 'routes' && <RouteManagementPanel />}
         {activeTab === 'assignments' && <ProductionAssignmentPanel />}
+        {activeTab === 'shifts' && <ShiftsManager />}
       </div>
     </div>
   );

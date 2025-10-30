@@ -33,6 +33,7 @@ interface AssignmentFormData {
   driver_id: string;
   bus_id: string;
   route_id: string;
+  shift_id?: string;
   notes: string;
   status: 'active' | 'inactive' | 'pending';
 }
@@ -56,8 +57,10 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
   const [drivers, setDrivers] = useState<any[]>([]);
   const [buses, setBuses] = useState<any[]>([]);
   const [routes, setRoutes] = useState<any[]>([]);
+  const [shifts, setShifts] = useState<any[]>([]);
   const [dashboard, setDashboard] = useState<AssignmentDashboard | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
@@ -68,6 +71,7 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
     driver_id: '',
     bus_id: '',
     route_id: '',
+    shift_id: '',
     notes: '',
     status: 'active'
   });
@@ -97,16 +101,19 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
     setError(null);
 
     try {
-      const [assignmentsResult, driversResult, busesResult, routesResult, dashboardResult] = await Promise.all([
+      const [assignmentsResult, driversResult, busesResult, routesResult, dashboardResult, shiftsResult] = await Promise.all([
         adminApiService.getAllAssignments(),
         adminApiService.getAllDrivers(),
         adminApiService.getAllBuses(),
         adminApiService.getAllRoutes(),
         adminApiService.getAssignmentStatus(),
+        adminApiService.getShifts(),
       ]);
 
       if (assignmentsResult.success && assignmentsResult.data) {
         setAssignments(assignmentsResult.data);
+      } else if (!assignmentsResult.success) {
+        setError(assignmentsResult.error || 'Failed to load assignments');
       }
 
       if (driversResult.success && driversResult.data) {
@@ -123,6 +130,10 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
 
       if (dashboardResult.success && dashboardResult.data) {
         setDashboard(dashboardResult.data);
+      }
+
+      if (shiftsResult.success && shiftsResult.data) {
+        setShifts(shiftsResult.data);
       }
 
       logger.info('Production assignment data loaded successfully', 'production-assignment');
@@ -185,6 +196,8 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return; // prevent duplicate submits
+    setSubmitting(true);
     setLoading(true);
     setError(null);
 
@@ -209,6 +222,7 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
       logger.error('Error saving assignment', 'production-assignment', { error: String(err) });
     } finally {
       setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -388,6 +402,27 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
                     ))}
                   </select>
                 </div>
+
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-1">
+                  Shift *
+                </label>
+                <select
+                  name="shift_id"
+                  value={formData.shift_id}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  style={{ color: 'white' }}
+                >
+                  <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Shift</option>
+                  {shifts.map((shift) => (
+                    <option key={shift.id} value={shift.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
+                      {shift.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
                 <div>
                   <label className="block text-sm font-medium text-white/80 mb-1">

@@ -33,6 +33,8 @@ import adminRoutes from './routes/admin';
 import productionAssignmentRoutes from './routes/productionAssignments';
 import optimizedAssignmentRoutes from './routes/optimizedAssignments';
 import storageRoutes from './routes/storage';
+import trackingRoutes from './routes/tracking';
+import studentRoutes from './routes/student';
 import locationRoutes from './routes/locations';
 import sseRoutes from './routes/sse';
 import { initializeDatabase, testDatabaseConnection } from './models/database';
@@ -205,6 +207,8 @@ app.use('/storage', apiRateLimits.upload, fileUploadValidator, storageRoutes);
 app.use('/locations', apiRateLimits.locations, smartCacheMiddleware({ 
   dataTypeTTL: { 'locations': 60 } // 1 min cache for locations
 }), locationRoutes);
+app.use('/tracking', trackingRoutes);
+app.use('/student', studentRoutes);
 app.use('/sse', sseRoutes);
 app.use('/monitoring', monitoringRoutes);
 

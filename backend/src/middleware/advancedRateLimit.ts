@@ -52,6 +52,10 @@ export const apiRateLimits = {
       if (req.path.startsWith('/health')) return true;
       // Skip for monitoring endpoints
       if (req.path.startsWith('/monitoring')) return true;
+      // IMPORTANT: Do not rate limit admin or assignment control-plane endpoints here
+      if (req.path.startsWith('/admin')) return true;
+      if (req.path.startsWith('/production-assignments')) return true;
+      if (req.path.startsWith('/assignments')) return true;
       return false;
     }
   }),
@@ -67,16 +71,15 @@ export const apiRateLimits = {
 
   // Assignment endpoints - moderate limits
   assignments: createAdvancedRateLimit({
-    windowMs: 5 * 60 * 1000, // 5 minutes
-    max: process.env.NODE_ENV === 'development' ? 1000 : 50, // 1000 in development, 50 in production
-    skipSuccessfulRequests: false,
-    skipFailedRequests: false,
+    // Permanently relax assignment rate limiting (we'll effectively disable it)
+    windowMs: 1 * 60 * 1000, // window kept small but irrelevant since we skip
+    max: 1000000,
+    skipSuccessfulRequests: true,
+    skipFailedRequests: true,
     skip: (req) => {
-      // Skip rate limiting for assignment endpoints in development
-      if (process.env.NODE_ENV === 'development') {
-        return true;
-      }
-      return false;
+      // Disable rate limiting for assignment endpoints across environments
+      // Assignments are control-plane actions and should not be throttled
+      return true;
     },
     message: 'Too many assignment requests. Please slow down.'
   }),

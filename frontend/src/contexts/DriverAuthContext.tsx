@@ -261,7 +261,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
       logger.info('🔐 Attempting driver login...', 'driver-auth', { email, requestId });
       
       // Use centralized timeout configuration
-      const loginTimeoutMs = timeoutConfig.api.default; // Use centralized config
+      const loginTimeoutMs = timeoutConfig.auth.signIn; // Use auth-specific sign-in timeout
       
       // SIMPLIFIED: Use centralized authService for login
       const loginPromise = authService.signIn(email, password);

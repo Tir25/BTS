@@ -15,6 +15,7 @@ export interface AssignmentData {
   driver_id: string;
   bus_id: string;
   route_id: string;
+  shift_id?: string | null;
   assigned_by: string;
   notes?: string;
   assigned_at?: string;
@@ -68,6 +69,7 @@ export class ProductionAssignmentService {
           vehicle_no,
           assigned_driver_profile_id,
           route_id,
+          assigned_shift_id,
           assignment_status,
           assignment_notes,
           updated_at,
@@ -104,6 +106,7 @@ export class ProductionAssignmentService {
         notes: bus.assignment_notes,
         assigned_at: bus.updated_at,
         status: bus.assignment_status || 'active',
+        shift_id: (bus as any).assigned_shift_id || null,
         // Additional display data
         bus_number: bus.bus_number,
         vehicle_no: bus.vehicle_no,
@@ -175,7 +178,7 @@ export class ProductionAssignmentService {
    */
   static async createAssignment(assignmentData: Omit<AssignmentData, 'id' | 'assigned_at'>): Promise<AssignmentData> {
     try {
-      const { driver_id, bus_id, route_id, assigned_by, notes, status = 'active' } = assignmentData;
+      const { driver_id, bus_id, route_id, shift_id, assigned_by, notes, status = 'active' } = assignmentData;
 
       // Comprehensive validation
       const validation = await this.validateAssignment(driver_id, bus_id, route_id);
@@ -194,6 +197,7 @@ export class ProductionAssignmentService {
         .update({
           assigned_driver_profile_id: driver_id,
           route_id: route_id,
+          assigned_shift_id: shift_id || null,
           assignment_status: status,
           assignment_notes: notes,
         })
@@ -231,6 +235,7 @@ export class ProductionAssignmentService {
         driver_id,
         bus_id,
         route_id,
+        shift_id: shift_id || null,
         assigned_by,
         notes,
         assigned_at: new Date().toISOString(),
@@ -247,7 +252,7 @@ export class ProductionAssignmentService {
    */
   static async updateAssignment(busId: string, updateData: Partial<Omit<AssignmentData, 'id' | 'assigned_at'>>): Promise<AssignmentData> {
     try {
-      const { driver_id, route_id, assigned_by, notes, status } = updateData;
+      const { driver_id, route_id, shift_id, assigned_by, notes, status } = updateData;
 
       // Get current assignment
       const currentAssignment = await this.getAssignmentByBus(busId);
@@ -270,6 +275,7 @@ export class ProductionAssignmentService {
         .update({
           assigned_driver_profile_id: newDriverId,
           route_id: newRouteId,
+          assigned_shift_id: typeof shift_id !== 'undefined' ? shift_id : currentAssignment.shift_id || null,
           assignment_status: status || currentAssignment.status,
           assignment_notes: notes || currentAssignment.notes,
         })
@@ -324,6 +330,7 @@ export class ProductionAssignmentService {
         driver_id: newDriverId,
         bus_id: busId,
         route_id: newRouteId,
+        shift_id: typeof shift_id !== 'undefined' ? shift_id || null : currentAssignment.shift_id || null,
         assigned_by: assigned_by || currentAssignment.assigned_by,
         notes: notes || currentAssignment.notes,
         assigned_at: new Date().toISOString(),

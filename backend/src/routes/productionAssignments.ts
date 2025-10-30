@@ -153,7 +153,7 @@ router.get('/bus/:busId/history', requireAdmin, async (req, res) => {
 // Create new assignment (Admin only)
 router.post('/', requireAdmin, async (req, res) => {
   try {
-    const { driver_id, bus_id, route_id, notes, status } = req.body;
+    const { driver_id, bus_id, route_id, shift_id, notes, status } = req.body;
 
     // Validate required fields
     if (!driver_id || !bus_id || !route_id) {
@@ -178,6 +178,7 @@ router.post('/', requireAdmin, async (req, res) => {
       driver_id,
       bus_id,
       route_id,
+      shift_id,
       assigned_by,
       notes,
       status: status || 'active',
@@ -213,7 +214,7 @@ router.post('/', requireAdmin, async (req, res) => {
 router.put('/bus/:busId', requireAdmin, async (req, res) => {
   try {
     const { busId } = req.params;
-    const { driver_id, route_id, notes, status } = req.body;
+    const { driver_id, route_id, shift_id, notes, status } = req.body;
 
     // Get the current user as the assigner
     const assigned_by = req.user?.id;
@@ -228,6 +229,7 @@ router.put('/bus/:busId', requireAdmin, async (req, res) => {
     const assignment = await ProductionAssignmentService.updateAssignment(busId, {
       driver_id,
       route_id,
+      shift_id,
       assigned_by,
       notes,
       status,

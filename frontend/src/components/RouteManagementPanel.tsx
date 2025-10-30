@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { adminApiService } from '../services/adminApiService';
 import { logger } from '../utils/logger';
 import { Route, RouteData } from '../types';
+import RouteStopsManager from './admin/RouteStopsManager';
 
 interface RouteFormData {
   name: string;
@@ -21,6 +22,7 @@ export default function RouteManagementPanel({ className = '' }: RouteManagement
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [manageStopsRouteId, setManageStopsRouteId] = useState<string | null>(null);
   
   // Form states
   const [showForm, setShowForm] = useState(false);
@@ -383,6 +385,12 @@ export default function RouteManagementPanel({ className = '' }: RouteManagement
                         Edit
                       </button>
                       <button
+                        onClick={() => setManageStopsRouteId(route.id)}
+                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded transition-colors"
+                      >
+                        Manage Stops
+                      </button>
+                      <button
                         onClick={() => handleDelete(route.id)}
                         className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
                       >
@@ -396,6 +404,10 @@ export default function RouteManagementPanel({ className = '' }: RouteManagement
           </table>
         </div>
       </div>
+
+      {manageStopsRouteId && (
+        <RouteStopsManager routeId={manageStopsRouteId} onClose={() => setManageStopsRouteId(null)} />
+      )}
     </div>
   );
 }
