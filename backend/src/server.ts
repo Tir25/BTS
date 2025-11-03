@@ -57,6 +57,9 @@ import { locationArchiveService } from './services/LocationArchiveService';
 // const config = initializeEnvironment();
 
 const app = express();
+// Ensure Express trusts proxy headers (Render/Cloudflare) so rate-limit and IP detection work properly
+// This prevents ERR_ERL_UNEXPECTED_X_FORWARDED_FOR and incorrect bucketing
+app.set('trust proxy', 1);
 const server = createServer(app);
 const io = new SocketIOServer(server, {
   cors: config.websocket.cors,

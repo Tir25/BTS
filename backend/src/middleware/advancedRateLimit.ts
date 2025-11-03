@@ -99,6 +99,11 @@ export const apiRateLimits = {
     max: process.env.NODE_ENV === 'development' ? 2000 : 500, // 2000 in development, 500 in production
     skipSuccessfulRequests: false,
     skipFailedRequests: false,
+    keyGenerator: (req) => {
+      // Prefer authenticated user id so multiple admin tabs don't share one IP bucket
+      const userId = (req as any).user?.id;
+      return userId ? `admin:${userId}` : `ip:${req.ip}`;
+    },
     skip: (req) => {
       // Skip rate limiting for admin endpoints in development
       if (process.env.NODE_ENV === 'development') {

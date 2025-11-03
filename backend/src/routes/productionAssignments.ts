@@ -14,12 +14,36 @@ const router = express.Router();
 // Apply authentication middleware to all assignment routes
 router.use(authenticateUser);
 
+// Lightweight in-memory cache and request coalescing to prevent thundering herd
+// TTLs are short to keep data fresh while avoiding repeated heavy queries
+let cache: Record<string, { data: any; expiresAt: number }> = {};
+const TTL_MS = 60 * 1000; // 60s
+let inflight: Record<string, Promise<any> | null> = {};
+
+async function cached(key: string, producer: () => Promise<any>) {
+  const now = Date.now();
+  const hit = cache[key];
+  if (hit && hit.expiresAt > now) return hit.data;
+  if (inflight[key]) return inflight[key];
+  inflight[key] = producer()
+    .then((data) => {
+      cache[key] = { data, expiresAt: Date.now() + TTL_MS };
+      return data;
+    })
+    .finally(() => {
+      inflight[key] = null;
+    });
+  return inflight[key]!;
+}
+
 // ===== PRODUCTION ASSIGNMENT MANAGEMENT ENDPOINTS =====
 
 // Get all assignments with comprehensive data (Admin only)
 router.get('/', requireAdmin, async (req, res) => {
   try {
-    const assignments = await ProductionAssignmentService.getAllAssignments();
+    const assignments = await cached('assignments:list', () =>
+      ProductionAssignmentService.getAllAssignments()
+    );
     res.json({
       success: true,
       data: assignments,
@@ -84,7 +108,9 @@ router.get('/my-assignment', requireAdminOrDriver, async (req, res) => {
 // Get assignment dashboard (Admin only)
 router.get('/dashboard', requireAdmin, async (req, res) => {
   try {
-    const dashboard = await ProductionAssignmentService.getAssignmentDashboard();
+    const dashboard = await cached('assignments:dashboard', () =>
+      ProductionAssignmentService.getAssignmentDashboard()
+    );
     res.json({
       success: true,
       data: dashboard,
