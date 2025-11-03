@@ -264,8 +264,12 @@ function buildApplication(profile, platform) {
   // Determine build command based on platform and profile
   let buildCommand;
   const platformInfo = PLATFORMS[platform];
+  const skipValidation = global.__skipValidation || false;
   
-  if (platform === 'vercel') {
+  // For Vercel with skipped validation, use Vite directly to avoid recursive calls
+  if (platform === 'vercel' && skipValidation) {
+    buildCommand = 'npx vite build';
+  } else if (platform === 'vercel') {
     buildCommand = 'npm run build';
   } else if (platform === 'docker') {
     buildCommand = 'npm run build:optimized';
@@ -420,6 +424,9 @@ async function unifiedBuild() {
   // Determine profile and platform
   const profile = profileArg || process.env.NODE_ENV || 'production';
   const platform = platformArg || getPlatform();
+  
+  // Store skipValidation in a way that buildApplication can access it
+  global.__skipValidation = skipValidation;
   
   log(`\n📋 Configuration:`, 'blue');
   log(`   Profile: ${profile}`, 'cyan');
