@@ -65,8 +65,8 @@ router.get('/viewport', async (req, res) => {
     };
 
     // Get current locations and filter by viewport
-    const currentLocations = await getCurrentBusLocations();
-    const locationsInViewport = currentLocations.filter((location) => {
+    const currentLocations = await optimizedLocationService.getCurrentBusLocations();
+    const locationsInViewport = currentLocations.filter((location: { location: string; bus_id: string }) => {
       // Parse PostGIS Point format: "POINT(longitude latitude)"
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
       if (!pointMatch) return false;
@@ -81,14 +81,14 @@ router.get('/viewport', async (req, res) => {
     });
 
     // Get bus info for buses in viewport
-    const busIds = [...new Set(locationsInViewport.map((loc) => loc.bus_id))];
+    const busIds = [...new Set(locationsInViewport.map((loc: { bus_id: string }) => loc.bus_id))];
     const busesInViewport = [];
 
     for (const busId of busIds) {
       const busInfo = await getBusInfo(busId as string);
       if (busInfo) {
         const location = locationsInViewport.find(
-          (loc) => loc.bus_id === busId
+          (loc: { bus_id: string }) => loc.bus_id === busId
         );
         busesInViewport.push({
           ...busInfo,
@@ -150,8 +150,8 @@ router.get('/clusters', async (req, res) => {
     };
 
     // Get current locations and filter by viewport
-    const currentLocations = await getCurrentBusLocations();
-    const locationsInViewport = currentLocations.filter((location) => {
+    const currentLocations = await optimizedLocationService.getCurrentBusLocations();
+    const locationsInViewport = currentLocations.filter((location: { location: string; bus_id: string }) => {
       // Parse PostGIS Point format: "POINT(longitude latitude)"
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
       if (!pointMatch) return false;
@@ -171,9 +171,9 @@ router.get('/clusters', async (req, res) => {
       0.01 / Math.pow(2, viewport.zoom - 10)
     );
     const clusters: any[] = [];
-    const processedLocations = new Set();
+    const processedLocations = new Set<string>();
 
-    locationsInViewport.forEach((location) => {
+    locationsInViewport.forEach((location: { id: string; location: string }) => {
       if (processedLocations.has(location.id)) return;
 
       const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
@@ -192,7 +192,7 @@ router.get('/clusters', async (req, res) => {
       };
 
       // Find nearby buses
-      locationsInViewport.forEach((otherLocation) => {
+      locationsInViewport.forEach((otherLocation: { id: string; location: string }) => {
         if (
           otherLocation.id === location.id ||
           processedLocations.has(otherLocation.id)

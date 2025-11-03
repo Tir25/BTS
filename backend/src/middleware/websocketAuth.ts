@@ -2,6 +2,12 @@ import { Socket } from 'socket.io';
 import { supabaseAdmin } from '../config/supabase';
 import { logger } from '../utils/logger';
 
+// Extend global type to include authAttemptStore
+declare global {
+  // eslint-disable-next-line no-var
+  var authAttemptStore: Map<string, { count: number; resetTime: number }> | undefined;
+}
+
 interface AuthenticatedSocket extends Socket {
   driverId?: string;
   busId?: string;
@@ -88,7 +94,7 @@ export const websocketAuthMiddleware = (socket: AuthenticatedSocket, next: (err?
   
   // In a production environment, this would use Redis or another distributed cache
   // For now, using a simple in-memory store (should be replaced with Redis)
-  const authAttempts = global.authAttemptStore || (global.authAttemptStore = new Map());
+  const authAttempts = global.authAttemptStore || (global.authAttemptStore = new Map<string, { count: number; resetTime: number }>());
   const now = Date.now();
   const attempts = authAttempts.get(rateLimitKey) || { count: 0, resetTime: now + windowMs };
   
