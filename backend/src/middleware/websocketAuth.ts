@@ -36,25 +36,27 @@ export const websocketAuthMiddleware = (socket: AuthenticatedSocket, next: (err?
   });
   
   // 🚨 SECURITY FIX: Controlled anonymous access with enhanced monitoring
+  // PRODUCTION FIX: Allow anonymous students by default (read-only map access)
+  // Students can view bus locations without authentication, but cannot send updates
   if (!token && clientType === 'student') {
-    // Check if anonymous access is allowed (dev mode compatible)
-    const allowAnonymous = process.env.ALLOW_ANONYMOUS_STUDENTS === 'true';
+    // Check if anonymous access is explicitly disabled
+    const disallowAnonymous = process.env.DISALLOW_ANONYMOUS_STUDENTS === 'true';
     
-    if (!allowAnonymous && process.env.NODE_ENV === 'production') {
-      logger.websocket('Anonymous student connection rejected in production', { 
+    if (disallowAnonymous && process.env.NODE_ENV === 'production') {
+      logger.websocket('Anonymous student connection rejected (DISALLOW_ANONYMOUS_STUDENTS=true)', { 
         socketId: socket.id, 
         clientType,
         clientIP
       });
-      return next(new Error('Authentication required in production mode'));
+      return next(new Error('Authentication required for student connections'));
     }
     
-    logger.websocket('Anonymous student connection allowed (dev mode compatible)', { 
+    logger.websocket('Anonymous student connection allowed (read-only map access)', { 
       socketId: socket.id, 
       clientType,
       clientIP,
-      allowAnonymous,
-      nodeEnv: process.env.NODE_ENV
+      nodeEnv: process.env.NODE_ENV,
+      note: 'Anonymous students can view bus locations but cannot send updates'
     });
     
     // Set basic info for student connections with enhanced security

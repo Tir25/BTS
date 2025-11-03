@@ -9,14 +9,20 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { serviceWorkerManager } from './services/ServiceWorkerManager';
 import { logger } from './utils/logger';
 
-// Import Service Worker cache clearer for development
-if (import.meta.env.DEV) {
+// Import Service Worker cache clearer for development only
+// CRITICAL FIX: Double-check environment to prevent loading in production builds
+if (import.meta.env.DEV && import.meta.env.MODE === 'development') {
   // Dynamically load the cache clearer script
   const script = document.createElement('script');
   script.src = '/clear-sw-cache.js';
+  script.type = 'application/javascript';
   script.onload = () => logger.info('Service Worker cache clearer loaded', 'main');
-  script.onerror = () =>
-    logger.warn('Service Worker cache clearer not available', 'main');
+  script.onerror = () => {
+    // Silently fail - this is expected in production builds
+    if (import.meta.env.DEV) {
+      logger.warn('Service Worker cache clearer not available', 'main');
+    }
+  };
   document.head.appendChild(script);
 }
 
