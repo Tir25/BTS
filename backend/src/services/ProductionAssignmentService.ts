@@ -55,7 +55,38 @@ export interface BulkAssignmentResult {
   }>;
 }
 
+// Result rows for specific selects
+// Bus row for getAllAssignments
+type BusRow = {
+  id: string;
+  bus_number?: string;
+  vehicle_no?: string;
+  assigned_driver_profile_id: string;
+  route_id: string;
+  assigned_shift_id?: string | null;
+  assignment_status?: string;
+  assignment_notes?: string;
+  updated_at?: string;
+};
+
+type DriverRow = {
+  id: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+};
+
+type RouteRow = {
+  id: string;
+  name?: string;
+  description?: string;
+  city?: string;
+};
+
 export class ProductionAssignmentService {
+
   /**
    * Get all assignments with comprehensive data
    */
@@ -74,9 +105,9 @@ export class ProductionAssignmentService {
         throw error;
       }
 
-      const busList = buses || [];
-      const driverIds = Array.from(new Set(busList.map(b => b.assigned_driver_profile_id))).filter(Boolean) as string[];
-      const routeIds = Array.from(new Set(busList.map(b => b.route_id))).filter(Boolean) as string[];
+      const busList: BusRow[] = (buses as any[]) || [];
+      const driverIds = Array.from(new Set(busList.map((b: BusRow) => b.assigned_driver_profile_id))).filter(Boolean) as string[];
+      const routeIds = Array.from(new Set(busList.map((b: BusRow) => b.route_id))).filter(Boolean) as string[];
 
       const [{ data: drivers }, { data: routes }] = await Promise.all([
         driverIds.length
@@ -87,12 +118,12 @@ export class ProductionAssignmentService {
           : Promise.resolve({ data: [] as any[] } as any),
       ]);
 
-      const driverMap = new Map((drivers || []).map(d => [d.id, d]));
-      const routeMap = new Map((routes || []).map(r => [r.id, r]));
+      const driverMap = new Map<string, DriverRow>((drivers as DriverRow[] | undefined || []).map((d: DriverRow) => [d.id, d]));
+      const routeMap = new Map<string, RouteRow>((routes as RouteRow[] | undefined || []).map((r: RouteRow) => [r.id, r]));
 
-      const assignments = busList.map(bus => {
-        const d = driverMap.get(bus.assigned_driver_profile_id);
-        const r = routeMap.get(bus.route_id);
+      const assignments = busList.map((bus: BusRow) => {
+        const d: DriverRow | undefined = driverMap.get(bus.assigned_driver_profile_id);
+        const r: RouteRow | undefined = routeMap.get(bus.route_id);
         return {
           id: bus.id,
           driver_id: bus.assigned_driver_profile_id,
@@ -758,7 +789,7 @@ export class ProductionAssignmentService {
       // find drivers who have a bus assigned via separate queries
       const { data: activeBuses, error: busesErr } = await supabaseAdmin
         .from('buses')
-        .select('assigned_driver_profile_id,bus_number,vehicle_no')
+        .select('id,assigned_driver_profile_id,bus_number,vehicle_no')
         .eq('is_active', true)
         .not('assigned_driver_profile_id', 'is', null);
 
@@ -767,7 +798,9 @@ export class ProductionAssignmentService {
         throw busesErr;
       }
 
-      const driverIds = Array.from(new Set((activeBuses || []).map(b => b.assigned_driver_profile_id))).filter(Boolean) as string[];
+      type ActiveBusRow = { id: string; assigned_driver_profile_id: string; bus_number?: string; vehicle_no?: string };
+      const activeBusList: ActiveBusRow[] = (activeBuses as any[]) || [];
+      const driverIds = Array.from(new Set(activeBusList.map((b: ActiveBusRow) => b.assigned_driver_profile_id))).filter(Boolean) as string[];
 
       const { data, error } = await supabaseAdmin
         .from('user_profiles')
@@ -780,10 +813,12 @@ export class ProductionAssignmentService {
       }
 
       // merge bus info into driver entries (first bus only for summary)
-      const busByDriver = new Map((activeBuses || []).map(b => [b.assigned_driver_profile_id, b]));
-      return (data || []).map(d => ({
+      const busByDriver = new Map<string, ActiveBusRow>(activeBusList.map((b: ActiveBusRow) => [b.assigned_driver_profile_id, b]));
+      return ((data as any[]) || []).map((d: any) => ({
         ...d,
-        buses: busByDriver.get(d.id) ? [{ id: busByDriver.get(d.id)!.id, bus_number: busByDriver.get(d.id)!.bus_number, vehicle_no: busByDriver.get(d.id)!.vehicle_no }] : []
+        buses: busByDriver.get(d.id)
+          ? [{ id: busByDriver.get(d.id)!.id, bus_number: busByDriver.get(d.id)!.bus_number, vehicle_no: busByDriver.get(d.id)!.vehicle_no }]
+          : []
       } as any));
     } catch (error) {
       logger.error('Error in getAssignedDrivers', 'production-assignment-service', { error });
