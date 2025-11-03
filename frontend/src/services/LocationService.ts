@@ -32,6 +32,9 @@ class LocationService {
   private locationListeners: Set<(location: LocationData) => void> = new Set();
   private errorListeners: Set<(error: LocationError) => void> = new Set();
   private deviceInfo = detectGPSDeviceInfo(); // Cache device info
+  private cachedPermissionState: PermissionState | null = null; // Cache permission state to avoid repeated checks
+  private permissionCheckTime: number = 0; // Timestamp of last permission check
+  private readonly PERMISSION_CACHE_MS = 30000; // Cache permission for 30 seconds
 
   static getInstance(): LocationService {
     if (!LocationService.instance) {
@@ -45,18 +48,37 @@ class LocationService {
     return 'geolocation' in navigator;
   }
 
-  // Check current permission status
+  // Check current permission status (with caching to avoid repeated API calls)
   async checkPermission(): Promise<PermissionState> {
     if (!this.isSupported()) {
       return 'denied';
     }
 
+    // Return cached permission if still valid
+    const now = Date.now();
+    if (this.cachedPermissionState && (now - this.permissionCheckTime) < this.PERMISSION_CACHE_MS) {
+      return this.cachedPermissionState;
+    }
+
     try {
       const permission = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+      this.cachedPermissionState = permission.state;
+      this.permissionCheckTime = now;
+      
+      // Listen for permission changes and update cache
+      permission.addEventListener('change', () => {
+        this.cachedPermissionState = permission.state;
+        this.permissionCheckTime = Date.now();
+        logger.info('Geolocation permission state changed', 'LocationService', { 
+          newState: permission.state 
+        });
+      });
+      
       return permission.state;
     } catch (error) {
       logger.warn('Could not check geolocation permission', 'LocationService', { error });
-      return 'prompt';
+      // If we have a cached value, use it; otherwise default to 'prompt'
+      return this.cachedPermissionState || 'prompt';
     }
   }
 
@@ -68,6 +90,18 @@ class LocationService {
       return false;
     }
 
+    // Check if permission is already granted before requesting
+    const currentPermission = await this.checkPermission();
+    if (currentPermission === 'granted') {
+      logger.info('Location permission already granted', 'LocationService', {
+        deviceType: this.deviceInfo.deviceType,
+      });
+      // Update cache to ensure we remember it's granted
+      this.cachedPermissionState = 'granted';
+      this.permissionCheckTime = Date.now();
+      return true;
+    }
+
     // Log device info on first permission request
     logGPSDeviceInfo();
 
@@ -76,6 +110,10 @@ class LocationService {
       return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
           (position) => {
+            // Update cache to reflect that permission is granted
+            this.cachedPermissionState = 'granted';
+            this.permissionCheckTime = Date.now();
+            
             logger.info('Location permission granted', 'LocationService', {
               hasGPSHardware: this.deviceInfo.hasGPSHardware,
               deviceType: this.deviceInfo.deviceType,
@@ -84,11 +122,18 @@ class LocationService {
             resolve(true);
           },
           (error) => {
-            logger.warn('Location permission denied', 'LocationService', { 
-              error: error.message,
-              code: error.code,
-              deviceType: this.deviceInfo.deviceType,
-            });
+            // Only log if it's actually a permission error
+            if (error.code === error.PERMISSION_DENIED) {
+              // Update cache to reflect that permission is denied
+              this.cachedPermissionState = 'denied';
+              this.permissionCheckTime = Date.now();
+              
+              logger.warn('Location permission denied', 'LocationService', { 
+                error: error.message,
+                code: error.code,
+                deviceType: this.deviceInfo.deviceType,
+              });
+            }
             resolve(false);
           },
           options
