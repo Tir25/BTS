@@ -14,6 +14,7 @@ class ProductionAssignmentService {
           vehicle_no,
           assigned_driver_profile_id,
           route_id,
+          assigned_shift_id,
           assignment_status,
           assignment_notes,
           updated_at,
@@ -48,6 +49,7 @@ class ProductionAssignmentService {
                 notes: bus.assignment_notes,
                 assigned_at: bus.updated_at,
                 status: bus.assignment_status || 'active',
+                shift_id: bus.assigned_shift_id || null,
                 bus_number: bus.bus_number,
                 vehicle_no: bus.vehicle_no,
                 driver_name: bus.user_profiles?.full_name || 'Unknown',
@@ -78,12 +80,16 @@ class ProductionAssignmentService {
             const totalBuses = busesRes.count || 0;
             const totalRoutes = routesRes.count || 0;
             const assignedBuses = (busesRes.data || []).filter(b => b.assigned_driver_profile_id && b.route_id).length;
-            const unassignedDrivers = totalDrivers - assignedBuses;
+            const uniqueAssignedDrivers = new Set((busesRes.data || [])
+                .filter(b => b.assigned_driver_profile_id && b.route_id)
+                .map(b => b.assigned_driver_profile_id)).size;
+            const unassignedDrivers = Math.max(0, totalDrivers - uniqueAssignedDrivers);
             const unassignedBuses = totalBuses - assignedBuses;
             const unassignedRoutes = totalRoutes - assignedBuses;
             logger_1.logger.info('Fetched assignment dashboard', 'production-assignment-service', {
                 activeAssignments,
                 totalDrivers,
+                uniqueAssignedDrivers,
                 totalBuses,
                 totalRoutes,
                 unassignedDrivers,
@@ -107,7 +113,7 @@ class ProductionAssignmentService {
     }
     static async createAssignment(assignmentData) {
         try {
-            const { driver_id, bus_id, route_id, assigned_by, notes, status = 'active' } = assignmentData;
+            const { driver_id, bus_id, route_id, shift_id, assigned_by, notes, status = 'active' } = assignmentData;
             const validation = await this.validateAssignment(driver_id, bus_id, route_id);
             if (!validation.is_valid) {
                 throw new Error(`Assignment validation failed: ${validation.errors.join(', ')}`);
@@ -120,6 +126,7 @@ class ProductionAssignmentService {
                 .update({
                 assigned_driver_profile_id: driver_id,
                 route_id: route_id,
+                assigned_shift_id: shift_id || null,
                 assignment_status: status,
                 assignment_notes: notes,
             })
@@ -150,6 +157,7 @@ class ProductionAssignmentService {
                 driver_id,
                 bus_id,
                 route_id,
+                shift_id: shift_id || null,
                 assigned_by,
                 notes,
                 assigned_at: new Date().toISOString(),
@@ -163,7 +171,7 @@ class ProductionAssignmentService {
     }
     static async updateAssignment(busId, updateData) {
         try {
-            const { driver_id, route_id, assigned_by, notes, status } = updateData;
+            const { driver_id, route_id, shift_id, assigned_by, notes, status } = updateData;
             const currentAssignment = await this.getAssignmentByBus(busId);
             if (!currentAssignment) {
                 throw new Error('No assignment found for this bus');
@@ -179,6 +187,7 @@ class ProductionAssignmentService {
                 .update({
                 assigned_driver_profile_id: newDriverId,
                 route_id: newRouteId,
+                assigned_shift_id: typeof shift_id !== 'undefined' ? shift_id : currentAssignment.shift_id || null,
                 assignment_status: status || currentAssignment.status,
                 assignment_notes: notes || currentAssignment.notes,
             })
@@ -227,6 +236,7 @@ class ProductionAssignmentService {
                 driver_id: newDriverId,
                 bus_id: busId,
                 route_id: newRouteId,
+                shift_id: typeof shift_id !== 'undefined' ? shift_id || null : currentAssignment.shift_id || null,
                 assigned_by: assigned_by || currentAssignment.assigned_by,
                 notes: notes || currentAssignment.notes,
                 assigned_at: new Date().toISOString(),

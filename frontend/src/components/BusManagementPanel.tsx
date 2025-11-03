@@ -190,7 +190,7 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
   if (loading && buses.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-white">Loading buses...</div>
+        <div className="text-slate-600">Loading buses...</div>
       </div>
     );
   }
@@ -198,14 +198,14 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Bus Management</h2>
-          <p className="text-white/70">Manage your bus fleet</p>
+          <h2 className="text-2xl font-bold text-slate-900">Bus Management</h2>
+          <p className="text-slate-600">Manage your bus fleet</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors text-sm font-medium min-h-[44px] shadow-sm touch-friendly w-full sm:w-auto"
         >
           Add New Bus
         </button>
@@ -213,14 +213,14 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
 
       {/* Messages */}
       {error && (
-        <div className="p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
-          <p className="text-red-300">{error}</p>
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+          <p className="text-red-800">{error}</p>
         </div>
       )}
 
       {successMessage && (
-        <div className="p-4 bg-green-500/20 border border-green-500/50 rounded-lg">
-          <p className="text-green-300">{successMessage}</p>
+        <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+          <p className="text-green-800">{successMessage}</p>
         </div>
       )}
 
@@ -406,36 +406,36 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
       )}
 
       {/* Bus Table */}
-      <div className="bg-white/10 backdrop-blur-lg rounded-lg overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-white/5">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Bus Details
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Driver
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Route
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-slate-200">
               {buses.map((bus) => (
-                <tr key={bus.id} className="hover:bg-white/5">
+                <tr key={bus.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <div>
-                      <div className="text-white font-medium">{bus.bus_number}</div>
-                      <div className="text-white/70 text-sm">{bus.vehicle_no}</div>
-                      <div className="text-white/70 text-sm">
+                      <div className="text-slate-900 font-medium">{bus.bus_number}</div>
+                      <div className="text-slate-600 text-sm">{bus.vehicle_no}</div>
+                      <div className="text-slate-600 text-sm">
                         {bus.capacity} seats • {bus.model} • {bus.year}
                       </div>
                     </div>
@@ -443,25 +443,25 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
                   <td className="px-6 py-4">
                     {bus.driver_full_name ? (
                       <div>
-                        <div className="text-white">{bus.driver_full_name}</div>
-                        <div className="text-white/70 text-sm">{bus.driver_email}</div>
+                        <div className="text-slate-900">{bus.driver_full_name}</div>
+                        <div className="text-slate-600 text-sm">{bus.driver_email}</div>
                       </div>
                     ) : (
-                      <span className="text-white/50">Unassigned</span>
+                      <span className="text-slate-400">Unassigned</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
                     {bus.route_name ? (
-                      <span className="text-white">{bus.route_name}</span>
+                      <span className="text-slate-900">{bus.route_name}</span>
                     ) : (
-                      <span className="text-white/50">No route</span>
+                      <span className="text-slate-400">No route</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       bus.is_active 
-                        ? 'bg-green-500/20 text-green-300' 
-                        : 'bg-red-500/20 text-red-300'
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
                     }`}>
                       {bus.is_active ? 'Active' : 'Inactive'}
                     </span>
@@ -470,13 +470,13 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleEdit(bus)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(bus.id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
                       >
                         Delete
                       </button>

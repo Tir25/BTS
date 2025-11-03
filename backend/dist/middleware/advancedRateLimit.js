@@ -42,6 +42,12 @@ exports.apiRateLimits = {
                 return true;
             if (req.path.startsWith('/monitoring'))
                 return true;
+            if (req.path.startsWith('/admin'))
+                return true;
+            if (req.path.startsWith('/production-assignments'))
+                return true;
+            if (req.path.startsWith('/assignments'))
+                return true;
             return false;
         }
     }),
@@ -53,15 +59,12 @@ exports.apiRateLimits = {
         message: 'Too many authentication attempts. Please try again later.'
     }),
     assignments: (0, exports.createAdvancedRateLimit)({
-        windowMs: 5 * 60 * 1000,
-        max: process.env.NODE_ENV === 'development' ? 1000 : 50,
-        skipSuccessfulRequests: false,
-        skipFailedRequests: false,
+        windowMs: 1 * 60 * 1000,
+        max: 1000000,
+        skipSuccessfulRequests: true,
+        skipFailedRequests: true,
         skip: (req) => {
-            if (process.env.NODE_ENV === 'development') {
-                return true;
-            }
-            return false;
+            return true;
         },
         message: 'Too many assignment requests. Please slow down.'
     }),

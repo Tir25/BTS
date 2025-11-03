@@ -640,7 +640,7 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
   // Only show loading if we're actually loading OR if we don't have the essential data
   if ((loadingState.state.isLoading && (!isAuthenticated || !busAssignment)) || !isAuthenticated || !busAssignment) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center">
         <div className="text-center max-w-md w-full px-4">
           {/* Loading spinner */}
           <div className="loading-spinner mx-auto mb-6" />
@@ -648,24 +648,24 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
           {/* Progress bar */}
           {loadingState.state.progress > 0 && (
             <div className="mb-4">
-              <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div 
                   className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
                   style={{ width: `${loadingState.state.progress}%` }}
                 />
               </div>
-              <p className="text-white/50 text-xs mt-1">{loadingState.state.progress}%</p>
+              <p className="text-slate-600 text-xs mt-1">{loadingState.state.progress}%</p>
             </div>
           )}
           
           {/* Loading message */}
-          <p className="text-white text-lg font-medium mb-2">
+          <p className="text-slate-900 text-lg font-medium mb-2">
             {loadingState.state.message || 'Loading driver interface...'}
           </p>
           
           {/* Phase-specific message */}
           {loadingState.state.phase !== 'idle' && (
-            <p className="text-white/70 text-sm">
+            <p className="text-slate-600 text-sm">
               {loadingState.state.phase === 'authenticating' && 'Verifying your credentials...'}
               {loadingState.state.phase === 'loading_assignment' && 'Fetching your bus assignment...'}
               {loadingState.state.phase === 'connecting_websocket' && 'Establishing real-time connection...'}
@@ -675,8 +675,8 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
           
           {/* Error notification */}
           {(driverState.initializationError || driverState.error) && (
-            <div className="mt-4 p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-              <p className="text-yellow-200 text-sm">
+            <div className="mt-4 p-3 bg-yellow-50 rounded-xl border border-yellow-300">
+              <p className="text-yellow-900 text-sm">
                 {driverState.initializationError || driverState.error}
               </p>
               <button
@@ -686,7 +686,7 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                     loadingState.retry();
                   }
                 }}
-                className="mt-2 text-yellow-300 hover:text-yellow-200 text-xs underline"
+                className="mt-2 text-yellow-700 hover:text-yellow-800 text-xs underline font-medium"
               >
                 {loadingState.state.canRetry ? 'Retry' : 'Dismiss'}
               </button>
@@ -701,12 +701,12 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
   if (error) {
     const displayError = error;
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="card-glass p-8 max-w-md">
-            <div className="w-16 h-16 mx-auto mb-6 bg-red-500/20 rounded-full flex items-center justify-center">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-lg p-8 max-w-md">
+            <div className="w-16 h-16 mx-auto mb-6 bg-red-100 rounded-full flex items-center justify-center">
               <svg
-                className="w-8 h-8 text-red-400"
+                className="w-8 h-8 text-red-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -719,26 +719,26 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-red-300 mb-2">
+            <h3 className="text-lg font-medium text-red-900 mb-2">
               Error Loading Interface
             </h3>
-            <p className="text-red-200 mb-4">{displayError}</p>
-            <div className="space-x-4">
+            <p className="text-red-800 mb-4">{displayError}</p>
+            <div className="flex flex-wrap gap-2 justify-center">
               <button
                 onClick={() => window.location.reload()}
-                className="btn-primary"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors text-sm font-medium min-h-[44px] touch-friendly"
               >
                 Retry
               </button>
               <button
                 onClick={handleRetryConnection}
-                className="btn-secondary"
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-xl transition-colors text-sm font-medium min-h-[44px] touch-friendly"
               >
                 Retry Connection
               </button>
               <button
                 onClick={handleSignOut}
-                className="btn-secondary"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors text-sm font-medium min-h-[44px] touch-friendly"
               >
                 Sign Out
               </button>
@@ -751,7 +751,7 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
 
   return (
     <DriverDashboardErrorBoundary>
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-2 sm:p-4 driver-dashboard-container">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 p-2 sm:p-4 driver-dashboard-container">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <DriverHeader
@@ -772,22 +772,10 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
             shiftName={currentShiftName || undefined}
           />
 
-          {/* Test Mode Toggle */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mb-4 flex justify-center">
-              <button
-                onClick={driverActions.toggleTestMode}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors min-h-[44px] touch-friendly"
-              >
-                {driverState.showTestMode ? 'Hide Test Mode' : 'Show Test Mode'}
-              </button>
-            </div>
-          )}
-
           {/* Status Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
             {/* Connection Status */}
-            <div className="card-glass p-3 sm:p-4">
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4">
               <div className="flex items-center">
                 <div
                   className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 sm:mr-3 ${
@@ -799,8 +787,8 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                   }`}
                 />
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-white text-xs sm:text-sm">Connection</h3>
-                  <p className="text-xs text-white/70 truncate">
+                  <h3 className="font-semibold text-slate-900 text-xs sm:text-sm">Connection</h3>
+                  <p className="text-xs text-slate-600 truncate">
                     {isWebSocketConnected && isWebSocketAuthenticated ? 'Connected' :
                      isWebSocketConnected ? 'Connecting...' :
                      'Disconnected'}
@@ -810,14 +798,14 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
             </div>
 
             {/* Tracking Status */}
-            <div className="card-glass p-3 sm:p-4">
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4">
               <div className="flex items-center">
                 <div
-                  className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 sm:mr-3 ${locationState.isTracking ? 'bg-green-500' : 'bg-gray-400'}`}
+                  className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 sm:mr-3 ${locationState.isTracking ? 'bg-green-500' : 'bg-slate-400'}`}
                 />
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-white text-xs sm:text-sm">GPS Tracking</h3>
-                  <p className="text-xs text-white/70 truncate">
+                  <h3 className="font-semibold text-slate-900 text-xs sm:text-sm">GPS Tracking</h3>
+                  <p className="text-xs text-slate-600 truncate">
                     {locationState.isTracking ? 'Active' : 'Inactive'}
                   </p>
                 </div>
@@ -825,12 +813,12 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
             </div>
 
             {/* Update Count */}
-            <div className="card-glass p-3 sm:p-4">
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4">
               <div>
-                <h3 className="font-semibold text-white text-xs sm:text-sm">Updates Sent</h3>
-                <p className="text-lg sm:text-xl font-bold text-blue-300">{locationState.updateCount}</p>
+                <h3 className="font-semibold text-slate-900 text-xs sm:text-sm">Updates Sent</h3>
+                <p className="text-lg sm:text-xl font-bold text-blue-600">{locationState.updateCount}</p>
                 {locationState.lastUpdateTime && (
-                  <p className="text-xs text-white/70 truncate">
+                  <p className="text-xs text-slate-600 truncate">
                     Last: {formatTime(locationState.lastUpdateTime)}
                   </p>
                 )}
@@ -838,17 +826,17 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
             </div>
 
             {/* Location Status */}
-            <div className="card-glass p-3 sm:p-4">
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4">
               <div className="flex items-center">
                 <div
                   className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 sm:mr-3 ${
                     locationState.locationError ? 'bg-red-500' : 
-                    locationState.currentLocation ? 'bg-green-500' : 'bg-gray-400'
+                    locationState.currentLocation ? 'bg-green-500' : 'bg-slate-400'
                   }`}
                 />
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-white text-xs sm:text-sm">Location</h3>
-                  <p className="text-xs text-white/70 truncate">
+                  <h3 className="font-semibold text-slate-900 text-xs sm:text-sm">Location</h3>
+                  <p className="text-xs text-slate-600 truncate">
                     {locationState.locationError ? 'Error' :
                      locationState.currentLocation ? 'Available' : 'Waiting'}
                   </p>
@@ -863,17 +851,17 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
             <div className="space-y-4 sm:space-y-6 order-2 xl:order-1">
               {/* CRITICAL WARNING: Show warning if GPS accuracy is poor */}
               {tracking.accuracy && tracking.accuracy > 1000 && locationState.isTracking && (
-                <div className="bg-red-600/20 border-2 border-red-500/50 rounded-lg p-4">
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
                   <div className="flex items-start gap-3">
                     <span className="text-2xl">⚠️</span>
                     <div className="flex-1">
-                      <h4 className="font-bold text-red-200 mb-2">
+                      <h4 className="font-bold text-red-900 mb-2">
                         Location Accuracy Warning
                       </h4>
-                      <p className="text-sm text-red-100 mb-2">
+                      <p className="text-sm text-red-800 mb-2">
                         Your current location accuracy is <strong>±{(tracking.accuracy / 1000).toFixed(1)}km</strong>, which indicates IP-based positioning.
                       </p>
-                      <div className="text-xs text-red-200 space-y-1">
+                      <div className="text-xs text-red-800 space-y-1">
                         <p><strong>Why this happens:</strong></p>
                         <ul className="list-disc list-inside ml-2 space-y-1">
                           <li>Desktop browsers don't have GPS hardware</li>
@@ -892,15 +880,15 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                     config={studentMapConfig}
                   />
                 ) : (
-                  <div className="h-full flex items-center justify-center bg-gray-100 rounded-lg">
+                  <div className="h-full flex items-center justify-center bg-slate-100 rounded-xl border border-slate-200">
                     <div className="text-center">
-                      <div className="text-gray-500 mb-2">
+                      <div className="text-slate-400 mb-2">
                         <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                         </svg>
                       </div>
-                      <p className="text-gray-600 font-medium">Map will load after authentication</p>
-                      <p className="text-gray-500 text-sm">Please complete login to view real-time bus tracking</p>
+                      <p className="text-slate-700 font-medium">Map will load after authentication</p>
+                      <p className="text-slate-600 text-sm">Please complete login to view real-time bus tracking</p>
                     </div>
                   </div>
                 )}

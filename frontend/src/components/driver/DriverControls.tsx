@@ -32,8 +32,8 @@ const DriverControls: React.FC<DriverControlsProps> = ({
   };
 
   return (
-    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 sm:p-6">
-      <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-md p-4 sm:p-6">
+      <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
         <span className="text-2xl">🎮</span>
         Tracking Controls
       </h3>
@@ -74,74 +74,74 @@ const DriverControls: React.FC<DriverControlsProps> = ({
 
         {/* Status Information */}
         <div className="grid grid-cols-1 gap-4">
-          <div className="bg-blue-500/20 border border-blue-400/30 rounded-lg p-4">
-            <h4 className="font-semibold text-blue-200 mb-2">📊 Tracking Status</h4>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <h4 className="font-semibold text-blue-900 mb-2">📊 Tracking Status</h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between items-center">
-                <span className="text-blue-100">Status:</span>
+                <span className="text-slate-700">Status:</span>
                 <span className={`font-medium ${
-                  isTracking ? 'text-green-300' : 'text-yellow-300'
+                  isTracking ? 'text-green-700' : 'text-yellow-700'
                 }`}>
                   {isTracking ? '🟢 Active' : '🟡 Inactive'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-blue-100">Updates:</span>
-                <span className="text-blue-200 font-medium">{updateCount}</span>
+                <span className="text-slate-700">Updates:</span>
+                <span className="text-slate-900 font-medium">{updateCount}</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-green-500/20 border border-green-400/30 rounded-lg p-4">
-            <h4 className="font-semibold text-green-200 mb-2">🕒 Last Update</h4>
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <h4 className="font-semibold text-green-900 mb-2">🕒 Last Update</h4>
             <div className="text-sm">
               {lastUpdateTime ? (() => {
                 const updateInfo = formatLastUpdate(lastUpdateTime);
                 return (
                   <div className="space-y-1">
-                    <div className="text-green-100">
+                    <div className="text-slate-900">
                       {updateInfo.time}
                     </div>
-                    <div className="text-green-200 text-xs">
+                    <div className="text-slate-600 text-xs">
                       {updateInfo.relative}
                     </div>
                   </div>
                 );
               })() : (
-                <div className="text-green-300">No updates yet</div>
+                <div className="text-slate-600">No updates yet</div>
               )}
             </div>
           </div>
 
           {/* PRODUCTION FIX: GPS Accuracy Display */}
           {accuracy !== undefined && (
-            <div className={`border rounded-lg p-4 ${
+            <div className={`border rounded-xl p-4 ${
               accuracyWarning || accuracy > 1000
-                ? 'bg-red-500/20 border-red-400/30' 
+                ? 'bg-red-50 border-red-200' 
                 : accuracyLevel === 'excellent' || accuracyLevel === 'good'
-                ? 'bg-green-500/20 border-green-400/30'
-                : 'bg-yellow-500/20 border-yellow-400/30'
+                ? 'bg-green-50 border-green-200'
+                : 'bg-yellow-50 border-yellow-200'
             }`}>
               <h4 className={`font-semibold mb-2 ${
                 accuracyWarning || accuracy > 1000
-                  ? 'text-red-200' 
+                  ? 'text-red-900' 
                   : accuracyLevel === 'excellent' || accuracyLevel === 'good'
-                  ? 'text-green-200'
-                  : 'text-yellow-200'
+                  ? 'text-green-900'
+                  : 'text-yellow-900'
               }`}>
                 📍 GPS Accuracy
               </h4>
               <div className="text-sm space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className={accuracyWarning || accuracy > 1000 ? 'text-red-100' : 'text-white/90'}>
+                  <span className={accuracyWarning || accuracy > 1000 ? 'text-slate-700' : 'text-slate-700'}>
                     Accuracy:
                   </span>
                   <span className={`font-medium ${
                     accuracyWarning || accuracy > 1000
-                      ? 'text-red-300' 
+                      ? 'text-red-700' 
                       : accuracyLevel === 'excellent' || accuracyLevel === 'good'
-                      ? 'text-green-300'
-                      : 'text-yellow-300'
+                      ? 'text-green-700'
+                      : 'text-yellow-700'
                   }`}>
                     {accuracy > 1000 
                       ? `±${(accuracy / 1000).toFixed(1)}km` 
@@ -150,15 +150,15 @@ const DriverControls: React.FC<DriverControlsProps> = ({
                 </div>
                 {accuracyLevel && (
                   <div className="flex justify-between items-center">
-                    <span className={accuracyWarning || accuracy > 1000 ? 'text-red-100' : 'text-white/90'}>
+                    <span className={accuracyWarning || accuracy > 1000 ? 'text-slate-700' : 'text-slate-700'}>
                       Signal:
                     </span>
                     <span className={`font-medium capitalize ${
                       accuracyWarning || accuracy > 1000
-                        ? 'text-red-300' 
+                        ? 'text-red-700' 
                         : accuracyLevel === 'excellent' || accuracyLevel === 'good'
-                        ? 'text-green-300'
-                        : 'text-yellow-300'
+                        ? 'text-green-700'
+                        : 'text-yellow-700'
                     }`}>
                       {accuracyLevel}
                     </span>
@@ -167,22 +167,22 @@ const DriverControls: React.FC<DriverControlsProps> = ({
                 {accuracyMessage && (
                   <div className={`text-xs mt-2 p-2 rounded ${
                     accuracyWarning || accuracy > 1000
-                      ? 'bg-red-500/20 text-red-200 border border-red-400/30' 
-                      : 'bg-blue-500/10 text-blue-200'
+                      ? 'bg-red-100 text-red-800 border border-red-300' 
+                      : 'bg-blue-100 text-blue-800'
                   }`}>
                     {accuracyMessage}
                   </div>
                 )}
                 {/* CRITICAL WARNING: IP-based positioning detected */}
                 {accuracy > 1000 && (
-                  <div className="mt-3 p-3 bg-red-600/30 border border-red-500/50 rounded-lg">
+                  <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-xl">
                     <div className="flex items-start gap-2">
                       <span className="text-xl">⚠️</span>
                       <div className="flex-1">
-                        <div className="font-semibold text-red-200 mb-1">
+                        <div className="font-semibold text-red-900 mb-1">
                           Inaccurate Location Detected
                         </div>
-                        <div className="text-xs text-red-100 space-y-1">
+                        <div className="text-xs text-red-800 space-y-1">
                           <p>• Your browser is using IP-based positioning (no GPS hardware)</p>
                           <p>• Location shown is approximate city/region level, not your exact position</p>
                           <p>• For accurate tracking, use a mobile device with GPS</p>
@@ -198,19 +198,19 @@ const DriverControls: React.FC<DriverControlsProps> = ({
         </div>
 
         {/* Connection Status */}
-        <div className="bg-purple-500/20 border border-purple-400/30 rounded-lg p-4">
-          <h4 className="font-semibold text-purple-200 mb-2">🔗 Connection Status</h4>
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+          <h4 className="font-semibold text-purple-900 mb-2">🔗 Connection Status</h4>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center">
-              <span className="text-purple-100">WebSocket:</span>
-              <span className="font-medium text-purple-200">
+              <span className="text-slate-700">WebSocket:</span>
+              <span className="font-medium text-slate-900">
                 {getConnectionStatusText()}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-purple-100">Authenticated:</span>
+              <span className="text-slate-700">Authenticated:</span>
               <span className={`font-medium ${
-                isAuthenticated ? 'text-green-300' : 'text-red-300'
+                isAuthenticated ? 'text-green-700' : 'text-red-700'
               }`}>
                 {isAuthenticated ? '✅ Yes' : '❌ No'}
               </span>
@@ -220,9 +220,9 @@ const DriverControls: React.FC<DriverControlsProps> = ({
 
         {/* Location Error Handling */}
         {locationError && (
-          <div className="bg-red-500/20 border border-red-400/30 rounded-lg p-4">
-            <h4 className="font-semibold text-red-200 mb-2">⚠️ Location Error</h4>
-            <p className="text-red-100 text-sm mb-3 whitespace-pre-line break-words">{locationError}</p>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <h4 className="font-semibold text-red-900 mb-2">⚠️ Location Error</h4>
+            <p className="text-red-800 text-sm mb-3 whitespace-pre-line break-words">{locationError}</p>
             <div className="flex flex-col sm:flex-row gap-2">
               {onClearError && (
                 <button

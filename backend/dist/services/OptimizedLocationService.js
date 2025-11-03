@@ -26,35 +26,67 @@ class OptimizedLocationService {
                 throw new Error('Invalid coordinates');
             }
             const point = `POINT(${data.longitude} ${data.latitude})`;
-            const query = `
-        INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
-        VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
-        RETURNING id, bus_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
-      `;
-            const result = await this.connectionPool.query(query, [
-                data.busId,
-                point,
-                data.speed,
-                data.heading,
-                data.timestamp,
-            ]);
-            if (result.rows.length === 0) {
-                logger_1.logger.error('Error saving location: No rows returned', 'location-service');
-                return null;
+            const client = await this.connectionPool.connect();
+            try {
+                await client.query('BEGIN');
+                const liveQuery = `
+          INSERT INTO live_locations (bus_id, driver_id, location, speed_kmh, heading_degrees, recorded_at)
+          VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6)
+          RETURNING id, bus_id, driver_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
+        `;
+                const liveResult = await client.query(liveQuery, [
+                    data.busId,
+                    data.driverId,
+                    point,
+                    data.speed,
+                    data.heading,
+                    data.timestamp,
+                ]);
+                if (liveResult.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    logger_1.logger.error('Error saving location: No rows returned from live_locations', 'location-service');
+                    return null;
+                }
+                const historicalQuery = `
+          INSERT INTO locations (bus_id, driver_id, location, speed_kmh, heading_degrees, recorded_at)
+          VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6)
+          ON CONFLICT DO NOTHING;
+        `;
+                try {
+                    await client.query(historicalQuery, [
+                        data.busId,
+                        data.driverId,
+                        point,
+                        data.speed,
+                        data.heading,
+                        data.timestamp,
+                    ]);
+                }
+                catch (historicalError) {
+                    logger_1.logger.warn('Warning: Failed to save to historical locations table', 'location-service', { error: historicalError });
+                }
+                await client.query('COMMIT');
+                const savedLocation = liveResult.rows[0];
+                const locationData = {
+                    id: savedLocation.id,
+                    driver_id: data.driverId,
+                    bus_id: savedLocation.bus_id,
+                    location: savedLocation.location,
+                    timestamp: savedLocation.recorded_at,
+                    speed: savedLocation.speed_kmh,
+                    heading: savedLocation.heading_degrees,
+                };
+                this.invalidateCache(`bus_${data.busId}`);
+                logger_1.logger.info('Location saved successfully', 'location-service', { busId: data.busId });
+                return locationData;
             }
-            const savedLocation = result.rows[0];
-            const locationData = {
-                id: savedLocation.id,
-                driver_id: data.driverId,
-                bus_id: savedLocation.bus_id,
-                location: savedLocation.location,
-                timestamp: savedLocation.recorded_at,
-                speed: savedLocation.speed_kmh,
-                heading: savedLocation.heading_degrees,
-            };
-            this.invalidateCache(`bus_${data.busId}`);
-            logger_1.logger.info('Location saved successfully', 'location-service', { busId: data.busId });
-            return locationData;
+            catch (error) {
+                await client.query('ROLLBACK');
+                throw error;
+            }
+            finally {
+                client.release();
+            }
         }
         catch (error) {
             logger_1.logger.error('Error in saveLocationUpdate', 'location-service', { error, data });
@@ -73,6 +105,7 @@ class OptimizedLocationService {
         SELECT 
           ll.id, 
           ll.bus_id, 
+          ll.driver_id,
           ST_AsText(ll.location) as location, 
           ll.speed_kmh, 
           ll.heading_degrees, 
@@ -82,7 +115,7 @@ class OptimizedLocationService {
           u.full_name as driver_name
         FROM live_locations ll
         LEFT JOIN buses b ON ll.bus_id = b.id
-        LEFT JOIN user_profiles u ON b.assigned_driver_profile_id = u.id
+        LEFT JOIN user_profiles u ON ll.driver_id = u.id
         WHERE ll.recorded_at >= NOW() - INTERVAL '${options.timeWindow || 5} minutes'
       `;
             const params = [];
@@ -104,7 +137,7 @@ class OptimizedLocationService {
             const result = await this.connectionPool.query(query, params);
             const locations = result.rows.map((row) => ({
                 id: row.id,
-                driver_id: row.driver_name ? 'driver' : '',
+                driver_id: row.driver_id || '',
                 bus_id: row.bus_id,
                 location: row.location,
                 timestamp: row.recorded_at,
@@ -185,26 +218,24 @@ class OptimizedLocationService {
             return [];
         }
     }
-    async getBusLocationHistory(busId, startTime, endTime, limit = 100) {
+    async getBusLocationHistory(busId, startTime, endTime, limit = 1000) {
         try {
             const query = `
         SELECT 
           id, 
           bus_id, 
-          ST_AsText(location) as location, 
+          driver_id,
+          location, 
           speed_kmh, 
           heading_degrees, 
           recorded_at
-        FROM live_locations 
-        WHERE bus_id = $1 
-        AND recorded_at BETWEEN $2 AND $3
-        ORDER BY recorded_at DESC
-        LIMIT $4
+        FROM get_location_history($1, $2, $3, $4)
+        ORDER BY recorded_at ASC;
       `;
             const result = await this.connectionPool.query(query, [busId, startTime, endTime, limit]);
             return result.rows.map((row) => ({
                 id: row.id,
-                driver_id: '',
+                driver_id: row.driver_id || '',
                 bus_id: row.bus_id,
                 location: row.location,
                 timestamp: row.recorded_at,
@@ -214,14 +245,44 @@ class OptimizedLocationService {
         }
         catch (error) {
             logger_1.logger.error('Error in getBusLocationHistory', 'location-service', { error, busId });
-            return [];
+            try {
+                const fallbackQuery = `
+          SELECT 
+            id, 
+            bus_id, 
+            driver_id,
+            ST_AsText(location) as location, 
+            speed_kmh, 
+            heading_degrees, 
+            recorded_at
+          FROM live_locations 
+          WHERE bus_id = $1 
+          AND recorded_at BETWEEN $2 AND $3
+          ORDER BY recorded_at DESC
+          LIMIT $4
+        `;
+                const fallbackResult = await this.connectionPool.query(fallbackQuery, [busId, startTime, endTime, limit]);
+                return fallbackResult.rows.map((row) => ({
+                    id: row.id,
+                    driver_id: row.driver_id || '',
+                    bus_id: row.bus_id,
+                    location: row.location,
+                    timestamp: row.recorded_at,
+                    speed: row.speed_kmh,
+                    heading: row.heading_degrees,
+                }));
+            }
+            catch (fallbackError) {
+                logger_1.logger.error('Error in fallback query', 'location-service', { error: fallbackError, busId });
+                return [];
+            }
         }
     }
     async getDriverBusInfo(driverId) {
         try {
             const query = `
         SELECT 
-          b.id as bus_id,
+          b.id,
           b.bus_number,
           b.vehicle_no,
           b.route_id,
@@ -243,7 +304,8 @@ class OptimizedLocationService {
             }
             const row = result.rows[0];
             return {
-                bus_id: row.bus_id,
+                id: row.id,
+                bus_id: row.id,
                 bus_number: row.bus_number,
                 route_id: row.route_id,
                 route_name: row.route_name || 'Unknown Route',

@@ -187,7 +187,7 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
   if (loading && drivers.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-white">Loading drivers...</div>
+        <div className="text-slate-600">Loading drivers...</div>
       </div>
     );
   }
@@ -195,14 +195,14 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">Driver Management</h2>
-          <p className="text-white/70">Manage your driver team</p>
+          <h2 className="text-2xl font-bold text-slate-900">Driver Management</h2>
+          <p className="text-slate-600">Manage your driver team</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors text-sm font-medium min-h-[44px] shadow-sm touch-friendly w-full sm:w-auto"
         >
           Add New Driver
         </button>
@@ -210,14 +210,14 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
 
       {/* Messages */}
       {error && (
-        <div className="p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
-          <p className="text-red-300">{error}</p>
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+          <p className="text-red-800">{error}</p>
         </div>
       )}
 
       {successMessage && (
-        <div className="p-4 bg-green-500/20 border border-green-500/50 rounded-lg">
-          <p className="text-green-300">{successMessage}</p>
+        <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+          <p className="text-green-800">{successMessage}</p>
         </div>
       )}
 
@@ -350,31 +350,31 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
       )}
 
       {/* Driver Table */}
-      <div className="bg-white/10 backdrop-blur-lg rounded-lg overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-white/5">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Driver
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Contact
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Assignment
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <tbody className="divide-y divide-slate-200">
               {drivers.map((driver) => (
-                <tr key={driver.id} className="hover:bg-white/5">
+                <tr key={driver.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-3">
                       {driver.profile_photo_url ? (
@@ -384,56 +384,56 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
                           className="w-10 h-10 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                          <span className="text-white font-medium">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                          <span className="text-slate-700 font-medium">
                             {driver.first_name?.[0]}{driver.last_name?.[0]}
                           </span>
                         </div>
                       )}
                       <div>
-                        <div className="text-white font-medium">
+                        <div className="text-slate-900 font-medium">
                           {driver.first_name} {driver.last_name}
                         </div>
-                        <div className="text-white/70 text-sm">{driver.email}</div>
+                        <div className="text-slate-600 text-sm">{driver.email}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-white/70 text-sm">
+                    <div className="text-slate-600 text-sm">
                       {driver.phone || 'No phone number'}
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     {driver.assigned_bus_id ? (
                       <div>
-                        <div className="text-white">{driver.assigned_bus_plate}</div>
-                        <div className="text-white/70 text-sm">{driver.route_name}</div>
+                        <div className="text-slate-900">{driver.assigned_bus_plate}</div>
+                        <div className="text-slate-600 text-sm">{driver.route_name}</div>
                       </div>
                     ) : (
-                      <span className="text-white/50">Unassigned</span>
+                      <span className="text-slate-400">Unassigned</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       driver.is_active 
-                        ? 'bg-green-500/20 text-green-300' 
-                        : 'bg-red-500/20 text-red-300'
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
                     }`}>
                       {driver.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex space-x-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => handleEdit(driver)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
                       >
                         Edit
                       </button>
                       {driver.assigned_bus_id ? (
                         <button
                           onClick={() => driver.assigned_bus_id && handleUnassign(driver.id, driver.assigned_bus_id)}
-                          className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded transition-colors"
+                          className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
                         >
                           Unassign
                         </button>
@@ -446,14 +446,14 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
                             });
                             window.dispatchEvent(event);
                           }}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
                         >
                           Assign
                         </button>
                       )}
                       <button
                         onClick={() => handleDelete(driver.id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
                       >
                         Delete
                       </button>

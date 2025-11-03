@@ -31,10 +31,11 @@ export interface AnalyticsData {
 }
 
 export interface SystemHealth {
-  database: 'healthy' | 'unhealthy';
-  services: 'healthy' | 'unhealthy';
-  lastCheck: string;
-  uptime: number;
+  buses: number;
+  routes: number;
+  drivers: number;
+  recentLocations: number;
+  timestamp: string;
 }
 
 export class ConsolidatedAdminService {
@@ -212,20 +213,26 @@ export class ConsolidatedAdminService {
 
   static async getSystemHealth(): Promise<SystemHealth> {
     try {
+      const [buses, routes, drivers, recentLocationsResult] = await Promise.all([
+        UnifiedDatabaseService.getAllBuses(),
+        UnifiedDatabaseService.getAllRoutes(),
+        UnifiedDatabaseService.getAllDrivers(),
+        supabaseAdmin
+          .from('live_locations')
+          .select('id', { count: 'exact', head: true })
+          .gte('recorded_at', new Date(Date.now() - 3600000).toISOString())
+      ]);
+
       return {
-        database: 'healthy',
-        services: 'healthy',
-        lastCheck: new Date().toISOString(),
-        uptime: process.uptime()
+        buses: buses.length,
+        routes: routes.length,
+        drivers: drivers.length,
+        recentLocations: recentLocationsResult.count || 0,
+        timestamp: new Date().toISOString()
       };
     } catch (error) {
       logger.error('Error in getSystemHealth', 'consolidated-admin', { error });
-      return {
-        database: 'unhealthy',
-        services: 'unhealthy',
-        lastCheck: new Date().toISOString(),
-        uptime: process.uptime()
-      };
+      throw error;
     }
   }
 

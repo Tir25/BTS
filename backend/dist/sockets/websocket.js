@@ -23,9 +23,12 @@ const initializeWebSocket = (io) => {
     io.use(websocketAuth_1.websocketAuthMiddleware);
     let totalConnections = 0;
     let activeConnections = 0;
-    const MAX_CONNECTIONS = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS || '1000');
-    const MAX_CONNECTIONS_PER_IP = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS_PER_IP || '10');
+    const MAX_CONNECTIONS = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS || '2000');
+    const MAX_CONNECTIONS_PER_IP = parseInt(process.env.MAX_WEBSOCKET_CONNECTIONS_PER_IP || '25');
     const connectionCounts = new Map();
+    const activeSockets = new Map();
+    const connectionTimestamps = new Map();
+    const heartbeatIntervals = new Map();
     io.on('connection', async (socket) => {
         const clientIP = socket.handshake.address;
         if (activeConnections >= MAX_CONNECTIONS) {
@@ -59,6 +62,8 @@ const initializeWebSocket = (io) => {
         activeConnections++;
         connectionCounts.set(clientIP, ipConnections + 1);
         socket.lastActivity = Date.now();
+        activeSockets.set(socket.id, socket);
+        connectionTimestamps.set(socket.id, Date.now());
         logger_1.logger.wsConnection(socket.id, socket.userId, {
             totalConnections,
             activeConnections,
@@ -76,6 +81,20 @@ const initializeWebSocket = (io) => {
             socket.lastActivity = Date.now();
             logger_1.logger.debug('Ping received', 'websocket', { socketId: socket.id });
         });
+        const heartbeatInterval = setInterval(() => {
+            const now = Date.now();
+            const lastActivity = socket.lastActivity || 0;
+            const inactiveTime = now - lastActivity;
+            if (inactiveTime > 5 * 60 * 1000) {
+                logger_1.logger.warn('Disconnecting inactive socket', 'websocket', {
+                    socketId: socket.id,
+                    inactiveTime: Math.round(inactiveTime / 1000),
+                    userId: socket.userId
+                });
+                socket.disconnect(true);
+            }
+        }, 60000);
+        heartbeatIntervals.set(socket.id, heartbeatInterval);
         socket.on('driver:initialize', async () => {
             try {
                 if (!socket.isAuthenticated || !socket.userId) {
@@ -108,6 +127,7 @@ const initializeWebSocket = (io) => {
                 logger_1.logger.websocket('Bus info retrieved', {
                     userId: socket.userId,
                     busInfo: busInfo ? {
+                        id: busInfo.id,
                         bus_id: busInfo.bus_id,
                         bus_number: busInfo.bus_number,
                         route_id: busInfo.route_id
@@ -125,17 +145,22 @@ const initializeWebSocket = (io) => {
                     return;
                 }
                 socket.driverId = socket.userId;
-                socket.busId = busInfo.bus_id;
+                socket.busId = busInfo.id;
                 socket.lastActivity = Date.now();
                 socket.join(`driver:${socket.userId}`);
-                socket.join(`bus:${busInfo.bus_id}`);
+                socket.join(`bus:${socket.busId}`);
                 logger_1.logger.websocket('Driver initialized and assigned', {
                     driverId: socket.userId,
-                    busId: busInfo.bus_id
+                    busId: socket.busId,
+                    busInfoFields: {
+                        id: busInfo.id,
+                        bus_id: busInfo.bus_id,
+                        bus_number: busInfo.bus_number
+                    }
                 });
                 const initResponse = {
                     driverId: socket.userId,
-                    busId: busInfo.bus_id,
+                    busId: socket.busId,
                     busInfo: busInfo,
                 };
                 logger_1.logger.websocket('Sending initialization response', {
@@ -148,7 +173,7 @@ const initializeWebSocket = (io) => {
                     type: 'initial',
                     assignment: {
                         driverId: socket.userId,
-                        busId: busInfo.bus_id,
+                        busId: socket.busId,
                         busNumber: busInfo.bus_number,
                         routeId: busInfo.route_id,
                         routeName: busInfo.route_name,
@@ -259,10 +284,31 @@ const initializeWebSocket = (io) => {
                     nearStop: nearStopInfo,
                 };
                 logger_1.logger.location('Broadcasting location update', { locationData });
+                const connectedClients = Array.from(io.sockets.sockets.values());
+                const studentClients = connectedClients.filter(s => s.userRole === 'student' ||
+                    s.userId?.startsWith('anonymous-student'));
+                const driverClients = connectedClients.filter(s => s.userRole === 'driver');
+                logger_1.logger.location('DETAILED DEBUG: Broadcasting to clients', {
+                    totalClients: connectedClients.length,
+                    studentClients: studentClients.length,
+                    driverClients: driverClients.length,
+                    socketBusId: socket.busId,
+                    socketBusIdType: typeof socket.busId,
+                    socketBusIdLength: socket.busId?.length,
+                    locationDataBusId: locationData.busId,
+                    locationDataBusIdType: typeof locationData.busId,
+                    locationDataBusIdLength: locationData.busId?.length,
+                    busIdMatch: socket.busId === locationData.busId,
+                    fullLocationData: locationData,
+                    driverId: data.driverId,
+                    timestamp: data.timestamp
+                });
                 io.emit('bus:locationUpdate', locationData);
+                io.to('students').emit('bus:locationUpdate', locationData);
                 logger_1.logger.location('Location broadcast complete', {
                     busId: socket.busId,
-                    clientsCount: io.engine.clientsCount
+                    totalClientsCount: io.engine.clientsCount,
+                    studentClientsCount: studentClients.length
                 });
                 if (nearStopInfo?.is_near_stop) {
                     io.emit('bus:arriving', {
@@ -291,26 +337,52 @@ const initializeWebSocket = (io) => {
         });
         socket.on('student:connect', () => {
             try {
-                if (!socket.isAuthenticated || !socket.userId) {
-                    socket.emit('error', {
-                        message: 'Authentication required',
-                        code: 'NOT_AUTHENTICATED',
-                    });
-                    return;
-                }
-                if (socket.userRole !== 'student' && socket.userRole !== 'admin') {
-                    socket.emit('error', {
-                        message: 'Student role required',
-                        code: 'INSUFFICIENT_PERMISSIONS',
-                    });
-                    return;
+                const isAnonymousStudent = !socket.isAuthenticated && socket.userId?.startsWith('anonymous-student');
+                const isAuthenticatedStudent = socket.isAuthenticated && socket.userId && (socket.userRole === 'student' || socket.userRole === 'admin' || socket.userRole === 'driver');
+                if (!isAnonymousStudent && !isAuthenticatedStudent) {
+                    if (socket.userRole && socket.userRole !== 'student' && socket.userRole !== 'admin' && socket.userRole !== 'driver') {
+                        socket.emit('error', {
+                            message: 'Valid role required for student map access',
+                            code: 'INSUFFICIENT_PERMISSIONS',
+                        });
+                        return;
+                    }
+                    const allowAnonymous = process.env.ALLOW_ANONYMOUS_STUDENTS === 'true';
+                    if (!socket.userRole && !socket.userId) {
+                        if (!allowAnonymous && process.env.NODE_ENV === 'production') {
+                            socket.emit('error', {
+                                message: 'Authentication required in production mode',
+                                code: 'AUTHENTICATION_REQUIRED',
+                            });
+                            return;
+                        }
+                        socket.userId = `anonymous-student-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                        socket.userRole = 'student';
+                        socket.isAuthenticated = false;
+                    }
+                    else {
+                        socket.emit('error', {
+                            message: 'Authentication required',
+                            code: 'NOT_AUTHENTICATED',
+                        });
+                        return;
+                    }
                 }
                 socket.lastActivity = Date.now();
                 socket.join('students');
-                logger_1.logger.websocket('Student connected', { socketId: socket.id, userId: socket.userId });
+                const isAnonymous = socket.userId?.startsWith('anonymous-student') || false;
+                const responseUserId = isAnonymous ? 'anonymous' : socket.userId;
+                logger_1.logger.websocket('Student connected successfully', {
+                    socketId: socket.id,
+                    userId: responseUserId,
+                    isAnonymous: isAnonymous,
+                    isAuthenticated: socket.isAuthenticated,
+                    userRole: socket.userRole
+                });
                 socket.emit('student:connected', {
                     timestamp: new Date().toISOString(),
-                    userId: socket.userId
+                    userId: responseUserId,
+                    isAnonymous: isAnonymous
                 });
             }
             catch (error) {
@@ -336,7 +408,7 @@ const initializeWebSocket = (io) => {
                         type: 'refresh',
                         assignment: {
                             driverId: socket.userId,
-                            busId: busInfo.bus_id,
+                            busId: busInfo.id,
                             busNumber: busInfo.bus_number,
                             routeId: busInfo.route_id,
                             routeName: busInfo.route_name,
@@ -372,6 +444,13 @@ const initializeWebSocket = (io) => {
                 if (ipConnections > 0) {
                     connectionCounts.set(clientIP, ipConnections - 1);
                 }
+                activeSockets.delete(socket.id);
+                connectionTimestamps.delete(socket.id);
+                const heartbeatInterval = heartbeatIntervals.get(socket.id);
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                    heartbeatIntervals.delete(socket.id);
+                }
                 logger_1.logger.wsDisconnection(socket.id, reason, socket.userId);
                 if (reason === 'transport close') {
                     logger_1.logger.debug('Mobile client disconnection', 'websocket', { socketId: socket.id, reason });
@@ -389,6 +468,12 @@ const initializeWebSocket = (io) => {
                     });
                 }
                 socket.removeAllListeners();
+                socket.userId = undefined;
+                socket.userRole = undefined;
+                socket.driverId = undefined;
+                socket.busId = undefined;
+                socket.isAuthenticated = false;
+                socket.lastActivity = undefined;
             }
             catch (error) {
                 logger_1.logger.error('Error handling disconnect', 'websocket', { socketId: socket.id }, error);
@@ -405,15 +490,42 @@ const initializeWebSocket = (io) => {
     setInterval(() => {
         const now = Date.now();
         const inactiveThreshold = 5 * 60 * 1000;
-        io.sockets.sockets.forEach((socket) => {
-            if (socket.lastActivity &&
-                now - socket.lastActivity > inactiveThreshold) {
+        const staleThreshold = 10 * 60 * 1000;
+        const staleConnections = [];
+        activeSockets.forEach((socket, socketId) => {
+            const connectionTime = connectionTimestamps.get(socketId) || 0;
+            const lastActivity = socket.lastActivity || 0;
+            const inactiveTime = now - lastActivity;
+            const connectionAge = now - connectionTime;
+            if (inactiveTime > inactiveThreshold) {
                 logger_1.logger.debug('Inactive socket detected', 'websocket', {
-                    socketId: socket.id,
-                    lastActivity: new Date(socket.lastActivity).toISOString()
+                    socketId,
+                    inactiveTime: Math.round(inactiveTime / 1000),
+                    userId: socket.userId
                 });
             }
+            if (connectionAge > staleThreshold && inactiveTime > inactiveThreshold) {
+                staleConnections.push(socketId);
+            }
         });
+        staleConnections.forEach(socketId => {
+            const socket = activeSockets.get(socketId);
+            if (socket) {
+                logger_1.logger.warn('Disconnecting stale connection', 'websocket', {
+                    socketId,
+                    userId: socket.userId
+                });
+                socket.disconnect(true);
+            }
+        });
+        if (activeConnections > 0 && totalConnections % 100 === 0) {
+            logger_1.logger.info('WebSocket connection statistics', 'websocket', {
+                activeConnections,
+                totalConnections,
+                staleConnections: staleConnections.length,
+                heartbeatIntervals: heartbeatIntervals.size
+            });
+        }
     }, 60000);
     const broadcastAssignmentUpdate = (driverId, assignment) => {
         logger_1.logger.websocket('Broadcasting assignment update', {

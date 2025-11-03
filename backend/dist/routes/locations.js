@@ -11,9 +11,24 @@ const router = express_1.default.Router();
 router.get('/current', async (req, res) => {
     try {
         const locations = await OptimizedLocationService_1.optimizedLocationService.getCurrentBusLocations();
+        const formattedLocations = locations.map((location) => {
+            const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
+            const [longitude, latitude] = pointMatch
+                ? pointMatch[1].split(' ').map(Number)
+                : [0, 0];
+            return {
+                busId: location.bus_id,
+                driverId: location.driver_id || '',
+                latitude,
+                longitude,
+                timestamp: location.timestamp || new Date().toISOString(),
+                speed: location.speed,
+                heading: location.heading,
+            };
+        });
         res.json({
             success: true,
-            data: locations,
+            data: formattedLocations,
             timestamp: new Date().toISOString(),
         });
     }

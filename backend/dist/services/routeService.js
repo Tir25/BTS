@@ -243,8 +243,13 @@ class RouteService {
                 .delete()
                 .eq('route_id', routeId);
             await supabase_1.supabaseAdmin
-                .from('driver_bus_assignments')
-                .delete()
+                .from('buses')
+                .update({
+                route_id: null,
+                assignment_status: 'unassigned',
+                assignment_notes: 'Route deleted',
+                updated_at: new Date().toISOString()
+            })
                 .eq('route_id', routeId);
             await supabase_1.supabaseAdmin
                 .from('bus_route_shifts')

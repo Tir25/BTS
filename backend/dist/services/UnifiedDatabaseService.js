@@ -311,9 +311,15 @@ class UnifiedDatabaseService {
                 .delete()
                 .eq('bus_id', busId);
             await supabase_1.supabaseAdmin
-                .from('driver_bus_assignments')
-                .delete()
-                .eq('bus_id', busId);
+                .from('buses')
+                .update({
+                assigned_driver_profile_id: null,
+                route_id: null,
+                assignment_status: 'unassigned',
+                assignment_notes: null,
+                updated_at: new Date().toISOString()
+            })
+                .eq('id', busId);
             await supabase_1.supabaseAdmin
                 .from('bus_route_assignments')
                 .delete()
@@ -727,9 +733,15 @@ class UnifiedDatabaseService {
                 .update({ assigned_driver_profile_id: null })
                 .eq('assigned_driver_profile_id', driverId);
             await supabase_1.supabaseAdmin
-                .from('driver_bus_assignments')
-                .delete()
-                .eq('driver_id', driverId);
+                .from('buses')
+                .update({
+                assigned_driver_profile_id: null,
+                route_id: null,
+                assignment_status: 'unassigned',
+                assignment_notes: null,
+                updated_at: new Date().toISOString()
+            })
+                .eq('assigned_driver_profile_id', driverId);
             await supabase_1.supabaseAdmin
                 .from('bus_route_assignments')
                 .delete()

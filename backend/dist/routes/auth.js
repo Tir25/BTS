@@ -112,25 +112,23 @@ router.post('/driver/login', async (req, res) => {
                 code: 'INSUFFICIENT_PERMISSIONS'
             });
         }
-        const { data: assignment, error: assignmentError } = await supabase_1.supabaseAdmin
-            .from('driver_bus_assignments')
+        const { data: busData, error: busError } = await supabase_1.supabaseAdmin
+            .from('buses')
             .select(`
         id,
-        driver_id,
-        bus_id,
         bus_number,
+        vehicle_no,
+        assigned_driver_profile_id,
         route_id,
-        route_name,
-        driver_name,
-        is_active,
-        created_at,
+        assignment_status,
+        assignment_notes,
         updated_at
       `)
-            .eq('driver_id', authData.user.id)
+            .eq('assigned_driver_profile_id', authData.user.id)
             .eq('is_active', true)
             .single();
-        if (assignmentError || !assignment) {
-            if (assignmentError?.code === 'PGRST116') {
+        if (busError || !busData) {
+            if (busError?.code === 'PGRST116') {
                 logger_1.logger.warn('❌ No bus assignment found for driver', 'auth', {
                     userId: authData.user.id,
                     email
@@ -144,7 +142,7 @@ router.post('/driver/login', async (req, res) => {
             }
             logger_1.logger.error('❌ Error fetching bus assignment', 'auth', {
                 userId: authData.user.id,
-                error: assignmentError?.message
+                error: busError?.message
             });
             return res.status(500).json({
                 success: false,
@@ -153,6 +151,29 @@ router.post('/driver/login', async (req, res) => {
                 code: 'ASSIGNMENT_FETCH_FAILED'
             });
         }
+        let routeName = '';
+        if (busData.route_id) {
+            const { data: routeData, error: routeError } = await supabase_1.supabaseAdmin
+                .from('routes')
+                .select('name')
+                .eq('id', busData.route_id)
+                .single();
+            if (!routeError && routeData) {
+                routeName = routeData.name;
+            }
+        }
+        const assignment = {
+            id: busData.id,
+            driver_id: authData.user.id,
+            bus_id: busData.id,
+            bus_number: busData.bus_number,
+            route_id: busData.route_id || '',
+            route_name: routeName,
+            driver_name: profile.full_name,
+            is_active: busData.assignment_status === 'assigned',
+            created_at: busData.updated_at,
+            updated_at: busData.updated_at
+        };
         try {
             await supabase_1.supabaseAdmin
                 .from('user_profiles')
@@ -351,24 +372,22 @@ router.post('/driver/validate', async (req, res) => {
                 code: 'INSUFFICIENT_PERMISSIONS'
             });
         }
-        const { data: assignment, error: assignmentError } = await supabase_1.supabaseAdmin
-            .from('driver_bus_assignments')
+        const { data: busData, error: busError } = await supabase_1.supabaseAdmin
+            .from('buses')
             .select(`
         id,
-        driver_id,
-        bus_id,
         bus_number,
+        vehicle_no,
+        assigned_driver_profile_id,
         route_id,
-        route_name,
-        driver_name,
-        is_active,
-        created_at,
+        assignment_status,
+        assignment_notes,
         updated_at
       `)
-            .eq('driver_id', user.id)
+            .eq('assigned_driver_profile_id', user.id)
             .eq('is_active', true)
             .single();
-        if (assignmentError || !assignment) {
+        if (busError || !busData) {
             return res.status(404).json({
                 success: false,
                 error: 'No assignment',
@@ -376,6 +395,27 @@ router.post('/driver/validate', async (req, res) => {
                 code: 'NO_BUS_ASSIGNMENT'
             });
         }
+        let routeName = '';
+        if (busData.route_id) {
+            const { data: routeData } = await supabase_1.supabaseAdmin
+                .from('routes')
+                .select('name')
+                .eq('id', busData.route_id)
+                .single();
+            routeName = routeData?.name || '';
+        }
+        const assignment = {
+            id: busData.id,
+            driver_id: user.id,
+            bus_id: busData.id,
+            bus_number: busData.bus_number,
+            route_id: busData.route_id || '',
+            route_name: routeName,
+            driver_name: profile.full_name,
+            is_active: busData.assignment_status === 'assigned',
+            created_at: busData.updated_at,
+            updated_at: busData.updated_at
+        };
         return res.json({
             success: true,
             data: {

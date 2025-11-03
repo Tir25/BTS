@@ -11,16 +11,16 @@ export default function UnifiedAdminManagement() {
   const [activeTab, setActiveTab] = useState<ManagementTab>('buses');
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white mb-2">Management Dashboard</h2>
-        <p className="text-white/70">Manage buses, drivers, and routes</p>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Management Dashboard</h2>
+        <p className="text-slate-600">Manage buses, drivers, and routes</p>
       </div>
 
       {/* Tab Navigation */}
       <div className="mb-6">
-        <div className="border-b border-white/20">
-          <nav className="-mb-px flex space-x-8">
+        <div className="border-b border-slate-200">
+          <nav className="-mb-px flex space-x-2 sm:space-x-6 overflow-x-auto">
             {[
               { id: 'buses', label: 'Buses' },
               { id: 'drivers', label: 'Drivers' },
@@ -31,10 +31,10 @@ export default function UnifiedAdminManagement() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as ManagementTab)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-3 px-2 sm:px-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-white/70 hover:text-white hover:border-white/30'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
                 }`}
               >
                 {tab.label}

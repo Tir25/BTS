@@ -8,6 +8,7 @@ interface LocationData {
     heading?: number;
 }
 interface BusInfo {
+    id: string;
     bus_id: string;
     bus_number: string;
     route_id: string;

@@ -25,6 +25,8 @@ const admin_1 = __importDefault(require("./routes/admin"));
 const productionAssignments_1 = __importDefault(require("./routes/productionAssignments"));
 const optimizedAssignments_1 = __importDefault(require("./routes/optimizedAssignments"));
 const storage_1 = __importDefault(require("./routes/storage"));
+const tracking_1 = __importDefault(require("./routes/tracking"));
+const student_1 = __importDefault(require("./routes/student"));
 const locations_1 = __importDefault(require("./routes/locations"));
 const sse_1 = __importDefault(require("./routes/sse"));
 const database_1 = require("./models/database");
@@ -41,6 +43,7 @@ const memoryOptimization_1 = require("./middleware/memoryOptimization");
 const logRotation_1 = require("./utils/logRotation");
 const deadCodeDetector_1 = require("./utils/deadCodeDetector");
 const advancedRateLimit_1 = require("./middleware/advancedRateLimit");
+const LocationArchiveService_1 = require("./services/LocationArchiveService");
 const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
 const io = new socket_io_1.Server(server, {
@@ -148,6 +151,8 @@ app.use('/storage', advancedRateLimit_1.apiRateLimits.upload, securityEnhanced_1
 app.use('/locations', advancedRateLimit_1.apiRateLimits.locations, (0, redisCache_1.smartCacheMiddleware)({
     dataTypeTTL: { 'locations': 60 }
 }), locations_1.default);
+app.use('/tracking', tracking_1.default);
+app.use('/student', student_1.default);
 app.use('/sse', sse_1.default);
 app.use('/monitoring', monitoring_2.default);
 app.get('/cache/stats', redisCache_1.redisCacheStats);
@@ -236,6 +241,9 @@ const startServer = async () => {
         logger_1.logger.info('🛡️ Performance guard started', 'server');
         systemValidator_1.systemValidator.startValidation();
         logger_1.logger.info('🔍 System validator started', 'server');
+        LocationArchiveService_1.locationArchiveService.startAutoArchive(60);
+        LocationArchiveService_1.locationArchiveService.startAutoCleanup(24);
+        logger_1.logger.info('📦 Location archive service started', 'server');
         logger_1.logger.info(`🌐 Starting server on port ${PORT}...`, 'server');
         server.listen(PORT, '0.0.0.0', () => {
             logger_1.logger.serverReady(PORT);
@@ -270,6 +278,8 @@ const gracefulShutdown = async (signal) => {
         logger_1.logger.info('Memory optimizer stopped', 'server');
         logRotation_1.logRotator.stop();
         logger_1.logger.info('Log rotator stopped', 'server');
+        LocationArchiveService_1.locationArchiveService.stop();
+        logger_1.logger.info('Location archive service stopped', 'server');
         await RedisCacheService_1.redisCache.disconnect();
         logger_1.logger.info('Redis cache connection closed', 'server');
         await (0, database_2.closeDatabasePool)();

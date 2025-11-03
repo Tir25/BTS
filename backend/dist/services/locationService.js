@@ -9,32 +9,64 @@ const database_1 = __importDefault(require("../config/database"));
 const saveLocationUpdate = async (data) => {
     try {
         const point = `POINT(${data.longitude} ${data.latitude})`;
-        const query = `
-      INSERT INTO live_locations (bus_id, location, speed_kmh, heading_degrees, recorded_at)
-      VALUES ($1, ST_GeomFromText($2, 4326), $3, $4, $5)
-      RETURNING id, bus_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
-    `;
-        const result = await database_1.default.query(query, [
-            data.busId,
-            point,
-            data.speed,
-            data.heading,
-            data.timestamp,
-        ]);
-        if (result.rows.length === 0) {
-            console.error('❌ Error saving location: No rows returned');
-            return null;
+        const client = await database_1.default.connect();
+        try {
+            await client.query('BEGIN');
+            const liveQuery = `
+        INSERT INTO live_locations (bus_id, driver_id, location, speed_kmh, heading_degrees, recorded_at)
+        VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6)
+        RETURNING id, bus_id, driver_id, ST_AsText(location) as location, speed_kmh, heading_degrees, recorded_at;
+      `;
+            const liveResult = await client.query(liveQuery, [
+                data.busId,
+                data.driverId,
+                point,
+                data.speed,
+                data.heading,
+                data.timestamp,
+            ]);
+            if (liveResult.rows.length === 0) {
+                await client.query('ROLLBACK');
+                console.error('❌ Error saving location: No rows returned from live_locations');
+                return null;
+            }
+            const historicalQuery = `
+        INSERT INTO locations (bus_id, driver_id, location, speed_kmh, heading_degrees, recorded_at)
+        VALUES ($1, $2, ST_GeomFromText($3, 4326), $4, $5, $6)
+        ON CONFLICT DO NOTHING;
+      `;
+            try {
+                await client.query(historicalQuery, [
+                    data.busId,
+                    data.driverId,
+                    point,
+                    data.speed,
+                    data.heading,
+                    data.timestamp,
+                ]);
+            }
+            catch (historicalError) {
+                console.warn('⚠️ Warning: Failed to save to historical locations table:', historicalError);
+            }
+            await client.query('COMMIT');
+            const savedLocation = liveResult.rows[0];
+            return {
+                id: savedLocation.id,
+                driver_id: data.driverId,
+                bus_id: savedLocation.bus_id,
+                location: savedLocation.location,
+                timestamp: savedLocation.recorded_at,
+                speed: savedLocation.speed_kmh,
+                heading: savedLocation.heading_degrees,
+            };
         }
-        const savedLocation = result.rows[0];
-        return {
-            id: savedLocation.id,
-            driver_id: data.driverId,
-            bus_id: savedLocation.bus_id,
-            location: savedLocation.location,
-            timestamp: savedLocation.recorded_at,
-            speed: savedLocation.speed_kmh,
-            heading: savedLocation.heading_degrees,
-        };
+        catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        }
+        finally {
+            client.release();
+        }
     }
     catch (error) {
         console.error('❌ Error in saveLocationUpdate:', error);
@@ -149,20 +181,18 @@ const getBusLocationHistory = async (busId, startTime, endTime) => {
       SELECT 
         id, 
         bus_id, 
-        ST_AsText(location) as location, 
+        driver_id,
+        location, 
         speed_kmh, 
         heading_degrees, 
         recorded_at
-      FROM live_locations 
-      WHERE bus_id = $1 
-        AND recorded_at >= $2 
-        AND recorded_at <= $3
+      FROM get_location_history($1, $2, $3, 1000)
       ORDER BY recorded_at ASC;
     `;
         const result = await database_1.default.query(query, [busId, startTime, endTime]);
         return result.rows.map((row) => ({
             id: row.id,
-            driver_id: '',
+            driver_id: row.driver_id || '',
             bus_id: row.bus_id,
             location: row.location,
             timestamp: row.recorded_at,
@@ -172,7 +202,37 @@ const getBusLocationHistory = async (busId, startTime, endTime) => {
     }
     catch (error) {
         console.error('❌ Error in getBusLocationHistory:', error);
-        return [];
+        try {
+            const fallbackQuery = `
+        SELECT 
+          id, 
+          bus_id, 
+          driver_id,
+          ST_AsText(location) as location, 
+          speed_kmh, 
+          heading_degrees, 
+          recorded_at
+        FROM live_locations 
+        WHERE bus_id = $1 
+          AND recorded_at >= $2 
+          AND recorded_at <= $3
+        ORDER BY recorded_at ASC;
+      `;
+            const fallbackResult = await database_1.default.query(fallbackQuery, [busId, startTime, endTime]);
+            return fallbackResult.rows.map((row) => ({
+                id: row.id,
+                driver_id: row.driver_id || '',
+                bus_id: row.bus_id,
+                location: row.location,
+                timestamp: row.recorded_at,
+                speed: row.speed_kmh,
+                heading: row.heading_degrees,
+            }));
+        }
+        catch (fallbackError) {
+            console.error('❌ Error in fallback query:', fallbackError);
+            return [];
+        }
     }
 };
 exports.getBusLocationHistory = getBusLocationHistory;

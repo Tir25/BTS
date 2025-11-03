@@ -3,6 +3,7 @@ export interface AssignmentData {
     driver_id: string;
     bus_id: string;
     route_id: string;
+    shift_id?: string | null;
     assigned_by: string;
     notes?: string;
     assigned_at?: string;

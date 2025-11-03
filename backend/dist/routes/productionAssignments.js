@@ -132,7 +132,7 @@ router.get('/bus/:busId/history', auth_1.requireAdmin, async (req, res) => {
 });
 router.post('/', auth_1.requireAdmin, async (req, res) => {
     try {
-        const { driver_id, bus_id, route_id, notes, status } = req.body;
+        const { driver_id, bus_id, route_id, shift_id, notes, status } = req.body;
         if (!driver_id || !bus_id || !route_id) {
             return res.status(400).json({
                 success: false,
@@ -152,6 +152,7 @@ router.post('/', auth_1.requireAdmin, async (req, res) => {
             driver_id,
             bus_id,
             route_id,
+            shift_id,
             assigned_by,
             notes,
             status: status || 'active',
@@ -182,7 +183,7 @@ router.post('/', auth_1.requireAdmin, async (req, res) => {
 router.put('/bus/:busId', auth_1.requireAdmin, async (req, res) => {
     try {
         const { busId } = req.params;
-        const { driver_id, route_id, notes, status } = req.body;
+        const { driver_id, route_id, shift_id, notes, status } = req.body;
         const assigned_by = req.user?.id;
         if (!assigned_by) {
             return res.status(401).json({
@@ -194,6 +195,7 @@ router.put('/bus/:busId', auth_1.requireAdmin, async (req, res) => {
         const assignment = await ProductionAssignmentService_1.ProductionAssignmentService.updateAssignment(busId, {
             driver_id,
             route_id,
+            shift_id,
             assigned_by,
             notes,
             status,

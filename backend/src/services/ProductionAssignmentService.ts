@@ -144,13 +144,19 @@ export class ProductionAssignmentService {
       const totalRoutes = routesRes.count || 0;
       
       const assignedBuses = (busesRes.data || []).filter(b => b.assigned_driver_profile_id && b.route_id).length;
-      const unassignedDrivers = totalDrivers - assignedBuses;
+      // Count unique assigned drivers
+      const uniqueAssignedDrivers = new Set((busesRes.data || [])
+        .filter(b => b.assigned_driver_profile_id && b.route_id)
+        .map(b => b.assigned_driver_profile_id)
+      ).size;
+      const unassignedDrivers = Math.max(0, totalDrivers - uniqueAssignedDrivers);
       const unassignedBuses = totalBuses - assignedBuses;
       const unassignedRoutes = totalRoutes - assignedBuses;
 
       logger.info('Fetched assignment dashboard', 'production-assignment-service', {
         activeAssignments,
         totalDrivers,
+        uniqueAssignedDrivers,
         totalBuses,
         totalRoutes,
         unassignedDrivers,

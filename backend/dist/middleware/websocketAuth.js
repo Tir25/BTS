@@ -5,16 +5,42 @@ const supabase_1 = require("../config/supabase");
 const logger_1 = require("../utils/logger");
 const websocketAuthMiddleware = (socket, next) => {
     const token = socket.handshake.auth.token;
+    const clientType = socket.handshake.auth.clientType || 'student';
     const clientIP = socket.handshake.address;
     const userAgent = socket.handshake.headers['user-agent'];
     logger_1.logger.websocket('WebSocket connection attempt', {
         socketId: socket.id,
+        clientType,
         clientIP,
         userAgent: userAgent?.substring(0, 100)
     });
-    if (!token) {
-        logger_1.logger.websocket('No authentication token provided', {
+    if (!token && clientType === 'student') {
+        const allowAnonymous = process.env.ALLOW_ANONYMOUS_STUDENTS === 'true';
+        if (!allowAnonymous && process.env.NODE_ENV === 'production') {
+            logger_1.logger.websocket('Anonymous student connection rejected in production', {
+                socketId: socket.id,
+                clientType,
+                clientIP
+            });
+            return next(new Error('Authentication required in production mode'));
+        }
+        logger_1.logger.websocket('Anonymous student connection allowed (dev mode compatible)', {
             socketId: socket.id,
+            clientType,
+            clientIP,
+            allowAnonymous,
+            nodeEnv: process.env.NODE_ENV
+        });
+        socket.userId = `anonymous-student-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        socket.userRole = 'student';
+        socket.isAuthenticated = false;
+        socket.lastActivity = Date.now();
+        return next();
+    }
+    if (!token) {
+        logger_1.logger.websocket('No authentication token provided for privileged connection', {
+            socketId: socket.id,
+            clientType,
             clientIP,
             userAgent: userAgent?.substring(0, 100)
         });
@@ -28,15 +54,27 @@ const websocketAuthMiddleware = (socket, next) => {
         });
         return next(new Error('Invalid token format'));
     }
-    const authAttempts = socket.handshake.auth.attempts || 0;
-    if (authAttempts > 5) {
-        logger_1.logger.websocket('Too many authentication attempts', {
-            socketId: socket.id,
-            attempts: authAttempts,
-            clientIP
-        });
-        return next(new Error('Too many authentication attempts'));
+    const rateLimitKey = `auth_attempts_${clientIP}`;
+    const maxAttempts = parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || '5');
+    const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000');
+    const authAttempts = global.authAttemptStore || (global.authAttemptStore = new Map());
+    const now = Date.now();
+    const attempts = authAttempts.get(rateLimitKey) || { count: 0, resetTime: now + windowMs };
+    if (now > attempts.resetTime) {
+        attempts.count = 0;
+        attempts.resetTime = now + windowMs;
     }
+    if (attempts.count >= maxAttempts) {
+        logger_1.logger.websocket('Too many authentication attempts from IP', {
+            socketId: socket.id,
+            attempts: attempts.count,
+            clientIP,
+            resetTime: new Date(attempts.resetTime).toISOString()
+        });
+        return next(new Error('Too many authentication attempts. Please try again later.'));
+    }
+    attempts.count++;
+    authAttempts.set(rateLimitKey, attempts);
     const authTimeout = setTimeout(() => {
         logger_1.logger.websocket('Authentication timeout', { socketId: socket.id, clientIP });
         next(new Error('Authentication timeout'));

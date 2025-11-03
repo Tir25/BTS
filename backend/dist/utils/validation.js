@@ -1,6 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateRouteData = exports.validateRouteName = exports.validateBusNumber = exports.validatePassword = exports.validateEmail = exports.validateLocationData = void 0;
+const lastValidLocations = new Map();
+function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
 const validateLocationData = (data) => {
     if (!data.driverId || typeof data.driverId !== 'string') {
         return 'Driver ID is required and must be a string';
@@ -8,17 +21,31 @@ const validateLocationData = (data) => {
     if (data.driverId.trim().length === 0) {
         return 'Driver ID cannot be empty';
     }
-    if (typeof data.latitude !== 'number' || isNaN(data.latitude)) {
-        return 'Latitude must be a valid number';
+    if (typeof data.latitude !== 'number' || isNaN(data.latitude) || !isFinite(data.latitude)) {
+        return 'Latitude must be a valid finite number';
     }
     if (data.latitude < -90 || data.latitude > 90) {
         return 'Latitude must be between -90 and 90 degrees';
     }
-    if (typeof data.longitude !== 'number' || isNaN(data.longitude)) {
-        return 'Longitude must be a valid number';
+    if (typeof data.longitude !== 'number' || isNaN(data.longitude) || !isFinite(data.longitude)) {
+        return 'Longitude must be a valid finite number';
     }
     if (data.longitude < -180 || data.longitude > 180) {
         return 'Longitude must be between -180 and 180 degrees';
+    }
+    if (data.latitude === 0 && data.longitude === 0) {
+        return 'Invalid coordinates (0, 0) - Null Island';
+    }
+    const invalidPatterns = [
+        [999, 999],
+        [-999, -999],
+        [999.999, 999.999],
+    ];
+    for (const [invalidLat, invalidLng] of invalidPatterns) {
+        if (Math.abs(data.latitude - invalidLat) < 0.001 &&
+            Math.abs(data.longitude - invalidLng) < 0.001) {
+            return `Invalid coordinates detected (${data.latitude}, ${data.longitude})`;
+        }
     }
     if (!data.timestamp || typeof data.timestamp !== 'string') {
         return 'Timestamp is required and must be a string';
@@ -50,6 +77,38 @@ const validateLocationData = (data) => {
         if (data.heading < 0 || data.heading > 360) {
             return 'Heading must be between 0 and 360 degrees';
         }
+    }
+    const lastLocation = lastValidLocations.get(data.driverId);
+    if (lastLocation) {
+        const timeDiffMs = timestamp.getTime() - lastLocation.timestamp;
+        const timeDiffHours = Math.max(timeDiffMs, 1000) / (1000 * 60 * 60);
+        const distanceKm = calculateDistanceKm(lastLocation.latitude, lastLocation.longitude, data.latitude, data.longitude);
+        const distanceMeters = distanceKm * 1000;
+        const calculatedSpeedKmh = distanceKm / timeDiffHours;
+        if (distanceMeters > 5000) {
+            return `Impossible location jump detected: ${distanceMeters.toFixed(0)}m in ${(timeDiffMs / 1000).toFixed(1)}s`;
+        }
+        if (calculatedSpeedKmh > 120 && distanceMeters > 1000) {
+            return `Unrealistic speed detected: ${calculatedSpeedKmh.toFixed(1)} km/h for ${distanceMeters.toFixed(0)}m jump`;
+        }
+        if (data.speed !== undefined && data.speed > 0) {
+            const speedDiff = Math.abs(calculatedSpeedKmh - data.speed);
+            if (speedDiff > 50 && distanceMeters > 100) {
+                return `Speed mismatch: calculated ${calculatedSpeedKmh.toFixed(1)} km/h vs reported ${data.speed.toFixed(1)} km/h`;
+            }
+        }
+    }
+    lastValidLocations.set(data.driverId, {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        timestamp: timestamp.getTime(),
+    });
+    if (lastValidLocations.size > 100) {
+        const entries = Array.from(lastValidLocations.entries());
+        lastValidLocations.clear();
+        entries.slice(-50).forEach(([key, value]) => {
+            lastValidLocations.set(key, value);
+        });
     }
     return null;
 };

@@ -4,6 +4,7 @@ exports.backendDriverVerificationService = exports.BackendDriverVerificationServ
 const supabase_1 = require("../config/supabase");
 const logger_1 = require("../utils/logger");
 const ProductionAssignmentService_1 = require("./ProductionAssignmentService");
+const OptimizedLocationService_1 = require("./OptimizedLocationService");
 class BackendDriverVerificationService {
     static getInstance() {
         if (!BackendDriverVerificationService.instance) {
@@ -191,7 +192,7 @@ class BackendDriverVerificationService {
             if (result.busAssignments.assignments.length > 0) {
                 try {
                     const firstAssignment = result.busAssignments.assignments[0];
-                    const busInfo = await OptimizedLocationService.prototype.getDriverBusInfo(firstAssignment.driver_id);
+                    const busInfo = await OptimizedLocationService_1.optimizedLocationService.getDriverBusInfo(firstAssignment.driver_id);
                     result.locationService.getDriverBusInfo = !!busInfo;
                     logger_1.logger.info('✅ getDriverBusInfo test passed', 'backend-verification', { busInfo });
                 }
