@@ -9,7 +9,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import UnifiedDriverInterface from '../../components/UnifiedDriverInterface';
 import DriverDashboardTest from '../../components/DriverDashboardTest';
-import { DriverAuthProvider } from '../../contexts/DriverAuthContext';
+import { DriverAuthProvider } from '../../context/DriverAuthContext';
 import { authService } from '../../services/authService';
 import { unifiedWebSocketService } from '../../services/UnifiedWebSocketService';
 

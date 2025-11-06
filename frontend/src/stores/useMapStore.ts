@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { BusLocation, BusInfo, Route } from '../types';
+import environment from '../config/environment';
 
 // Spatial clustering interface
 interface BusCluster {
@@ -112,9 +113,9 @@ export const useMapStore = create<MapState>()(
         bounds: [
           [72.5, 22.8],
           [73.2, 23.4],
-        ], // Default Ahmedabad bounds
-        zoom: 12,
-        center: [72.8777, 23.0225],
+        ],
+        zoom: environment.map.defaultZoom,
+        center: environment.map.defaultCenter as [number, number],
       },
       busClusters: [],
       spatialIndex: new Map(),

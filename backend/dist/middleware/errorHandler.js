@@ -78,6 +78,20 @@ const globalErrorHandler = (error, req, res, next) => {
         errorCode = 'SERVICE_UNAVAILABLE';
     }
     const requestId = req.headers['x-request-id'] || 'unknown';
+    let source = {};
+    if (error?.stack) {
+        const frames = error.stack.split('\n').map(l => l.trim());
+        const appFrame = frames.find(f => f.includes('at ') && !f.includes('node:internal') && !f.includes('node_modules')) || frames[1];
+        const m = /at\s+(.*?)\s+\((.*?):(\d+):(\d+)\)/.exec(appFrame || '') || /at\s+(.*?):(\d+):(\d+)/.exec(appFrame || '');
+        if (m) {
+            if (m.length === 5) {
+                source = { function: m[1], file: m[2], line: Number(m[3]), column: Number(m[4]) };
+            }
+            else if (m.length === 4) {
+                source = { file: m[1], line: Number(m[2]), column: Number(m[3]) };
+            }
+        }
+    }
     logger_1.logger.error('Error occurred', 'error', {
         requestId,
         message: error.message,
@@ -92,7 +106,8 @@ const globalErrorHandler = (error, req, res, next) => {
         body: req.body,
         query: req.query,
         params: req.params,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        source
     });
     const errorResponse = {
         error: message,

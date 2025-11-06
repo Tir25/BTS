@@ -8,20 +8,26 @@ import React, {
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import maplibregl from 'maplibre-gl';
+import environment from '../config/environment';
+import { MAP_TILE_URLS, MAP_TILE_ATTRIBUTION, MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from '../config/map';
 import { unifiedWebSocketService, BusLocation as WSBusLocation } from '../services/UnifiedWebSocketService';
 import { busService, BusInfo } from '../services/busService';
-import { apiService } from '../services/api';
-import { authService } from '../services/authService';
+import { apiService } from '../api';
+// PRODUCTION FIX: Removed unused authService import - StudentMap does not require authentication
 import { usePerformanceMonitor } from '../hooks/usePerformanceMonitor';
 import { useMapPerformance } from '../hooks/useMapPerformance';
 import DriverLocationMarker from './map/DriverLocationMarker';
 import './StudentMap.css';
+import StudentMapSidebar from './map/StudentMap/Sidebar';
+import RouteStatusPanel from './map/StudentMap/RouteStatusPanel';
 import { Route, BusLocation } from '../types';
 import { onRouteStatusUpdated } from '../services/RouteStatusEvents';
 
 import { logger } from '../utils/logger';
 import { errorHandler } from '../utils/errorHandler';
 import { formatTime } from '../utils/dateFormatter';
+import { useMapInstance } from '../hooks/useMapInstance';
+import { useStudentMapWebSocketBindings } from '../hooks/useStudentMapWebSocketBindings';
 
 // Feature flags for different modes
 interface StudentMapConfig {
@@ -60,6 +66,26 @@ const defaultConfig: StudentMapConfig = {
   updateInterval: 1000,
   enableAccessibility: true,
   enableInternationalization: false,
+};
+
+// PRODUCTION FIX: Generate distinct colors for routes
+const routeColors = [
+  '#3b82f6', // Blue
+  '#ef4444', // Red
+  '#10b981', // Green
+  '#f59e0b', // Amber
+  '#8b5cf6', // Purple
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#f97316', // Orange
+  '#14b8a6', // Teal
+  '#6366f1', // Indigo
+];
+
+const getRouteColor = (routeId: string, index: number): string => {
+  // Use route ID hash for consistent color assignment
+  const hash = routeId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return routeColors[hash % routeColors.length];
 };
 
 // PRODUCTION-GRADE: Ultra-optimized comparison function - eliminates complex calculations
@@ -342,6 +368,8 @@ const StudentMap: React.FC<StudentMapProps> = ({
 
   // Cache for bus info to avoid repeated lookups
   const busInfoCache = useRef<Map<string, BusInfo>>(new Map());
+  // PRODUCTION FIX: Track pending bus info fetches to avoid duplicate API calls
+  const pendingBusFetches = useRef<Set<string>>(new Set());
   // Resolve a canonical busId for any incoming identifier
   const getCanonicalBusId = useCallback((incomingId: string): string => {
     // 1) If we already mapped it, return cached canonical id
@@ -377,11 +405,82 @@ const StudentMap: React.FC<StudentMapProps> = ({
     return incomingId;
   }, [buses]);
   
+  // PRODUCTION FIX: Convert API Bus data to BusInfo format
+  const convertBusToBusInfo = useCallback((apiBus: any): BusInfo => {
+    const busId = apiBus.id || apiBus.bus_id || '';
+    const currentLocation = lastBusLocations[busId];
+    
+    return {
+      busId,
+      busNumber: apiBus.bus_number || apiBus.code || `Bus ${busId.slice(0, 8)}`,
+      routeName: apiBus.route_name || 'Unknown Route',
+      driverName: apiBus.driver_full_name || apiBus.driver_name || 'Unknown Driver',
+      driverId: apiBus.assigned_driver_profile_id || apiBus.driver_id || '',
+      routeId: apiBus.route_id || '',
+      currentLocation: currentLocation || {
+        busId,
+        driverId: apiBus.assigned_driver_profile_id || apiBus.driver_id || '',
+        latitude: 0,
+        longitude: 0,
+        timestamp: new Date().toISOString(),
+      },
+    };
+  }, [lastBusLocations]);
+
+  // PRODUCTION FIX: Load buses from API on component mount
+  useEffect(() => {
+    const loadBuses = async () => {
+      try {
+        logger.info('🔄 Loading buses from API...', 'component');
+        const response = await apiService.getAllBuses();
+        
+        if (response.success && response.data && Array.isArray(response.data)) {
+          // Convert API buses to BusInfo format
+          const busesInfo: BusInfo[] = response.data.map(apiBus => convertBusToBusInfo(apiBus));
+          
+          setBuses(busesInfo);
+          logger.info('✅ Buses loaded successfully', 'component', { 
+            count: busesInfo.length 
+          });
+          
+          // Update cache with loaded buses
+          busesInfo.forEach(bus => {
+            const busId = bus.busId;
+            busInfoCache.current.set(busId, bus);
+            
+            // Also cache by other possible IDs
+            const apiBus = response.data.find((b: any) => 
+              (b.id === busId || b.bus_id === busId) ||
+              (b.bus_number === bus.busNumber || b.code === bus.busNumber)
+            );
+            if (apiBus) {
+              const altId = (apiBus as any).id || (apiBus as any).bus_id;
+              if (altId && altId !== busId) {
+                busInfoCache.current.set(altId, bus);
+              }
+            }
+          });
+        } else {
+          logger.warn('⚠️ No buses data received or invalid format', 'component', {
+            success: response.success,
+            hasData: !!response.data,
+            isArray: Array.isArray(response.data)
+          });
+        }
+      } catch (error) {
+        logger.error('❌ Failed to load buses', 'component', { 
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    };
+    
+    loadBuses();
+  }, [convertBusToBusInfo]);
+
   // Update bus info cache when buses change
   useEffect(() => {
-    busInfoCache.current.clear();
     buses.forEach(bus => {
-      const busId = (bus as any).id || (bus as any).bus_id;
+      const busId = bus.busId;
       if (busId) {
         busInfoCache.current.set(busId, bus);
       }
@@ -421,15 +520,16 @@ const StudentMap: React.FC<StudentMapProps> = ({
         }
       }
       
-      // PRODUCTION FIX: Handle missing bus info gracefully by creating a minimal bus object
+      // PRODUCTION FIX: Handle missing bus info - fetch from API on-demand
       if (!bus) {
-        logger.warn('⚠️ No bus info found for location update - creating minimal marker', 'component', {
+        logger.warn('⚠️ No bus info found for location update - fetching from API', 'component', {
           busId: location.busId,
+          canonicalBusId,
           lat: location.latitude,
           lng: location.longitude
         });
         
-        // Create minimal bus info for marker display
+        // Create minimal bus info for immediate display
         const minimalLocation = {
           busId: location.busId,
           driverId: (location as any).driverId || '',
@@ -450,10 +550,85 @@ const StudentMap: React.FC<StudentMapProps> = ({
           currentLocation: minimalLocation,
         };
         
-        // Add to cache for future use
-        if (bus) {
-          busInfoCache.current.set(canonicalBusId, bus);
-          busIdAliases.current.set(location.busId, canonicalBusId);
+        // Add to cache for immediate use
+        busInfoCache.current.set(canonicalBusId, bus);
+        busIdAliases.current.set(location.busId, canonicalBusId);
+        
+        // PRODUCTION FIX: Fetch bus info from API asynchronously (only if not already fetching)
+        if (!pendingBusFetches.current.has(canonicalBusId)) {
+          pendingBusFetches.current.add(canonicalBusId);
+          
+          (async () => {
+            try {
+              const busInfoResponse = await apiService.getBusInfo(location.busId);
+              
+              if (busInfoResponse.success && busInfoResponse.data) {
+                // Convert API bus to BusInfo format
+                const fullBusInfo = convertBusToBusInfo(busInfoResponse.data);
+                
+                // Update cache with full bus info
+                busInfoCache.current.set(canonicalBusId, fullBusInfo);
+                
+                // Update buses state
+                setBuses(prev => {
+                  const existing = prev.find(b => b.busId === canonicalBusId);
+                  if (existing) {
+                    return prev.map(b => b.busId === canonicalBusId ? fullBusInfo : b);
+                  } else {
+                    return [...prev, fullBusInfo];
+                  }
+                });
+                
+                // Update marker popup if it exists
+                const existingMarker = markers.current[canonicalBusId];
+                const existingPopup = popups.current[canonicalBusId];
+                if (existingMarker && existingPopup && map.current) {
+                  existingPopup.setHTML(`
+                    <div class="p-4 min-w-[220px]">
+                      <div class="flex items-center mb-3 pb-2 border-b border-slate-200">
+                        <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white text-xl mr-3">
+                          🚌
+                        </div>
+                        <h3 class="font-bold text-slate-900 text-lg">Bus ${fullBusInfo.busNumber}</h3>
+                      </div>
+                      <div class="space-y-2">
+                        <div class="flex items-center text-sm">
+                          <span class="text-slate-500 w-16">Route:</span>
+                          <span class="font-medium text-slate-900">${fullBusInfo.routeName}</span>
+                        </div>
+                        <div class="flex items-center text-sm">
+                          <span class="text-slate-500 w-16">Driver:</span>
+                          <span class="font-medium text-slate-900">${fullBusInfo.driverName}</span>
+                        </div>
+                        <div class="flex items-center text-xs text-slate-600 mt-3 pt-2 border-t border-slate-200">
+                          <span>Last Update: ${formatTime(location.timestamp)}</span>
+                        </div>
+                        ${location.speed ? `
+                          <div class="flex items-center justify-between mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                            <span class="text-xs font-medium text-green-700">Speed</span>
+                            <span class="text-sm font-bold text-green-900">${location.speed} km/h</span>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+                  `);
+                  logger.info('✅ Bus info fetched and marker updated', 'component', {
+                    busId: location.busId,
+                    routeName: fullBusInfo.routeName,
+                    driverName: fullBusInfo.driverName
+                  });
+                }
+              }
+            } catch (error) {
+              logger.error('❌ Failed to fetch bus info from API', 'component', {
+                busId: location.busId,
+                error: error instanceof Error ? error.message : String(error)
+              });
+            } finally {
+              // Remove from pending fetches
+              pendingBusFetches.current.delete(canonicalBusId);
+            }
+          })();
         }
       }
 
@@ -607,148 +782,34 @@ const StudentMap: React.FC<StudentMapProps> = ({
   // - addRoutesToMap: unused function
   // - filteredBuses: replaced by displayBuses
 
-  // Initialize map
-  useEffect(() => {
-    if (isMapInitialized.current || !mapContainer.current) {
-      return;
-    }
+  // Initialize map via hook
+  useMapInstance({
+    mapContainer,
+    mapRef: map as any,
+    markersRef: markers as any,
+    popupsRef: popups as any,
+    addedRoutesRef: addedRoutes as any,
+    cleanupFunctionsRef: cleanupFunctions as any,
+    mapEventListenersRef: mapEventListeners as any,
+    isMapInitializedRef: isMapInitialized as any,
+    eventListenersAddedRef: eventListenersAdded as any,
+    setIsLoading,
+    setConnectionError,
+  });
 
-    logger.info('🗺️ Initializing consolidated student map...', 'component');
-    isMapInitialized.current = true;
-
-    try {
-      map.current = new maplibregl.Map({
-        container: mapContainer.current,
-        style: {
-          version: 8,
-          sources: {
-            osm: {
-              type: 'raster',
-              tiles: [
-                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              ],
-              tileSize: 256,
-              attribution: '© OpenStreetMap contributors',
-              maxzoom: 19,
-            },
-          },
-          layers: [
-            {
-              id: 'osm-tiles',
-              type: 'raster',
-              source: 'osm',
-              minzoom: 0,
-              maxzoom: 19,
-            },
-          ],
-        },
-        center: [72.571, 23.025],
-        zoom: 12,
-        bearing: 0,
-        pitch: 0,
-        attributionControl: true,
-        maxZoom: 19,
-        minZoom: 1,
-        preserveDrawingBuffer: false,
-        antialias: true,
-        dragRotate: false,
-      });
-
-      map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-      // MEMORY LEAK FIX: Track event listeners for proper cleanup
-      const handleMapLoad = () => {
-        logger.info('🗺️ Map loaded successfully', 'component');
-        setIsLoading(false);
-        // Don't load routes here - let the separate useEffect handle it
-      };
-
-      const handleMapError = (e: any) => {
-        const mapError = errorHandler.handleError(
-          new Error(`Map error: ${e.message || 'Unknown map error'}`), 
-          'StudentMap-mapError'
-        );
-        logger.error('Map error occurred', 'component', { 
-          error: mapError.message,
-          code: mapError.code 
-        });
-        setConnectionError(mapError.userMessage || 'Map initialization failed');
-        setIsLoading(false);
-      };
-
-      // Store event listeners for cleanup
-      mapEventListeners.current.set('load', handleMapLoad);
-      mapEventListeners.current.set('error', () => handleMapError({}));
-
-      map.current.once('load', handleMapLoad);
-      map.current.on('error', handleMapError);
-
-      // MEMORY LEAK FIX: Enhanced cleanup function
-      const cleanup = () => {
-        if (map.current) {
-          // Remove all tracked event listeners
-          mapEventListeners.current.forEach((handler, event) => {
-            try {
-              map.current?.off(event, handler);
-            } catch (error) {
-              logger.warn('Warning', 'component', { data: `⚠️ Error removing map event listener ${event}:`, error });
-            }
-          });
-          mapEventListeners.current.clear();
-
-          // Remove all markers and popups
-          Object.values(markers.current).forEach(marker => {
-            try {
-              marker.remove();
-            } catch (error) {
-              logger.warn('Warning', 'component', { data: '⚠️ Error removing marker:', error });
-            }
-          });
-          Object.values(popups.current).forEach(popup => {
-            try {
-              popup.remove();
-            } catch (error) {
-              logger.warn('Warning', 'component', { data: '⚠️ Error removing popup:', error });
-            }
-          });
-
-          // Clear all references
-          markers.current = {};
-          popups.current = {};
-          addedRoutes.current.clear();
-          
-          // Remove map instance
-          map.current.remove();
-          map.current = null;
-          isMapInitialized.current = false;
-        }
-      };
-
-      cleanupFunctions.current.push(cleanup);
-
-      return cleanup;
-    } catch (error) {
-      const mapInitError = errorHandler.handleError(error, 'StudentMap-mapInitialization');
-      logger.error('❌ Failed to initialize map', 'component', { 
-        error: mapInitError.message,
-        code: mapInitError.code 
-      });
-      setConnectionError(mapInitError.userMessage || 'Failed to initialize map');
-      setIsLoading(false);
-    }
-  }, []); // Removed loadRoutes dependency to prevent infinite loops
-
+  // PRODUCTION FIX: Track loading state for routes
+  const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
+  
   // Load routes when component mounts (no-op until shift chosen)
   useEffect(() => {
     if (!selectedShift) {
       setRoutes([]);
       setSelectedRoute('all');
+      setIsLoadingRoutes(false);
       return;
     }
     (async () => {
+      setIsLoadingRoutes(true);
       try {
         logger.info('Loading routes for shift', 'StudentMap', { shiftName: selectedShift });
         const res = await apiService.getRoutesByShift({ shiftName: selectedShift });
@@ -778,6 +839,9 @@ const StudentMap: React.FC<StudentMapProps> = ({
         });
         setRoutes([]);
         setSelectedRoute('all');
+        setConnectionError(`Failed to load routes for ${selectedShift} shift`);
+      } finally {
+        setIsLoadingRoutes(false);
       }
     })();
   }, [selectedShift]);
@@ -842,418 +906,79 @@ const StudentMap: React.FC<StudentMapProps> = ({
     return () => unsubscribe();
   }, [selectedRoute, selectedShift]);
 
-  // PRODUCTION FIX: Simplified WebSocket event subscription with event-driven state management
-  useEffect(() => {
-    if (!finalConfig.enableRealTime) return;
-
-    let isMounted = true;
-
-  // CRITICAL FIX: Load bus data directly from API without MapStore dependency
-  const loadBusData = async (): Promise<BusInfo[]> => {
-    try {
-      logger.info('🔄 Loading initial bus data from API...', 'component');
-      
-      // CRITICAL FIX: Call API directly instead of relying on busService MapStore
-      const response = await apiService.getAllBuses();
-      
-      if (response.success && response.data && Array.isArray(response.data)) {
-        // CRITICAL FIX: Transform API data to BusInfo format directly
-        const busInfos: BusInfo[] = response.data.map((bus: any) => ({
-          busId: bus.id,
-          busNumber: bus.bus_number || bus.code || `Bus ${bus.id}`,
-          routeName: bus.route_name || 'Route TBD',
-          driverName: bus.driver_full_name || 'Driver TBD', 
-          driverId: bus.assigned_driver_profile_id || '',
-          routeId: bus.route_id || '',
-          currentLocation: {
-            busId: bus.id,
-            driverId: bus.assigned_driver_profile_id || '',
-            latitude: 0,
-            longitude: 0,
-            timestamp: new Date().toISOString(),
-          },
-        }));
-        
-        setBuses(busInfos);
-        logger.info('📊 Initial bus data loaded successfully:', 'component', { 
-          count: busInfos.length,
-          busIds: busInfos.map(bus => bus.busId),
-          sampleBus: busInfos[0] || null
-        });
-        
-        // CRITICAL DEBUG: Log each bus individually to ensure data is correct
-        busInfos.forEach((bus, index) => {
-          logger.info(`🚌 Bus ${index + 1}:`, 'component', {
-            busId: bus.busId,
-            busNumber: bus.busNumber,
-            routeName: bus.routeName,
-            driverName: bus.driverName
-          });
-        });
-
-        // PRODUCTION FIX: Sync existing location data with newly loaded buses
-        // This handles cases where location updates arrived before bus data was loaded
-        const pendingLocations = Object.values(lastBusLocations);
-        if (pendingLocations.length > 0) {
-          logger.info('🔄 Syncing pending location updates with loaded bus data', 'component', {
-            pendingLocationCount: pendingLocations.length,
-            loadedBusCount: busInfos.length
-          });
-          
-          pendingLocations.forEach(location => {
-            const matchingBus = busInfos.find(bus => bus.busId === location.busId);
-            if (matchingBus) {
-              logger.info('✅ Found matching bus for pending location', 'component', {
-                busId: location.busId,
-                busNumber: matchingBus.busNumber
-              });
-              
-              // Update the marker now that we have bus info
-              requestAnimationFrame(() => {
-                updateBusMarker(location);
-              });
-            }
-          });
-        }
-
-        // CRITICAL FIX: Return loaded buses for sequential initialization
-        return busInfos;
-      } else {
-        logger.warn('⚠️ No bus data received or invalid format', 'component', {
-          hasSuccess: response?.success,
-          hasData: !!response?.data,
-          isArray: Array.isArray(response?.data)
-        });
-        setBuses([]);
-        return [];
-      }
-    } catch (error) {
-      const busError = errorHandler.handleError(error, 'StudentMap-loadBuses');
-      logger.error('Bus loading error', 'component', { 
-        error: busError.message,
-        code: busError.code 
-      });
-      setBuses([]);
-      setConnectionError(busError.userMessage || 'Failed to load bus data');
-      return [];
-    }
-  };
-
-    // CRITICAL FIX: Initialize WebSocket connection for real-time updates
-    const initializeWebSocket = async (loadedBuses: BusInfo[]) => {
-      try {
-        logger.info('🔌 Initializing WebSocket connection for live bus updates...', 'component', {
-          busCount: loadedBuses.length,
-          busIds: loadedBuses.map(b => b.busId).slice(0, 3) // Log first 3 for debugging
-        });
-        unifiedWebSocketService.setClientType('student');
-        await unifiedWebSocketService.connect();
-        logger.info('✅ WebSocket connection established for student map', 'component');
-      } catch (error) {
-        const wsError = errorHandler.handleError(error, 'StudentMap-WebSocketInit');
-        logger.error('WebSocket connection error', 'component', { 
-          error: wsError.message,
-          code: wsError.code 
-        });
-        setConnectionError(wsError.userMessage || 'Failed to connect to live updates');
-      }
+  // PRODUCTION FIX: Handle route stop reached events for real-time updates
+  const handleRouteStopReached = useCallback((data: {
+    routeId: string;
+    stopId: string;
+    driverId: string;
+    lastStopSequence: number;
+    routeStatus: {
+      tracking_active: boolean;
+      stops: { completed: any[]; next: any | null; remaining: any[] };
     };
-
-    // CRITICAL FIX: Sequential initialization - load buses FIRST, then WebSocket
-    const initializeSequentially = async () => {
-      try {
-        logger.info('🔄 Starting sequential initialization (buses first, then WebSocket)', 'component');
-        
-        // Step 1: Load bus data first
-        const loadedBuses = await loadBusData();
-        
-        if (!isMounted) {
-          logger.info('⚠️ Component unmounted during bus loading', 'component');
-          return;
-        }
-
-        // Step 2: Only initialize WebSocket after buses are loaded
-        logger.info('🔌 Buses loaded, now initializing WebSocket...', 'component', {
-          busCount: loadedBuses.length
-        });
-        await initializeWebSocket(loadedBuses);
-        
-        logger.info('✅ Sequential initialization complete', 'component', {
-          busCount: loadedBuses.length,
-          webSocketReady: true
-        });
-        
-      } catch (error) {
-        const initError = errorHandler.handleError(error, 'StudentMap-SequentialInit');
-        logger.error('Sequential initialization error', 'component', { 
-          error: initError.message,
-          code: initError.code 
-        });
-        setConnectionError(initError.userMessage || 'Failed to initialize map components');
-      }
-    };
-
-    // Start sequential initialization
-    initializeSequentially();
-
-    // PRODUCTION FIX: Set up handlers using refs to prevent useEffect re-runs
-    handleBusLocationUpdateRef.current = (location: WSBusLocation) => {
-      // CRITICAL DEBUG: Detailed WebSocket location data logging
-      logger.info('🔍 DETAILED DEBUG: WebSocket location received', 'component', { 
-        busId: location.busId,
-        busIdType: typeof location.busId,
-        busIdLength: location.busId?.length,
-        busIdString: String(location.busId),
-        timestamp: location.timestamp,
-        lat: location.latitude,
-        lng: location.longitude
-      });
-      
-      // CRITICAL DEBUG: Log all frontend bus IDs for comparison
-      const frontendBusIds = buses.map(bus => ({
-        busId: bus.busId,
-        busIdType: typeof bus.busId,
-        busIdLength: bus.busId?.length,
-        busIdString: String(bus.busId),
-        busNumber: bus.busNumber,
-        routeName: bus.routeName
-      }));
-      
-      logger.info('🔍 DETAILED DEBUG: All frontend buses', 'component', { 
-        totalBuses: buses.length,
-        incomingBusId: location.busId,
-        incomingBusIdType: typeof location.busId,
-        frontendBusIds: frontendBusIds
-      });
-      
-      // CRITICAL FIX: Enhanced bus matching with multiple ID format support
-      let busExists = buses.find(bus => {
-        const busId = bus.busId; // Use busId from BusInfo interface
-        const exactMatch = busId === location.busId;
-        const stringMatch = String(busId) === String(location.busId);
-        
-        // PRODUCTION FIX: Also try matching by bus number as fallback
-        const busNumberMatch = bus.busNumber === location.busId;
-        
-        // PRODUCTION FIX: Try matching if location.busId might be a partial UUID
-        const partialMatch = busId.includes(location.busId) || location.busId.includes(busId);
-        
-        const anyMatch = exactMatch || stringMatch || busNumberMatch || partialMatch;
-        
-        // Log each comparison attempt with all matching methods
-        logger.info('🔍 ENHANCED DEBUG: Bus ID comparison with multiple methods', 'component', {
-          frontendBusId: busId,
-          frontendBusIdType: typeof busId,
-          frontendBusNumber: bus.busNumber,
-          incomingBusId: location.busId,
-          incomingBusIdType: typeof location.busId,
-          exactMatch: exactMatch,
-          stringMatch: stringMatch,
-          busNumberMatch: busNumberMatch,
-          partialMatch: partialMatch,
-          finalMatch: anyMatch,
-          busNumber: bus.busNumber
-        });
-        
-        return anyMatch;
-      });
-
-      // PRODUCTION FIX: If bus not found in array, check cache with enhanced matching
-      if (!busExists) {
-        // Try direct cache lookup first
-        busExists = busInfoCache.current.get(location.busId);
-        
-        // CRITICAL FIX: If not found, try enhanced matching in cache
-        if (!busExists) {
-          for (const [cacheKey, cachedBus] of busInfoCache.current.entries()) {
-            const exactMatch = cacheKey === location.busId;
-            const stringMatch = String(cacheKey) === String(location.busId);
-            const busNumberMatch = cachedBus.busNumber === location.busId;
-            const partialMatch = cacheKey.includes(location.busId) || location.busId.includes(cacheKey);
-            
-            if (exactMatch || stringMatch || busNumberMatch || partialMatch) {
-              busExists = cachedBus;
-              logger.info('🔍 ENHANCED DEBUG: Found bus in cache using enhanced matching', 'component', {
-                cacheKey: cacheKey,
-                incomingBusId: location.busId,
-                matchType: exactMatch ? 'exact' : stringMatch ? 'string' : busNumberMatch ? 'busNumber' : 'partial'
-              });
-              break;
-            }
-          }
-        }
-        
-        logger.info('🔍 ENHANCED DEBUG: Cache lookup result', 'component', {
-          busId: location.busId,
-          foundInCache: !!busExists,
-          cacheSize: busInfoCache.current.size,
-          cacheKeys: Array.from(busInfoCache.current.keys())
-        });
-      }
-      
-      logger.info('🔍 DETAILED DEBUG: Final bus matching result', 'component', { 
-        busId: location.busId,
-        existsInArray: !!buses.find(b => b.busId === location.busId),
-        existsInCache: !!busInfoCache.current.get(location.busId),
-        finalBusExists: !!busExists,
-        totalBuses: buses.length,
-        totalCacheEntries: busInfoCache.current.size,
-        matchedBus: busExists ? {
-          busId: busExists.busId,
-          busNumber: busExists.busNumber,
-          routeName: busExists.routeName
-        } : null
-      });
-      
-      // CRITICAL FIX: Always process location update, even if bus not found yet
-      // This handles the race condition where location updates arrive before bus data
-      requestAnimationFrame(() => {
-        // Store location update regardless of bus existence
-        const canonicalBusId = getCanonicalBusId(location.busId);
-        const busLocation: BusLocation = {
-          busId: canonicalBusId,
-          driverId: (location as any).driverId || '',
-          latitude: location.latitude,
-          longitude: location.longitude,
-          timestamp: location.timestamp,
-          speed: location.speed,
-          heading: location.heading,
-        };
-        setLastBusLocations(prev => ({
-          ...prev,
-          [canonicalBusId]: busLocation
-        }));
-        
-        // Call debounced update
-        debouncedLocationUpdate(location);
-        
-        // Try to update marker (updateBusMarker handles missing bus gracefully)
-        updateBusMarker({ ...location, busId: canonicalBusId });
-        
-        // PRODUCTION FIX: If bus doesn't exist, try to add it to cache for future updates
-        if (!busExists) {
-          logger.warn('⚠️ Location update for unknown bus - storing for later processing', 'component', {
-            busId: location.busId,
-            willRetryWhenBusLoaded: true
-          });
-          
-          // Create minimal bus info for cache to prevent future misses
-          const minimalLocation = {
-            busId: location.busId,
-            driverId: (location as any).driverId || '',
-            latitude: location.latitude,
-            longitude: location.longitude,
-            timestamp: location.timestamp,
-            speed: location.speed,
-            heading: location.heading,
-          } as BusLocation;
-          
-          const minimalBusInfo: BusInfo = {
-            busId: location.busId,
-            busNumber: `Bus ${location.busId.slice(0, 8)}...`, // Truncated for display
-            routeName: 'Loading...',
-            driverName: 'Loading...',
-            driverId: (location as any).driverId || '',
-            routeId: '',
-            currentLocation: minimalLocation,
-          };
-          
-          // Add to cache but not to buses array (will be replaced when real data loads)
-          const canonical = getCanonicalBusId(location.busId);
-          busInfoCache.current.set(canonical, minimalBusInfo);
-          busIdAliases.current.set(location.busId, canonical);
-          
-          logger.info('📝 Added minimal bus info to cache for unknown bus', 'component', {
-            busId: location.busId,
-            cacheSize: busInfoCache.current.size
-          });
-        }
-      });
-    };
-
-    handleDriverConnectedRef.current = (data: { driverId: string; busId: string; timestamp: string }) => {
-      logger.debug('🚌 Driver connected:', 'component', { data });
-    };
-
-    handleDriverDisconnectedRef.current = (data: { driverId: string; busId: string; timestamp: string }) => {
-      logger.debug('🚌 Driver disconnected:', 'component', { data });
-    };
-
-    handleBusArrivingRef.current = (data: { busId: string; routeId: string; stopId: string; eta: number; timestamp: string }) => {
-      logger.debug('🚌 Bus arriving:', 'component', { data });
-      // Refresh route status if the event matches the currently selected route
-      try {
-        if (selectedRoute && selectedRoute !== 'all' && data?.routeId === selectedRoute) {
-          (async () => {
-            const params: any = {};
-            if (selectedShift) params.shiftName = selectedShift;
-            const res = await apiService.getStudentRouteStatus(selectedRoute, params);
-            if (res?.success) setRouteStatus(res.data);
-          })();
-        }
-      } catch (e) {
-        // Soft-fail on refresh errors
-      }
-    };
-
-    // PRODUCTION FIX: Event-driven connection state management
-    const unsubscribeConnectionState = unifiedWebSocketService.onConnectionStateChange((state) => {
-      if (!isMounted) return;
-      
-      setIsConnected(state.isConnected);
-      setConnectionStatus(state.isConnected ? 'connected' : 'disconnected');
-      
-      if (state.error) {
-        setConnectionError(state.error);
-      } else if (state.isConnected) {
-        setConnectionError(null);
-      }
+    timestamp: string;
+  }) => {
+    logger.info('🛑 Route stop reached - updating student map', 'component', {
+      routeId: data.routeId,
+      selectedRoute,
+      stopId: data.stopId
     });
-
-    // Subscribe to WebSocket events
-    const unsubscribeBusLocation = unifiedWebSocketService.onBusLocationUpdate((location) => handleBusLocationUpdateRef.current?.(location));
-    const unsubscribeDriverConnected = unifiedWebSocketService.onDriverConnected((data) => handleDriverConnectedRef.current?.(data));
-    const unsubscribeDriverDisconnected = unifiedWebSocketService.onDriverDisconnected((data) => handleDriverDisconnectedRef.current?.(data));
-    const unsubscribeBusArriving = unifiedWebSocketService.onBusArriving((data) => handleBusArrivingRef.current?.(data));
     
-    // Store cleanup functions
-    websocketCleanupFunctions.current = [
-      unsubscribeConnectionState,
-      unsubscribeBusLocation,
-      unsubscribeDriverConnected,
-      unsubscribeDriverDisconnected,
-      unsubscribeBusArriving,
-    ];
+    // Update route status immediately with received data
+    if (data.routeStatus) {
+      setRouteStatus(data.routeStatus);
+    }
     
-    logger.info('✅ WebSocket event listeners registered', 'component');
-
-    const cleanup = () => {
-      isMounted = false;
-      
-      // Cleanup WebSocket listeners
-      websocketCleanupFunctions.current.forEach(unsubscribe => {
+    // Also refresh route status from API to ensure consistency
+    if (selectedRoute && selectedRoute !== 'all' && data.routeId === selectedRoute) {
+      (async () => {
         try {
-          unsubscribe();
+          const params: any = {};
+          if (selectedShift) params.shiftName = selectedShift;
+          const res = await apiService.getStudentRouteStatus(selectedRoute, params);
+          if (res?.success && res.data) {
+            setRouteStatus(res.data);
+            logger.info('✅ Route status refreshed after stop reached', 'component');
+          }
         } catch (error) {
-          logger.warn('Warning', 'component', { data: '⚠️ Error removing WebSocket listener:', error });
+          logger.error('❌ Error refreshing route status after stop reached', 'component', {
+            error: error instanceof Error ? error.message : String(error)
+          });
         }
-      });
-      websocketCleanupFunctions.current = [];
-      
-      logger.info('🧹 StudentMap WebSocket listener cleanup complete', 'component');
-    };
+      })();
+    }
+  }, [selectedRoute, selectedShift]);
 
-    cleanupFunctions.current.push(cleanup);
-    return cleanup;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finalConfig.enableRealTime]);
+  // WebSocket bindings via hook
+  useStudentMapWebSocketBindings({
+    enabled: finalConfig.enableRealTime,
+    setIsConnected,
+    setConnectionStatus,
+    setConnectionError,
+    setBuses,
+    buses,
+    lastBusLocations,
+    setLastBusLocations,
+    debouncedLocationUpdate,
+    updateBusMarker,
+    getCanonicalBusId,
+    busInfoCache,
+    websocketCleanupFunctions,
+    cleanupFunctions,
+    selectedRoute,
+    selectedShift,
+    onRouteStopReached: handleRouteStopReached,
+  });
 
+  // PRODUCTION FIX: Track route colors for consistent highlighting
+  const routeColorsMap = useRef<Map<string, string>>(new Map());
+  
   // Add routes to map when routes are loaded - ONLY ADD NEW ROUTES
   const routesProcessed = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (routes.length > 0 && map.current && map.current.isStyleLoaded()) {
       // Only add routes that haven't been added yet
-      routes.forEach((route) => {
+      routes.forEach((route, index) => {
         if (!routesProcessed.current.has(route.id) && !addedRoutes.current.has(route.id)) {
           // Add individual route
           if (map.current && !map.current.getSource(`route-${route.id}`)) {
@@ -1264,6 +989,10 @@ const StudentMap: React.FC<StudentMapProps> = ({
                              null;
               
               if (coords && coords.length > 0) {
+                // PRODUCTION FIX: Generate distinct color for each route
+                const routeColor = getRouteColor(route.id, index);
+                routeColorsMap.current.set(route.id, routeColor);
+                
                 map.current.addSource(`route-${route.id}`, {
                   type: 'geojson',
                   data: {
@@ -1276,20 +1005,68 @@ const StudentMap: React.FC<StudentMapProps> = ({
                   },
                 });
 
+                // PRODUCTION FIX: Add route layer with distinct color
                 map.current.addLayer({
                   id: `route-${route.id}`,
                   type: 'line',
                   source: `route-${route.id}`,
-                  layout: { 'line-join': 'round', 'line-cap': 'round' },
-                  paint: {
-                    'line-color': (route as any).color || '#3b82f6',
-                    'line-width': 4,
-                    'line-opacity': 0.8,
+                  layout: { 
+                    'line-join': 'round', 
+                    'line-cap': 'round',
+                    'visibility': 'visible'
                   },
+                  paint: {
+                    'line-color': routeColor,
+                    'line-width': 4,
+                    'line-opacity': selectedRoute === 'all' || selectedRoute === route.id ? 0.9 : 0.3, // Dim unselected routes
+                  },
+                });
+
+                // PRODUCTION FIX: Add click handler for route info
+                map.current.on('click', `route-${route.id}`, (e: any) => {
+                  const routeName = e.features[0]?.properties?.name || route.name;
+                  new maplibregl.Popup()
+                    .setLngLat(e.lngLat)
+                    .setHTML(`
+                      <div class="p-3">
+                        <h3 class="font-bold text-slate-900 text-lg mb-2">${routeName}</h3>
+                        <div class="space-y-1 text-sm text-slate-600">
+                          ${route.description ? `<p>${route.description}</p>` : ''}
+                          ${(route as any).distance_km ? `<p>📏 Distance: ${(route as any).distance_km} km</p>` : ''}
+                          ${(route as any).estimated_duration_minutes ? `<p>⏱️ Duration: ${(route as any).estimated_duration_minutes} min</p>` : ''}
+                        </div>
+                      </div>
+                    `)
+                    .addTo(map.current!);
+                });
+
+                // PRODUCTION FIX: Change cursor on hover
+                map.current.on('mouseenter', `route-${route.id}`, () => {
+                  if (map.current) {
+                    map.current.getCanvas().style.cursor = 'pointer';
+                  }
+                });
+
+                map.current.on('mouseleave', `route-${route.id}`, () => {
+                  if (map.current) {
+                    map.current.getCanvas().style.cursor = '';
+                  }
                 });
 
                 addedRoutes.current.add(route.id);
                 routesProcessed.current.add(route.id);
+                
+                logger.info('✅ Route added to map', 'component', { 
+                  routeId: route.id, 
+                  routeName: route.name,
+                  color: routeColor,
+                  coordinatesCount: coords.length 
+                });
+              } else {
+                logger.warn('⚠️ Route has no coordinates', 'component', { 
+                  routeId: route.id, 
+                  routeName: route.name 
+                });
               }
             } catch (error) {
               logger.warn('Warning', 'component', { data: `⚠️ Error adding route ${route.name}:`, error });
@@ -1298,8 +1075,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
         }
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routes]);
+  }, [routes, selectedRoute]);
 
   // CRITICAL FIX: Ultra-simplified recentering logic to minimize map animation overhead
   const lastRecenterLocationRef = useRef<{ latitude: number; longitude: number } | null>(null);
@@ -1609,8 +1385,134 @@ const StudentMap: React.FC<StudentMapProps> = ({
     map.current.flyTo({
       center: [location.longitude, location.latitude],
       zoom: 15,
+      duration: 1000,
     });
+    logger.info('✅ Map centered on bus', 'component', { busId, location });
   }, [lastBusLocations]);
+
+  // PRODUCTION FIX: Center on bus for selected route
+  // Note: This is defined before displayBuses to avoid temporal dead zone errors
+  // It calculates route buses inline using buses and lastBusLocations
+  const handleCenterOnBusForRoute = useCallback(() => {
+    if (!selectedRoute || selectedRoute === 'all' || !map.current) {
+      logger.warn('⚠️ Cannot center on bus: no route selected', 'component');
+      return;
+    }
+
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    let targetBusId: string | null = null;
+    let targetLocation: BusLocation | null = null;
+
+    // Method 1: Check routeStatus session first (most reliable)
+    if (routeStatus?.session?.bus_id) {
+      const sessionBusId = routeStatus.session.bus_id;
+      const location = lastBusLocations[sessionBusId];
+      if (location) {
+        const lastUpdate = new Date(location.timestamp).getTime();
+        if (lastUpdate > fiveMinutesAgo) {
+          targetBusId = sessionBusId;
+          targetLocation = location;
+          logger.info('✅ Found bus from routeStatus session', 'component', { busId: sessionBusId, routeId: selectedRoute });
+        }
+      }
+    }
+
+    // Method 2: If no session bus, check busesWithLiveLocations filtered by route
+    if (!targetBusId) {
+      // Calculate filtered buses inline from busesWithLiveLocations
+      // Apply maxBuses limit and filter by route
+      const maxBuses = finalConfig.maxBuses;
+      const busesToCheck = busesWithLiveLocations.slice(0, maxBuses);
+      const filteredBuses = busesToCheck.filter(bus => {
+        const busRouteId = (bus as any).routeId || (bus as any).route_id;
+        return busRouteId === selectedRoute;
+      });
+      
+      if (filteredBuses.length > 0) {
+        for (const bus of filteredBuses) {
+          const busId = (bus as any).id || (bus as any).bus_id;
+          const location = lastBusLocations[busId];
+          if (location) {
+            const lastUpdate = new Date(location.timestamp).getTime();
+            if (lastUpdate > fiveMinutesAgo) {
+              targetBusId = busId;
+              targetLocation = location;
+              logger.info('✅ Found bus from filtered buses', 'component', { busId, routeId: selectedRoute });
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Method 3: Check all buses with live locations for this route
+    if (!targetBusId) {
+      for (const [busId, location] of Object.entries(lastBusLocations)) {
+        const lastUpdate = new Date(location.timestamp).getTime();
+        if (lastUpdate > fiveMinutesAgo) {
+          // Check if this bus belongs to the selected route
+          const bus = buses.find(b => {
+            const bId = (b as any).id || (b as any).bus_id;
+            const bRouteId = (b as any).routeId || (b as any).route_id;
+            return bId === busId && bRouteId === selectedRoute;
+          });
+          
+          if (bus) {
+            targetBusId = busId;
+            targetLocation = location;
+            logger.info('✅ Found bus from buses array', 'component', { busId, routeId: selectedRoute });
+            break;
+          }
+          
+          // Also check cached bus
+          const cachedBus = busInfoCache.current.get(busId);
+          if (cachedBus) {
+            const busRouteId = (cachedBus as any).routeId || (cachedBus as any).route_id;
+            if (busRouteId === selectedRoute) {
+              targetBusId = busId;
+              targetLocation = location;
+              logger.info('✅ Found bus from cache', 'component', { busId, routeId: selectedRoute });
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (!targetBusId || !targetLocation) {
+      // Calculate filtered buses count for logging
+      const maxBuses = finalConfig.maxBuses;
+      const busesToCheck = busesWithLiveLocations.slice(0, maxBuses);
+      const filteredBusesCount = busesToCheck.filter(bus => {
+        const busRouteId = (bus as any).routeId || (bus as any).route_id;
+        return busRouteId === selectedRoute;
+      }).length;
+      
+      logger.warn('⚠️ No buses found for selected route', 'component', { 
+        selectedRoute,
+        routeStatus: routeStatus?.session,
+        filteredBusesCount,
+        lastBusLocationsCount: Object.keys(lastBusLocations).length
+      });
+      setConnectionError('No active bus found for this route');
+      setTimeout(() => setConnectionError(null), 3000);
+      return;
+    }
+
+    // Center map on bus with smooth animation
+    map.current.flyTo({
+      center: [targetLocation.longitude, targetLocation.latitude],
+      zoom: 15,
+      duration: 1000,
+      essential: true,
+    });
+
+    logger.info('✅ Map centered on bus for route', 'component', { 
+      routeId: selectedRoute,
+      busId: targetBusId,
+      location: { lat: targetLocation.latitude, lng: targetLocation.longitude }
+    });
+  }, [selectedRoute, buses, lastBusLocations, routeStatus, busesWithLiveLocations, finalConfig.maxBuses]);
 
   // Limit buses based on config
   const limitedBuses = useMemo(() => {
@@ -1628,6 +1530,101 @@ const StudentMap: React.FC<StudentMapProps> = ({
       return busRouteId === selectedRoute;
     });
   }, [limitedBuses, selectedRoute]);
+
+  // PRODUCTION FIX: Check if there's a bus available for the selected route
+  // Defined after displayBuses to avoid temporal dead zone
+  const hasBusForSelectedRoute = useMemo(() => {
+    if (!selectedRoute || selectedRoute === 'all') return false;
+    
+    // Method 1: Check routeStatus session for bus_id (most reliable)
+    if (routeStatus?.session?.bus_id) {
+      const sessionBusId = routeStatus.session.bus_id;
+      if (lastBusLocations[sessionBusId]) {
+        return true;
+      }
+    }
+    
+    // Method 2: Check displayBuses (already filtered by route)
+    const hasDisplayBus = displayBuses.some(bus => {
+      const busId = (bus as any).id || (bus as any).bus_id;
+      return lastBusLocations[busId] !== undefined;
+    });
+    if (hasDisplayBus) return true;
+    
+    // Method 3: Check all buses with live locations for this route
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    for (const [busId, location] of Object.entries(lastBusLocations)) {
+      const lastUpdate = new Date(location.timestamp).getTime();
+      if (lastUpdate > fiveMinutesAgo) {
+        // Check if this bus belongs to the selected route
+        const bus = buses.find(b => {
+          const bId = (b as any).id || (b as any).bus_id;
+          const bRouteId = (b as any).routeId || (b as any).route_id;
+          return bId === busId && bRouteId === selectedRoute;
+        });
+        if (bus) return true;
+        
+        // Also check cached bus
+        const cachedBus = busInfoCache.current.get(busId);
+        if (cachedBus && 
+            ((cachedBus as any).routeId === selectedRoute || (cachedBus as any).route_id === selectedRoute)) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }, [selectedRoute, routeStatus, displayBuses, lastBusLocations, buses]);
+
+  // PRODUCTION FIX: Update route visibility and opacity based on selection
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+    
+    routes.forEach((route) => {
+      const layerId = `route-${route.id}`;
+      if (map.current && map.current.getLayer(layerId)) {
+        const isSelected = selectedRoute === 'all' || selectedRoute === route.id;
+        map.current.setPaintProperty(layerId, 'line-opacity', isSelected ? 0.9 : 0.3);
+        map.current.setPaintProperty(layerId, 'line-width', isSelected ? 5 : 3);
+      }
+    });
+  }, [selectedRoute, routes]);
+
+  // PRODUCTION FIX: Auto-fit map bounds when route is selected
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded() || selectedRoute === 'all') return;
+    
+    const route = routes.find(r => r.id === selectedRoute);
+    if (!route) return;
+    
+    const coords = (route as any).coordinates || 
+                   (route as any).geom?.coordinates || 
+                   (route as any).stops?.coordinates;
+    
+    if (coords && coords.length > 0) {
+      try {
+        // Calculate bounds from route coordinates
+        const bounds = new maplibregl.LngLatBounds(coords[0] as [number, number], coords[0] as [number, number]);
+        coords.forEach((coord: [number, number]) => {
+          bounds.extend(coord);
+        });
+        
+        // Fit map to route bounds with padding
+        map.current.fitBounds(bounds, {
+          padding: { top: 50, bottom: 50, left: 50, right: 50 },
+          duration: 1000,
+          maxZoom: 15
+        });
+        
+        logger.info('✅ Map bounds fitted to selected route', 'component', { 
+          routeId: selectedRoute,
+          routeName: route.name
+        });
+      } catch (error) {
+        logger.warn('⚠️ Error fitting bounds to route', 'component', { error });
+      }
+    }
+  }, [selectedRoute, routes]);
 
   // Route options for filter
   const routeOptions = useMemo(() => {
@@ -1653,7 +1650,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
     }
 
     // Polling fallback for route status (in case WS events are not received)
-    const POLL_INTERVAL = 15000; // 15s
+    const POLL_INTERVAL = environment.performance.locationUpdateInterval;
     const poller = setInterval(async () => {
       try {
         const params: any = {};
@@ -1686,185 +1683,23 @@ const StudentMap: React.FC<StudentMapProps> = ({
         className="h-full w-full flex relative"
       >
         {/* Left Sidebar - Filters */}
-        <motion.div
-          initial={false}
-          animate={{
-            width: isNavbarCollapsed ? '60px' : '320px',
-          }}
-          transition={{ duration: 0.3, ease: 'easeInOut' }}
-          className="flex-shrink-0 h-full relative z-20"
-        >
-          <div className="h-full bg-white border-r border-slate-200 shadow-sm">
-            <div className="p-4">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                {!isNavbarCollapsed && (
-                  <h2 className="text-xl font-bold text-slate-900">🚌 Live Bus Tracking</h2>
-                )}
-                <button
-                  onClick={() => setIsNavbarCollapsed(!isNavbarCollapsed)}
-                  className="text-slate-600 hover:text-slate-900 transition-colors ml-auto"
-                  title={isNavbarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-                >
-                  {isNavbarCollapsed ? '▶️' : '◀️'}
-                </button>
-              </div>
-
-              {!isNavbarCollapsed && (
-              <>
-                {/* Connection Status */}
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-3 h-3 rounded-full ${
-                      isConnected ? 'bg-green-500' : 'bg-red-500'
-                    }`} />
-                    <span className="text-sm text-slate-900 font-medium">
-                      {isConnected ? 'Connected' : 'Disconnected'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1">
-                    {buses.length} buses • {busesWithLiveLocations.length} active
-                  </p>
-                </div>
-
-                {/* Route Filter (requires shift selection) */}
-                <div className="mb-4">
-                  <button
-                    onClick={() => setIsRouteFilterOpen(!isRouteFilterOpen)}
-                    className="flex items-center justify-between w-full p-2 bg-slate-100 rounded-lg text-slate-900 hover:bg-slate-200 transition-colors"
-                  >
-                    <span className="font-medium">🛣️ Routes</span>
-                    <span>{isRouteFilterOpen ? '▼' : '▶'}</span>
-                  </button>
-                  
-                  {isRouteFilterOpen && (
-                    <div className="mt-2 space-y-1">
-                      {!selectedShift && (
-                        <div className="text-slate-600 text-sm p-2">Select a shift to view active routes.</div>
-                      )}
-                      {selectedShift && (
-                        <>
-                      <button
-                        onClick={() => setSelectedRoute('all')}
-                        className={`w-full text-left p-2 rounded text-sm transition-colors ${
-                          selectedRoute === 'all'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-slate-700 hover:bg-slate-100'
-                        }`}
-                      >
-                            All Active Routes ({routes.length})
-                      </button>
-                      {routeOptions.map((route) => (
-                        <button
-                          key={route.value}
-                          onClick={() => setSelectedRoute(route.value)}
-                          className={`w-full text-left p-2 rounded text-sm transition-colors ${
-                            selectedRoute === route.value
-                              ? 'bg-blue-600 text-white'
-                              : 'text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          {route.label}
-                        </button>
-                      ))}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Shift Filter (required) */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between w-full p-2 bg-slate-100 rounded-lg">
-                    <span className="font-medium text-slate-900">⏱️ Shift</span>
-                    <select
-                      value={selectedShift}
-                      onChange={(e) => setSelectedShift(e.target.value as any)}
-                      className="ml-2 bg-white text-slate-900 text-sm rounded-lg px-3 py-1 border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="" disabled>Select shift</option>
-                      <option value="Day">Day</option>
-                      <option value="Afternoon">Afternoon</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Buses list with Center on bus action */}
-                <div className="mb-4">
-                  <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
-                    <AnimatePresence>
-                      {displayBuses.map((bus) => {
-                        const busId = (bus as any).id || (bus as any).bus_id;
-                        const location = lastBusLocations[busId];
-                        return (
-                          <motion.div
-                            key={busId}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="p-3 bg-white border border-slate-200 rounded-lg hover:border-blue-400 hover:shadow-sm transition-all cursor-pointer"
-                            onClick={() => handleCenterOnBus(busId)}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center space-x-2">
-                                <span className="text-lg">🚌</span>
-                                <span className="font-medium text-slate-900">
-                                  {bus.busNumber}
-                                </span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <div className="text-xs text-slate-700 bg-slate-100 px-2 py-1 rounded">
-                                  {bus.eta ? `${bus.eta} min` : 'ETA: --'}
-                                </div>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleCenterOnBus(busId); }}
-                                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                  aria-label={`Center map on ${bus.busNumber}`}
-                                  title={`Center on ${bus.busNumber}`}
-                                >
-                                  🎯
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Bus Details */}
-                            <div className="space-y-1">
-                              <div className="text-xs text-slate-600">
-                                📍 Route: {bus.routeName}
-                              </div>
-                              <div className="text-xs text-slate-600">
-                                👨‍💼 Driver: {bus.driverName}
-                              </div>
-                              {location && (
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-green-600 font-medium">
-                                    🕐{' '}
-                                    {new Date(
-                                      location.timestamp
-                                    ).toLocaleTimeString([], {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })}
-                                  </span>
-                                  <span className="text-blue-600 font-medium">
-                                    {location.speed
-                                      ? `${location.speed} km/h`
-                                      : 'Speed: --'}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </motion.div>
-                        );
-                      })}
-                    </AnimatePresence>
-                  </div>
-                </div>
-                </>
-              )}
-            </div>
-          </div>
-        </motion.div>
+        <StudentMapSidebar
+          isNavbarCollapsed={isNavbarCollapsed}
+          setIsNavbarCollapsed={setIsNavbarCollapsed}
+          isConnected={isConnected}
+          busesCount={buses.length}
+          activeCount={busesWithLiveLocations.length}
+          selectedShift={selectedShift}
+          setSelectedShift={(v:any) => setSelectedShift(v)}
+          selectedRoute={selectedRoute}
+          setSelectedRoute={setSelectedRoute}
+          routeOptions={routeOptions}
+          displayBuses={displayBuses as any}
+          lastBusLocations={lastBusLocations as any}
+          onCenterOnBus={handleCenterOnBus}
+          isLoadingRoutes={isLoadingRoutes}
+          onCenterOnBusForRoute={handleCenterOnBusForRoute}
+        />
 
         {/* Right Side - Map Container */}
         <div className="flex-1 h-full relative">
@@ -1914,14 +1749,12 @@ const StudentMap: React.FC<StudentMapProps> = ({
           )}
 
           {/* Route status panel for students */}
-          {selectedRoute !== 'all' && (
-            <div className="absolute bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 z-10">
-              <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-slate-900 font-semibold">🛑 Route Stops</h3>
-                  <button
-                    className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-lg border border-blue-200 hover:bg-blue-200 transition-colors"
-                    onClick={async () => {
+          <RouteStatusPanel
+            selectedRoute={selectedRoute}
+            selectedShift={selectedShift}
+            routeStatus={routeStatus as any}
+            routeStops={routeStops as any}
+            onRefresh={async () => {
                       try {
                         const params: any = {};
                         if (selectedShift) params.shiftName = selectedShift;
@@ -1931,62 +1764,9 @@ const StudentMap: React.FC<StudentMapProps> = ({
                         if (stopsRes?.success) setRouteStops(stopsRes.data);
                       } catch {}
                     }}
-                  >
-                    Refresh
-                  </button>
-                </div>
-                {!routeStatus?.tracking_active ? (
-                  <div className="space-y-3">
-                    <div className="text-slate-700 text-sm">Tracking is not active for this route{selectedShift ? ` (${selectedShift})` : ''}.</div>
-                    <div>
-                      <div className="text-slate-700 text-sm mb-1 font-medium">All Stops</div>
-                      <div className="flex flex-wrap gap-2">
-                        {routeStops.map((s:any) => (
-                          <div key={s.id} className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
-                            {s.sequence}. {s.name || `Stop #${s.sequence}`}
-                          </div>
-                        ))}
-                        {routeStops.length === 0 && (
-                          <div className="text-slate-500 text-sm">No stops available</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-slate-700 text-sm mb-1 font-medium">Next Stop</div>
-                      <div className="px-3 py-2 rounded-lg bg-blue-50 text-blue-900 border border-blue-200 font-medium">
-                        {routeStatus?.stops.next?.name || `Stop #${routeStatus?.stops.next?.sequence || '-'}`}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-700 text-sm mb-1 font-medium">Remaining</div>
-                      <div className="flex flex-wrap gap-2">
-                        {(routeStatus?.stops.remaining || []).map((s:any) => (
-                          <div key={s.id} className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
-                            {s.sequence}. {s.name || `Stop #${s.sequence}`}
-                          </div>
-                        ))}
-                        {routeStatus?.stops.remaining?.length === 0 && <div className="text-slate-500 text-sm">None</div>}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-700 text-sm mb-1 font-medium">Completed</div>
-                      <div className="flex flex-wrap gap-2">
-                        {(routeStatus?.stops.completed || []).map((s:any) => (
-                          <div key={s.id} className="text-xs px-2 py-1 rounded-lg bg-slate-50 text-slate-400 line-through border border-slate-200">
-                            {s.sequence}. {s.name || `Stop #${s.sequence}`}
-                          </div>
-                        ))}
-                        {routeStatus?.stops.completed?.length === 0 && <div className="text-slate-500 text-sm">None</div>}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+            onCenterOnBus={handleCenterOnBusForRoute}
+            hasBusForRoute={hasBusForSelectedRoute}
+          />
         </div>
       </motion.div>
     </div>

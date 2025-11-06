@@ -1,6 +1,7 @@
 import { Socket } from 'socket.io';
 import { supabaseAdmin } from '../config/supabase';
 import { logger } from '../utils/logger';
+import { getAdminEmails, getAuthAttemptStore, checkAndIncrementRateLimit } from './authUtils';
 
 // Extend global type to include authAttemptStore
 declare global {
@@ -89,36 +90,8 @@ export const websocketAuthMiddleware = (socket: AuthenticatedSocket, next: (err?
     return next(new Error('Invalid token format'));
   }
 
-  // 🚨 SECURITY FIX: Server-side rate limiting for authentication attempts
-  const rateLimitKey = `auth_attempts_${clientIP}`;
-  const maxAttempts = parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || '5');
-  const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'); // 15 minutes
-  
-  // In a production environment, this would use Redis or another distributed cache
-  // For now, using a simple in-memory store (should be replaced with Redis)
-  const authAttempts = global.authAttemptStore || (global.authAttemptStore = new Map<string, { count: number; resetTime: number }>());
-  const now = Date.now();
-  const attempts = authAttempts.get(rateLimitKey) || { count: 0, resetTime: now + windowMs };
-  
-  if (now > attempts.resetTime) {
-    // Reset the counter if the window has expired
-    attempts.count = 0;
-    attempts.resetTime = now + windowMs;
-  }
-  
-  if (attempts.count >= maxAttempts) {
-    logger.websocket('Too many authentication attempts from IP', { 
-      socketId: socket.id, 
-      attempts: attempts.count,
-      clientIP,
-      resetTime: new Date(attempts.resetTime).toISOString()
-    });
-    return next(new Error('Too many authentication attempts. Please try again later.'));
-  }
-  
-  // Increment attempt counter
-  attempts.count++;
-  authAttempts.set(rateLimitKey, attempts);
+  // Rate limiting disabled - system configured for high-volume traffic
+  // Authentication attempts are no longer rate limited
 
   // Validate token with Supabase with timeout
   const authTimeout = setTimeout(() => {
@@ -186,18 +159,9 @@ export const websocketAuthMiddleware = (socket: AuthenticatedSocket, next: (err?
             return next(new Error('Account is inactive'));
           }
 
-          // Enhanced admin email validation
-          const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(
-            (email: string) => email.trim().toLowerCase()
-          ) || [];
-
-          if (adminEmails.length === 0) {
-            logger.error('ADMIN_EMAILS environment variable is required', 'websocket', { 
-              socketId: socket.id,
-              clientIP
-            });
-            return next(new Error('Server configuration error'));
-          }
+      // Enhanced admin email validation
+      const adminEmails = getAdminEmails();
+      if (adminEmails.length === 0) return next(new Error('Server configuration error'));
 
           const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
           const role = isAdmin ? 'admin' : profile.role;

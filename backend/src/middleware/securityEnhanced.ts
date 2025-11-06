@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import { logger } from '../utils/logger';
 import config from '../config/environment';
 
@@ -73,57 +72,23 @@ export class SecurityManager {
   }
 
   /**
-   * Enhanced rate limiting
+   * Enhanced rate limiting - DISABLED for high-volume traffic
    */
   public getRateLimitConfig() {
-    return rateLimit({
-      windowMs: config.rateLimit.windowMs,
-      max: config.rateLimit.maxRequests,
-      message: {
-        error: 'Too many requests from this IP, please try again later.',
-        retryAfter: Math.ceil(config.rateLimit.windowMs / 1000)
-      },
-      standardHeaders: true,
-      legacyHeaders: false,
-      handler: (req, res) => {
-        logger.warn('Rate limit exceeded', 'security', {
-          ip: req.ip,
-          userAgent: req.headers['user-agent'],
-          path: req.path
-        });
-        res.status(429).json({
-          error: 'Too many requests from this IP, please try again later.',
-          retryAfter: Math.ceil(config.rateLimit.windowMs / 1000)
-        });
-      }
-    });
+    // Return passthrough middleware - no rate limiting
+    return (req: Request, res: Response, next: NextFunction) => {
+      next();
+    };
   }
 
   /**
-   * Authentication rate limiting
+   * Authentication rate limiting - DISABLED for high-volume traffic
    */
   public getAuthRateLimitConfig() {
-    return rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: config.rateLimit.authMaxRequests,
-      message: {
-        error: 'Too many authentication attempts, please try again later.',
-        retryAfter: 900
-      },
-      standardHeaders: true,
-      legacyHeaders: false,
-      handler: (req, res) => {
-        logger.warn('Auth rate limit exceeded', 'security', {
-          ip: req.ip,
-          userAgent: req.headers['user-agent'],
-          path: req.path
-        });
-        res.status(429).json({
-          error: 'Too many authentication attempts, please try again later.',
-          retryAfter: 900
-        });
-      }
-    });
+    // Return passthrough middleware - no rate limiting
+    return (req: Request, res: Response, next: NextFunction) => {
+      next();
+    };
   }
 
   /**

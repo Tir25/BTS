@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { adminApiService } from '../services/adminApiService';
+import { adminApiService } from '../api';
 import { logger } from '../utils/logger';
 import { Bus, BusData, BusFormData } from '../types';
+import BusFormModal from './bus/BusFormModal';
+import BusTable from './bus/BusTable';
 
 interface BusManagementPanelProps {
   className?: string;
@@ -225,269 +227,24 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
       )}
 
       {/* Bus Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-white">
-                {editingBus ? 'Edit Bus' : 'Add New Bus'}
-              </h3>
-              <button
-                onClick={resetForm}
-                className="text-white/70 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Bus Number *
-                  </label>
-                  <input
-                    type="text"
-                    name="bus_number"
-                    value={formData.bus_number}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="e.g., BUS001"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Vehicle Number *
-                  </label>
-                  <input
-                    type="text"
-                    name="vehicle_no"
-                    value={formData.vehicle_no}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="e.g., GJ-01-AB-1234"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Capacity *
-                  </label>
-                  <input
-                    type="number"
-                    name="capacity"
-                    value={formData.capacity}
-                    onChange={handleInputChange}
-                    required
-                    min="1"
-                    max="100"
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="50"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Model
-                  </label>
-                  <input
-                    type="text"
-                    name="model"
-                    value={formData.model}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="e.g., Tata Starbus"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Year
-                  </label>
-                  <input
-                    type="number"
-                    name="year"
-                    value={formData.year}
-                    onChange={handleInputChange}
-                    min="1990"
-                    max={new Date().getFullYear() + 1}
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Driver
-                  </label>
-                  <select
-                    name="assigned_driver_profile_id"
-                    value={formData.assigned_driver_profile_id}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    style={{ color: 'white' }}
-                  >
-                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Driver</option>
-                    {drivers.map((driver) => (
-                      <option key={driver.id} value={driver.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
-                        {driver.first_name} {driver.last_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Route
-                  </label>
-                  <select
-                    name="route_id"
-                    value={formData.route_id}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    style={{ color: 'white' }}
-                  >
-                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Route</option>
-                    {routes.map((route) => (
-                      <option key={route.id} value={route.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
-                        {route.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Image URL
-                  </label>
-                  <input
-                    type="url"
-                    name="bus_image_url"
-                    value={formData.bus_image_url}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="https://example.com/bus-image.jpg"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  name="is_active"
-                  checked={formData.is_active}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 text-blue-600 bg-white/10 border-white/20 rounded focus:ring-blue-500"
-                />
-                <label className="text-sm text-white/80">Active</label>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="px-4 py-2 text-white/70 hover:text-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg transition-colors"
-                >
-                  {loading ? 'Saving...' : editingBus ? 'Update Bus' : 'Create Bus'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <BusFormModal
+        show={showForm}
+        loading={loading}
+        drivers={drivers}
+        routes={routes}
+        formData={formData as any}
+        editing={!!editingBus}
+        onInputChange={handleInputChange}
+        onSubmit={handleSubmit}
+        onClose={resetForm}
+      />
 
       {/* Bus Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Bus Details
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Driver
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Route
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {buses.map((bus) => (
-                <tr key={bus.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div>
-                      <div className="text-slate-900 font-medium">{bus.bus_number}</div>
-                      <div className="text-slate-600 text-sm">{bus.vehicle_no}</div>
-                      <div className="text-slate-600 text-sm">
-                        {bus.capacity} seats • {bus.model} • {bus.year}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {bus.driver_full_name ? (
-                      <div>
-                        <div className="text-slate-900">{bus.driver_full_name}</div>
-                        <div className="text-slate-600 text-sm">{bus.driver_email}</div>
-                      </div>
-                    ) : (
-                      <span className="text-slate-400">Unassigned</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {bus.route_name ? (
-                      <span className="text-slate-900">{bus.route_name}</span>
-                    ) : (
-                      <span className="text-slate-400">No route</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      bus.is_active 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {bus.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEdit(bus)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(bus.id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <BusTable
+        buses={buses as any}
+        onEdit={(b:any) => handleEdit(b as any)}
+        onDelete={(id:string) => handleDelete(id)}
+      />
     </div>
   );
 }

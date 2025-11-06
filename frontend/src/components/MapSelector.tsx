@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { GANPAT_UNIVERSITY } from '../utils/coordinates';
+import environment from '../config/environment';
+import { MAP_TILE_URLS, MAP_TILE_ATTRIBUTION, MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM, MAP_MAX_ZOOM } from '../config/map';
 import { logger } from '../utils/logger';
 
 interface MapSelectorProps {
@@ -20,7 +21,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
   onLocationSelect,
   onClose,
   title,
-  defaultCenter = GANPAT_UNIVERSITY.coordinates, // Ganpat University coordinates
+  defaultCenter = MAP_DEFAULT_CENTER,
   searchPlaceholder = 'Search for a location...',
 }) => {
   // Prevent multiple instances
@@ -45,11 +46,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
       'MapSelector',
       { instanceId: instanceId.current, center: defaultCenter }
     );
-    logger.info(
-      `Ganpat University coordinates`,
-      'MapSelector',
-      { instanceId: instanceId.current, coordinates: GANPAT_UNIVERSITY.coordinates }
-    );
+    // Using configured default center from environment
 
     // Initialize map
     map.current = new maplibregl.Map({
@@ -59,9 +56,9 @@ const MapSelector: React.FC<MapSelectorProps> = ({
         sources: {
           osm: {
             type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tiles: MAP_TILE_URLS,
             tileSize: 256,
-            attribution: '© OpenStreetMap contributors',
+            attribution: MAP_TILE_ATTRIBUTION,
           },
         },
         layers: [
@@ -70,15 +67,15 @@ const MapSelector: React.FC<MapSelectorProps> = ({
             type: 'raster',
             source: 'osm',
             minzoom: 0,
-            maxzoom: 22,
+            maxzoom: MAP_MAX_ZOOM,
           },
         ],
       },
-      center: GANPAT_UNIVERSITY.coordinates, // Ganpat University coordinates
-      zoom: 12,
+      center: MAP_DEFAULT_CENTER,
+      zoom: MAP_DEFAULT_ZOOM,
       preserveDrawingBuffer: true, // Help with WebGL context stability
       antialias: false, // Reduce GPU load
-      maxZoom: 18,
+      maxZoom: MAP_MAX_ZOOM,
       minZoom: 5,
       maxPitch: 0, // Disable 3D to reduce GPU load
       pitch: 0,
@@ -100,18 +97,16 @@ const MapSelector: React.FC<MapSelectorProps> = ({
           .setLngLat(defaultCenter)
           .addTo(map.current!);
 
-        // Force center the map on Ganpat University
+        // Center the map on configured default
         map.current!.flyTo({
-          center: GANPAT_UNIVERSITY.coordinates, // Ganpat University
-          zoom: 12,
+          center: MAP_DEFAULT_CENTER,
+          zoom: MAP_DEFAULT_ZOOM,
           duration: 1000,
         });
 
-        // Set initial selected location to Ganpat University
         setSelectedLocation({
-          name: GANPAT_UNIVERSITY.name,
-          coordinates: GANPAT_UNIVERSITY.coordinates,
-          address: GANPAT_UNIVERSITY.address,
+          name: 'Default Location',
+          coordinates: MAP_DEFAULT_CENTER,
         });
 
         // Handle marker drag after marker is created
@@ -122,11 +117,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
           }
         });
 
-        logger.info(
-          `Map centered on ${GANPAT_UNIVERSITY.name}`,
-          'MapSelector',
-          { instanceId: instanceId.current }
-        );
+        logger.info('Map centered on default location', 'MapSelector', { instanceId: instanceId.current });
 
         setIsMapLoading(false);
       } catch (error) {
@@ -318,22 +309,18 @@ const MapSelector: React.FC<MapSelectorProps> = ({
             <button
               onClick={() => {
                 if (map.current) {
-                  logger.debug('Resetting to Ganpat University', 'MapSelector', { coordinates: GANPAT_UNIVERSITY.coordinates });
+                  logger.debug('Resetting to default center', 'MapSelector', { coordinates: MAP_DEFAULT_CENTER });
                   map.current!.flyTo({
-                    center: GANPAT_UNIVERSITY.coordinates, // Ganpat University
-                    zoom: 12,
+                    center: MAP_DEFAULT_CENTER,
+                    zoom: MAP_DEFAULT_ZOOM,
                   });
-                  marker.current?.setLngLat(GANPAT_UNIVERSITY.coordinates);
-                  setSelectedLocation({
-                    name: GANPAT_UNIVERSITY.name,
-                    coordinates: GANPAT_UNIVERSITY.coordinates,
-                    address: GANPAT_UNIVERSITY.address,
-                  });
+                  marker.current?.setLngLat(MAP_DEFAULT_CENTER);
+                  setSelectedLocation({ name: 'Default Location', coordinates: MAP_DEFAULT_CENTER });
                 }
               }}
               className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
             >
-              🏫 Reset to Ganpat University
+              🧭 Reset to Default
             </button>
           </div>
         </div>

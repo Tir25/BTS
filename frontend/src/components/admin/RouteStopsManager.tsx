@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import adminApiService from '../../services/adminApiService';
+import adminApiService from '../../api/admin';
 
 type RouteStop = { id: string; route_id: string; name?: string; sequence: number; is_active?: boolean };
 
@@ -14,10 +14,23 @@ export default function RouteStopsManager({ routeId, onClose }: { routeId: strin
   async function load() {
     setLoading(true);
     setError(null);
-    const res = await adminApiService.getRouteStops(routeId);
-    if (res.success && Array.isArray(res.data)) setStops(res.data as RouteStop[]);
-    else setError(res.error || 'Failed to load stops');
-    setLoading(false);
+    try {
+      const res = await adminApiService.getRouteStops(routeId);
+      if (res.success && Array.isArray(res.data)) {
+        setStops(res.data as RouteStop[]);
+      } else {
+        // PRODUCTION FIX: Better error handling for non-array responses
+        const errorMessage = res.error || 'Failed to load stops';
+        setError(errorMessage);
+        setStops([]); // Clear stops on error
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load stops';
+      setError(errorMessage);
+      setStops([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, [routeId]);
@@ -52,9 +65,28 @@ export default function RouteStopsManager({ routeId, onClose }: { routeId: strin
     if (swapIdx < 0 || swapIdx >= ordered.length) return;
     [ordered[idx], ordered[swapIdx]] = [ordered[swapIdx], ordered[idx]];
     setStops(ordered.map((s, i) => ({ ...s, sequence: i + 1 })));
-    // Persist reorder
-    await adminApiService.reorderRouteStops(routeId, ordered.map(s => s.id));
-    await load();
+    
+    // PRODUCTION FIX: Persist reorder with loading state and error handling
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await adminApiService.reorderRouteStops(routeId, ordered.map(s => s.id));
+      if (!res.success) {
+        setError(res.error || 'Failed to reorder stops');
+        // Revert on error
+        await load();
+      } else {
+        // Refresh to ensure consistency
+        await load();
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reorder stops';
+      setError(errorMessage);
+      // Revert on error
+      await load();
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

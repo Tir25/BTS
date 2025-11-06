@@ -6,7 +6,7 @@ import { handlePreflight } from './middleware/cors';
 import { corsMiddleware as enhancedCorsMiddleware, websocketCors } from './middleware/corsEnhanced';
 import { notFoundHandler, globalErrorHandler, unhandledRejectionHandler, uncaughtExceptionHandler } from './middleware/errorHandler';
 import { requestIdMiddleware, addRequestIdToError } from './middleware/requestId';
-import { securityMiddleware, apiRateLimit, authRateLimit, validateRequest, corsSecurity } from './middleware/security';
+import { securityMiddleware, validateRequest, corsSecurity } from './middleware/security';
 import { 
   securityManager,
   requestSizeValidator,
@@ -50,7 +50,7 @@ import { systemValidator } from './utils/systemValidator';
 import { memoryOptimizationMiddleware, memoryLeakDetection, getMemoryStats, forceGarbageCollection, memoryOptimizer } from './middleware/memoryOptimization';
 import { logRotationMiddleware, getLogRotationStats, forceLogRotation, logRotator } from './utils/logRotation';
 import { detectDeadCode, getDeadCodeReport, deadCodeDetector } from './utils/deadCodeDetector';
-import { apiRateLimits, userTierRateLimits, operationRateLimits } from './middleware/advancedRateLimit';
+// Rate limiting imports removed - system configured for high-volume traffic
 import { locationArchiveService } from './services/LocationArchiveService';
 
 // Initialize environment configuration - REMOVED, now imported
@@ -66,6 +66,7 @@ const io = new SocketIOServer(server, {
 });
 
 const PORT = 3000; // Override config.port to use standard port
+const DEMO_MODE = process.env.DEMO_MODE === 'true';
 
 // PRODUCTION FIX: Enhanced process management
 // Set memory limits for Node.js processes
@@ -165,9 +166,7 @@ app.use(performanceMonitoring);
 app.use(enhancedCorsMiddleware);
 app.use(handlePreflight);
 
-// Enhanced rate limiting with advanced patterns
-app.use(securityManager.getRateLimitConfig());
-app.use(apiRateLimits.general);
+// Rate limiting disabled - system configured for high-volume traffic
 
 // Body parsing middleware with enhanced limits
 app.use(express.json({ 
@@ -193,21 +192,22 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Add request ID to error responses
 app.use(addRequestIdToError);
 
-// Enhanced routes with Redis caching, security, and advanced rate limiting
+// Enhanced routes with Redis caching and security (rate limiting disabled for high-volume traffic)
 app.use('/health', healthRoutes);
-app.use('/auth', authRateLimit, authRoutes);
-app.use('/admin', apiRateLimits.admin, fileUploadValidator, adminRoutes);
-app.use('/assignments', apiRateLimits.assignments, securityManager.getAuthRateLimitConfig(), productionAssignmentRoutes);
-app.use('/production-assignments', apiRateLimits.assignments, securityManager.getAuthRateLimitConfig(), productionAssignmentRoutes);
-app.use('/assignments-optimized', apiRateLimits.assignments, securityManager.getAuthRateLimitConfig(), optimizedAssignmentRoutes);
+// Rate limiting removed - system configured for high-volume traffic
+app.use('/auth', authRoutes);
+app.use('/admin', fileUploadValidator, adminRoutes);
+app.use('/assignments', productionAssignmentRoutes);
+app.use('/production-assignments', productionAssignmentRoutes);
+app.use('/assignments-optimized', optimizedAssignmentRoutes);
 app.use('/buses', smartCacheMiddleware({ 
   dataTypeTTL: { 'buses': 600 } // 10 min cache for buses
 }), busRoutes);
 app.use('/routes', smartCacheMiddleware({ 
   dataTypeTTL: { 'routes': 1800 } // 30 min cache for routes
 }), routeRoutes);
-app.use('/storage', apiRateLimits.upload, fileUploadValidator, storageRoutes);
-app.use('/locations', apiRateLimits.locations, smartCacheMiddleware({ 
+app.use('/storage', fileUploadValidator, storageRoutes);
+app.use('/locations', smartCacheMiddleware({ 
   dataTypeTTL: { 'locations': 60 } // 1 min cache for locations
 }), locationRoutes);
 app.use('/tracking', trackingRoutes);

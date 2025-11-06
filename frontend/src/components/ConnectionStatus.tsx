@@ -1,5 +1,5 @@
 import React from 'react';
-import { useDriverAuth } from '../contexts/DriverAuthContext';
+import { useDriverAuth } from '../context/DriverAuthContext';
 import { logger } from '../utils/logger';
 
 interface ConnectionStatusProps {

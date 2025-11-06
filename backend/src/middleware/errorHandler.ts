@@ -1,3 +1,8 @@
+/**
+ * Global Error Handling
+ * Classifies errors, logs structured context, and returns safe, user-friendly responses.
+ * Keeps stack traces in development only and maps common DB/JWT/validation errors.
+ */
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 
@@ -81,6 +86,20 @@ export const globalErrorHandler = (
 
   // Enhanced error logging with correlation ID
   const requestId = req.headers['x-request-id'] || 'unknown';
+  // Extract concise source context from stack (top application frame)
+  let source: { file?: string; function?: string; line?: number; column?: number } = {};
+  if (error?.stack) {
+    const frames = error.stack.split('\n').map(l => l.trim());
+    const appFrame = frames.find(f => f.includes('at ') && !f.includes('node:internal') && !f.includes('node_modules')) || frames[1];
+    const m = /at\s+(.*?)\s+\((.*?):(\d+):(\d+)\)/.exec(appFrame || '') || /at\s+(.*?):(\d+):(\d+)/.exec(appFrame || '');
+    if (m) {
+      if (m.length === 5) {
+        source = { function: m[1], file: m[2], line: Number(m[3]), column: Number(m[4]) };
+      } else if (m.length === 4) {
+        source = { file: m[1], line: Number(m[2]), column: Number(m[3]) };
+      }
+    }
+  }
   logger.error('Error occurred', 'error', {
     requestId,
     message: error.message,
@@ -95,7 +114,8 @@ export const globalErrorHandler = (
     body: req.body,
     query: req.query,
     params: req.params,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    source
   });
 
   // Enhanced error response with correlation ID

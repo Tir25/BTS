@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useMemo } from 'react';
-import { useRoutes } from '../../contexts/AppContext';
+import { useRoutes } from '../../context/AppContext';
 
 interface RouteFilterProps {
   className?: string;

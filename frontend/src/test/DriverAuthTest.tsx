@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { DriverAuthProvider } from '../contexts/DriverAuthContext';
+import { DriverAuthProvider } from '../context/DriverAuthContext';
 import DriverLogin from '../components/DriverLogin';
 
 // Mock the logger to avoid console output during tests

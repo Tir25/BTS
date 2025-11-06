@@ -1,4 +1,10 @@
 import { Socket } from 'socket.io';
+declare global {
+    var authAttemptStore: Map<string, {
+        count: number;
+        resetTime: number;
+    }> | undefined;
+}
 interface AuthenticatedSocket extends Socket {
     driverId?: string;
     busId?: string;

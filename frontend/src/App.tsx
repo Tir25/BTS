@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useAuthStore } from './stores/useAuthStore';
 import { useHealthCheck } from './hooks/useApiQueries';
 import { authService } from './services/authService';
-import { DriverAuthProvider } from './contexts/DriverAuthContext';
+import { DriverAuthProvider } from './context/DriverAuthContext';
 // Enhanced lazy loading with retry logic for dynamic imports
 const lazyWithRetry = (importFunction: () => Promise<any>) => {
   return React.lazy(() =>
@@ -28,6 +28,7 @@ const lazyWithRetry = (importFunction: () => Promise<any>) => {
 const UnifiedDriverInterface = lazyWithRetry(() => import('./components/UnifiedDriverInterface'));
 const DriverLogin = lazyWithRetry(() => import('./components/DriverLogin'));
 const StudentMap = lazyWithRetry(() => import('./components/StudentMap'));
+const StudentMapWrapper = lazyWithRetry(() => import('./components/StudentMapWrapper'));
 const AdminDashboard = lazyWithRetry(() => import('./components/AdminDashboard'));
 const AdminLogin = lazyWithRetry(() => import('./components/AdminLogin'));
 const PremiumHomepage = lazyWithRetry(() => import('./components/PremiumHomepage'));
@@ -308,7 +309,7 @@ function App() {
                       </div>
                     }
                   >
-                    <StudentMap />
+                    <StudentMapWrapper />
                   </Suspense>
                 }
               />

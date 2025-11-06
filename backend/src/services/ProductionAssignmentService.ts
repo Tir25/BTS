@@ -121,9 +121,40 @@ export class ProductionAssignmentService {
       const driverMap = new Map<string, DriverRow>((drivers as DriverRow[] | undefined || []).map((d: DriverRow) => [d.id, d]));
       const routeMap = new Map<string, RouteRow>((routes as RouteRow[] | undefined || []).map((r: RouteRow) => [r.id, r]));
 
+      // PRODUCTION FIX: Log warnings for missing routes or drivers
+      const missingRouteIds = busList
+        .map(b => b.route_id)
+        .filter(routeId => !routeMap.has(routeId));
+      if (missingRouteIds.length > 0) {
+        logger.warn('Some route IDs not found in routeMap', 'production-assignment-service', {
+          missingRouteIds: Array.from(new Set(missingRouteIds)),
+          totalMissing: missingRouteIds.length
+        });
+      }
+
+      const missingDriverIds = busList
+        .map(b => b.assigned_driver_profile_id)
+        .filter(driverId => !driverMap.has(driverId));
+      if (missingDriverIds.length > 0) {
+        logger.warn('Some driver IDs not found in driverMap', 'production-assignment-service', {
+          missingDriverIds: Array.from(new Set(missingDriverIds)),
+          totalMissing: missingDriverIds.length
+        });
+      }
+
       const assignments = busList.map((bus: BusRow) => {
         const d: DriverRow | undefined = driverMap.get(bus.assigned_driver_profile_id);
         const r: RouteRow | undefined = routeMap.get(bus.route_id);
+        
+        // PRODUCTION FIX: Provide meaningful fallback values
+        const routeName = r?.name || `Route ${bus.route_id.substring(0, 8)}... (Not found)`;
+        if (!r) {
+          logger.warn('Route not found in assignment', 'production-assignment-service', {
+            routeId: bus.route_id,
+            busId: bus.id
+          });
+        }
+        
         return {
           id: bus.id,
           driver_id: bus.assigned_driver_profile_id,
@@ -136,10 +167,10 @@ export class ProductionAssignmentService {
           shift_id: (bus as any).assigned_shift_id || null,
           bus_number: (bus as any).bus_number,
           vehicle_no: (bus as any).vehicle_no,
-          driver_name: d?.full_name || 'Unknown',
+          driver_name: d?.full_name || 'Unknown Driver',
           driver_email: d?.email || '',
           driver_phone: d?.phone || '',
-          route_name: r?.name || 'Unknown',
+          route_name: routeName,
           route_description: r?.description || '',
           route_city: r?.city || '',
         } as any;
@@ -155,36 +186,90 @@ export class ProductionAssignmentService {
 
   /**
    * Get assignment dashboard data
+   * Returns accurate metrics for assignment management
    */
   static async getAssignmentDashboard(): Promise<AssignmentDashboard> {
     try {
+      // Fetch all necessary data in parallel
       const [assignmentsRes, driversRes, busesRes, routesRes] = await Promise.all([
+        // Get all assignments (buses with both driver and route assigned)
         this.getAllAssignments(),
+        // Get total active drivers
         supabaseAdmin.from('user_profiles').select('id', { count: 'exact' }).eq('role', 'driver').eq('is_active', true),
-        supabaseAdmin.from('buses').select('id, assigned_driver_profile_id, route_id', { count: 'exact' }).eq('is_active', true),
-        supabaseAdmin.from('routes').select('id', { count: 'exact' }).eq('is_active', true)
+        // Get all active buses with assignment details
+        supabaseAdmin.from('buses')
+          .select('id, assigned_driver_profile_id, route_id, assignment_status')
+          .eq('is_active', true),
+        // Get all active routes with IDs
+        supabaseAdmin.from('routes').select('id').eq('is_active', true)
       ]);
 
-      const activeAssignments = assignmentsRes.length;
       const totalDrivers = driversRes.count || 0;
-      const totalBuses = busesRes.count || 0;
-      const totalRoutes = routesRes.count || 0;
-      
-      const assignedBuses = (busesRes.data || []).filter(b => b.assigned_driver_profile_id && b.route_id).length;
-      // Count unique assigned drivers
-      const uniqueAssignedDrivers = new Set((busesRes.data || [])
-        .filter(b => b.assigned_driver_profile_id && b.route_id)
-        .map(b => b.assigned_driver_profile_id)
+      const totalBuses = (busesRes.data || []).length;
+      const allRoutesData = routesRes.data || [];
+      const totalRoutes = allRoutesData.length;
+      const allBuses = busesRes.data || [];
+
+      // Calculate total assignments (buses with both driver AND route assigned, regardless of status)
+      const totalAssignments = allBuses.filter(
+        b => b.assigned_driver_profile_id && b.route_id
+      ).length;
+
+      // Calculate active assignments (buses with both driver and route AND status = 'active')
+      const activeAssignments = allBuses.filter(
+        b => b.assigned_driver_profile_id && 
+             b.route_id && 
+             (b.assignment_status === 'active' || b.assignment_status === 'assigned')
+      ).length;
+
+      // Calculate pending assignments (buses with both driver and route but status is 'inactive' or 'pending')
+      const pendingAssignments = allBuses.filter(
+        b => b.assigned_driver_profile_id && 
+             b.route_id && 
+             (b.assignment_status === 'inactive' || b.assignment_status === 'pending' || b.assignment_status === 'unassigned')
+      ).length;
+
+      // Calculate assigned buses (buses with both driver and route)
+      const assignedBuses = allBuses.filter(
+        b => b.assigned_driver_profile_id && b.route_id
+      );
+
+      // Count unique assigned drivers (drivers who have at least one bus with both driver and route assigned)
+      const uniqueAssignedDrivers = new Set(
+        assignedBuses
+          .map(b => b.assigned_driver_profile_id)
+          .filter(Boolean)
       ).size;
+
+      // Calculate unassigned drivers
       const unassignedDrivers = Math.max(0, totalDrivers - uniqueAssignedDrivers);
-      const unassignedBuses = totalBuses - assignedBuses;
-      const unassignedRoutes = totalRoutes - assignedBuses;
+
+      // Calculate unassigned buses (buses missing either driver OR route)
+      const unassignedBuses = allBuses.filter(
+        b => !b.assigned_driver_profile_id || !b.route_id
+      ).length;
+
+      // Calculate unassigned routes (routes that have NO buses assigned to them)
+      const assignedRouteIds = new Set(
+        assignedBuses
+          .map(b => b.route_id)
+          .filter(Boolean)
+      );
+      
+      // Find routes that have no buses assigned
+      const allRouteIds = new Set(allRoutesData.map(r => r.id));
+      const unassignedRoutes = Array.from(allRouteIds).filter(
+        routeId => !assignedRouteIds.has(routeId)
+      ).length;
 
       logger.info('Fetched assignment dashboard', 'production-assignment-service', {
+        totalAssignments,
         activeAssignments,
+        pendingAssignments,
         totalDrivers,
         uniqueAssignedDrivers,
         totalBuses,
+        assignedBuses: assignedBuses.length,
         totalRoutes,
         unassignedDrivers,
         unassignedBuses,
@@ -192,12 +277,12 @@ export class ProductionAssignmentService {
       });
 
       return {
-        total_assignments: activeAssignments,
+        total_assignments: totalAssignments,
         active_assignments: activeAssignments,
         unassigned_drivers: unassignedDrivers,
         unassigned_buses: unassignedBuses,
         unassigned_routes: unassignedRoutes,
-        pending_assignments: 0, // TODO: Implement pending assignments
+        pending_assignments: pendingAssignments,
         recent_assignments: assignmentsRes.slice(0, 5),
       };
     } catch (error) {
@@ -501,22 +586,79 @@ export class ProductionAssignmentService {
       }
 
       if (!data || !data.route_id) {
+        // PRODUCTION FIX: Better error message for drivers without route assignment
+        // This helps new drivers understand why stops aren't showing
+        logger.warn('Bus assignment found but no route_id', 'production-assignment-service', { 
+          driverId, 
+          busId: data?.id,
+          message: 'Driver has bus assignment but no route assigned. Admin should assign a route to this bus.'
+        });
         return null;
       }
 
-      // Get route information
-      const { data: routeData } = await supabaseAdmin
+      // PRODUCTION FIX: Get route information with proper error handling
+      let routeName = '';
+      const { data: routeData, error: routeError } = await supabaseAdmin
         .from('routes')
-        .select('name')
+        .select('name, is_active')
         .eq('id', data.route_id)
-        .single();
+        .maybeSingle();
 
-      // Get driver information
-      const { data: driverData } = await supabaseAdmin
+      if (routeError) {
+        logger.error('Error fetching route information', 'production-assignment-service', { 
+          error: routeError, 
+          routeId: data.route_id,
+          driverId 
+        });
+        // Don't fail the entire assignment if route lookup fails, but log it
+        routeName = `Route ${data.route_id.substring(0, 8)}... (Error loading name)`;
+      } else if (!routeData) {
+        logger.warn('Route not found for assignment', 'production-assignment-service', { 
+          routeId: data.route_id,
+          driverId 
+        });
+        routeName = `Route ${data.route_id.substring(0, 8)}... (Not found)`;
+      } else if (!routeData.is_active) {
+        logger.warn('Route found but is inactive', 'production-assignment-service', { 
+          routeId: data.route_id,
+          routeName: routeData.name,
+          driverId 
+        });
+        routeName = routeData.name || `Route ${data.route_id.substring(0, 8)}...`;
+      } else {
+        routeName = routeData.name || '';
+      }
+
+      // PRODUCTION FIX: Get driver information with proper error handling
+      let driverName = '';
+      const { data: driverData, error: driverError } = await supabaseAdmin
         .from('user_profiles')
         .select('full_name')
         .eq('id', driverId)
-        .single();
+        .maybeSingle();
+
+      if (driverError) {
+        logger.error('Error fetching driver information', 'production-assignment-service', { 
+          error: driverError, 
+          driverId 
+        });
+        driverName = 'Unknown Driver';
+      } else if (!driverData) {
+        logger.warn('Driver profile not found', 'production-assignment-service', { driverId });
+        driverName = 'Unknown Driver';
+      } else {
+        driverName = driverData.full_name || 'Unknown Driver';
+      }
+
+      // PRODUCTION FIX: Validate that we have essential route information
+      if (!routeName || routeName.includes('Error loading') || routeName.includes('Not found')) {
+        logger.error('Critical: Route name could not be loaded for driver assignment', 'production-assignment-service', {
+          driverId,
+          routeId: data.route_id,
+          busId: data.id,
+          routeName
+        });
+      }
 
       return {
         id: data.id,
@@ -530,8 +672,8 @@ export class ProductionAssignmentService {
         // Additional data for driver interface
         bus_number: data.bus_number,
         vehicle_no: data.vehicle_no,
-        route_name: routeData?.name || '',
-        driver_name: driverData?.full_name || '',
+        route_name: routeName,
+        driver_name: driverName,
       };
     } catch (error) {
       logger.error('Error in getDriverAssignment', 'production-assignment-service', { error, driverId });

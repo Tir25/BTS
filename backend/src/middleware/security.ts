@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { logger } from '../utils/logger';
 
@@ -18,40 +17,24 @@ export const securityMiddleware = (req: Request, res: Response, next: NextFuncti
   next();
 };
 
-// Advanced rate limiting
+// Advanced rate limiting - DISABLED for high-volume traffic
 export const createRateLimit = (windowMs: number, max: number, message?: string) => {
-  return rateLimit({
-    windowMs,
-    max,
-    message: message || 'Too many requests from this IP, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => {
-      // Skip rate limiting in development environment
-      if (process.env.NODE_ENV === 'development') return true;
-      // Skip rate limiting for health checks
-      if (req.path.startsWith('/health')) return true;
-      return false;
-    },
-    handler: (req, res) => {
-      logger.warn('Rate limit exceeded', 'security', {
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        path: req.path,
-        method: req.method
-      });
-      res.status(429).json({
-        error: 'Rate limit exceeded',
-        retryAfter: Math.ceil(windowMs / 1000)
-      });
-    }
-  });
+  // Return passthrough middleware - no rate limiting
+  return (req: Request, res: Response, next: NextFunction) => {
+    next();
+  };
 };
 
-// API rate limiting - More lenient for development
-export const apiRateLimit = createRateLimit(15 * 60 * 1000, 5000, 'API rate limit exceeded');
-export const authRateLimit = createRateLimit(15 * 60 * 1000, 5, 'Authentication rate limit exceeded');
-export const uploadRateLimit = createRateLimit(60 * 1000, 10, 'Upload rate limit exceeded');
+// API rate limiting - DISABLED
+export const apiRateLimit = (req: Request, res: Response, next: NextFunction) => {
+  next();
+};
+export const authRateLimit = (req: Request, res: Response, next: NextFunction) => {
+  next();
+};
+export const uploadRateLimit = (req: Request, res: Response, next: NextFunction) => {
+  next();
+};
 
 // IP whitelist middleware
 export const ipWhitelist = (allowedIPs: string[]) => {

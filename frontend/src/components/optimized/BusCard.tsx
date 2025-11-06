@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { BusInfo } from '../../contexts/AppContext';
+import { BusInfo } from '../../context/AppContext';
 
 interface BusCardProps {
   bus: BusInfo;

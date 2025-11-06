@@ -1,3 +1,8 @@
+/**
+ * Logger
+ * Structured logging with dev-friendly formatting and production JSON output.
+ * Automatically attaches request correlation, user info, and source (file/function/line).
+ */
 import { Request, Response } from 'express';
 
 export enum LogLevel {
@@ -25,6 +30,36 @@ export interface LogEntry {
 class Logger {
   private isDevelopment = process.env.NODE_ENV === 'development';
   private isProduction = process.env.NODE_ENV === 'production';
+
+  private getCallerInfo(): { file?: string; function?: string; line?: number; column?: number } {
+    const obj: { stack?: string } = {};
+    Error.captureStackTrace(obj, this.getCallerInfo);
+    const stack = obj.stack || '';
+    const frames = stack.split('\n').map(l => l.trim());
+    // Frame index 0: Error
+    // Frame index 1: this.getCallerInfo
+    // Frame index 2: this.log (caller inside logger)
+    // Frame index 3: actual caller of logger.*
+    const target = frames[3] || frames[2] || '';
+    const match = /at\s+(.*?)\s+\((.*?):(\d+):(\d+)\)/.exec(target) || /at\s+(.*?):(\d+):(\d+)/.exec(target);
+    if (!match) return {};
+    if (match.length === 5) {
+      return {
+        function: match[1],
+        file: match[2],
+        line: Number(match[3]),
+        column: Number(match[4])
+      };
+    }
+    if (match.length === 4) {
+      return {
+        file: match[1],
+        line: Number(match[2]),
+        column: Number(match[3])
+      };
+    }
+    return {};
+  }
 
   private formatLogEntry(entry: LogEntry): string {
     if (this.isDevelopment) {
@@ -63,7 +98,13 @@ class Logger {
       service,
       requestId: req?.id || req?.headers['x-request-id'] as string,
       userId: (req as any)?.user?.id,
-      metadata,
+      metadata: {
+        ...metadata,
+        source: {
+          ...(metadata?.source || {}),
+          ...this.getCallerInfo()
+        }
+      },
       error: error ? {
         name: error.name,
         message: error.message,

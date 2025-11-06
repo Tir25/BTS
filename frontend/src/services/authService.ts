@@ -3,8 +3,10 @@ import { UserProfile } from '../types';
 import { supabase } from '../config/supabase';
 import { timeoutConfig } from '../config/timeoutConfig';
 import { logger } from '../utils/logger';
-import { standardBackoff } from './resilience/ExponentialBackoff';
-import { resilientQuery } from './resilience/ResilientSupabaseService';
+import { tokenStorage } from './auth/tokenStorage';
+import { sessionHelpers } from './auth/sessionHelpers';
+import { profileHelpers } from './auth/profileHelpers';
+import { assignmentHelpers, DriverBusAssignment } from './auth/assignmentHelpers';
 
 export interface AuthState {
   user: User | null;
@@ -13,16 +15,8 @@ export interface AuthState {
   loading: boolean;
 }
 
-export interface DriverBusAssignment {
-  driver_id: string;
-  bus_id: string;
-  bus_number: string;
-  route_id: string;
-  route_name: string;
-  driver_name: string;
-  created_at: string;
-  updated_at: string;
-}
+// DriverBusAssignment interface moved to assignmentHelpers.ts
+export type { DriverBusAssignment } from './auth/assignmentHelpers';
 
 class AuthService {
   private currentUser: User | null = null;
@@ -40,10 +34,6 @@ class AuthService {
     errorCode?: string;
     errorMessage?: string;
   }> | null = null;
-  
-  // Proactive session refresh
-  private sessionRefreshInterval: NodeJS.Timeout | null = null;
-  private isRefreshingSession = false;
 
   // Cleanup method
   public cleanup(): void {
@@ -53,10 +43,10 @@ class AuthService {
     }
     
     // Stop proactive session refresh
-    this.stopProactiveSessionRefresh();
+    sessionHelpers.stopProactiveRefresh();
     
     // PRODUCTION FIX: Clear token cache on cleanup
-    this.clearTokenCache();
+    tokenStorage.clearCache();
   }
   private _isInitialized: boolean = false;
 
@@ -89,7 +79,16 @@ class AuthService {
         await this.loadUserProfile(session.user.id);
         
         // Start proactive session refresh
-        this.startProactiveSessionRefresh();
+        sessionHelpers.startProactiveRefresh(
+          this.currentSession,
+          (session, user) => {
+            this.currentSession = session;
+            this.currentUser = user || null;
+            if (this.authStateChangeListener) {
+              this.authStateChangeListener();
+            }
+          }
+        );
       }
 
       // Listen for auth state changes
@@ -102,7 +101,7 @@ class AuthService {
         this.currentUser = session?.user || null;
 
         // PRODUCTION FIX: Clear token cache on session change
-        this.clearTokenCache();
+        tokenStorage.clearCache();
 
         if (session) {
           logger.debug(
@@ -114,11 +113,20 @@ class AuthService {
         if (session?.user) {
           await this.loadUserProfile(session.user.id);
           // Start proactive session refresh if we have a session
-          this.startProactiveSessionRefresh();
+          sessionHelpers.startProactiveRefresh(
+            this.currentSession,
+            (updatedSession, updatedUser) => {
+              this.currentSession = updatedSession;
+              this.currentUser = updatedUser || null;
+              if (this.authStateChangeListener) {
+                this.authStateChangeListener();
+              }
+            }
+          );
         } else {
           this.currentProfile = null;
           // Stop proactive session refresh if no session
-          this.stopProactiveSessionRefresh();
+          sessionHelpers.stopProactiveRefresh();
         }
 
         // Notify listeners
@@ -138,260 +146,50 @@ class AuthService {
     }
   }
 
+  /**
+   * Load user profile - PRODUCTION FIX: Always ensures profile is set
+   */
   private async loadUserProfile(userId: string): Promise<void> {
     try {
-      // Check if user has dual roles in auth metadata
-      const authRoles = this.currentUser?.user_metadata?.roles;
-      const isDualRoleUser =
-        authRoles && Array.isArray(authRoles) && authRoles.length > 1;
-
-      if (isDualRoleUser) {
-        // For dual-role users, determine role based on current interface
-        const currentPath = window.location.pathname;
-        let role: 'admin' | 'driver' | 'student' = 'admin'; // Default to admin
-
-        if (currentPath.includes('/driver')) {
-          role = 'driver';
-        } else if (currentPath.includes('/admin')) {
-          role = 'admin';
-        } else {
-          // If not on a specific interface, check if admin email
-          const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
-            (email: string) => email.trim().toLowerCase()
-          ) || ['siddharthmali.211@gmail.com'];
-          role = adminEmails.includes(
-            this.currentUser?.email?.toLowerCase() || ''
-          )
-            ? 'admin'
-            : 'driver';
-        }
-
-        // PRODUCTION FIX: Use resilient Supabase query with retry logic
-        const result = await resilientQuery<{
-          id: string;
-          full_name: string;
-          role: string;
-          created_at: string;
-          updated_at: string;
-        }>(
-          async () => {
-            const queryResult = await supabase
-              .from('user_profiles')
-              .select('*')
-              .eq('id', userId)
-              .single();
-            return queryResult;
-          },
-        {
-          timeout: timeoutConfig.api.default, // PRODUCTION FIX: Increased from 5s to 15s
-          retryOnFailure: true,
-          maxRetries: 3,
-        }
-        );
-
-        if (result.error || !result.data) {
-          logger.warn('⚠️ Error loading user profile, using temporary profile', 'auth', {
-            error: result.error?.message || 'No data returned',
-            retries: result.retries || 0,
-          });
-          await this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
-          return;
-        }
-
-        const profile = result.data;
-
-        this.currentProfile = {
-          id: profile.id,
-          email: this.currentUser?.email || '',
-          role: role, // Use determined role instead of database role
-          full_name: profile.full_name,
-          first_name: profile.full_name?.split(' ')[0] || '',
-          last_name: profile.full_name?.split(' ').slice(1).join(' ') || '',
-          created_at: profile.created_at,
-          updated_at: profile.updated_at,
-        };
+      // Try cached profile first
+      const cachedProfile = profileHelpers.tryLoadCachedProfile(userId);
+      if (cachedProfile) {
+        this.currentProfile = cachedProfile;
         return;
       }
 
-      // Regular single-role user handling - PRODUCTION FIX: Use resilient query
-      const result = await resilientQuery<{
-        id: string;
-        full_name: string;
-        role: string;
-        created_at: string;
-        updated_at: string;
-      }>(
-        async () => {
-          const queryResult = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', userId)
-            .single();
-          return queryResult;
-        },
-        {
-          timeout: timeoutConfig.api.default, // PRODUCTION FIX: Increased from 5s to 15s
-          retryOnFailure: true,
-          maxRetries: 3,
-        }
-      );
-
-      if (result.error || !result.data) {
-        logger.warn('⚠️ Error loading user profile, using temporary profile', 'auth', {
-          error: result.error?.message || 'No data returned',
-          retries: result.retries || 0,
-        });
-        // Set temporary profile with role check
-        await this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
-        return;
+      // PRODUCTION FIX: loadUserProfile now always returns a profile (never null)
+      const profile = await profileHelpers.loadUserProfile(userId, this.currentUser);
+      this.currentProfile = profile;
+      
+      // PRODUCTION FIX: Cache the profile for faster future loads
+      try {
+        localStorage.setItem(`profile_${userId}`, JSON.stringify({
+          ...profile,
+          _timestamp: Date.now()
+        }));
+      } catch (cacheError) {
+        // Ignore cache errors
       }
-
-      const profile = result.data;
-
-      // Check if this is a known admin user - prioritize admin email over database role
-      const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
-        (email: string) => email.trim().toLowerCase()
-      ) || [
-        'siddharthmali.211@gmail.com', // Keep this as fallback for development
-      ];
-
-      const isAdmin = adminEmails.includes(
-        this.currentUser?.email?.toLowerCase() || ''
-      );
-      const role: 'admin' | 'driver' | 'student' = isAdmin ? 'admin' : (profile.role as 'admin' | 'driver' | 'student');
-
-      logger.debug('User profile loaded', 'auth', {
-        email: this.currentUser?.email,
-        databaseRole: profile.role,
-        adminCheck: isAdmin,
-        finalRole: role,
-      });
-
-      this.currentProfile = {
-        id: profile.id,
-        email: this.currentUser?.email || '',
-        role: role,
-        full_name: profile.full_name,
-        first_name: profile.full_name?.split(' ')[0] || '',
-        last_name: profile.full_name?.split(' ').slice(1).join(' ') || '',
-        created_at: profile.created_at,
-        updated_at: profile.updated_at,
-      };
     } catch (error) {
       logger.error('❌ Error in loadUserProfile', 'auth', {
         error: error instanceof Error ? error.message : String(error),
         userId,
       });
-      // Set temporary profile with role check on any error
-      await this.setTemporaryProfileWithRoleCheck(userId, this.currentUser);
-    }
-  }
-
-  // Removed unused setTemporaryProfile function
-
-  private async setTemporaryProfileWithRoleCheck(userId: string, user: User | null): Promise<void> {
-    logger.info('🔄 Setting temporary profile with database role lookup', 'auth', {
-      userId,
-      userEmail: user?.email
-    });
-
-    if (!user) {
-      logger.error('❌ No user data available for profile creation', 'auth');
-      return;
-    }
-
-    let actualRole: 'admin' | 'driver' | 'student' = 'student'; // Default fallback
-    
-    try {
-      // PRODUCTION FIX: First attempt to get actual role from database
-      logger.info('🔍 Attempting to fetch actual user role from database', 'auth', { userId });
       
-      const roleResult = await resilientQuery<{ role: string }>(
-        async () => {
-          const queryResult = await supabase
-            .from('user_profiles')
-            .select('role')
-            .eq('id', userId)
-            .single();
-          return queryResult;
-        },
-        {
-          timeout: 3000, // Quick timeout for role lookup
-          retryOnFailure: true,
-          maxRetries: 2,
-        }
-      );
-      
-      if (roleResult.data?.role) {
-        actualRole = roleResult.data.role as 'admin' | 'driver' | 'student';
-        logger.info('✅ Successfully retrieved actual role from database', 'auth', {
-          userId,
-          actualRole,
-          retries: roleResult.retries || 0
-        });
-      } else {
-        logger.warn('⚠️ No role found in database, falling back to email-based role assignment', 'auth', {
-          userId,
-          error: roleResult.error?.message
-        });
-        
-        // Fallback to email-based role assignment
-        const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
-          (email: string) => email.trim().toLowerCase()
-        ) || [
-          'siddharthmali.211@gmail.com', // Keep this as fallback for development
-        ];
-        
-        const userEmail = user.email?.toLowerCase() || '';
-        const isAdmin = adminEmails.includes(userEmail);
-        actualRole = isAdmin ? 'admin' : 'student'; // Still defaults to student if not admin
+      // PRODUCTION FIX: Last resort - create minimal profile
+      if (!this.currentProfile && this.currentUser) {
+        this.currentProfile = {
+          id: userId,
+          email: this.currentUser.email || '',
+          role: (this.currentUser.user_metadata?.role as string) || 'student',
+          full_name: this.currentUser.user_metadata?.full_name || this.currentUser.email?.split('@')[0] || 'User',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
       }
-    } catch (error) {
-      logger.error('❌ Failed to fetch role from database, using email-based fallback', 'auth', {
-        error: error instanceof Error ? error.message : String(error),
-        userId
-      });
-      
-      // Final fallback to email-based role assignment
-      const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(
-        (email: string) => email.trim().toLowerCase()
-      ) || [
-        'siddharthmali.211@gmail.com',
-      ];
-      
-      const userEmail = user.email?.toLowerCase() || '';
-      const isAdmin = adminEmails.includes(userEmail);
-      actualRole = isAdmin ? 'admin' : 'student';
     }
-
-    logger.info(`🔍 User ${user.email} assigned role: ${actualRole}`, 'auth', {
-      method: 'temporary_profile_with_role_check',
-      wasFromDatabase: actualRole !== 'student' || !user.email?.includes('admin')
-    });
-
-    const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
-    const firstName = user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'User';
-    const lastName = user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '';
-
-    this.currentProfile = {
-      id: userId,
-      email: user.email || '',
-      role: actualRole,
-      full_name: fullName,
-      first_name: firstName,
-      last_name: lastName,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    
-    logger.info('✅ Temporary profile created successfully', 'auth', {
-      userId,
-      role: actualRole,
-      fullName
-    });
   }
-
-  // Removed redundant createDefaultProfile method
 
   // Sign in with email and password - PRODUCTION-GRADE VERSION WITH RACE CONDITION FIX
   async signIn(
@@ -411,7 +209,7 @@ class AuthService {
       logger.info(`🔐 Starting sign in process for: ${email}`, 'auth');
 
       // Clear token cache before starting new authentication
-      this.clearTokenCache();
+      tokenStorage.clearCache();
 
       // OPTIMIZATION: Set an early cache to speed up subsequent sign-ins
       this.setSignInCache(email);
@@ -463,7 +261,7 @@ class AuthService {
         if (raceError instanceof Error && raceError.message.includes('timeout')) {
           logger.error('❌ Authentication timeout', 'auth', { error: raceError.message });
           // Clear token cache on timeout
-          this.clearTokenCache();
+          tokenStorage.clearCache();
           return { 
             success: false, 
             error: 'Login is taking longer than expected. Please check your internet connection and try again.'
@@ -475,7 +273,7 @@ class AuthService {
       if (result.error) {
         logger.error('❌ Sign in error:', 'auth', { error: result.error });
         // PRODUCTION FIX: Clear token cache on authentication failure
-        this.clearTokenCache();
+        tokenStorage.clearCache();
         return { 
           success: false, 
           error: this.getFormattedAuthError(result.error)
@@ -485,7 +283,7 @@ class AuthService {
       if (!result.data) {
         logger.error('❌ No data received from authentication', 'auth');
         // PRODUCTION FIX: Clear token cache on authentication failure
-        this.clearTokenCache();
+        tokenStorage.clearCache();
         return { success: false, error: 'No authentication data received' };
       }
 
@@ -499,40 +297,87 @@ class AuthService {
         this.currentUser = data.user;
         this.currentSession = data.session;
 
-        // OPTIMIZATION: Start profile loading with a more graceful fallback strategy
+        // PRODUCTION FIX: Ensure profile is ALWAYS loaded before returning
+        // This guarantees authentication works on first try
         logger.info('📋 Loading user profile...', 'auth');
         
         try {
-          // OPTIMIZATION: Use Promise.any instead of race to try multiple profile loading strategies
-          const directProfilePromise = this.loadUserProfile(data.user.id);
+          // PRODUCTION FIX: Check cached profile first (fast path)
+          const cachedProfile = profileHelpers.tryLoadCachedProfile(data.user.id);
+          if (cachedProfile) {
+            this.currentProfile = cachedProfile;
+            logger.info('✅ Using cached profile', 'auth', { role: cachedProfile.role });
+          } else {
+            // PRODUCTION FIX: Load profile from database with timeout
+            const profileTimeout = timeoutConfig.api.shortRunning || 5000; // 5 seconds for profile load
+            const profilePromise = this.loadUserProfile(data.user.id);
+            const timeoutPromise = new Promise<void>((_, reject) => {
+              setTimeout(() => reject(new Error('Profile loading timeout')), profileTimeout);
+            });
+
+            try {
+              await Promise.race([profilePromise, timeoutPromise]);
+              
+              // PRODUCTION FIX: Verify profile was actually loaded
+              if (!this.currentProfile) {
+                throw new Error('Profile not loaded after successful promise');
+              }
+              
+              logger.info(`✅ Profile loaded from database: ${this.currentProfile.role}`, 'auth');
+            } catch (timeoutError) {
+              logger.warn('⚠️ Profile loading timed out, creating temporary profile', 'auth', { 
+                error: timeoutError instanceof Error ? timeoutError.message : String(timeoutError) 
+              });
+
+              // PRODUCTION FIX: Always ensure we have a profile, even if temporary
+              // loadUserProfile now always returns a profile (never null)
+              if (!this.currentProfile) {
+                this.currentProfile = await profileHelpers.loadUserProfile(data.user.id, data.user);
+                logger.info('✅ Created temporary profile', 'auth', { role: this.currentProfile.role });
+              }
+            }
+          }
           
-          // OPTIMIZATION: Simultaneously try to use cached profile data if available
-          const cachedProfilePromise = this.tryLoadCachedProfile(data.user.id);
+          // PRODUCTION FIX: Final verification - ensure profile exists
+          if (!this.currentProfile) {
+            logger.error('❌ CRITICAL: No profile after all attempts', 'auth');
+            throw new Error('Failed to load or create user profile');
+          }
           
-          // PRODUCTION FIX: Use longer timeout for profile loading to prevent unnecessary fallbacks
-          const profileTimeout = timeoutConfig.api.default; // Increased from 5s to 15s
-          
-          // Try both approaches and use whichever succeeds first
-          // Using Promise.race instead of Promise.any for better compatibility
-          const profilePromise = Promise.race([
-            directProfilePromise.then(result => result),
-            cachedProfilePromise.then(result => result)
-          ]);
-          
-          // Use Promise.race with the timeout
-          const timeoutPromise = new Promise<void>((_, reject) => {
-            setTimeout(() => reject(new Error('Profile loading timeout')), profileTimeout);
+          logger.info(`✅ Profile ready: ${this.currentProfile.role}`, 'auth', {
+            userId: this.currentProfile.id,
+            email: this.currentProfile.email
           });
-
-          await Promise.race([profilePromise, timeoutPromise]);
-          logger.info(`✅ Profile loaded: ${this.currentProfile?.role}`, 'auth');
         } catch (profileError) {
-          logger.warn('⚠️ Profile loading timed out, using temporary profile', 'auth', { error: String(profileError) });
-
-          // OPTIMIZATION: Use a more accurate temporary profile based on user metadata
-          await this.setTemporaryProfileWithRoleCheck(data.user.id, data.user);
+          logger.error('❌ Critical error in profile loading', 'auth', { 
+            error: profileError instanceof Error ? profileError.message : String(profileError) 
+          });
+          
+          // PRODUCTION FIX: Last resort - create minimal profile to prevent auth failure
+          if (!this.currentProfile && data.user) {
+            this.currentProfile = {
+              id: data.user.id,
+              email: data.user.email || email,
+              role: (data.user.user_metadata?.role as string) || 'student',
+              full_name: data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'User',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            logger.warn('⚠️ Created emergency minimal profile', 'auth', { 
+              role: this.currentProfile.role 
+            });
+          }
+          
+          // If we still don't have a profile, authentication must fail
+          if (!this.currentProfile) {
+            this._isAuthenticating = false;
+            return { 
+              success: false, 
+              error: 'Failed to load user profile. Please try again or contact support.' 
+            };
+          }
         } finally {
-          // OPTIMIZATION: Reset authentication state
+          // PRODUCTION FIX: Reset authentication state
           this._isAuthenticating = false;
         }
 
@@ -546,21 +391,30 @@ class AuthService {
           this.authStateChangeListener();
         }
 
+        // PRODUCTION FIX: Guarantee profile exists before returning
+        if (!this.currentProfile) {
+          logger.error('❌ CRITICAL: Profile missing after sign-in', 'auth');
+          return { 
+            success: false, 
+            error: 'Authentication succeeded but profile loading failed. Please try again.' 
+          };
+        }
+        
         return {
           success: true,
-          user: this.currentProfile || undefined,
+          user: this.currentProfile,
         };
       }
 
       logger.error('❌ No user or session data received', 'auth');
       // PRODUCTION FIX: Clear token cache on authentication failure
-      this.clearTokenCache();
+      tokenStorage.clearCache();
       return { success: false, error: 'Authentication failed' };
     } catch (error) {
       logger.error('❌ Sign in error:', 'auth', { error: String(error) });
       
       // PRODUCTION FIX: Clear token cache on any authentication error
-      this.clearTokenCache();
+      tokenStorage.clearCache();
       
       // Reset authentication state on error
       this._isAuthenticating = false;
@@ -613,35 +467,6 @@ class AuthService {
       sessionStorage.setItem('last_signin_time', Date.now().toString());
     } catch (e) {
       // Ignore errors if sessionStorage is unavailable
-    }
-  }
-  
-  private async tryLoadCachedProfile(userId: string): Promise<void> {
-    try {
-      const cachedProfile = localStorage.getItem(`profile_${userId}`);
-      if (cachedProfile) {
-        const parsedProfile = JSON.parse(cachedProfile);
-        const cacheTime = parsedProfile._timestamp || 0;
-        
-        // Only use cache if it's less than 1 hour old
-        if (Date.now() - cacheTime < 3600000) {
-          this.currentProfile = {
-            id: parsedProfile.id,
-            email: parsedProfile.email,
-            role: parsedProfile.role,
-            full_name: parsedProfile.full_name,
-            first_name: parsedProfile.first_name,
-            last_name: parsedProfile.last_name,
-            created_at: parsedProfile.created_at,
-            updated_at: parsedProfile.updated_at,
-          };
-          logger.info('✅ Used cached profile data', 'auth');
-          return;
-        }
-      }
-      throw new Error('No valid cached profile');
-    } catch (e) {
-      throw new Error('Failed to load from cache');
     }
   }
   
@@ -723,7 +548,7 @@ class AuthService {
       logger.info('🔐 Starting sign out process...', 'auth');
 
       // Stop proactive session refresh
-      this.stopProactiveSessionRefresh();
+      sessionHelpers.stopProactiveRefresh();
 
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
@@ -742,7 +567,7 @@ class AuthService {
       this.currentDriverAssignment = null;
 
       // Clear token cache
-      this.clearTokenCache();
+      tokenStorage.clearCache();
 
       // Clear localStorage and sessionStorage
       try {
@@ -849,33 +674,12 @@ class AuthService {
     return this.hasRole('student');
   }
 
-  // SIMPLIFIED: In-memory token cache only (no localStorage)
-  private tokenCache: { token: string | null; expiresAt: number } = {
-    token: null,
-    expiresAt: 0
-  };
-
-  // PRODUCTION FIX: Clear token cache method
-  private clearTokenCache(): void {
-    this.tokenCache = { token: null, expiresAt: 0 };
-    logger.debug('🗑️ Token cache cleared', 'auth');
-  }
-
-  // SIMPLIFIED: Check if token is expired
-  private isTokenExpired(): boolean {
-    if (!this.tokenCache.token || !this.tokenCache.expiresAt) {
-      return true;
-    }
-    const now = Date.now();
-    const bufferTime = 60 * 1000; // 1 minute buffer
-    return now >= (this.tokenCache.expiresAt - bufferTime);
-  }
-
-  // SIMPLIFIED: Get access token with proper caching
+  // Get access token with proper caching
   getAccessToken(): string | null {
     // Check if cached token is still valid
-    if (this.tokenCache.token && !this.isTokenExpired()) {
-      return this.tokenCache.token;
+    const cachedToken = tokenStorage.getCachedToken();
+    if (cachedToken) {
+      return cachedToken;
     }
 
     // Get token from current session
@@ -883,243 +687,22 @@ class AuthService {
     
     if (token && this.currentSession?.expires_at) {
       // Cache the token with expiration
-      this.tokenCache = {
-        token,
-        expiresAt: this.currentSession.expires_at * 1000
-      };
-      
-      logger.debug('🔑 Token cached from session', 'auth', {
-        hasToken: !!token,
-        expiresAt: new Date(this.tokenCache.expiresAt).toISOString()
-      });
+      tokenStorage.cacheToken(token, this.currentSession.expires_at);
     } else {
       // Clear cache if no valid token
-      this.clearTokenCache();
+      tokenStorage.clearCache();
     }
     
     return token;
   }
 
-  // SIMPLIFIED: Enhanced token validation with race condition protection
+  // Enhanced token validation with race condition protection
   async validateTokenForAPI(): Promise<{
     valid: boolean;
     token: string | null;
     refreshed: boolean;
   }> {
-    // Prevent concurrent validation calls
-    if (this.isRefreshingSession) {
-      logger.debug('🔄 Session refresh in progress, waiting...', 'auth');
-      // Wait for current refresh to complete
-      while (this.isRefreshingSession) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
-
-    let token = this.getAccessToken();
-    let refreshed = false;
-
-    if (!token) {
-      return { valid: false, token: null, refreshed: false };
-    }
-
-    try {
-      // Validate the current token
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-
-      if (error || !user) {
-        logger.debug('🔄 Token validation failed, attempting refresh', 'auth', { error: error?.message });
-
-        // Try to refresh the session
-        const refreshResult = await this.refreshSession();
-        if (refreshResult.success) {
-          token = this.getAccessToken();
-          refreshed = true;
-          logger.info('✅ Token refreshed successfully', 'auth');
-        } else {
-          logger.warn('❌ Token refresh failed', 'auth', { error: refreshResult.error });
-          return { valid: false, token: null, refreshed: false };
-        }
-      }
-
-      return { valid: true, token, refreshed };
-    } catch (error) {
-      logger.error('❌ Token validation error', 'auth', { error: String(error) });
-      return { valid: false, token: null, refreshed: false };
-    }
-  }
-
-  // SIMPLIFIED: Refresh session with proper race condition protection
-  async refreshSession(): Promise<{ success: boolean; error?: string }> {
-    // Prevent concurrent refresh attempts
-    if (this.isRefreshingSession) {
-      logger.debug('🔄 Session refresh already in progress', 'auth');
-      return { success: false, error: 'Refresh already in progress' };
-    }
-
-    try {
-      // Check if we have a current session before attempting refresh
-      if (!this.currentSession) {
-        logger.debug('🔄 No current session to refresh', 'auth');
-        return { success: false, error: 'No session to refresh' };
-      }
-
-      this.isRefreshingSession = true;
-      logger.info('🔄 Starting session refresh', 'auth');
-
-      const { data, error } = await supabase.auth.refreshSession();
-
-      if (error) {
-        // Don't log AuthSessionMissingError as an error since it's expected when no session exists
-        if (error.message.includes('Auth session missing')) {
-          logger.debug('🔄 No session to refresh (expected for unauthenticated users)', 'auth');
-          return { success: false, error: 'No session to refresh' };
-        }
-        logger.error('❌ Session refresh error', 'auth', { error: error.message });
-        return { success: false, error: error.message };
-      }
-
-      if (data.session) {
-        this.currentSession = data.session;
-        this.currentUser = data.user;
-        // Clear token cache after refresh
-        this.clearTokenCache();
-        logger.info('✅ Session refreshed successfully', 'auth');
-        return { success: true };
-      }
-
-      return { success: false, error: 'Session refresh failed' };
-    } catch (error) {
-      logger.error('❌ Session refresh error', 'auth', { error: String(error) });
-      return { success: false, error: 'Network error during session refresh' };
-    } finally {
-      this.isRefreshingSession = false;
-    }
-  }
-
-  /**
-   * Check if session needs refresh and refresh proactively
-   * PRODUCTION FIX: Enhanced handling for expired sessions and long-running sessions
-   */
-  private async checkAndRefreshSession(): Promise<void> {
-    // Prevent concurrent refresh attempts
-    if (this.isRefreshingSession) {
-      return;
-    }
-
-    if (!this.currentSession || !this.currentSession.expires_at) {
-      // PRODUCTION FIX: If no session, try to recover from localStorage
-      logger.warn('⚠️ No current session detected - attempting recovery', 'auth');
-      const recoveryResult = await this.recoverSession();
-      if (recoveryResult.success) {
-        logger.info('✅ Session recovered from localStorage', 'auth');
-        if (this.authStateChangeListener) {
-          this.authStateChangeListener();
-        }
-      }
-      return;
-    }
-
-    const expiresAt = this.currentSession.expires_at * 1000; // Convert to milliseconds
-    const now = Date.now();
-    const timeUntilExpiry = expiresAt - now;
-    const refreshThreshold = timeoutConfig.session.refreshBeforeExpiry;
-
-    // PRODUCTION FIX: Handle expired sessions (negative timeUntilExpiry)
-    if (timeUntilExpiry <= 0) {
-      logger.warn('⚠️ Session has expired - attempting refresh', 'auth', {
-        expiredBy: Math.round(Math.abs(timeUntilExpiry) / 1000) + 's',
-      });
-
-      this.isRefreshingSession = true;
-      try {
-        const result = await this.refreshSession();
-        if (result.success) {
-          logger.info('✅ Expired session refreshed successfully', 'auth');
-          if (this.authStateChangeListener) {
-            this.authStateChangeListener();
-          }
-        } else {
-          logger.error('❌ Failed to refresh expired session', 'auth', {
-            error: result.error,
-          });
-          // PRODUCTION FIX: Attempt recovery if refresh fails
-          const recoveryResult = await this.recoverSession();
-          if (recoveryResult.success) {
-            logger.info('✅ Session recovered after refresh failure', 'auth');
-            if (this.authStateChangeListener) {
-              this.authStateChangeListener();
-            }
-          } else {
-            logger.error('❌ Session recovery failed - user may need to re-authenticate', 'auth');
-          }
-        }
-      } catch (error) {
-        logger.error('❌ Error refreshing expired session', 'auth', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      } finally {
-        this.isRefreshingSession = false;
-      }
-      return;
-    }
-
-    // Refresh if session expires within the threshold
-    if (timeUntilExpiry <= refreshThreshold && timeUntilExpiry > 0) {
-      this.isRefreshingSession = true;
-      logger.info('🔄 Proactively refreshing session before expiry', 'auth', {
-        timeUntilExpiry: Math.round(timeUntilExpiry / 1000) + 's',
-      });
-
-      try {
-        const result = await this.refreshSession();
-        if (result.success) {
-          logger.info('✅ Proactive session refresh successful', 'auth');
-          // Notify listeners
-          if (this.authStateChangeListener) {
-            this.authStateChangeListener();
-          }
-        } else {
-          logger.warn('⚠️ Proactive session refresh failed', 'auth', {
-            error: result.error,
-          });
-        }
-      } catch (error) {
-        logger.error('❌ Error during proactive session refresh', 'auth', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      } finally {
-        this.isRefreshingSession = false;
-      }
-    }
-  }
-
-  /**
-   * Start proactive session refresh interval
-   */
-  private startProactiveSessionRefresh(): void {
-    // Stop existing interval if any
-    this.stopProactiveSessionRefresh();
-
-    // Start checking session expiry periodically
-    this.sessionRefreshInterval = setInterval(() => {
-      this.checkAndRefreshSession();
-    }, timeoutConfig.session.checkInterval);
-
-    logger.info('✅ Proactive session refresh started', 'auth', {
-      checkInterval: timeoutConfig.session.checkInterval / 1000 + 's',
-      refreshThreshold: timeoutConfig.session.refreshBeforeExpiry / 1000 + 's',
-    });
-  }
-
-  /**
-   * Stop proactive session refresh interval
-   */
-  private stopProactiveSessionRefresh(): void {
-    if (this.sessionRefreshInterval) {
-      clearInterval(this.sessionRefreshInterval);
-      this.sessionRefreshInterval = null;
-      logger.info('🛑 Proactive session refresh stopped', 'auth');
-    }
+    return await sessionHelpers.validateTokenForAPI(this.currentSession);
   }
 
   // Update user profile
@@ -1312,226 +895,7 @@ class AuthService {
   async getDriverBusAssignment(
     driverId: string
   ): Promise<DriverBusAssignment | null> {
-    // Helper function to check if error is retriable
-    const isRetriableError = (error: any): boolean => {
-      if (!error) return false;
-      
-      // Network errors are retriable
-      if (error.message?.includes('NetworkError') || 
-          error.message?.includes('Failed to fetch') ||
-          error.message?.includes('timeout')) {
-        return true;
-      }
-      
-      // 5xx server errors are retriable
-      if (error.status >= 500 && error.status < 600) {
-        return true;
-      }
-      
-      // 408 Request Timeout is retriable
-      if (error.status === 408) {
-        return true;
-      }
-      
-      // 429 Too Many Requests is retriable
-      if (error.status === 429) {
-        return true;
-      }
-      
-      return false;
-    };
-
-    // Main fetch function with error handling
-    const fetchAssignment = async (): Promise<DriverBusAssignment | null> => {
-      logger.info('🔍 Fetching driver bus assignment via API', 'auth', { driverId });
-      
-      // Get access token for authenticated request
-      const tokenResult = await this.validateTokenForAPI();
-      if (!tokenResult.valid || !tokenResult.token) {
-        logger.warn('❌ No valid token for API request', 'auth');
-        return null;
-      }
-
-      // Use backend API with authentication
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const response = await fetch(
-        `${API_BASE_URL}/production-assignments/my-assignment`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${tokenResult.token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorInfo = {
-          status: response.status,
-          statusText: response.statusText,
-          message: `HTTP ${response.status}: ${response.statusText}`
-        };
-        
-        // Check if error is retriable
-        if (isRetriableError(errorInfo)) {
-          logger.warn('⚠️ Retriable error fetching bus assignment', 'auth', errorInfo);
-          const retriableError: any = new Error(`Retriable error: ${response.status} ${response.statusText}`);
-          retriableError.status = response.status;
-          throw retriableError;
-        }
-        
-        logger.error('❌ Non-retriable error fetching bus assignment from API', 'auth', errorInfo);
-        return null;
-      }
-
-      const result = await response.json();
-      
-      if (result.success && result.data) {
-        logger.info('✅ Bus assignment retrieved from API', 'auth', {
-          bus_number: result.data.bus_number,
-          route_name: result.data.route_name
-        });
-        return result.data;
-      } else {
-        logger.warn('⚠️ No bus assignment found', 'auth', { driverId });
-        return null;
-      }
-    };
-
-    // Fallback function for direct Supabase query - PRODUCTION FIX: Use resilient queries
-    const fetchFromSupabase = async (): Promise<DriverBusAssignment | null> => {
-      logger.info('🔄 Falling back to direct Supabase query', 'auth');
-      
-      // PRODUCTION FIX: Use resilient query with retry logic
-      const busResult = await resilientQuery<{
-        id: string;
-        bus_number: string;
-        route_id: string | null;
-      }>(
-        async () => {
-          const queryResult = await supabase
-            .from('buses')
-            .select('id, bus_number, route_id')
-            .eq('assigned_driver_profile_id', driverId)
-            .eq('is_active', true)
-            .single();
-          return queryResult;
-        },
-        {
-          timeout: timeoutConfig.api.shortRunning,
-          retryOnFailure: true,
-          maxRetries: 2,
-        }
-      );
-
-      if (busResult.error || !busResult.data) {
-        logger.error('❌ Fallback Supabase query failed', 'auth', {
-          error: busResult.error?.message || 'No bus data returned',
-          retries: busResult.retries || 0,
-        });
-        return null;
-      }
-
-      const busData = busResult.data;
-
-      // Get route information - PRODUCTION FIX: Use resilient query
-      let routeName = '';
-      if (busData.route_id) {
-        const routeResult = await resilientQuery<{ name: string }>(
-          async () => {
-            const queryResult = await supabase
-              .from('routes')
-              .select('name')
-              .eq('id', busData.route_id)
-              .single();
-            return queryResult;
-          },
-          {
-            timeout: timeoutConfig.api.shortRunning,
-            retryOnFailure: true,
-            maxRetries: 2,
-          }
-        );
-        routeName = routeResult.data?.name || '';
-      }
-
-      // Get driver name - PRODUCTION FIX: Use resilient query
-      let driverName = 'Unknown Driver';
-      const profileResult = await resilientQuery<{ full_name: string }>(
-        async () => {
-          const queryResult = await supabase
-            .from('user_profiles')
-            .select('full_name')
-            .eq('id', driverId)
-            .single();
-          return queryResult;
-        },
-        {
-          timeout: timeoutConfig.api.shortRunning,
-          retryOnFailure: true,
-          maxRetries: 2,
-        }
-      );
-      if (profileResult.data?.full_name) {
-        driverName = profileResult.data.full_name;
-      }
-
-      return {
-        driver_id: driverId,
-        bus_id: busData.id,
-        bus_number: busData.bus_number,
-        route_id: busData.route_id || '',
-        route_name: routeName,
-        driver_name: driverName,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-    };
-
-    // Execute with retry logic
-    try {
-      const backoffResult = await standardBackoff.execute(async () => {
-        try {
-          const result = await fetchAssignment();
-          if (result === null) {
-            // Null result might mean no assignment, which is not a retriable error
-            // But we still want to try fallback
-            throw new Error('No assignment found via API');
-          }
-          return result;
-        } catch (error) {
-          // Only retry if it's a retriable error
-          if (isRetriableError(error)) {
-            throw error;
-          }
-          // For non-retriable errors, try fallback immediately
-          return await fetchFromSupabase();
-        }
-      }, (attempt, delay, error) => {
-        logger.info(`🔄 Retrying bus assignment fetch (attempt ${attempt})`, 'auth', {
-          delay: `${delay}ms`,
-          error: error.message
-        });
-      });
-
-      if (backoffResult.success && backoffResult.result) {
-        return backoffResult.result;
-      }
-
-      // If retry failed, try Supabase fallback
-      logger.info('🔄 API retry failed, trying Supabase fallback', 'auth');
-      return await fetchFromSupabase();
-    } catch (error) {
-      logger.error('❌ Error in getDriverBusAssignment after retries:', 'auth', { error });
-      
-      // Final fallback to Supabase
-      try {
-        return await fetchFromSupabase();
-      } catch (fallbackError) {
-        logger.error('❌ All assignment fetch methods failed', 'auth', { error: fallbackError });
-        return null;
-      }
-    }
+    return await assignmentHelpers.getDriverBusAssignment(driverId, this.currentSession);
   }
 
   /**
@@ -1716,15 +1080,34 @@ class AuthService {
         };
       }
 
-      // Check if user profile was loaded
+      // PRODUCTION FIX: If profile not loaded, try to load it now
       if (!this.currentProfile) {
-        logger.warn('❌ Driver session validation failed: No profile data', 'driver-validation');
-        return { 
-          isValid: false, 
-          assignment: null,
-          errorCode: 'NO_PROFILE',
-          errorMessage: 'Unable to load your driver profile. Please contact your administrator.'
-        };
+        logger.warn('⚠️ Profile not loaded, attempting to load now', 'driver-validation', {
+          userId: this.currentUser.id
+        });
+        try {
+          await this.loadUserProfile(this.currentUser.id);
+          // Double-check after loading
+          if (!this.currentProfile) {
+            logger.error('❌ Driver session validation failed: Profile could not be loaded', 'driver-validation');
+            return { 
+              isValid: false, 
+              assignment: null,
+              errorCode: 'NO_PROFILE',
+              errorMessage: 'Unable to load your driver profile. Please try logging in again.'
+            };
+          }
+        } catch (profileLoadError) {
+          logger.error('❌ Failed to load profile during validation', 'driver-validation', {
+            error: profileLoadError instanceof Error ? profileLoadError.message : String(profileLoadError)
+          });
+          return { 
+            isValid: false, 
+            assignment: null,
+            errorCode: 'PROFILE_LOAD_FAILED',
+            errorMessage: 'Unable to load your driver profile. Please try logging in again.'
+          };
+        }
       }
 
       // Check if user is a driver with improved error message and recovery mechanism
@@ -1796,20 +1179,8 @@ class AuthService {
           userId: this.currentUser.id
         });
         
-        // Try to get from session storage as fallback
-        try {
-          const cachedAssignment = sessionStorage.getItem(`driver_assignment_${this.currentUser.id}`);
-          if (cachedAssignment) {
-            const parsed = JSON.parse(cachedAssignment);
-            // Check if cache is not too old (5 minutes)
-            if (Date.now() - parsed._timestamp < 5 * 60 * 1000) {
-              assignment = parsed;
-              logger.info('📱 Using cached assignment data', 'driver-validation');
-            }
-          }
-        } catch (cacheError) {
-          logger.warn('⚠️ Failed to read cached assignment', 'driver-validation', { error: cacheError });
-        }
+        // Try to get from cache as fallback
+        assignment = assignmentHelpers.getCachedAssignment(this.currentUser.id);
       }
       
       if (!assignment) {
@@ -1826,18 +1197,9 @@ class AuthService {
         };
       }
 
-      // Store the assignment in memory
+      // Store the assignment in memory and cache
       this.currentDriverAssignment = assignment;
-      
-      // Also store in session storage for faster recovery
-      try {
-        sessionStorage.setItem(
-          `driver_assignment_${this.currentUser.id}`, 
-          JSON.stringify({...assignment, _timestamp: Date.now()})
-        );
-      } catch (e) {
-        // Ignore storage errors
-      }
+      assignmentHelpers.cacheAssignment(this.currentUser.id, assignment);
       
       logger.info('✅ Driver session validated successfully', 'driver-validation', {
         busId: assignment.bus_id,

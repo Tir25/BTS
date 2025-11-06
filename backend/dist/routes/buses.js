@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const locationService_1 = require("../services/locationService");
+const OptimizedLocationService_1 = require("../services/OptimizedLocationService");
 const UnifiedDatabaseService_1 = require("../services/UnifiedDatabaseService");
 const router = express_1.default.Router();
 router.get('/', async (req, res) => {
@@ -53,7 +54,7 @@ router.get('/viewport', async (req, res) => {
             maxLng: parseFloat(maxLng),
             maxLat: parseFloat(maxLat),
         };
-        const currentLocations = await getCurrentBusLocations();
+        const currentLocations = await OptimizedLocationService_1.optimizedLocationService.getCurrentBusLocations();
         const locationsInViewport = currentLocations.filter((location) => {
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
             if (!pointMatch)
@@ -120,7 +121,7 @@ router.get('/clusters', async (req, res) => {
             maxLat: parseFloat(maxLat),
             zoom: zoom ? parseInt(zoom) : 12,
         };
-        const currentLocations = await getCurrentBusLocations();
+        const currentLocations = await OptimizedLocationService_1.optimizedLocationService.getCurrentBusLocations();
         const locationsInViewport = currentLocations.filter((location) => {
             const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
             if (!pointMatch)

@@ -5,9 +5,10 @@ import './index.css';
 import { setupConsoleFilter } from './utils/consoleFilter';
 import './utils/apiInterceptor';
 import { QueryProvider } from './providers/QueryProvider';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { serviceWorkerManager } from './services/ServiceWorkerManager';
 import { logger } from './utils/logger';
+import ErrorBoundary from './components/error/ErrorBoundary';
 
 // Import Service Worker cache clearer for development only
 // CRITICAL FIX: Double-check environment to prevent loading in production builds
@@ -88,7 +89,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
       <QueryProvider>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </QueryProvider>
     </ThemeProvider>
   </React.StrictMode>

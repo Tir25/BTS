@@ -176,12 +176,19 @@ export interface DatabaseBusStop {
   updated_at?: string;
 }
 
+// PRODUCTION FIX: Updated to match actual database schema
 export interface DatabaseRouteStop {
   id: string;
   route_id: string;
-  name: string;
-  geom: PostGISGeometry;
-  seq: number;
+  stop_id: string; // Foreign key to bus_stops table
+  sequence: number; // Sequence number (not 'seq')
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  estimated_arrival_time?: string;
+  is_pickup_only?: boolean;
+  is_dropoff_only?: boolean;
+  notes?: string;
 }
 
 export interface DatabaseDriverBusAssignment {

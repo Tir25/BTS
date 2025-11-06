@@ -15,21 +15,21 @@ const websocketAuthMiddleware = (socket, next) => {
         userAgent: userAgent?.substring(0, 100)
     });
     if (!token && clientType === 'student') {
-        const allowAnonymous = process.env.ALLOW_ANONYMOUS_STUDENTS === 'true';
-        if (!allowAnonymous && process.env.NODE_ENV === 'production') {
-            logger_1.logger.websocket('Anonymous student connection rejected in production', {
+        const disallowAnonymous = process.env.DISALLOW_ANONYMOUS_STUDENTS === 'true';
+        if (disallowAnonymous && process.env.NODE_ENV === 'production') {
+            logger_1.logger.websocket('Anonymous student connection rejected (DISALLOW_ANONYMOUS_STUDENTS=true)', {
                 socketId: socket.id,
                 clientType,
                 clientIP
             });
-            return next(new Error('Authentication required in production mode'));
+            return next(new Error('Authentication required for student connections'));
         }
-        logger_1.logger.websocket('Anonymous student connection allowed (dev mode compatible)', {
+        logger_1.logger.websocket('Anonymous student connection allowed (read-only map access)', {
             socketId: socket.id,
             clientType,
             clientIP,
-            allowAnonymous,
-            nodeEnv: process.env.NODE_ENV
+            nodeEnv: process.env.NODE_ENV,
+            note: 'Anonymous students can view bus locations but cannot send updates'
         });
         socket.userId = `anonymous-student-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         socket.userRole = 'student';

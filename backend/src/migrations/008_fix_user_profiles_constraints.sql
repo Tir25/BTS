@@ -43,21 +43,24 @@ FROM auth.users
 WHERE id NOT IN (SELECT id FROM public.user_profiles)
 ON CONFLICT (id) DO NOTHING;
 
--- Ensure the admin user exists with proper role
-INSERT INTO public.user_profiles (id, email, full_name, first_name, last_name, role, is_active)
-VALUES (
-  gen_random_uuid(),
-  'siddharthmali.211@gmail.com',
-  'Siddharth Mali',
-  'Siddharth',
-  'Mali',
-  'admin',
-  true
-)
-ON CONFLICT (email) DO UPDATE SET
-  role = 'admin',
-  is_active = true,
-  updated_at = NOW();
+-- PRODUCTION FIX: Removed hardcoded admin email
+-- Admin users should be created through the application or via environment-specific migrations
+-- To create an admin user, use the admin panel or run a separate migration with environment variables
+-- Example (DO NOT USE IN PRODUCTION - use environment variables instead):
+-- INSERT INTO public.user_profiles (id, email, full_name, first_name, last_name, role, is_active)
+-- VALUES (
+--   gen_random_uuid(),
+--   '<admin-email-from-env>',
+--   '<admin-name>',
+--   '<first-name>',
+--   '<last-name>',
+--   'admin',
+--   true
+-- )
+-- ON CONFLICT (email) DO UPDATE SET
+--   role = 'admin',
+--   is_active = true,
+--   updated_at = NOW();
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON user_profiles(email);

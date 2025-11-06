@@ -22,6 +22,7 @@ export interface LogEntry {
 declare class Logger {
     private isDevelopment;
     private isProduction;
+    private getCallerInfo;
     private formatLogEntry;
     private log;
     error(message: string, service: string, metadata?: Record<string, any>, error?: Error, req?: Request): void;

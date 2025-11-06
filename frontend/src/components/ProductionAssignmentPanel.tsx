@@ -5,9 +5,11 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { adminApiService } from '../services/adminApiService';
+import { adminApiService } from '../api';
 import { logger } from '../utils/logger';
 import AuthenticationGuard from './AuthenticationGuard';
+import AssignmentFormModal from './assignment/AssignmentFormModal';
+import AssignmentsTable from './assignment/AssignmentsTable';
 
 interface AssignmentData {
   id: string;
@@ -236,8 +238,8 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
       const result = await adminApiService.removeAssignment(busId);
       if (result.success) {
         setSuccessMessage('Assignment removed successfully!');
-        // Optimize: Only reload dashboard data instead of all data
-        await loadDashboardData();
+        // Reload all data immediately to show updated state
+        await loadAllData();
         setTimeout(() => setSuccessMessage(null), 3000);
       } else {
         setError(result.error || 'Failed to remove assignment');
@@ -323,256 +325,26 @@ function ProductionAssignmentPanelContent({ className = '' }: ProductionAssignme
       )}
 
       {/* Assignment Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-white">
-                {editingAssignment ? 'Edit Assignment' : 'Create New Assignment'}
-              </h3>
-              <button
-                onClick={resetForm}
-                className="text-white/70 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Driver *
-                  </label>
-                  <select
-                    name="driver_id"
-                    value={formData.driver_id}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    style={{ color: 'white' }}
-                  >
-                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Driver</option>
-                    {drivers.map((driver) => (
-                      <option key={driver.id} value={driver.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
-                        {driver.first_name} {driver.last_name} ({driver.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Bus *
-                  </label>
-                  <select
-                    name="bus_id"
-                    value={formData.bus_id}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    style={{ color: 'white' }}
-                  >
-                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Bus</option>
-                    {buses.map((bus) => (
-                      <option key={bus.id} value={bus.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
-                        {bus.bus_number} - {bus.vehicle_no}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Route *
-                  </label>
-                  <select
-                    name="route_id"
-                    value={formData.route_id}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    style={{ color: 'white' }}
-                  >
-                    <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Route</option>
-                    {routes.map((route) => (
-                      <option key={route.id} value={route.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
-                        {route.name} ({route.city})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-1">
-                  Shift *
-                </label>
-                <select
-                  name="shift_id"
-                  value={formData.shift_id}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                  style={{ color: 'white' }}
-                >
-                  <option value="" style={{ backgroundColor: '#1f2937', color: 'white' }}>Select Shift</option>
-                  {shifts.map((shift) => (
-                    <option key={shift.id} value={shift.id} style={{ backgroundColor: '#1f2937', color: 'white' }}>
-                      {shift.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Status
-                  </label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
-                    style={{ color: 'white' }}
-                  >
-                    <option value="active" style={{ backgroundColor: '#1f2937', color: 'white' }}>Active</option>
-                    <option value="inactive" style={{ backgroundColor: '#1f2937', color: 'white' }}>Inactive</option>
-                    <option value="pending" style={{ backgroundColor: '#1f2937', color: 'white' }}>Pending</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  name="notes"
-                  value={formData.notes}
-                  onChange={handleInputChange}
-                  rows={3}
-                  className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                  placeholder="Optional assignment notes..."
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="px-4 py-2 text-white/70 hover:text-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg transition-colors"
-                >
-                  {loading ? 'Saving...' : editingAssignment ? 'Update Assignment' : 'Create Assignment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AssignmentFormModal
+        show={showForm}
+        loading={loading}
+        drivers={drivers}
+        buses={buses}
+        routes={routes}
+        shifts={shifts}
+        formData={formData as any}
+        editingAssignment={editingAssignment as any}
+        onInputChange={handleInputChange}
+        onSubmit={handleSubmit}
+        onClose={resetForm}
+      />
 
       {/* Assignments Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Bus
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Driver
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Route
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Assigned At
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {assignments.map((assignment) => (
-                <tr key={assignment.bus_id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div>
-                      <div className="text-slate-900 font-medium">{assignment.bus_number}</div>
-                      <div className="text-slate-600 text-sm">{assignment.vehicle_no}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {assignment.driver_name ? (
-                      <div>
-                        <div className="text-slate-900">{assignment.driver_name}</div>
-                        <div className="text-slate-600 text-sm">{assignment.driver_email}</div>
-                      </div>
-                    ) : (
-                      <span className="text-slate-400">Unassigned</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {assignment.route_name ? (
-                      <div>
-                        <div className="text-slate-900">{assignment.route_name}</div>
-                        <div className="text-slate-600 text-sm">{assignment.route_city}</div>
-                      </div>
-                    ) : (
-                      <span className="text-slate-400">No route</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      assignment.status === 'active'
-                        ? 'bg-green-100 text-green-800' 
-                        : assignment.status === 'inactive'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {assignment.status || 'Unassigned'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-slate-600 text-sm">
-                      {assignment.assigned_at 
-                        ? new Date(assignment.assigned_at).toLocaleDateString()
-                        : 'N/A'
-                      }
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => handleEdit(assignment)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(assignment.bus_id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <AssignmentsTable
+        assignments={assignments as any}
+        onEdit={(a:any) => handleEdit(a)}
+        onDelete={(id:string) => handleDelete(id)}
+      />
     </div>
   );
 }

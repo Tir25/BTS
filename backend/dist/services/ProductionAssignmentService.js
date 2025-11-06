@@ -6,59 +6,52 @@ const logger_1 = require("../utils/logger");
 class ProductionAssignmentService {
     static async getAllAssignments() {
         try {
-            const { data, error } = await supabase_1.supabaseAdmin
+            const { data: buses, error } = await supabase_1.supabaseAdmin
                 .from('buses')
-                .select(`
-          id,
-          bus_number,
-          vehicle_no,
-          assigned_driver_profile_id,
-          route_id,
-          assigned_shift_id,
-          assignment_status,
-          assignment_notes,
-          updated_at,
-          user_profiles!buses_assigned_driver_profile_id_fkey(
-            id,
-            full_name,
-            first_name,
-            last_name,
-            email,
-            phone
-          ),
-          routes!buses_route_id_fkey(
-            id,
-            name,
-            description,
-            city
-          )
-        `)
+                .select('id,bus_number,vehicle_no,assigned_driver_profile_id,route_id,assigned_shift_id,assignment_status,assignment_notes,updated_at')
+                .eq('is_active', true)
                 .not('assigned_driver_profile_id', 'is', null)
-                .not('route_id', 'is', null)
-                .eq('is_active', true);
+                .not('route_id', 'is', null);
             if (error) {
                 logger_1.logger.error('Error fetching all assignments', 'production-assignment-service', { error });
                 throw error;
             }
-            const assignments = (data || []).map(bus => ({
-                id: bus.id,
-                driver_id: bus.assigned_driver_profile_id,
-                bus_id: bus.id,
-                route_id: bus.route_id,
-                assigned_by: 'system',
-                notes: bus.assignment_notes,
-                assigned_at: bus.updated_at,
-                status: bus.assignment_status || 'active',
-                shift_id: bus.assigned_shift_id || null,
-                bus_number: bus.bus_number,
-                vehicle_no: bus.vehicle_no,
-                driver_name: bus.user_profiles?.full_name || 'Unknown',
-                driver_email: bus.user_profiles?.email || '',
-                driver_phone: bus.user_profiles?.phone || '',
-                route_name: bus.routes?.name || 'Unknown',
-                route_description: bus.routes?.description || '',
-                route_city: bus.routes?.city || '',
-            }));
+            const busList = buses || [];
+            const driverIds = Array.from(new Set(busList.map((b) => b.assigned_driver_profile_id))).filter(Boolean);
+            const routeIds = Array.from(new Set(busList.map((b) => b.route_id))).filter(Boolean);
+            const [{ data: drivers }, { data: routes }] = await Promise.all([
+                driverIds.length
+                    ? supabase_1.supabaseAdmin.from('user_profiles').select('id,full_name,first_name,last_name,email,phone').in('id', driverIds)
+                    : Promise.resolve({ data: [] }),
+                routeIds.length
+                    ? supabase_1.supabaseAdmin.from('routes').select('id,name,description,city').in('id', routeIds)
+                    : Promise.resolve({ data: [] }),
+            ]);
+            const driverMap = new Map((drivers || []).map((d) => [d.id, d]));
+            const routeMap = new Map((routes || []).map((r) => [r.id, r]));
+            const assignments = busList.map((bus) => {
+                const d = driverMap.get(bus.assigned_driver_profile_id);
+                const r = routeMap.get(bus.route_id);
+                return {
+                    id: bus.id,
+                    driver_id: bus.assigned_driver_profile_id,
+                    bus_id: bus.id,
+                    route_id: bus.route_id,
+                    assigned_by: 'system',
+                    notes: bus.assignment_notes,
+                    assigned_at: bus.updated_at,
+                    status: bus.assignment_status || 'active',
+                    shift_id: bus.assigned_shift_id || null,
+                    bus_number: bus.bus_number,
+                    vehicle_no: bus.vehicle_no,
+                    driver_name: d?.full_name || 'Unknown',
+                    driver_email: d?.email || '',
+                    driver_phone: d?.phone || '',
+                    route_name: r?.name || 'Unknown',
+                    route_description: r?.description || '',
+                    route_city: r?.city || '',
+                };
+            });
             logger_1.logger.info(`Fetched ${assignments.length} assignments`, 'production-assignment-service');
             return assignments;
         }
@@ -71,7 +64,7 @@ class ProductionAssignmentService {
         try {
             const [assignmentsRes, driversRes, busesRes, routesRes] = await Promise.all([
                 this.getAllAssignments(),
-                supabase_1.supabaseAdmin.from('user_profiles').select('id', { count: 'exact' }).eq('is_driver', true).eq('is_active', true),
+                supabase_1.supabaseAdmin.from('user_profiles').select('id', { count: 'exact' }).eq('role', 'driver').eq('is_active', true),
                 supabase_1.supabaseAdmin.from('buses').select('id, assigned_driver_profile_id, route_id', { count: 'exact' }).eq('is_active', true),
                 supabase_1.supabaseAdmin.from('routes').select('id', { count: 'exact' }).eq('is_active', true)
             ]);
@@ -590,33 +583,32 @@ class ProductionAssignmentService {
     }
     static async getAssignedDrivers() {
         try {
+            const { data: activeBuses, error: busesErr } = await supabase_1.supabaseAdmin
+                .from('buses')
+                .select('id,assigned_driver_profile_id,bus_number,vehicle_no')
+                .eq('is_active', true)
+                .not('assigned_driver_profile_id', 'is', null);
+            if (busesErr) {
+                logger_1.logger.error('Error fetching buses for assigned drivers', 'production-assignment-service', { error: busesErr });
+                throw busesErr;
+            }
+            const activeBusList = activeBuses || [];
+            const driverIds = Array.from(new Set(activeBusList.map((b) => b.assigned_driver_profile_id))).filter(Boolean);
             const { data, error } = await supabase_1.supabaseAdmin
                 .from('user_profiles')
-                .select(`
-          id,
-          full_name,
-          first_name,
-          last_name,
-          email,
-          phone,
-          role,
-          is_active,
-          created_at,
-          updated_at,
-          buses!buses_assigned_driver_profile_id_fkey(
-            id,
-            bus_number,
-            vehicle_no
-          )
-        `)
-                .eq('role', 'driver')
-                .eq('is_active', true)
-                .not('buses', 'is', null);
+                .select('id,full_name,first_name,last_name,email,phone,role,is_active,created_at,updated_at')
+                .in('id', driverIds);
             if (error) {
                 logger_1.logger.error('Error fetching assigned drivers', 'production-assignment-service', { error });
                 throw error;
             }
-            return data || [];
+            const busByDriver = new Map(activeBusList.map((b) => [b.assigned_driver_profile_id, b]));
+            return (data || []).map((d) => ({
+                ...d,
+                buses: busByDriver.get(d.id)
+                    ? [{ id: busByDriver.get(d.id).id, bus_number: busByDriver.get(d.id).bus_number, vehicle_no: busByDriver.get(d.id).vehicle_no }]
+                    : []
+            }));
         }
         catch (error) {
             logger_1.logger.error('Error in getAssignedDrivers', 'production-assignment-service', { error });

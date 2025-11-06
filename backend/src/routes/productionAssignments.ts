@@ -36,6 +36,17 @@ async function cached(key: string, producer: () => Promise<any>) {
   return inflight[key]!;
 }
 
+// Cache invalidation function - clears all assignment-related cache
+function invalidateAssignmentCache() {
+  // Clear all assignment-related cache keys
+  Object.keys(cache).forEach(key => {
+    if (key.startsWith('assignments:')) {
+      delete cache[key];
+    }
+  });
+  logger.info('Assignment cache invalidated', 'production-assignments');
+}
+
 // ===== PRODUCTION ASSIGNMENT MANAGEMENT ENDPOINTS =====
 
 // Get all assignments with comprehensive data (Admin only)
@@ -210,6 +221,9 @@ router.post('/', requireAdmin, async (req, res) => {
       status: status || 'active',
     });
 
+    // Invalidate cache immediately after creating assignment
+    invalidateAssignmentCache();
+
     return res.status(201).json({
       success: true,
       data: assignment,
@@ -261,6 +275,9 @@ router.put('/bus/:busId', requireAdmin, async (req, res) => {
       status,
     });
 
+    // Invalidate cache immediately after updating assignment
+    invalidateAssignmentCache();
+
     return res.json({
       success: true,
       data: assignment,
@@ -311,6 +328,9 @@ router.delete('/bus/:busId', requireAdmin, async (req, res) => {
         message: 'Assignment removal failed',
       });
     }
+
+    // Invalidate cache immediately after removing assignment
+    invalidateAssignmentCache();
 
     return res.json({
       success: true,
@@ -387,6 +407,9 @@ router.post('/bulk', requireAdmin, async (req, res) => {
     }));
 
     const result = await ProductionAssignmentService.bulkAssignDrivers(assignmentsWithAssigner);
+    
+    // Invalidate cache immediately after bulk assignment
+    invalidateAssignmentCache();
     
     return res.json({
       success: result.success,

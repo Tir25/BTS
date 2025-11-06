@@ -80,6 +80,10 @@ exports.apiRateLimits = {
         max: process.env.NODE_ENV === 'development' ? 2000 : 500,
         skipSuccessfulRequests: false,
         skipFailedRequests: false,
+        keyGenerator: (req) => {
+            const userId = req.user?.id;
+            return userId ? `admin:${userId}` : `ip:${req.ip}`;
+        },
         skip: (req) => {
             if (process.env.NODE_ENV === 'development') {
                 return true;

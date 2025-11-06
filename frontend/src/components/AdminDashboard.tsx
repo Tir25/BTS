@@ -1,8 +1,11 @@
 import { useState, useEffect, memo } from 'react';
-import { adminApiService } from '../services/adminApiService';
+import { useNavigate } from 'react-router-dom';
+import { adminApiService } from '../api';
 import { authService } from '../services/authService';
 import { logger } from '../utils/logger';
 import UnifiedAdminManagementLazy from './lazy/UnifiedAdminManagementLazy';
+import AdminHeader from './admin/AdminHeader';
+import OverviewCards from './admin/OverviewCards';
 
 interface AnalyticsData {
   totalBuses: number;
@@ -28,10 +31,13 @@ interface SystemHealth {
 }
 
 const AdminDashboard = memo(function AdminDashboard() {
+  const navigate = useNavigate();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
     'overview' | 'analytics' | 'management'
   >('overview');
@@ -99,11 +105,88 @@ const AdminDashboard = memo(function AdminDashboard() {
   };
 
   const handleSignOut = async () => {
+    // Prevent multiple simultaneous sign out attempts
+    if (signingOut) {
+      return;
+    }
+
+    setSigningOut(true);
+    setSignOutError(null);
+
     try {
-      await authService.signOut();
-      window.location.href = '/';
+      logger.info('🔐 Starting sign out process...', 'admin-dashboard');
+      
+      // Call sign out service
+      const result = await authService.signOut();
+      
+      // Helper function to ensure navigation happens reliably
+      const performNavigation = () => {
+        try {
+          // Try React Router navigation first (non-blocking)
+          navigate('/admin-login', { replace: true });
+        } catch (navError) {
+          logger.error('❌ React Router navigation error', 'admin-dashboard', { error: String(navError) });
+        }
+        
+        // Always use window.location as a reliable fallback after a short delay
+        // This ensures navigation happens even if React Router is blocked
+        setTimeout(() => {
+          // Use replace instead of href to prevent back button issues
+          window.location.replace('/admin-login');
+        }, 300);
+      };
+      
+      if (result.success) {
+        logger.info('✅ Sign out successful, redirecting to admin login', 'admin-dashboard');
+        
+        // Clear any auth-related state
+        setSignOutError(null);
+        
+        // Perform navigation with reliable fallback
+        performNavigation();
+      } else {
+        // Sign out returned an error
+        const errorMessage = result.error || 'Sign out failed. Please try again.';
+        logger.error('❌ Sign out failed', 'admin-dashboard', { error: errorMessage });
+        setSignOutError(errorMessage);
+        
+        // Still attempt to redirect after a delay, but show error
+        setTimeout(() => {
+          try {
+            navigate('/admin-login', { replace: true });
+          } catch {
+            window.location.replace('/admin-login');
+          }
+        }, 1500);
+      }
     } catch (error) {
-      logger.error('Sign out error', 'admin-dashboard', { error: String(error) });
+      // Unexpected error during sign out
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'An unexpected error occurred during sign out.';
+      
+      logger.error('❌ Sign out error', 'admin-dashboard', { 
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      setSignOutError('Sign out encountered an error. Redirecting to login...');
+      
+      // Even on error, attempt to redirect to login page
+      // This ensures user can still access the app even if sign out fails
+      setTimeout(() => {
+        try {
+          navigate('/admin-login', { replace: true });
+        } catch {
+          window.location.replace('/admin-login');
+        }
+      }, 1500);
+    } finally {
+      // Reset signing out state after navigation completes
+      // Give enough time for navigation to happen
+      setTimeout(() => {
+        setSigningOut(false);
+      }, 2000);
     }
   };
 
@@ -149,39 +232,14 @@ const AdminDashboard = memo(function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 gap-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold text-slate-900">
-                  🚍 Admin Dashboard
-                </h1>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              <span className="text-sm text-slate-600 sm:mr-2">
-                Welcome,{' '}
-                <span className="font-medium text-slate-900">
-                  {currentUser?.first_name ||
-                    currentUser?.full_name ||
-                    currentUser?.email}
-                </span>
-              </span>
-              <button
-                onClick={() => loadDashboardData()}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors text-sm font-medium disabled:opacity-50 min-h-[44px] shadow-sm"
-                disabled={loading}
-              >
-                {loading ? 'Refreshing...' : '🔄 Refresh'}
-              </button>
-              <button onClick={handleSignOut} className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors text-sm font-medium min-h-[44px] shadow-sm">
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AdminHeader
+        currentUser={currentUser}
+        loading={loading}
+        signingOut={signingOut}
+        signOutError={signOutError}
+        onRefresh={() => loadDashboardData()}
+        onSignOut={handleSignOut}
+      />
 
       {/* Navigation Tabs */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -225,128 +283,7 @@ const AdminDashboard = memo(function AdminDashboard() {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {activeTab === 'overview' && (
           <div className="px-4 py-6 sm:px-0">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {/* System Health Cards */}
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden">
-                <div className="p-5">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                        <svg
-                          className="w-6 h-6 text-blue-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="ml-4 w-0 flex-1">
-                      <dl>
-                        <dt className="text-sm font-medium text-slate-600 truncate">
-                          Total Buses
-                        </dt>
-                        <dd className="text-2xl font-bold text-slate-900">
-                          {systemHealth?.buses || 0}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden">
-                <div className="p-5">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                        <svg
-                          className="w-6 h-6 text-green-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="ml-4 w-0 flex-1">
-                      <dl>
-                        <dt className="text-sm font-medium text-slate-600 truncate">
-                          Total Routes
-                        </dt>
-                        <dd className="text-2xl font-bold text-slate-900">
-                          {systemHealth?.routes || 0}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden">
-                <div className="p-5">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                        <svg
-                          className="w-6 h-6 text-yellow-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="ml-4 w-0 flex-1">
-                      <dl>
-                        <dt className="text-sm font-medium text-slate-600 truncate">
-                          Total Drivers
-                        </dt>
-                        <dd className="text-2xl font-bold text-slate-900">
-                          {systemHealth?.drivers || 0}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden">
-                <div className="p-5">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                        <svg
-                          className="w-6 h-6 text-purple-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="ml-4 w-0 flex-1">
-                      <dl>
-                        <dt className="text-sm font-medium text-slate-600 truncate">
-                          Recent Locations
-                        </dt>
-                        <dd className="text-2xl font-bold text-slate-900">
-                          {systemHealth?.recentLocations || 0}
-                        </dd>
-                      </dl>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <OverviewCards systemHealth={systemHealth} />
 
             {/* Quick Stats */}
             {analytics && (

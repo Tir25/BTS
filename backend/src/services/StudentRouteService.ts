@@ -110,21 +110,35 @@ export class StudentRouteService {
 
     if (!shiftId) {
       logger.warn('No shift ID found', 'StudentRouteService', { opts });
-      return [] as Array<{ id: string; name: string }>;
+      return [] as Array<{ id: string; name: string; [key: string]: any }>;
     }
 
     // 1) Route-level mapping: all routes explicitly assigned to this shift
-    const { data: shiftRoutes, error: srErr } = await supabaseAdmin
-      .from('routes')
-      .select('id, name')
-      .eq('is_active', true)
-      .eq('assigned_shift_id', shiftId)
-      .order('name');
-    if (srErr) {
-      logger.error('Error fetching routes by shift', 'StudentRouteService', { shiftId, error: srErr });
-      throw srErr;
+    // PRODUCTION FIX: Query routes table directly to get geometry and check if assigned_shift_id column exists
+    // Note: assigned_shift_id may not exist on routes table, so we'll check buses instead
+    let shiftRoutes: any[] = [];
+    try {
+      // Try to query routes with assigned_shift_id (if column exists)
+      const { data: routesWithShift, error: routesErr } = await supabaseAdmin
+        .from('routes')
+        .select('*')
+        .eq('is_active', true)
+        .eq('assigned_shift_id', shiftId)
+        .order('name');
+      
+      if (!routesErr && routesWithShift) {
+        shiftRoutes = routesWithShift;
+      } else if (routesErr && routesErr.code !== '42703') { // 42703 = column doesn't exist
+        logger.error('Error fetching routes by shift', 'StudentRouteService', { shiftId, error: routesErr });
+        throw routesErr;
+      }
+    } catch (err: any) {
+      // If column doesn't exist, that's okay - we'll rely on bus assignments
+      if (err.code !== '42703') {
+        logger.warn('Error checking routes.assigned_shift_id (column may not exist)', 'StudentRouteService', { error: err });
+      }
     }
-    logger.info('Routes found by shift assignment', 'StudentRouteService', { shiftId, count: shiftRoutes?.length || 0, routes: shiftRoutes });
+    logger.info('Routes found by shift assignment', 'StudentRouteService', { shiftId, count: shiftRoutes?.length || 0 });
 
     // 2) Fallback: routes that are assigned to buses with this shift (in case some routes weren't annotated yet)
     const { data: buses, error: bErr } = await supabaseAdmin
@@ -136,26 +150,79 @@ export class StudentRouteService {
     if (bErr) throw bErr;
 
     const routeIdsFromBuses = new Set((buses || []).map((b: any) => b.route_id).filter(Boolean));
-    const merged = new Map<string, { id: string; name: string }>();
+    const merged = new Map<string, any>();
+    // Add routes from direct shift assignment
     (shiftRoutes || []).forEach(r => merged.set(r.id, r));
     logger.info('Merging routes from buses', 'StudentRouteService', { routeIdsFromBuses: Array.from(routeIdsFromBuses), existingRoutes: Array.from(merged.keys()) });
+    
+    // Fetch routes from bus assignments with full data including geometry
     if (routeIdsFromBuses.size > 0) {
+      // PRODUCTION FIX: Query routes table directly to get geometry (stops column)
       const { data: busRoutes, error: brErr } = await supabaseAdmin
         .from('routes')
-        .select('id, name')
+        .select('*')
         .in('id', Array.from(routeIdsFromBuses))
         .eq('is_active', true);
       if (brErr) {
         logger.error('Error fetching routes from buses', 'StudentRouteService', { routeIds: Array.from(routeIdsFromBuses), error: brErr });
         throw brErr;
       }
-      logger.info('Routes found from bus assignments', 'StudentRouteService', { count: busRoutes?.length || 0, routes: busRoutes });
+      logger.info('Routes found from bus assignments', 'StudentRouteService', { count: busRoutes?.length || 0 });
       (busRoutes || []).forEach(r => merged.set(r.id, r));
     }
 
-    // Return all distinct routes for that shift
-    const finalRoutes = Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
-    logger.info('Final routes for shift', 'StudentRouteService', { shiftId, shiftName: opts.shiftName, count: finalRoutes.length, routes: finalRoutes });
+    // PRODUCTION FIX: Transform routes to include geometry in format expected by frontend
+    const finalRoutes = Array.from(merged.values()).map((route: any) => {
+      // Extract coordinates from geometry if available
+      // Routes table has 'stops' column (GEOMETRY(LINESTRING, 4326)) which contains route path
+      let coordinates: [number, number][] = [];
+      
+      // Try to get coordinates from 'stops' column first (route path geometry)
+      const geometry = route.stops || route.geom;
+      if (geometry) {
+        // Handle PostGIS geometry format (GeoJSON)
+        if (geometry.coordinates && Array.isArray(geometry.coordinates)) {
+          coordinates = geometry.coordinates;
+        } else if (geometry.type === 'LineString' && Array.isArray(geometry.coordinates)) {
+          coordinates = geometry.coordinates;
+        } else if (typeof geometry === 'string') {
+          // Try to parse as GeoJSON string
+          try {
+            const parsed = JSON.parse(geometry);
+            if (parsed.coordinates && Array.isArray(parsed.coordinates)) {
+              coordinates = parsed.coordinates;
+            }
+          } catch (e) {
+            logger.warn('Failed to parse route geometry as JSON', 'StudentRouteService', { routeId: route.id });
+          }
+        }
+      }
+
+      return {
+        id: route.id,
+        name: route.name,
+        description: route.description,
+        distance_km: route.distance_km,
+        estimated_duration_minutes: route.estimated_duration_minutes,
+        city: route.city,
+        is_active: route.is_active,
+        created_at: route.created_at,
+        updated_at: route.updated_at,
+        // PRODUCTION FIX: Include geometry data for map display
+        coordinates: coordinates,
+        geom: route.geom,
+        stops: route.stops,
+        // Include all other route properties
+        ...route
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    
+    logger.info('Final routes for shift', 'StudentRouteService', { 
+      shiftId, 
+      shiftName: opts.shiftName, 
+      count: finalRoutes.length,
+      routesWithGeometry: finalRoutes.filter(r => r.coordinates && r.coordinates.length > 0).length 
+    });
     return finalRoutes;
   }
 }

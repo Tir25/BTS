@@ -109,20 +109,40 @@ export class TrackingService {
       .eq('is_active', true);
     const total = (countData as any)?.length || 0; // head:true returns no rows; count accessible via .count in supabase-js; workaround not available here, so skip strict total
 
-    // Advance last_stop_sequence
+    // PRODUCTION FIX: Advance last_stop_sequence
+    // Note: This allows flexible stop ordering - drivers can mark stops out of sequence
+    // which is useful for real-world scenarios (skipped stops, route variations, etc.)
     let nextSequence = stop.sequence;
+    const currentSequence = session.last_stop_sequence || 0;
+    
+    logger.info('Processing stop reached', 'tracking-service', {
+      driverId,
+      routeStopId,
+      stopSequence: stop.sequence,
+      currentLastSequence: currentSequence,
+      routeId: session.route_id
+    });
+    
     // Reset if last
     // If we cannot get total, we still allow reset when no remaining stops based on max sequence
     const { data: maxStop } = await supabaseAdmin
       .from('route_stops')
       .select('sequence')
       .eq('route_id', session.route_id)
+      .eq('is_active', true)
       .order('sequence', { ascending: false })
       .limit(1)
       .maybeSingle();
 
     const maxSequence = maxStop?.sequence || nextSequence;
+    
+    // PRODUCTION FIX: Reset to 0 if we've reached the last stop (allows route to restart)
     if (nextSequence >= maxSequence) {
+      logger.info('Last stop reached, resetting sequence to 0', 'tracking-service', {
+        driverId,
+        stopSequence: nextSequence,
+        maxSequence
+      });
       nextSequence = 0;
     }
 
@@ -130,16 +150,54 @@ export class TrackingService {
       .from('trip_sessions')
       .update({ last_stop_sequence: nextSequence })
       .eq('id', session.id);
-    if (error) throw error;
+    if (error) {
+      logger.error('Error updating stop sequence', 'tracking-service', {
+        error,
+        driverId,
+        sessionId: session.id,
+        nextSequence
+      });
+      throw error;
+    }
+    
+    logger.info('Stop sequence updated successfully', 'tracking-service', {
+      driverId,
+      routeStopId,
+      previousSequence: currentSequence,
+      newSequence: nextSequence,
+      routeId: session.route_id
+    });
 
-    return { success: true, last_stop_sequence: nextSequence };
+    // PRODUCTION FIX: Return route_id for WebSocket broadcast
+    return { 
+      success: true, 
+      last_stop_sequence: nextSequence,
+      route_id: session.route_id,
+      stop_id: routeStopId
+    };
   }
 
   static async getDriverAssignmentWithStops(driverId: string) {
+    // PRODUCTION FIX: Works for any driver - dynamically fetches assignment
+    // No hardcoded driver IDs, supports all drivers including newly created ones
     const assignment = await ProductionAssignmentService.getDriverAssignment(driverId);
-    if (!assignment) return null;
+    if (!assignment) {
+      logger.info('No assignment found for driver', 'tracking-service', { driverId });
+      return null;
+    }
+    
+    // PRODUCTION FIX: Validate assignment has required route_id
+    if (!assignment.route_id) {
+      logger.warn('Assignment found but missing route_id', 'tracking-service', {
+        driverId,
+        assignmentId: assignment.id,
+        busId: assignment.bus_id
+      });
+      return null;
+    }
 
-    // Active session (may be null until startTracking)
+    // PRODUCTION FIX: Active session (may be null until startTracking)
+    // Only use active sessions, ignore ended sessions to prevent showing all stops as completed
     const { data: session } = await supabaseAdmin
       .from('trip_sessions')
       .select('id, last_stop_sequence, shift_id')
@@ -147,7 +205,17 @@ export class TrackingService {
       .is('ended_at', null)
       .maybeSingle();
 
-    const lastSeq = session?.last_stop_sequence || 0;
+    // PRODUCTION FIX: If no active session, start from 0 (all stops should be in remaining)
+    // If session exists, use its last_stop_sequence
+    const lastSeq = session ? (session.last_stop_sequence || 0) : 0;
+    
+    logger.info('Route stops calculation', 'tracking-service', {
+      driverId,
+      routeId: assignment.route_id,
+      hasSession: !!session,
+      lastSeq,
+      sessionLastSeq: session?.last_stop_sequence
+    });
     let shiftName: string | null = null;
     if (session?.shift_id) {
       const { data: shift } = await supabaseAdmin
@@ -158,22 +226,105 @@ export class TrackingService {
       shiftName = shift?.name || null;
     }
 
-    const { data: stops, error } = await supabaseAdmin
+    // PRODUCTION FIX: Fetch route stops with proper join to get stop names
+    const { data: stops, error: stopsError } = await supabaseAdmin
       .from('route_stops')
-      .select('id, sequence, is_active, bus_stops:stop_id(name)')
+      .select('id, sequence, is_active, stop_id')
       .eq('route_id', assignment.route_id)
       .eq('is_active', true)
-      .order('sequence');
-    if (error) throw error;
+      .order('sequence', { ascending: true });
+    
+    if (stopsError) {
+      logger.error('Error fetching route stops', 'tracking-service', { 
+        error: stopsError, 
+        routeId: assignment.route_id,
+        driverId 
+      });
+      throw stopsError;
+    }
 
-    const all = (stops || []).map((s: any) => ({ id: s.id, name: s.bus_stops?.name, sequence: s.sequence }));
-    const completed = all.filter(s => s.sequence <= lastSeq);
+    if (!stops || stops.length === 0) {
+      // PRODUCTION FIX: Handle routes with no stops gracefully
+      // This can happen for new routes or routes being set up
+      logger.warn('No route stops found for route', 'tracking-service', {
+        routeId: assignment.route_id,
+        routeName: assignment.route_name,
+        driverId,
+        message: 'Route exists but has no stops configured. Admin should add stops to this route.'
+      });
+      return {
+        route_id: assignment.route_id,
+        bus_id: assignment.bus_id,
+        route_name: assignment.route_name || null,
+        shift_id: session?.shift_id || null,
+        shift_name: shiftName,
+        tracking_active: !!session,
+        stops: { completed: [], next: null, remaining: [] }
+      };
+    }
+
+    // PRODUCTION FIX: Fetch bus stop names separately for better reliability
+    const stopIds = stops.map((s: any) => s.stop_id).filter(Boolean);
+    let stopNamesMap = new Map<string, string>();
+    
+    if (stopIds.length > 0) {
+      const { data: busStops, error: busStopsError } = await supabaseAdmin
+        .from('bus_stops')
+        .select('id, name')
+        .in('id', stopIds);
+      
+      if (busStopsError) {
+        logger.error('Error fetching bus stop names', 'tracking-service', {
+          error: busStopsError,
+          routeId: assignment.route_id,
+          driverId
+        });
+        // Don't throw - continue with fallback names
+      } else if (busStops) {
+        busStops.forEach((bs: any) => {
+          if (bs.id && bs.name) {
+            stopNamesMap.set(bs.id, bs.name);
+          }
+        });
+      }
+    }
+
+    // PRODUCTION FIX: Map stops with proper names
+    const all = (stops || []).map((s: any) => {
+      const stopName = stopNamesMap.get(s.stop_id) || `Stop ${s.sequence}`;
+      
+      return {
+        id: s.id,
+        name: stopName.trim(),
+        sequence: s.sequence
+      };
+    });
+    
+    // PRODUCTION FIX: Fixed logic - stops with sequence <= lastSeq are completed
+    // Stops with sequence > lastSeq are remaining
+    // If lastSeq is 0 (no session), all stops should be in remaining
+    const completed = all.filter(s => s.sequence <= lastSeq && lastSeq > 0);
     const remaining = all.filter(s => s.sequence > lastSeq);
-    const nextStop = remaining[0] || null;
+    const nextStop = remaining.length > 0 ? remaining[0] : null;
+    
+    logger.info('Route stops processed', 'tracking-service', {
+      driverId,
+      routeId: assignment.route_id,
+      totalStops: all.length,
+      lastSeq,
+      completedCount: completed.length,
+      remainingCount: remaining.length,
+      hasNext: !!nextStop,
+      allSequences: all.map(s => s.sequence),
+      completedSequences: completed.map(s => s.sequence),
+      remainingSequences: remaining.map(s => s.sequence)
+    });
 
+    // PRODUCTION FIX: Include route_name in response for frontend
     return {
       route_id: assignment.route_id,
       bus_id: assignment.bus_id,
+      route_name: assignment.route_name || null,
       shift_id: session?.shift_id || null,
       shift_name: shiftName,
       tracking_active: !!session,

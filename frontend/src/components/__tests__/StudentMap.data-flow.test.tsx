@@ -9,12 +9,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import StudentMap from '../StudentMap';
-import { apiService } from '../../services/api';
+import { apiService } from '../../api';
 import { busService } from '../../services/busService';
 import { unifiedWebSocketService } from '../../services/UnifiedWebSocketService';
 
 // Mock services
-vi.mock('../../services/api');
+vi.mock('../../api');
 vi.mock('../../services/busService');
 vi.mock('../../services/UnifiedWebSocketService');
 vi.mock('../../services/authService', () => ({

@@ -9,9 +9,29 @@ const ProductionAssignmentService_1 = require("../services/ProductionAssignmentS
 const logger_1 = require("../utils/logger");
 const router = express_1.default.Router();
 router.use(auth_1.authenticateUser);
+let cache = {};
+const TTL_MS = 60 * 1000;
+let inflight = {};
+async function cached(key, producer) {
+    const now = Date.now();
+    const hit = cache[key];
+    if (hit && hit.expiresAt > now)
+        return hit.data;
+    if (inflight[key])
+        return inflight[key];
+    inflight[key] = producer()
+        .then((data) => {
+        cache[key] = { data, expiresAt: Date.now() + TTL_MS };
+        return data;
+    })
+        .finally(() => {
+        inflight[key] = null;
+    });
+    return inflight[key];
+}
 router.get('/', auth_1.requireAdmin, async (req, res) => {
     try {
-        const assignments = await ProductionAssignmentService_1.ProductionAssignmentService.getAllAssignments();
+        const assignments = await cached('assignments:list', () => ProductionAssignmentService_1.ProductionAssignmentService.getAllAssignments());
         res.json({
             success: true,
             data: assignments,
@@ -69,7 +89,7 @@ router.get('/my-assignment', auth_1.requireAdminOrDriver, async (req, res) => {
 });
 router.get('/dashboard', auth_1.requireAdmin, async (req, res) => {
     try {
-        const dashboard = await ProductionAssignmentService_1.ProductionAssignmentService.getAssignmentDashboard();
+        const dashboard = await cached('assignments:dashboard', () => ProductionAssignmentService_1.ProductionAssignmentService.getAssignmentDashboard());
         res.json({
             success: true,
             data: dashboard,

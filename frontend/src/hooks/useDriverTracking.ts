@@ -302,6 +302,7 @@ export function useDriverTracking(
   }, [isWebSocketConnected, isWebSocketAuthenticated, isTracking, driverId, busId, locationError]);
 
   // Start tracking
+  // PRODUCTION FIX: Allow tracking to start even if WebSocket is connecting (will queue location updates)
   const startTracking = useCallback(async () => {
     if (!isAuthenticated) {
       setLocationError('Not authenticated. Please log in first.');
@@ -309,16 +310,20 @@ export function useDriverTracking(
       return;
     }
 
-    if (!isWebSocketConnected) {
-      setLocationError('WebSocket not connected. Please check your connection.');
-      logger.warn('Cannot start tracking: WebSocket not connected', 'useDriverTracking');
-      return;
+    // PRODUCTION FIX: Don't block tracking start if WebSocket is connecting
+    // Location updates will be queued and sent when WebSocket connects
+    if (!isWebSocketConnected && !isWebSocketAuthenticated) {
+      logger.warn('⚠️ WebSocket not fully connected, but starting tracking anyway (updates will queue)', 'useDriverTracking', {
+        isWebSocketConnected,
+        isWebSocketAuthenticated
+      });
     }
 
     try {
       logger.info('🚀 Starting location tracking process', 'useDriverTracking', {
         isAuthenticated,
         isWebSocketConnected,
+        isWebSocketAuthenticated,
         hasDriverId: !!driverId,
         hasBusId: !!busId
       });
@@ -335,7 +340,8 @@ export function useDriverTracking(
 
       logger.info('✅ Location permission granted, starting GPS tracking...', 'useDriverTracking');
 
-      // Start tracking with the location service
+      // PRODUCTION FIX: Start tracking even if WebSocket isn't connected
+      // The location service will start, and updates will be sent when WebSocket connects
       const success = await locationService.startTracking();
       if (success) {
         setIsTracking(true);
@@ -343,8 +349,14 @@ export function useDriverTracking(
         
         logger.info('✅ Location tracking started successfully', 'useDriverTracking', {
           driverId,
-          busId
+          busId,
+          webSocketReady: isWebSocketConnected && isWebSocketAuthenticated
         });
+        
+        // PRODUCTION FIX: If WebSocket isn't ready, show a warning but don't block
+        if (!isWebSocketConnected || !isWebSocketAuthenticated) {
+          logger.warn('⚠️ Tracking started but WebSocket not ready - updates will queue', 'useDriverTracking');
+        }
       } else {
         const errorMsg = 'Failed to start location tracking. Please try again.';
         setLocationError(errorMsg);
@@ -359,7 +371,7 @@ export function useDriverTracking(
         stack: error instanceof Error ? error.stack : undefined
       });
     }
-  }, [isAuthenticated, isWebSocketConnected, driverId, busId]);
+  }, [isAuthenticated, isWebSocketConnected, isWebSocketAuthenticated, driverId, busId]);
 
   // Stop tracking
   const stopTracking = useCallback(() => {

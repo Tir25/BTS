@@ -5,6 +5,7 @@ import { BusInfo } from '../types';
 import { formatTime } from '../utils/dateFormatter';
 
 import { logger } from '../utils/logger';
+import { MAP_TILE_URLS, MAP_TILE_ATTRIBUTION, MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM } from '../config/map';
 
 interface ClusterPoint {
   id: string;
@@ -26,22 +27,17 @@ export class MapService implements IMapService {
   private clusterRadius: number = 50; // pixels
 
   private readonly defaultConfig: IMapConfiguration = {
-    center: [72.571, 23.025], // Default center (Ahmedabad, India)
-    zoom: 12,
+    center: MAP_DEFAULT_CENTER,
+    zoom: MAP_DEFAULT_ZOOM,
     style: {
       version: 8,
       sources: {
         osm: {
           type: 'raster',
-          tiles: [
-            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          ],
+          tiles: MAP_TILE_URLS,
           tileSize: 256,
-          attribution: '© OpenStreetMap contributors',
-          maxzoom: 19,
+          attribution: MAP_TILE_ATTRIBUTION,
+          maxzoom: MAP_MAX_ZOOM,
         },
       },
       layers: [
@@ -50,12 +46,12 @@ export class MapService implements IMapService {
           type: 'raster',
           source: 'osm',
           minzoom: 0,
-          maxzoom: 19,
+          maxzoom: MAP_MAX_ZOOM,
         },
       ],
     },
-    maxZoom: 19,
-    minZoom: 1,
+    maxZoom: MAP_MAX_ZOOM,
+    minZoom: MAP_MIN_ZOOM,
   };
 
   /**

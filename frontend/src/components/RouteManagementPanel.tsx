@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { adminApiService } from '../services/adminApiService';
+import { adminApiService } from '../api';
 import { logger } from '../utils/logger';
 import { Route, RouteData } from '../types';
 import RouteStopsManager from './admin/RouteStopsManager';
+import RouteFormModal from './route/RouteFormModal';
+import RoutesTable from './route/RoutesTable';
 
 interface RouteFormData {
   name: string;
@@ -194,216 +196,22 @@ export default function RouteManagementPanel({ className = '' }: RouteManagement
         </div>
       )}
 
-      {/* Route Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-white">
-                {editingRoute ? 'Edit Route' : 'Add New Route'}
-              </h3>
-              <button
-                onClick={resetForm}
-                className="text-white/70 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
+      <RouteFormModal
+        show={showForm}
+        loading={loading}
+        editing={!!editingRoute}
+        formData={formData as any}
+        onInputChange={handleInputChange}
+        onSubmit={handleSubmit}
+        onClose={resetForm}
+      />
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Route Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="e.g., Route A - University to Downtown"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    rows={3}
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="Describe the route details..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Distance (km) *
-                  </label>
-                  <input
-                    type="number"
-                    name="distance_km"
-                    value={formData.distance_km}
-                    onChange={handleInputChange}
-                    required
-                    min="0"
-                    step="0.1"
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="15.5"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    Duration (minutes) *
-                  </label>
-                  <input
-                    type="number"
-                    name="estimated_duration_minutes"
-                    value={formData.estimated_duration_minutes}
-                    onChange={handleInputChange}
-                    required
-                    min="0"
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="45"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-1">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    name="city"
-                    value={formData.city}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
-                    placeholder="Ahmedabad"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    name="is_active"
-                    checked={formData.is_active}
-                    onChange={handleInputChange}
-                    className="w-4 h-4 text-blue-600 bg-white/10 border-white/20 rounded focus:ring-blue-500"
-                  />
-                  <label className="text-sm text-white/80">Active Route</label>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="px-4 py-2 text-white/70 hover:text-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg transition-colors"
-                >
-                  {loading ? 'Saving...' : editingRoute ? 'Update Route' : 'Create Route'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Route Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Route Details
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Distance & Duration
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Location
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {routes.map((route) => (
-                <tr key={route.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div>
-                      <div className="text-slate-900 font-medium">{route.name}</div>
-                      {route.description && (
-                        <div className="text-slate-600 text-sm mt-1">{route.description}</div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-slate-600 text-sm">
-                      <div>{route.distance_km} km</div>
-                      <div>{route.estimated_duration_minutes} minutes</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-slate-600 text-sm">
-                      {route.city || 'No city specified'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      route.is_active 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {route.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => handleEdit(route)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => setManageStopsRouteId(route.id)}
-                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
-                      >
-                        Manage Stops
-                      </button>
-                      <button
-                        onClick={() => handleDelete(route.id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <RoutesTable
+        routes={routes as any}
+        onEdit={(r:any) => handleEdit(r as any)}
+        onManageStops={(id:string) => setManageStopsRouteId(id)}
+        onDelete={(id:string) => handleDelete(id)}
+      />
 
       {manageStopsRouteId && (
         <RouteStopsManager routeId={manageStopsRouteId} onClose={() => setManageStopsRouteId(null)} />

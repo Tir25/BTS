@@ -175,21 +175,26 @@ class ConsolidatedAdminService {
     }
     static async getSystemHealth() {
         try {
+            const [buses, routes, drivers, recentLocationsResult] = await Promise.all([
+                UnifiedDatabaseService_1.UnifiedDatabaseService.getAllBuses(),
+                UnifiedDatabaseService_1.UnifiedDatabaseService.getAllRoutes(),
+                UnifiedDatabaseService_1.UnifiedDatabaseService.getAllDrivers(),
+                supabase_1.supabaseAdmin
+                    .from('live_locations')
+                    .select('id', { count: 'exact', head: true })
+                    .gte('recorded_at', new Date(Date.now() - 3600000).toISOString())
+            ]);
             return {
-                database: 'healthy',
-                services: 'healthy',
-                lastCheck: new Date().toISOString(),
-                uptime: process.uptime()
+                buses: buses.length,
+                routes: routes.length,
+                drivers: drivers.length,
+                recentLocations: recentLocationsResult.count || 0,
+                timestamp: new Date().toISOString()
             };
         }
         catch (error) {
             logger_1.logger.error('Error in getSystemHealth', 'consolidated-admin', { error });
-            return {
-                database: 'unhealthy',
-                services: 'unhealthy',
-                lastCheck: new Date().toISOString(),
-                uptime: process.uptime()
-            };
+            throw error;
         }
     }
     static async clearAllData() {

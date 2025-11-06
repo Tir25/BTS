@@ -13,10 +13,11 @@ export interface AnalyticsData {
     }[];
 }
 export interface SystemHealth {
-    database: 'healthy' | 'unhealthy';
-    services: 'healthy' | 'unhealthy';
-    lastCheck: string;
-    uptime: number;
+    buses: number;
+    routes: number;
+    drivers: number;
+    recentLocations: number;
+    timestamp: string;
 }
 export declare class ConsolidatedAdminService {
     static getAllBuses(): Promise<import("./UnifiedDatabaseService").BusWithDriver[]>;

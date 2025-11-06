@@ -13,6 +13,32 @@ class Logger {
         this.isDevelopment = process.env.NODE_ENV === 'development';
         this.isProduction = process.env.NODE_ENV === 'production';
     }
+    getCallerInfo() {
+        const obj = {};
+        Error.captureStackTrace(obj, this.getCallerInfo);
+        const stack = obj.stack || '';
+        const frames = stack.split('\n').map(l => l.trim());
+        const target = frames[3] || frames[2] || '';
+        const match = /at\s+(.*?)\s+\((.*?):(\d+):(\d+)\)/.exec(target) || /at\s+(.*?):(\d+):(\d+)/.exec(target);
+        if (!match)
+            return {};
+        if (match.length === 5) {
+            return {
+                function: match[1],
+                file: match[2],
+                line: Number(match[3]),
+                column: Number(match[4])
+            };
+        }
+        if (match.length === 4) {
+            return {
+                file: match[1],
+                line: Number(match[2]),
+                column: Number(match[3])
+            };
+        }
+        return {};
+    }
     formatLogEntry(entry) {
         if (this.isDevelopment) {
             const timestamp = new Date(entry.timestamp).toISOString();
@@ -44,7 +70,13 @@ class Logger {
             service,
             requestId: req?.id || req?.headers['x-request-id'],
             userId: req?.user?.id,
-            metadata,
+            metadata: {
+                ...metadata,
+                source: {
+                    ...(metadata?.source || {}),
+                    ...this.getCallerInfo()
+                }
+            },
             error: error ? {
                 name: error.name,
                 message: error.message,

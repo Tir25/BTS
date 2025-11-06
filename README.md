@@ -1,5 +1,53 @@
 ﻿# University Bus Tracking System
 
+## Folder Structure (High-Level)
+
+This project follows a clear, navigable structure so new developers can get productive quickly:
+
+- `backend/` – Express API, middleware, sockets, services, models, and config
+  - `src/controllers/` – Route controllers (business logic per route)
+  - `src/routes/` – Express routers (wires endpoints to controllers/middleware)
+  - `src/middleware/` – Cross-cutting concerns (auth, validation, rate limits, error handling)
+  - `src/services/` – Domain services (DB, caching, monitoring, websockets)
+  - `src/utils/` – Utilities (logger, performance guards, etc.)
+  - `src/sockets/` – WebSocket server initialization
+  - `src/models/` – DB models and initialization
+
+- `frontend/` – React app (Vite)
+  - `src/components/` – UI components grouped by domain; reusable UI in `components/common`
+    - `common/` – Reusable UI primitives (`Button`, `Input`, `Card`, `Modal`)
+    - `error/` – Error boundaries and error UI
+  - `src/pages/` – Page-level components (if present)
+  - `src/hooks/` – Reusable hooks (`useApi`, `useSafeAsync`, etc.)
+  - `src/utils/` – Utilities (logger, error handling, validation, interceptors)
+  - `src/services/` – Client-side services (API, websocket, storage, resilience)
+  - `src/context/` – React contexts/providers
+  - `src/assets/` – Static assets (if present)
+
+## Naming Conventions
+
+- Components: `PascalCase` (e.g., `BusCard.tsx`, `ErrorBoundary.tsx`)
+- Hooks: `camelCase` with `use` prefix (e.g., `useAuth.ts`, `useApi.ts`)
+- Functions/variables: `camelCase`
+- Constants: `UPPER_CASE`
+- Files: meaningful, domain-oriented names (e.g., `MapService.ts`, `LocationService.ts`)
+
+## Key Cross-Cutting Patterns
+
+- Centralized logging: `backend/src/utils/logger.ts`, `frontend/src/utils/logger.ts`
+- Centralized error handling: `backend/src/middleware/errorHandler.ts`, `frontend/src/utils/errorHandler.ts`
+- Fault isolation: React Error Boundaries (`frontend/src/components/error/ErrorBoundary.tsx`) and async wrappers
+- DRY API: `frontend/src/services/api.ts` (generic HTTP helpers), `frontend/src/hooks/useApi.ts`
+- Reusable UI: `frontend/src/components/common/` exports in `index.ts`
+
+## Import Shortcuts
+
+- Reusable UI: `import { Button, Input } from '@/components/common'`
+- Hooks: `import { useApi } from '@/hooks/useApi'`
+- Services: `import { api } from '@/services/api'`
+
+> Tip: See each folder's `index.ts` to discover available exports.
+
 A real-time bus tracking system designed for university campuses, providing live location updates, route management, and comprehensive administrative controls.
 
 ## 🚀 Features

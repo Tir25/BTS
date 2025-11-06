@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import UnifiedDriverInterface from '../../components/UnifiedDriverInterface';
-import { DriverAuthProvider } from '../../contexts/DriverAuthContext';
+import { DriverAuthProvider } from '../../context/DriverAuthContext';
 import { unifiedWebSocketService } from '../../services/UnifiedWebSocketService';
 
 // Mock dependencies

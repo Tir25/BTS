@@ -19,7 +19,8 @@ const DriverControls: React.FC<DriverControlsProps> = ({
   accuracyMessage,
   accuracyWarning,
 }) => {
-  // IMPROVED: More lenient tracking conditions
+  // PRODUCTION FIX: More lenient tracking conditions - allow start even if WebSocket is connecting
+  // WebSocket connection will be established in background, location updates will queue
   const canStartTracking = isAuthenticated && !isTracking;
   const canStopTracking = isAuthenticated && isTracking;
   

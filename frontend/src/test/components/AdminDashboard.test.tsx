@@ -19,7 +19,7 @@ vi.mock('../services/authService', () => ({
   },
 }))
 
-vi.mock('../services/adminApiService', () => ({
+vi.mock('../api', () => ({
   adminApiService: {
     getDashboard: vi.fn(() => Promise.resolve({
       success: true,

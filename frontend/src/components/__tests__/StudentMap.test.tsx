@@ -53,7 +53,7 @@ vi.mock('../../services/UnifiedWebSocketService', () => ({
   },
 }));
 
-vi.mock('../../services/api', () => ({
+vi.mock('../../api', () => ({
   apiService: {
     getRoutes: vi.fn().mockResolvedValue({
       success: true,

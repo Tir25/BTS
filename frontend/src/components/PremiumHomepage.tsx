@@ -2,6 +2,9 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTransition } from './transitions';
+import Hero from './premium/Hero';
+import NavCard from './premium/NavCard';
+import Footer from './premium/Footer';
 
 // SVG Icon Components - Production Optimized
 const BusIcon = () => (
@@ -505,159 +508,42 @@ const PremiumHomepage: React.FC = () => {
 
       {/* Main Content */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 max-w-7xl mx-auto">
-        {/* Enhanced Heading */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-12 sm:mb-16 px-4"
-        >
-          <div className="inline-block p-3 bg-blue-100 rounded-2xl mb-6">
-            <svg className="w-12 h-12 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-3 text-slate-900 leading-tight">
-            <span className="bg-gradient-to-r from-slate-900 via-blue-800 to-slate-900 bg-clip-text text-transparent">
-              Ganpat University
-            </span>
-          </h1>
-          <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-slate-400 mx-auto rounded-full mb-3" />
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-slate-700 mb-2 leading-tight">
-            Bus Tracker
-          </h2>
-          <p className="text-sm sm:text-base text-slate-500 max-w-md mx-auto">
-            Real-time tracking for a smarter commute
-          </p>
-        </motion.div>
+        <Hero />
 
         {/* Navigation Cards Container */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 w-full max-w-5xl px-4">
-          {/* Driver Interface Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            whileHover={{ y: -8, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="group relative bg-white border-2 border-blue-200 rounded-2xl shadow-md hover:shadow-xl hover:border-blue-400 transition-all duration-300 cursor-pointer overflow-hidden"
+          <NavCard
+            accentColor="blue"
+            title="Driver Interface"
+            description="Real-time location sharing & navigation"
+            icon={<BusIcon />}
             onClick={() => handleNavigation('/driver-login')}
-          >
-            {/* Subtle gradient overlay on hover */}
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            
-            {/* Accent decoration */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-400" />
-            
-            <div className="relative p-8 flex flex-col items-center text-center min-h-[240px]">
-              <div className="mb-6 p-4 bg-blue-100 rounded-2xl group-hover:bg-blue-200 transition-colors duration-300">
-                <BusIcon />
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-3 group-hover:text-blue-700 transition-colors">
-                Driver Interface
-              </h3>
-              <p className="text-sm sm:text-base text-slate-600 mb-4">
-                Real-time location sharing & navigation
-              </p>
-              <div className="flex items-center text-blue-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <span>Get Started</span>
-                <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </div>
-            </div>
-          </motion.div>
+            delay={0.1}
+            cta="Get Started"
+          />
 
-          {/* Student Map Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            whileHover={{ y: -8, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="group relative bg-white border-2 border-green-200 rounded-2xl shadow-md hover:shadow-xl hover:border-green-400 transition-all duration-300 cursor-pointer overflow-hidden"
+          <NavCard
+            accentColor="green"
+            title="Student Map"
+            description="Live bus tracking & route information"
+            icon={<MapIcon />}
             onClick={() => handleNavigation('/student-map')}
-          >
-            {/* Subtle gradient overlay on hover */}
-            <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            
-            {/* Accent decoration */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-green-400" />
-            
-            <div className="relative p-8 flex flex-col items-center text-center min-h-[240px]">
-              <div className="mb-6 p-4 bg-green-100 rounded-2xl group-hover:bg-green-200 transition-colors duration-300">
-                <MapIcon />
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-3 group-hover:text-green-700 transition-colors">
-                Student Map
-              </h3>
-              <p className="text-sm sm:text-base text-slate-600 mb-4">
-                Live bus tracking & route information
-              </p>
-              <div className="flex items-center text-green-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <span>Explore</span>
-                <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </div>
-            </div>
-          </motion.div>
+            delay={0.2}
+            cta="Explore"
+          />
 
-          {/* Admin Panel Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            whileHover={{ y: -8, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="group relative bg-white border-2 border-purple-200 rounded-2xl shadow-md hover:shadow-xl hover:border-purple-400 transition-all duration-300 cursor-pointer overflow-hidden"
+          <NavCard
+            accentColor="purple"
+            title="Admin Panel"
+            description="Fleet management & analytics dashboard"
+            icon={<AdminIcon />}
             onClick={() => handleNavigation('/admin-login')}
-          >
-            {/* Subtle gradient overlay on hover */}
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            
-            {/* Accent decoration */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-purple-400" />
-            
-            <div className="relative p-8 flex flex-col items-center text-center min-h-[240px]">
-              <div className="mb-6 p-4 bg-purple-100 rounded-2xl group-hover:bg-purple-200 transition-colors duration-300">
-                <AdminIcon />
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-3 group-hover:text-purple-700 transition-colors">
-                Admin Panel
-              </h3>
-              <p className="text-sm sm:text-base text-slate-600 mb-4">
-                Fleet management & analytics dashboard
-              </p>
-              <div className="flex items-center text-purple-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <span>Access</span>
-                <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </div>
-            </div>
-          </motion.div>
+            delay={0.3}
+            cta="Access"
+          />
         </div>
 
-        {/* Enhanced Footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.5 }}
-          className="mt-20 text-center px-4"
-        >
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <div className="h-px w-12 bg-gradient-to-r from-transparent to-slate-300" />
-            <div className="w-2 h-2 rounded-full bg-blue-500" />
-            <div className="h-px w-12 bg-gradient-to-l from-transparent to-slate-300" />
-          </div>
-          <p className="text-sm text-slate-600 font-medium">
-            Real-time tracking • Modern technology • Always reliable
-          </p>
-          <p className="text-xs text-slate-400 mt-2">
-            Ganpat University Bus Tracking System
-          </p>
-        </motion.div>
+        <Footer />
       </div>
     </div>
   );

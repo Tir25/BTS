@@ -2,7 +2,7 @@ import React, { useEffect, useCallback, memo, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDriverInterface, useDriverInterfaceActions, useDriverStatus } from '../stores/useDriverInterfaceStore';
 // Removed unused bridge hooks to prevent infinite loops
-import { useDriverAuth } from '../contexts/DriverAuthContext';
+import { useDriverAuth } from '../context/DriverAuthContext';
 import { useDriverTracking } from '../hooks/useDriverTracking';
 import { unifiedWebSocketService } from '../services/UnifiedWebSocketService';
 import { authService } from '../services/authService';
@@ -18,6 +18,10 @@ import { logger } from '../utils/logger';
 import { errorHandler, CustomError, createNetworkError } from '../utils/errorHandler';
 import { useUnifiedLoadingState } from '../hooks/useUnifiedLoadingState';
 import { formatTime } from '../utils/dateFormatter';
+import { notifySuccess, notifyError, notifyWarning } from '../utils/notifications';
+import DriverStatusCards from './driver/DriverStatusCards';
+import DriverMapSection from './driver/DriverMapSection';
+import { useDriverInitialization } from '../hooks/useDriverInitialization';
 
 import './DriverInterface.css';
 import './DriverDashboard.css';
@@ -62,17 +66,105 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
   );
 
   // Stops state from backend assignment
+  // PRODUCTION FIX: Enhanced stops loading with route information
   const [stopsState, setStopsState] = React.useState<{ completed: any[]; next: any | null; remaining: any[] } | null>(null);
   const [currentShiftName, setCurrentShiftName] = React.useState<string | null>(null);
   const refreshStops = React.useCallback(async () => {
-    if (!isAuthenticated || !busAssignment) return;
-    const { apiService } = await import('../services/api');
-    const res = await apiService.getDriverAssignmentWithStops(busAssignment.driver_id);
-    if (res?.success && res.data) {
-      setStopsState(res.data.stops);
-      setCurrentShiftName((res.data as any).shift_name || null);
+    if (!isAuthenticated || !busAssignment) {
+      logger.debug('Cannot refresh stops: not authenticated or no assignment', 'UnifiedDriverInterface', {
+        isAuthenticated,
+        hasAssignment: !!busAssignment
+      });
+      return;
     }
-  }, [isAuthenticated, busAssignment?.driver_id]);
+    
+    try {
+      logger.info('🔄 Refreshing stops and route information', 'UnifiedDriverInterface', {
+        driverId: busAssignment.driver_id,
+        routeId: busAssignment.route_id,
+        routeName: busAssignment.route_name
+      });
+      
+      const { apiService } = await import('../api');
+      const res = await apiService.getDriverAssignmentWithStops(busAssignment.driver_id);
+      
+      if (res?.success && res.data) {
+        // PRODUCTION FIX: Enhanced logging and validation
+        const stopsData = res.data.stops;
+        logger.info('✅ Stops data received', 'UnifiedDriverInterface', {
+          hasStops: !!stopsData,
+          completed: stopsData?.completed?.length || 0,
+          remaining: stopsData?.remaining?.length || 0,
+          hasNext: !!stopsData?.next,
+          nextStopName: stopsData?.next?.name,
+          stopsData: JSON.stringify(stopsData)
+        });
+        
+        // PRODUCTION FIX: Validate stops data structure
+        if (!stopsData || typeof stopsData !== 'object') {
+          logger.error('❌ Invalid stops data structure', 'UnifiedDriverInterface', {
+            stopsData,
+            type: typeof stopsData
+          });
+        } else {
+          setStopsState(stopsData);
+          setCurrentShiftName(res.data.shift_name || null);
+          
+          // PRODUCTION FIX: Update route information if provided
+          if (res.data.route_name && !busAssignment.route_name) {
+            logger.info('✅ Route name updated from assignment API', 'UnifiedDriverInterface', {
+              routeName: res.data.route_name
+            });
+          }
+          
+          logger.info('✅ Stops state updated successfully', 'UnifiedDriverInterface', {
+            completedCount: stopsData.completed?.length || 0,
+            remainingCount: stopsData.remaining?.length || 0,
+            hasNext: !!stopsData.next,
+            nextStopId: stopsData.next?.id,
+            nextStopName: stopsData.next?.name
+          });
+        }
+      } else {
+        logger.warn('⚠️ Failed to refresh stops', 'UnifiedDriverInterface', {
+          error: res?.error,
+          success: res?.success,
+          data: res?.data,
+          driverId: busAssignment.driver_id,
+          routeId: busAssignment.route_id
+        });
+        // PRODUCTION FIX: Clear stops state on error to prevent stale data
+        // Only clear if we have a definitive error (not just missing data)
+        if (res?.error && !res.error.includes('No assignment found')) {
+          setStopsState({ completed: [], next: null, remaining: [] });
+        }
+        
+        // PRODUCTION FIX: Show user-friendly message for drivers without assignment
+        if (res?.error?.includes('No assignment found')) {
+          logger.info('Driver has no assignment', 'UnifiedDriverInterface', {
+            driverId: busAssignment.driver_id,
+            message: 'Driver needs to be assigned to a bus and route by admin'
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('❌ Error refreshing stops', 'UnifiedDriverInterface', {
+        error: error instanceof Error ? error.message : String(error),
+        driverId: busAssignment?.driver_id,
+        routeId: busAssignment?.route_id,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      // PRODUCTION FIX: Only clear on network/API errors, not on missing data
+      if (error instanceof Error && (
+        error.message.includes('fetch') || 
+        error.message.includes('network') || 
+        error.message.includes('404') ||
+        error.message.includes('Failed to fetch')
+      )) {
+        setStopsState({ completed: [], next: null, remaining: [] });
+      }
+    }
+  }, [isAuthenticated, busAssignment]);
 
   React.useEffect(() => {
     refreshStops();
@@ -541,81 +633,8 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
     locationState.currentLocation?.timestamp,
   ]);
 
-  // Track current loading phase to prevent infinite loops
-  const currentPhaseRef = useRef<string>('idle');
-  const loadingStateRef = useRef(loadingState);
-  loadingStateRef.current = loadingState;
-  
-  // Coordinate loading phases based on driver state
-  useEffect(() => {
-    // Skip if not in dashboard mode
-    if (mode !== 'dashboard') return;
-
-    // Determine target phase based on current state
-    let targetPhase: string = 'idle';
-    let phaseMessage: string = '';
-
-    // Authentication phase
-    if (driverState.isLoading && !driverState.isAuthenticated) {
-      targetPhase = 'authenticating';
-      phaseMessage = 'Authenticating driver...';
-    }
-    // Assignment loading phase
-    else if (driverState.isAuthenticated && !driverState.busAssignment && !initProgressRef.current.assignment) {
-      targetPhase = 'loading_assignment';
-      phaseMessage = 'Loading bus assignment...';
-    }
-    // WebSocket connection phase
-    else if (driverState.isAuthenticated && driverState.busAssignment && !driverState.isWebSocketConnected) {
-      targetPhase = 'connecting_websocket';
-      phaseMessage = 'Connecting to real-time service...';
-    }
-    // WebSocket authentication phase
-    else if (driverState.isWebSocketConnected && !driverState.isWebSocketAuthenticated && !initProgressRef.current.websocket) {
-      targetPhase = 'authenticating_websocket';
-      phaseMessage = 'Authenticating connection...';
-    }
-    // Ready phase - all conditions met
-    else if (
-      driverState.isAuthenticated &&
-      driverState.busAssignment &&
-      driverState.isWebSocketConnected &&
-      driverState.isWebSocketAuthenticated &&
-      !driverState.isLoading &&
-      !driverState.isInitializing
-    ) {
-      targetPhase = 'ready';
-      phaseMessage = 'Dashboard ready';
-      initProgressRef.current = { auth: true, assignment: true, websocket: true };
-    }
-    // Error phase
-    else if (driverState.error || driverState.initializationError) {
-      targetPhase = 'error';
-      const errorMsg = driverState.error || driverState.initializationError || 'An error occurred';
-      // Only set error if phase changed
-      if (currentPhaseRef.current !== 'error') {
-        loadingStateRef.current.setError(errorMsg);
-        currentPhaseRef.current = 'error';
-      }
-      return;
-    }
-
-    // Only update phase if it actually changed
-    if (currentPhaseRef.current !== targetPhase && targetPhase !== 'idle') {
-      currentPhaseRef.current = targetPhase;
-      loadingStateRef.current.setPhase(targetPhase as any, phaseMessage);
-    }
-  }, [
-    driverState.isAuthenticated,
-    driverState.isLoading,
-    driverState.isInitializing,
-    driverState.busAssignment,
-    driverState.isWebSocketConnected,
-    driverState.isWebSocketAuthenticated,
-    driverState.error,
-    driverState.initializationError,
-    mode,
-  ]);
+  // Coordinate loading phases via hook
+  useDriverInitialization(mode, driverState as any, loadingState as any);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -772,128 +791,23 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
             shiftName={currentShiftName || undefined}
           />
 
-          {/* Status Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
-            {/* Connection Status */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4">
-              <div className="flex items-center">
-                <div
-                  className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 sm:mr-3 ${
-                    isWebSocketConnected && isWebSocketAuthenticated
-                      ? 'bg-green-500'
-                      : isWebSocketConnected
-                        ? 'bg-yellow-500 animate-pulse'
-                        : 'bg-red-500'
-                  }`}
-                />
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-slate-900 text-xs sm:text-sm">Connection</h3>
-                  <p className="text-xs text-slate-600 truncate">
-                    {isWebSocketConnected && isWebSocketAuthenticated ? 'Connected' :
-                     isWebSocketConnected ? 'Connecting...' :
-                     'Disconnected'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Tracking Status */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4">
-              <div className="flex items-center">
-                <div
-                  className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 sm:mr-3 ${locationState.isTracking ? 'bg-green-500' : 'bg-slate-400'}`}
-                />
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-slate-900 text-xs sm:text-sm">GPS Tracking</h3>
-                  <p className="text-xs text-slate-600 truncate">
-                    {locationState.isTracking ? 'Active' : 'Inactive'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Update Count */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4">
-              <div>
-                <h3 className="font-semibold text-slate-900 text-xs sm:text-sm">Updates Sent</h3>
-                <p className="text-lg sm:text-xl font-bold text-blue-600">{locationState.updateCount}</p>
-                {locationState.lastUpdateTime && (
-                  <p className="text-xs text-slate-600 truncate">
-                    Last: {formatTime(locationState.lastUpdateTime)}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Location Status */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4">
-              <div className="flex items-center">
-                <div
-                  className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 sm:mr-3 ${
-                    locationState.locationError ? 'bg-red-500' : 
-                    locationState.currentLocation ? 'bg-green-500' : 'bg-slate-400'
-                  }`}
-                />
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-slate-900 text-xs sm:text-sm">Location</h3>
-                  <p className="text-xs text-slate-600 truncate">
-                    {locationState.locationError ? 'Error' :
-                     locationState.currentLocation ? 'Available' : 'Waiting'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <DriverStatusCards
+            isWebSocketConnected={isWebSocketConnected}
+            isWebSocketAuthenticated={isWebSocketAuthenticated}
+            isTracking={locationState.isTracking}
+            updateCount={locationState.updateCount}
+            lastUpdateTime={locationState.lastUpdateTime}
+            locationError={locationState.locationError}
+          />
 
           {/* Main Content */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-            {/* Map Section */}
-            <div className="space-y-4 sm:space-y-6 order-2 xl:order-1">
-              {/* CRITICAL WARNING: Show warning if GPS accuracy is poor */}
-              {tracking.accuracy && tracking.accuracy > 1000 && locationState.isTracking && (
-                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">⚠️</span>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-red-900 mb-2">
-                        Location Accuracy Warning
-                      </h4>
-                      <p className="text-sm text-red-800 mb-2">
-                        Your current location accuracy is <strong>±{(tracking.accuracy / 1000).toFixed(1)}km</strong>, which indicates IP-based positioning.
-                      </p>
-                      <div className="text-xs text-red-800 space-y-1">
-                        <p><strong>Why this happens:</strong></p>
-                        <ul className="list-disc list-inside ml-2 space-y-1">
-                          <li>Desktop browsers don't have GPS hardware</li>
-                          <li>Browser uses your IP address to estimate location (city/region level)</li>
-                          <li>This is not your exact physical location</li>
-                        </ul>
-                        <p className="mt-2"><strong>Solution:</strong> Use a mobile device with GPS for accurate tracking (±10-50m accuracy)</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div className="h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]">
-                {isAuthenticated && busAssignment ? (
-                  <StudentMap 
-                    config={studentMapConfig}
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center bg-slate-100 rounded-xl border border-slate-200">
-                    <div className="text-center">
-                      <div className="text-slate-400 mb-2">
-                        <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                        </svg>
-                      </div>
-                      <p className="text-slate-700 font-medium">Map will load after authentication</p>
-                      <p className="text-slate-600 text-sm">Please complete login to view real-time bus tracking</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <DriverMapSection
+              isAuthenticated={isAuthenticated}
+              busAssignment={busAssignment || null}
+              tracking={{ accuracy: tracking.accuracy, isTracking: locationState.isTracking }}
+              studentMapConfig={studentMapConfig}
+            />
 
             {/* Controls Section */}
             <div className="space-y-4 sm:space-y-6 order-1 xl:order-2">
@@ -902,13 +816,13 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                 isAuthenticated={isAuthenticated}
                 connectionStatus={tracking.connectionStatus === 'reconnecting' ? 'connecting' : tracking.connectionStatus}
                 onStartTracking={async () => {
-                  const { apiService } = await import('../services/api');
+                  const { apiService } = await import('../api');
                   await apiService.startTracking(busAssignment?.driver_id);
                   await tracking.startTracking();
                   await refreshStops();
                 }}
                 onStopTracking={async () => {
-                  const { apiService } = await import('../services/api');
+                  const { apiService } = await import('../api');
                   await apiService.stopTracking(busAssignment?.driver_id);
                   tracking.stopTracking();
                   await refreshStops();
@@ -932,25 +846,126 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                 disabled={!isAuthenticated}
                 onRefresh={refreshStops}
                 onReachStop={async (stopId) => {
-                  const { apiService } = await import('../services/api');
+                  const { apiService } = await import('../api');
                   const { notifyRouteStatusUpdated } = await import('../services/RouteStatusEvents');
+                  
+                  // PRODUCTION FIX: Capture stop info before API call for better user feedback
+                  const tappedStop = stopsState?.next || stopsState?.remaining.find(s => s.id === stopId);
+                  const stopName = tappedStop?.name || `Stop #${tappedStop?.sequence || 'N/A'}`;
+                  
+                  logger.info('🛑 Stop reached handler called', 'UnifiedDriverInterface', {
+                    stopId,
+                    stopName,
+                    driverId: busAssignment?.driver_id,
+                    routeId: busAssignment?.route_id
+                  });
+                  
                   try {
+                    // PRODUCTION FIX: Disable button state to prevent double-clicks
                     // Ensure tracking session exists first (idempotent on backend)
-                    await apiService.startTracking(busAssignment?.driver_id);
-                    await apiService.markStopReached(busAssignment?.driver_id, stopId);
+                    logger.info('Starting tracking session...', 'UnifiedDriverInterface', {
+                      driverId: busAssignment?.driver_id
+                    });
+                    const startResult = await apiService.startTracking(busAssignment?.driver_id);
+                    
+                    if (!startResult.success) {
+                      logger.warn('Failed to start tracking session', 'UnifiedDriverInterface', {
+                        error: startResult.error,
+                        driverId: busAssignment?.driver_id
+                      });
+                      notifyError('Tracking Failed', `Failed to start tracking: ${startResult.error || 'Unknown error'}. Please try again.`);
+                      return;
+                    }
+                    
+                    // PRODUCTION FIX: Wait a moment for session to be fully created in database
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    
+                    // PRODUCTION FIX: Mark stop as reached
+                    logger.info('Marking stop as reached...', 'UnifiedDriverInterface', {
+                      stopId,
+                      driverId: busAssignment?.driver_id
+                    });
+                    const result = await apiService.markStopReached(busAssignment?.driver_id, stopId);
+                    
+                    logger.info('Stop reached API response', 'UnifiedDriverInterface', {
+                      success: result.success,
+                      error: result.error,
+                      stopId
+                    });
+                    
+                    if (!result.success) {
+                      logger.warn('⚠️ Failed to mark stop as reached', 'UnifiedDriverInterface', {
+                        error: result.error,
+                        stopId,
+                        driverId: busAssignment?.driver_id
+                      });
+                      // PRODUCTION FIX: Show error to user - don't silently fail
+                      notifyError('Stop Update Failed', `Failed to mark stop: ${result.error || 'Unknown error'}`);
+                      return; // Don't refresh or notify if marking failed
+                    }
+                    
+                    logger.info('✅ Stop marked successfully, waiting before refresh...', 'UnifiedDriverInterface', {
+                      stopId,
+                      stopName
+                    });
+                    
+                    // PRODUCTION FIX: Show success feedback to user
+                    notifySuccess(
+                      'Stop Reached',
+                      `Successfully marked "${stopName}" as reached`
+                    );
+                    
+                    // PRODUCTION FIX: Wait a brief moment for backend to update, then refresh
+                    // This prevents race conditions where we fetch before the update completes
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
                     // Notify students to refresh route status
-                    if (busAssignment?.route_id) notifyRouteStatusUpdated(busAssignment.route_id);
+                    if (busAssignment?.route_id) {
+                      logger.info('Notifying route status update', 'UnifiedDriverInterface', {
+                        routeId: busAssignment.route_id
+                      });
+                      notifyRouteStatusUpdated(busAssignment.route_id);
+                    }
+                    
+                    // PRODUCTION FIX: Refresh stops after successful update
+                    logger.info('Refreshing stops...', 'UnifiedDriverInterface');
+                    await refreshStops();
+                    logger.info('✅ Stops refreshed successfully', 'UnifiedDriverInterface');
                   } catch (e) {
+                    logger.error('❌ Error marking stop as reached', 'UnifiedDriverInterface', {
+                      error: e instanceof Error ? e.message : String(e),
+                      stack: e instanceof Error ? e.stack : undefined,
+                      stopId,
+                      driverId: busAssignment?.driver_id
+                    });
+                    // PRODUCTION FIX: Show error to user
+                    notifyError('Stop Update Error', `Error marking stop: ${e instanceof Error ? e.message : String(e)}`);
+                    
                     // Attempt to auto-start tracking, then retry once
                     try {
+                      logger.info('Retrying stop reached...', 'UnifiedDriverInterface');
+                      notifyWarning('Retrying', 'Attempting to retry marking stop as reached...');
                       await apiService.startTracking(busAssignment?.driver_id);
-                      await apiService.markStopReached(busAssignment?.driver_id, stopId);
-                      if (busAssignment?.route_id) notifyRouteStatusUpdated(busAssignment.route_id);
-                    } catch {
-                      // Swallow; UI stays unchanged if both attempts fail
+                      const retryResult = await apiService.markStopReached(busAssignment?.driver_id, stopId);
+                      if (retryResult.success) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        if (busAssignment?.route_id) notifyRouteStatusUpdated(busAssignment.route_id);
+                        await refreshStops();
+                        logger.info('✅ Retry successful', 'UnifiedDriverInterface');
+                        notifySuccess('Stop Reached', `Successfully marked "${stopName}" as reached (retry successful)`);
+                      } else {
+                        logger.error('❌ Retry failed', 'UnifiedDriverInterface', {
+                          error: retryResult.error
+                        });
+                        notifyError('Retry Failed', `Retry failed: ${retryResult.error || 'Unknown error'}`);
+                      }
+                    } catch (retryError) {
+                      logger.error('❌ Retry exception', 'UnifiedDriverInterface', {
+                        error: retryError instanceof Error ? retryError.message : String(retryError),
+                        stack: retryError instanceof Error ? retryError.stack : undefined
+                      });
+                      notifyError('Retry Failed', `Retry failed: ${retryError instanceof Error ? retryError.message : String(retryError)}`);
                     }
-                  } finally {
-                    await refreshStops();
                   }
                 }}
               />

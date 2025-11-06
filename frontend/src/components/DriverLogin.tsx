@@ -1,9 +1,17 @@
+/**
+ * DriverLogin
+ * Authenticates drivers and redirects to the dashboard; uses shared UI and validation utilities.
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDriverAuth } from '../contexts/DriverAuthContext';
+import { useDriverAuth } from '../context/DriverAuthContext';
 import { logger } from '../utils/logger';
 import { errorHandler, CustomError } from '../utils/errorHandler';
 import { getUserFriendlyError, ErrorContext } from '../utils/errorMessageTranslator';
+import { Input } from './common/Input';
+import { Button } from './common/Button';
+import { Card } from './common/Card';
+import { validateEmail, validatePassword } from '../utils/validation';
 
 interface LoginForm {
   email: string;
@@ -68,27 +76,7 @@ const DriverLogin: React.FC = () => {
     };
   }, [isAuthenticated, isLoading, busAssignment, navigate]);
 
-  // Client-side validation
-  const validateEmail = (email: string): string | undefined => {
-    if (!email) {
-      return 'Email is required';
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return 'Please enter a valid email address';
-    }
-    return undefined;
-  };
-
-  const validatePassword = (password: string): string | undefined => {
-    if (!password) {
-      return 'Password is required';
-    }
-    if (password.length < 6) {
-      return 'Password must be at least 6 characters';
-    }
-    return undefined;
-  };
+  // Client-side validation (reused utilities)
 
   const validateForm = (): boolean => {
     const errors: ValidationErrors = {};
@@ -213,7 +201,7 @@ const DriverLogin: React.FC = () => {
         </div>
 
         {/* Login Form */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-lg p-8">
+        <Card padding="lg">
           {/* PRODUCTION FIX: Show loading state while waiting for bus assignment after login */}
           {isAuthenticated && isLoading && !loginError && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
@@ -229,64 +217,34 @@ const DriverLogin: React.FC = () => {
           
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
-                Email Address
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={loginForm.email}
-                onChange={handleInputChange}
-                onBlur={handleBlur}
-                required
-                className={`w-full px-4 py-3 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                  touched.email && validationErrors.email
-                    ? 'border-red-400 focus:ring-red-500'
-                    : 'border-slate-300'
-                }`}
-                placeholder="driver@university.edu"
-                disabled={isLoading}
-                aria-invalid={touched.email && !!validationErrors.email}
-                aria-describedby={touched.email && validationErrors.email ? 'email-error' : undefined}
-              />
-              {touched.email && validationErrors.email && (
-                <p id="email-error" className="mt-1 text-sm text-red-600" role="alert">
-                  {validationErrors.email}
-                </p>
-              )}
-            </div>
+            <Input
+              type="email"
+              id="email"
+              name="email"
+              label="Email Address"
+              value={loginForm.email}
+              onChange={handleInputChange}
+              onBlur={handleBlur}
+              required
+              placeholder="driver@university.edu"
+              disabled={isLoading}
+              error={touched.email ? validationErrors.email : undefined}
+            />
 
             {/* Password Field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={loginForm.password}
-                onChange={handleInputChange}
-                onBlur={handleBlur}
-                required
-                className={`w-full px-4 py-3 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                  touched.password && validationErrors.password
-                    ? 'border-red-400 focus:ring-red-500'
-                    : 'border-slate-300'
-                }`}
-                placeholder="Enter your password"
-                disabled={isLoading}
-                aria-invalid={touched.password && !!validationErrors.password}
-                aria-describedby={touched.password && validationErrors.password ? 'password-error' : undefined}
-              />
-              {touched.password && validationErrors.password && (
-                <p id="password-error" className="mt-1 text-sm text-red-600" role="alert">
-                  {validationErrors.password}
-                </p>
-              )}
-            </div>
+            <Input
+              type="password"
+              id="password"
+              name="password"
+              label="Password"
+              value={loginForm.password}
+              onChange={handleInputChange}
+              onBlur={handleBlur}
+              required
+              placeholder="Enter your password"
+              disabled={isLoading}
+              error={touched.password ? validationErrors.password : undefined}
+            />
 
             {/* Error Message */}
             {(loginError || error) && (
@@ -301,24 +259,9 @@ const DriverLogin: React.FC = () => {
             )}
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
-                isLoading
-                  ? 'bg-slate-400 text-white cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
-              }`}
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center">
-                  <div className="loading-spinner mr-2" />
-                  Signing In...
-                </span>
-              ) : (
-                'Sign In'
-              )}
-            </button>
+            <Button type="submit" fullWidth variant="primary" isLoading={isLoading}>
+              {isLoading ? 'Signing In...' : 'Sign In'}
+            </Button>
           </form>
 
           {/* Help Text */}
@@ -327,7 +270,7 @@ const DriverLogin: React.FC = () => {
               Having trouble? Contact your administrator for assistance.
             </p>
           </div>
-        </div>
+        </Card>
 
         {/* Back to Home */}
         <div className="text-center mt-6">
