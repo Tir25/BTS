@@ -27,6 +27,19 @@ export const globalErrorHandler = (
   res: Response,
   next: NextFunction
 ) => {
+  // CRITICAL FIX: Add CORS headers to all error responses
+  // This ensures CORS works even when errors occur
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  } else {
+    // If no origin, allow all (for health checks, etc.)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Client-Info, X-Client-Version, Cache-Control, Pragma, X-Request-ID');
+
   let statusCode = 500;
   let message = 'Internal Server Error';
   let isOperational = false;
@@ -150,6 +163,17 @@ export const asyncHandler = (fn: (req: Request, res: Response, next: NextFunctio
 
 // 404 handler
 export const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
+  // CRITICAL FIX: Add CORS headers to 404 responses
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Client-Info, X-Client-Version, Cache-Control, Pragma, X-Request-ID');
+  
   const error = new AppError(`Route ${req.originalUrl} not found`, 404);
   next(error);
 };
