@@ -9,7 +9,9 @@ export const securityMiddleware = (req: Request, res: Response, next: NextFuncti
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // Allow geolocation for same-origin (required for driver tracking)
+  // Block microphone and camera for security
+  res.setHeader('Permissions-Policy', 'geolocation=(self), microphone=(), camera=()');
   
   // Remove server information
   res.removeHeader('X-Powered-By');
