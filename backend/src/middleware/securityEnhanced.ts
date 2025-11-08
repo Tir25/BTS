@@ -174,7 +174,9 @@ export class SecurityManager {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    // Allow geolocation for same-origin (required for driver tracking)
+    // Block microphone and camera for security
+    res.setHeader('Permissions-Policy', 'geolocation=(self), microphone=(), camera=()');
     
     // Add request ID for tracking
     const requestId = req.headers['x-request-id'] || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
