@@ -82,7 +82,7 @@ router.get('/viewport', async (req, res) => {
 
     // Get bus info for buses in viewport
     const busIds = [...new Set(locationsInViewport.map((loc: { bus_id: string }) => loc.bus_id))];
-    const busesInViewport = [];
+    const busesInViewport: any[] = [];
 
     for (const busId of busIds) {
       const busInfo = await getBusInfo(busId as string);

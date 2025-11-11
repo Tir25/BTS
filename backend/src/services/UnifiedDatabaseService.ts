@@ -1011,10 +1011,10 @@ export class UnifiedDatabaseService {
 
       logger.info('Driver and all related data deleted successfully', 'unified-db', { 
         driverId, 
-        email: driverData.email 
+        email: (driverData as { id: string; email: string }).email 
       });
       
-      return driverData as DriverData;
+      return driverData as any as DriverData;
     } catch (error) {
       logger.error('Error in deleteDriver', 'unified-db', { error, driverId });
       throw error;

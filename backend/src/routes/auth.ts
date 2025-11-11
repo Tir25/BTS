@@ -87,11 +87,20 @@ router.post('/driver/login', async (req, res) => {
     });
 
     // Get user profile to verify driver role
-    const { data: profile, error: profileError } = await driverSupabaseAdmin
+    const { data: profileRaw, error: profileError } = await driverSupabaseAdmin
       .from('user_profiles')
       .select('id, full_name, role, is_active, last_login')
       .eq('id', authData.user.id)
       .single();
+
+    const profile = profileRaw as {
+      id: string;
+      full_name: string | null;
+      role: 'driver' | 'student' | 'admin';
+      is_active: boolean;
+      last_login?: string | null;
+      email_verified?: boolean;
+    };
 
     if (profileError || !profile) {
       logger.error('❌ Failed to fetch user profile', 'auth', { 
@@ -136,7 +145,7 @@ router.post('/driver/login', async (req, res) => {
     }
 
     // Get driver's bus assignment from buses table
-    const { data: busData, error: busError } = await driverSupabaseAdmin
+    const { data: busDataRaw, error: busError } = await driverSupabaseAdmin
       .from('buses')
       .select(`
         id,
@@ -151,6 +160,17 @@ router.post('/driver/login', async (req, res) => {
       .eq('assigned_driver_profile_id', authData.user.id)
       .eq('is_active', true)
       .single();
+
+    const busData = busDataRaw as {
+      id: string;
+      bus_number: string;
+      vehicle_no: string;
+      assigned_driver_profile_id: string | null;
+      route_id: string | null;
+      assignment_status: string;
+      assignment_notes?: string | null;
+      updated_at: string;
+    } | null;
 
     if (busError || !busData) {
       if (busError?.code === 'PGRST116') {
@@ -210,7 +230,7 @@ router.post('/driver/login', async (req, res) => {
     try {
       await driverSupabaseAdmin
         .from('user_profiles')
-        .update({ last_login: new Date().toISOString() })
+        .update({ last_login: new Date().toISOString() } as any)
         .eq('id', authData.user.id);
     } catch (updateError) {
       // Log but don't fail the request
@@ -297,7 +317,7 @@ router.get('/driver/assignment', async (req, res) => {
 
     // Get bus assignment from buses table using driver Supabase client
     const driverSupabaseAdmin = getDriverSupabaseAdmin();
-    const { data: busData, error: busError } = await driverSupabaseAdmin
+    const { data: busData2, error: busError } = await driverSupabaseAdmin
       .from('buses')
       .select('id, bus_number, vehicle_no, route_id')
       .eq('assigned_driver_profile_id', driver_id as string)
@@ -318,7 +338,7 @@ router.get('/driver/assignment', async (req, res) => {
       });
     }
 
-    if (!busData) {
+    if (!busData2) {
       logger.warn('⚠️ No bus assignment found for driver', 'auth', { driver_id });
       return res.json({
         success: true,
@@ -330,11 +350,11 @@ router.get('/driver/assignment', async (req, res) => {
 
     // Get route information
     let routeName = '';
-    if (busData.route_id) {
+    if (busData2.route_id) {
       const { data: routeData, error: routeError } = await driverSupabaseAdmin
         .from('routes')
         .select('name')
-        .eq('id', busData.route_id)
+        .eq('id', busData2.route_id)
         .single();
 
       if (!routeError && routeData) {
@@ -356,9 +376,9 @@ router.get('/driver/assignment', async (req, res) => {
 
     const assignment = {
       driver_id: driver_id as string,
-      bus_id: busData.id,
-      bus_number: busData.bus_number,
-      route_id: busData.route_id || '',
+      bus_id: busData2.id,
+      bus_number: busData2.bus_number,
+      route_id: busData2.route_id || '',
       route_name: routeName,
       driver_name: driverName,
       created_at: new Date().toISOString(),
@@ -422,11 +442,18 @@ router.post('/driver/validate', async (req, res) => {
     }
 
     // Get user profile
-    const { data: profile, error: profileError } = await driverSupabaseAdmin
+    const { data: profile2, error: profileError } = await driverSupabaseAdmin
       .from('user_profiles')
       .select('id, full_name, role, is_active')
       .eq('id', user.id)
       .single();
+
+    const profile = profile2 as {
+      id: string;
+      full_name: string | null;
+      role: 'driver' | 'student' | 'admin';
+      is_active: boolean;
+    } | null;
 
     if (profileError || !profile) {
       return res.status(404).json({
@@ -448,7 +475,7 @@ router.post('/driver/validate', async (req, res) => {
     }
 
     // Get current bus assignment from buses table
-    const { data: busData, error: busError } = await driverSupabaseAdmin
+    const { data: busData3, error: busError } = await driverSupabaseAdmin
       .from('buses')
       .select(`
         id,
@@ -463,6 +490,16 @@ router.post('/driver/validate', async (req, res) => {
       .eq('assigned_driver_profile_id', user.id)
       .eq('is_active', true)
       .single();
+
+    const busData = busData3 as {
+      id: string;
+      bus_number: string;
+      vehicle_no: string;
+      assigned_driver_profile_id: string | null;
+      route_id: string | null;
+      assignment_status: string;
+      updated_at: string;
+    } | null;
 
     if (busError || !busData) {
       return res.status(404).json({

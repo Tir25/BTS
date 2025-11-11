@@ -144,7 +144,7 @@ router.get('/ready', async (req: Request, res: Response) => {
         }
       });
     } else {
-      const reasons = [];
+      const reasons: string[] = [];
       if (!dbHealthy) reasons.push('Database not available');
       if (!redisHealthy) reasons.push('Redis not available');
       if (!websocketHealthy) reasons.push('WebSocket not available');

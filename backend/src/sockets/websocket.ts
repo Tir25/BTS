@@ -324,8 +324,8 @@ export const initializeWebSocket = (io: SocketIOServer) => {
         }
 
         const busInfo = await optimizedLocationService.getDriverBusInfo(data.driverId);
-        let etaInfo = null;
-        let nearStopInfo = null;
+        let etaInfo: any = null;
+        let nearStopInfo: any = null;
 
         if (busInfo?.route_id) {
           try {
