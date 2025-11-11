@@ -26,6 +26,10 @@ class LocationService {
   private locationListeners: Set<(location: LocationData) => void> = new Set();
   private errorListeners: Set<(error: LocationError) => void> = new Set();
   private trackingMgr: TrackingManager;
+  // PRODUCTION FIX: Throttle error logging to reduce spam
+  private lastPermissionDeniedLogged = false;
+  private lastErrorLogTime: number = 0;
+  private readonly ERROR_LOG_THROTTLE_MS = 5000; // Log errors at most once per 5 seconds
 
   constructor() {
     const deviceInfo = permissionManager.getDeviceInfo();
@@ -70,7 +74,9 @@ class LocationService {
 
     try {
       const options = permissionManager.getOptimalPositionOptions();
-      const LOCATION_REQUEST_TIMEOUT_MS = 15000;
+      // CRITICAL FIX: Increased timeout for mobile GPS - GPS can take 20-45 seconds to acquire signal
+      const deviceInfo = permissionManager.getDeviceInfo();
+      const LOCATION_REQUEST_TIMEOUT_MS = deviceInfo.hasGPSHardware ? 45000 : 15000; // 45s for GPS, 15s for desktop
       
       return new Promise((resolve) => {
         const timeoutId = setTimeout(() => {
@@ -128,11 +134,31 @@ class LocationService {
           (error) => {
             clearTimeout(timeoutId);
             const locationError = this.handleLocationError(error);
-            logger.error('Failed to get current location', 'LocationService', { 
-              error: locationError.message,
-              code: locationError.code,
-              deviceType: permissionManager.getDeviceInfo().deviceType,
-            });
+            // PRODUCTION FIX: Only log errors that are meaningful - reduce spam
+            // Don't log permission denied errors repeatedly if permission is already denied
+            if (error.code === error.PERMISSION_DENIED) {
+              // Only log permission denied once per session to reduce spam
+              if (!this.lastPermissionDeniedLogged) {
+                logger.warn('Location permission denied - user needs to enable location access', 'LocationService', { 
+                  error: locationError.message,
+                  code: locationError.code,
+                  deviceType: permissionManager.getDeviceInfo().deviceType,
+                  note: 'This error will not be logged again until permission changes'
+                });
+                this.lastPermissionDeniedLogged = true;
+              }
+            } else {
+              // Log other errors normally but throttle repeated errors
+              const now = Date.now();
+              if (!this.lastErrorLogTime || (now - this.lastErrorLogTime) > 5000) {
+                logger.error('Failed to get current location', 'LocationService', { 
+                  error: locationError.message,
+                  code: locationError.code,
+                  deviceType: permissionManager.getDeviceInfo().deviceType,
+                });
+                this.lastErrorLogTime = now;
+              }
+            }
             resolve(null);
           },
           options
@@ -181,6 +207,11 @@ class LocationService {
         (location) => {
           this.lastLocation = location;
           healthMonitor.updateLastSuccessfulUpdate();
+          // Reset error logging flags on successful location update
+          // If we get a location update, permission is likely granted
+          if (this.lastPermissionDeniedLogged) {
+            this.lastPermissionDeniedLogged = false;
+          }
           this.locationListeners.forEach(listener => {
             try {
               listener(location);
@@ -191,13 +222,27 @@ class LocationService {
         },
         (error) => {
           const locationError = this.handleLocationError(error);
-          this.errorListeners.forEach(listener => {
-            try {
-              listener(locationError);
-            } catch (listenerError) {
-              logger.error('Error in error listener', 'LocationService', { error: listenerError });
-            }
-          });
+          // PRODUCTION FIX: Throttle error notifications to reduce spam
+          const now = Date.now();
+          const shouldNotifyError = 
+            (error.code === error.PERMISSION_DENIED && !this.lastPermissionDeniedLogged) ||
+            (error.code !== error.PERMISSION_DENIED && (!this.lastErrorLogTime || (now - this.lastErrorLogTime) > this.ERROR_LOG_THROTTLE_MS));
+          
+          if (error.code === error.PERMISSION_DENIED) {
+            this.lastPermissionDeniedLogged = true;
+          } else {
+            this.lastErrorLogTime = now;
+          }
+          
+          if (shouldNotifyError) {
+            this.errorListeners.forEach(listener => {
+              try {
+                listener(locationError);
+              } catch (listenerError) {
+                logger.error('Error in error listener', 'LocationService', { error: listenerError });
+              }
+            });
+          }
         }
       );
       
@@ -239,13 +284,27 @@ class LocationService {
           },
           (error) => {
             const locationError = this.handleLocationError(error);
-            this.errorListeners.forEach(listener => {
-              try {
-                listener(locationError);
-              } catch (listenerError) {
-                logger.error('Error in error listener', 'LocationService', { error: listenerError });
-              }
-            });
+            // PRODUCTION FIX: Throttle error notifications to reduce spam
+            const now = Date.now();
+            const shouldNotifyError = 
+              (error.code === error.PERMISSION_DENIED && !this.lastPermissionDeniedLogged) ||
+              (error.code !== error.PERMISSION_DENIED && (!this.lastErrorLogTime || (now - this.lastErrorLogTime) > this.ERROR_LOG_THROTTLE_MS));
+            
+            if (error.code === error.PERMISSION_DENIED) {
+              this.lastPermissionDeniedLogged = true;
+            } else {
+              this.lastErrorLogTime = now;
+            }
+            
+            if (shouldNotifyError) {
+              this.errorListeners.forEach(listener => {
+                try {
+                  listener(locationError);
+                } catch (listenerError) {
+                  logger.error('Error in error listener', 'LocationService', { error: listenerError });
+                }
+              });
+            }
           }
         );
         

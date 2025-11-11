@@ -12,7 +12,10 @@ import {
 // PRODUCTION FIX: Retry configuration constants
 const MAX_RETRIES = 5; // Increased to handle desktop GPS issues better
 const RETRY_DELAY = 2000; // 2 seconds
-const ERROR_DISPLAY_THRESHOLD = 2; // Only show error after 2 consecutive failures
+// CRITICAL FIX: Increased threshold for mobile GPS - GPS needs time to acquire signal
+// Don't show errors immediately on mobile devices - wait for GPS to acquire signal
+const ERROR_DISPLAY_THRESHOLD = 3; // Only show error after 3 consecutive failures (was 2)
+const MOBILE_GPS_GRACE_PERIOD_MS = 30000; // 30 seconds grace period for mobile GPS to acquire signal
 
 export interface TrackingState {
   isTracking: boolean;
@@ -67,6 +70,9 @@ export function useDriverTracking(
   const errorListenerRef = useRef<((error: LocationError) => void) | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const retryCountRef = useRef<number>(0);
+  // CRITICAL FIX: Track when tracking started to implement grace period for mobile GPS
+  const trackingStartTimeRef = useRef<number>(0);
+  const isMobileDeviceRef = useRef<boolean>(false);
 
   // Update connection status
   useEffect(() => {
@@ -125,6 +131,16 @@ export function useDriverTracking(
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
         retryTimeoutRef.current = null;
+      }
+      
+      // CRITICAL FIX: Clear tracking start time on successful location
+      // This ensures grace period logic works correctly
+      if (trackingStartTimeRef.current > 0) {
+        const timeToFirstLocation = Date.now() - trackingStartTimeRef.current;
+        logger.info('GPS acquired signal successfully', 'useDriverTracking', {
+          timeToFirstLocation: Math.round(timeToFirstLocation / 1000) + 's',
+          isMobile: isMobileDeviceRef.current
+        });
       }
 
       // Send location to WebSocket if connected and authenticated
@@ -194,6 +210,11 @@ export function useDriverTracking(
         return;
       }
       
+      // CRITICAL FIX: For mobile GPS devices, implement grace period before showing errors
+      // GPS can take 20-45 seconds to acquire signal, especially on first use or indoors
+      const timeSinceTrackingStart = Date.now() - trackingStartTimeRef.current;
+      const isInGracePeriod = isMobileDeviceRef.current && timeSinceTrackingStart < MOBILE_GPS_GRACE_PERIOD_MS;
+      
       if (isRecoverable && retryCountRef.current < MAX_RETRIES) {
         // Recoverable error - retry with exponential backoff
         retryCountRef.current += 1;
@@ -203,7 +224,9 @@ export function useDriverTracking(
           error: error.message,
           code: error.code,
           retryCount: retryCountRef.current,
-          retryDelay
+          retryDelay,
+          isInGracePeriod,
+          timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's'
         });
         
         // Clear existing retry timeout
@@ -223,10 +246,30 @@ export function useDriverTracking(
           retryTimeoutRef.current = null;
         }, retryDelay);
         
+        // CRITICAL FIX: Don't show errors during grace period for mobile GPS
+        // GPS needs time to acquire signal - showing errors too early is confusing
+        if (isInGracePeriod) {
+          // Still in grace period - don't show error, just log it
+          logger.debug('GPS error during grace period (GPS acquiring signal)', 'useDriverTracking', {
+            code: error.code,
+            message: error.message,
+            timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's',
+            gracePeriodRemaining: Math.round((MOBILE_GPS_GRACE_PERIOD_MS - timeSinceTrackingStart) / 1000) + 's'
+          });
+          return; // Don't set error during grace period
+        }
+        
         // PRODUCTION FIX: Only show error if we have multiple consecutive failures
         // Don't show error for first timeout/unavailable (common on desktop)
         if (retryCountRef.current >= ERROR_DISPLAY_THRESHOLD) {
-          setLocationError(`GPS issue (retrying ${retryCountRef.current}/${MAX_RETRIES})...`);
+          // Provide more helpful error message for mobile GPS
+          if (isMobileDeviceRef.current && error.code === GeolocationPositionError.TIMEOUT) {
+            setLocationError(`GPS is acquiring signal... (attempt ${retryCountRef.current}/${MAX_RETRIES})\n\nPlease:\n• Go outdoors or near a window\n• Wait 30-45 seconds for GPS to acquire signal\n• Make sure GPS is enabled in device settings`);
+          } else if (isMobileDeviceRef.current && error.code === GeolocationPositionError.POSITION_UNAVAILABLE) {
+            setLocationError(`GPS signal unavailable (attempt ${retryCountRef.current}/${MAX_RETRIES})\n\nPlease:\n• Go outdoors for better GPS signal\n• Wait 30-45 seconds for GPS to acquire signal\n• Check if GPS is enabled in device settings`);
+          } else {
+            setLocationError(`GPS issue (retrying ${retryCountRef.current}/${MAX_RETRIES})...`);
+          }
         } else {
           // First error - don't show error state, just log it
           logger.debug('GPS timeout/unavailable (will retry silently)', 'useDriverTracking', {
@@ -236,7 +279,14 @@ export function useDriverTracking(
         }
       } else {
         // Max retries exceeded or unknown error - set as error
-        setLocationError(error.message);
+        // Provide more helpful error message for mobile GPS
+        if (isMobileDeviceRef.current && error.code === GeolocationPositionError.TIMEOUT) {
+          setLocationError(`GPS timeout after ${MAX_RETRIES} attempts.\n\nPlease:\n• Go outdoors or near a window\n• Wait 30-45 seconds for GPS to acquire signal\n• Make sure GPS is enabled in device settings\n• Try refreshing the page`);
+        } else if (isMobileDeviceRef.current && error.code === GeolocationPositionError.POSITION_UNAVAILABLE) {
+          setLocationError(`GPS signal unavailable after ${MAX_RETRIES} attempts.\n\nPlease:\n• Go outdoors for better GPS signal\n• Wait 30-45 seconds for GPS to acquire signal\n• Check if GPS is enabled in device settings\n• Try refreshing the page`);
+        } else {
+          setLocationError(error.message);
+        }
         logger.error('Location error - max retries exceeded or unknown error', 'useDriverTracking', { 
           error: error.message,
           code: error.code,
@@ -332,13 +382,45 @@ export function useDriverTracking(
       logger.info('📍 Requesting location permission...', 'useDriverTracking');
       const hasPermission = await locationService.requestPermission();
       if (!hasPermission) {
-        const errorMsg = 'Location permission denied. Please enable location access in your browser settings.';
+        // PRODUCTION FIX: Provide more helpful error message for mobile devices with specific instructions
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        
+        let errorMsg = 'Location permission denied. ';
+        
+        if (isIOS) {
+          errorMsg += 'Please enable location access:\n1. Open iPhone Settings\n2. Go to Safari (or your browser)\n3. Enable Location Services\n4. Allow location access for this website\n5. Return here and try again';
+        } else if (isAndroid) {
+          errorMsg += 'Please enable location access:\n1. Tap the menu (⋮) in your browser\n2. Go to Settings > Site Settings\n3. Enable Location permissions\n4. Allow location access for this website\n5. Return here and try again';
+        } else if (isMobile) {
+          errorMsg += 'Please enable location access in your device/browser settings and allow this site to access your location.';
+        } else {
+          errorMsg += 'Please enable location access in your browser settings and allow this site to access your location.';
+        }
+        
         setLocationError(errorMsg);
-        logger.error('❌ Location permission denied', 'useDriverTracking');
+        logger.warn('⚠️ Location permission denied - user needs to enable location access', 'useDriverTracking', {
+          isMobile,
+          isIOS,
+          isAndroid,
+          userAgent: navigator.userAgent
+        });
         return;
       }
 
       logger.info('✅ Location permission granted, starting GPS tracking...', 'useDriverTracking');
+
+      // CRITICAL FIX: Track when tracking starts and detect mobile device for grace period
+      trackingStartTimeRef.current = Date.now();
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      isMobileDeviceRef.current = isMobile;
+      
+      logger.info('Starting GPS tracking with grace period', 'useDriverTracking', {
+        isMobile,
+        gracePeriodMs: MOBILE_GPS_GRACE_PERIOD_MS,
+        note: isMobile ? 'GPS may take 20-45 seconds to acquire signal - errors will be suppressed during grace period' : 'Desktop device - no grace period needed'
+      });
 
       // PRODUCTION FIX: Start tracking even if WebSocket isn't connected
       // The location service will start, and updates will be sent when WebSocket connects
@@ -380,6 +462,14 @@ export function useDriverTracking(
     setIsTracking(false);
     setLocationError(null);
     
+    // CRITICAL FIX: Reset tracking start time and retry count when stopping
+    trackingStartTimeRef.current = 0;
+    retryCountRef.current = 0;
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    
     logger.info('Location tracking stopped', 'useDriverTracking');
   }, []);
 
@@ -388,21 +478,60 @@ export function useDriverTracking(
     setLocationError(null);
   }, []);
 
-  // Request permission
-  const requestPermission = useCallback(async (): Promise<boolean> => {
+  // Request permission manually (for "Request Permission" button)
+  const requestPermission = useCallback(async () => {
     try {
+      logger.info('📍 Manually requesting location permission...', 'useDriverTracking');
+      
+      // PRODUCTION FIX: Reset permission cache to allow retry even if previously denied
+      // This allows users to retry after enabling permission in browser settings
+      const { permissionManager } = await import('../services/location/permissionManager');
+      permissionManager.resetPermissionCache();
+      
       const hasPermission = await locationService.requestPermission();
-      if (!hasPermission) {
-        setLocationError('Location permission denied. Please enable location access in your browser settings.');
+      if (hasPermission) {
+        setLocationError(null);
+        logger.info('✅ Location permission granted after manual request', 'useDriverTracking');
+        // If permission is now granted and tracking is not active, suggest starting tracking
+        if (!isTracking) {
+          logger.info('Permission granted - user can now start tracking', 'useDriverTracking');
+        }
+        return true;
+      } else {
+        // Permission still denied - error message will be set by requestPermission
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        
+        let errorMsg = 'Location permission denied. ';
+        
+        if (isIOS) {
+          errorMsg += 'Please enable location access:\n1. Open iPhone Settings\n2. Go to Safari (or your browser)\n3. Enable Location Services\n4. Allow location access for this website\n5. Return here and tap "Request Permission" again';
+        } else if (isAndroid) {
+          errorMsg += 'Please enable location access:\n1. Tap the menu (⋮) in your browser\n2. Go to Settings > Site Settings\n3. Enable Location permissions\n4. Allow location access for this website\n5. Return here and tap "Request Permission" again';
+        } else if (isMobile) {
+          errorMsg += 'Please enable location access in your device/browser settings and allow this site to access your location. Then tap "Request Permission" again.';
+        } else {
+          errorMsg += 'Please enable location access in your browser settings and allow this site to access your location. Then click "Request Permission" again.';
+        }
+        
+        setLocationError(errorMsg);
+        logger.warn('⚠️ Location permission still denied after manual request', 'useDriverTracking', {
+          isMobile,
+          isIOS,
+          isAndroid
+        });
+        return false;
       }
-      return hasPermission;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setLocationError(`Permission request failed: ${errorMessage}`);
-      logger.error('Error requesting location permission', 'useDriverTracking', { error });
+      setLocationError(`Failed to request permission: ${errorMessage}`);
+      logger.error('❌ Error requesting permission', 'useDriverTracking', { 
+        error: errorMessage 
+      });
       return false;
     }
-  }, []);
+  }, [isTracking]);
 
   // Cleanup on unmount
   useEffect(() => {

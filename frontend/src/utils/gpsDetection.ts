@@ -197,11 +197,13 @@ export function getOptimalPositionOptions(deviceInfo?: GPSDeviceInfo): PositionO
   const device = deviceInfo || detectGPSDeviceInfo();
   
   // Mobile devices with GPS hardware should use high accuracy
+  // CRITICAL FIX: Increased timeout for mobile GPS - GPS can take 20-45 seconds to acquire signal
+  // especially if device just started, is indoors, or GPS hasn't been used recently
   if (device.hasGPSHardware) {
     return {
       enableHighAccuracy: true,
-      timeout: 15000, // 15 seconds for mobile GPS to acquire signal
-      maximumAge: 5000, // Accept up to 5 seconds old data (GPS updates frequently)
+      timeout: 45000, // 45 seconds for mobile GPS to acquire signal (was 15s - too short)
+      maximumAge: 10000, // Accept up to 10 seconds old data (increased from 5s for better tolerance)
     };
   }
   

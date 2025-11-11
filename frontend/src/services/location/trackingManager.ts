@@ -34,10 +34,11 @@ export class TrackingManager {
   private trackingStartTime: number = 0;
   
   private readonly MAX_CONSECUTIVE_FAILURES = 3;
-  private readonly UPDATE_TIMEOUT_MS = 15000; // 15 seconds
+  // CRITICAL FIX: Increased timeout for mobile GPS - GPS can take 20-45 seconds to acquire signal
+  private readonly UPDATE_TIMEOUT_MS = 60000; // 60 seconds - allow more time for GPS to acquire signal
   private readonly POLL_FALLBACK_INTERVAL_MS = 5000; // 5 seconds
   private readonly POLL_FALLBACK_ENABLED = true;
-  private readonly LOCATION_REQUEST_TIMEOUT_MS = 15000; // 15 seconds
+  private readonly LOCATION_REQUEST_TIMEOUT_MS = 45000; // 45 seconds for mobile GPS (was 15s - too short)
   private readonly PERSISTENT_HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
   private readonly WATCHPOSITION_RESTART_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 

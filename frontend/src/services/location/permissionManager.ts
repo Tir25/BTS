@@ -24,6 +24,7 @@ export class PermissionManager {
 
   /**
    * Check current permission status (with caching to avoid repeated API calls)
+   * PRODUCTION FIX: Handle iOS Safari and mobile browsers that don't support permissions API
    */
   async checkPermission(): Promise<PermissionState> {
     if (!this.isSupported()) {
@@ -34,6 +35,19 @@ export class PermissionManager {
     const now = Date.now();
     if (this.cachedPermissionState && (now - this.permissionCheckTime) < this.PERMISSION_CACHE_MS) {
       return this.cachedPermissionState;
+    }
+
+    // PRODUCTION FIX: Check if permissions API is supported (not available on iOS Safari)
+    if (!navigator.permissions || !navigator.permissions.query) {
+      logger.debug('Permissions API not available (likely iOS Safari)', 'LocationService', {
+        deviceType: this.deviceInfo.deviceType,
+        isMobile: this.deviceInfo.isMobile,
+        userAgent: navigator.userAgent
+      });
+      // On mobile browsers without permissions API, we can't check permission state
+      // Return 'prompt' to allow attempting permission request
+      // The actual permission state will be determined when we try to get location
+      return this.cachedPermissionState || 'prompt';
     }
 
     try {
@@ -60,6 +74,7 @@ export class PermissionManager {
 
   /**
    * Request location permission
+   * PRODUCTION FIX: Improved mobile permission handling with better error detection
    */
   async requestPermission(): Promise<boolean> {
     if (!this.isSupported()) {
@@ -80,14 +95,43 @@ export class PermissionManager {
       return true;
     }
 
+    // PRODUCTION FIX: If permission was previously denied, return false immediately
+    // On mobile browsers, once denied, user must enable it manually in browser settings
+    if (currentPermission === 'denied') {
+      logger.warn('Location permission was previously denied', 'LocationService', {
+        deviceType: this.deviceInfo.deviceType,
+        isMobile: this.deviceInfo.isMobile,
+        note: 'User must enable location permission in browser settings'
+      });
+      return false;
+    }
+
     // Log device info on first permission request
     logGPSDeviceInfo();
 
     try {
+      // PRODUCTION FIX: Use more lenient timeout for mobile devices (GPS needs time to acquire signal)
       const options = getOptimalPositionOptions(this.deviceInfo);
+      // CRITICAL FIX: Increased timeout for mobile GPS - GPS can take 20-45 seconds to acquire signal
+      // The getOptimalPositionOptions already sets 45s for GPS devices, but we ensure it here too
+      if (this.deviceInfo.isMobile && this.deviceInfo.hasGPSHardware) {
+        options.timeout = 45000; // 45 seconds for mobile GPS (was 20s - too short)
+      }
+      
       return new Promise((resolve) => {
+        // PRODUCTION FIX: Add timeout to prevent hanging on mobile devices
+        const timeoutId = setTimeout(() => {
+          logger.warn('Location permission request timed out', 'LocationService', {
+            deviceType: this.deviceInfo.deviceType,
+            timeout: options.timeout,
+            note: 'This may indicate permission was denied or GPS is taking too long'
+          });
+          resolve(false);
+        }, (options.timeout || 15000) + 5000); // Add 5 seconds buffer
+
         navigator.geolocation.getCurrentPosition(
           (position) => {
+            clearTimeout(timeoutId);
             // Update cache to reflect that permission is granted
             this.cachedPermissionState = 'granted';
             this.permissionCheckTime = Date.now();
@@ -100,7 +144,8 @@ export class PermissionManager {
             resolve(true);
           },
           (error) => {
-            // Only log if it's actually a permission error
+            clearTimeout(timeoutId);
+            // PRODUCTION FIX: Handle all error types properly
             if (error.code === error.PERMISSION_DENIED) {
               // Update cache to reflect that permission is denied
               this.cachedPermissionState = 'denied';
@@ -110,7 +155,28 @@ export class PermissionManager {
                 error: error.message,
                 code: error.code,
                 deviceType: this.deviceInfo.deviceType,
+                isMobile: this.deviceInfo.isMobile,
+                note: this.deviceInfo.isMobile 
+                  ? 'User must enable location permission in device/browser settings'
+                  : 'User denied location permission'
               });
+            } else if (error.code === error.POSITION_UNAVAILABLE) {
+              logger.warn('Location unavailable', 'LocationService', {
+                error: error.message,
+                code: error.code,
+                deviceType: this.deviceInfo.deviceType,
+                note: 'GPS signal may be weak or unavailable'
+              });
+              // Don't cache this as denied - it might work later
+            } else if (error.code === error.TIMEOUT) {
+              logger.warn('Location request timed out', 'LocationService', {
+                error: error.message,
+                code: error.code,
+                deviceType: this.deviceInfo.deviceType,
+                timeout: options.timeout,
+                note: 'GPS may be taking longer than expected to acquire signal'
+              });
+              // Don't cache this as denied - it might work with more time
             }
             resolve(false);
           },
@@ -135,6 +201,27 @@ export class PermissionManager {
    */
   getOptimalPositionOptions() {
     return getOptimalPositionOptions(this.deviceInfo);
+  }
+
+  /**
+   * Reset permission cache and attempt to request permission again
+   * PRODUCTION FIX: Allow users to manually retry permission request
+   * Useful when permission was denied but user has enabled it in browser settings
+   */
+  resetPermissionCache(): void {
+    this.cachedPermissionState = null;
+    this.permissionCheckTime = 0;
+    logger.info('Permission cache reset', 'LocationService', {
+      deviceType: this.deviceInfo.deviceType,
+      note: 'User can now retry permission request'
+    });
+  }
+
+  /**
+   * Check if permission is currently denied (cached)
+   */
+  isPermissionDenied(): boolean {
+    return this.cachedPermissionState === 'denied';
   }
 }
 
