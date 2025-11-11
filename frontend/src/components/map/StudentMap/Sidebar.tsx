@@ -1,5 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { getRouteColorByValue } from '../../../utils/routeColors';
 
 interface RouteOption {
   value: string;
@@ -36,6 +37,7 @@ interface StudentMapSidebarProps {
   onCenterOnBus: (busId: string) => void;
   isLoadingRoutes?: boolean;
   onCenterOnBusForRoute?: () => void;
+  onSignOut?: () => void;
 }
 
 const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
@@ -54,6 +56,7 @@ const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
   onCenterOnBus,
   isLoadingRoutes = false,
   onCenterOnBusForRoute,
+  onSignOut,
 }) => {
   const [isRouteFilterOpen, setIsRouteFilterOpen] = React.useState(true);
 
@@ -66,8 +69,8 @@ const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       className="flex-shrink-0 h-full relative z-20"
     >
-      <div className="h-full bg-white border-r border-slate-200 shadow-sm">
-        <div className="p-4">
+      <div className="h-full bg-white border-r border-slate-200 shadow-sm flex flex-col">
+        <div className="p-4 flex-1 overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             {!isNavbarCollapsed && (
               <h2 className="text-xl font-bold text-slate-900">🚌 Live Bus Tracking</h2>
@@ -124,23 +127,33 @@ const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
 
                 {isRouteFilterOpen && (
                   <div className="mt-2 space-y-1">
-                    {!selectedShift && (
-                      <div className="text-slate-600 text-sm p-2">Select a shift to view active routes.</div>
-                    )}
-                    {selectedShift && (isLoadingRoutes as any) && (
+                    {/* Loading state */}
+                    {isLoadingRoutes && (
                       <div className="text-slate-600 text-sm p-2 flex items-center space-x-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                         <span>Loading routes...</span>
                       </div>
                     )}
-                    {selectedShift && !(isLoadingRoutes as any) && (
+                    
+                    {/* Routes list - show when not loading */}
+                    {!isLoadingRoutes && (
                       <>
                         {routeOptions.length === 0 ? (
                           <div className="text-slate-600 text-sm p-2 bg-yellow-50 border border-yellow-200 rounded">
-                            No routes available for {selectedShift} shift.
+                            {selectedShift
+                              ? `No routes available for ${selectedShift} shift.`
+                              : 'No routes available.'}
                           </div>
                         ) : (
                           <>
+                            {/* Info text when no shift is selected */}
+                            {!selectedShift && (
+                              <div className="text-slate-600 text-xs p-2 bg-blue-50 border border-blue-200 rounded mb-2">
+                                Showing all routes. Select a shift to filter.
+                              </div>
+                            )}
+                            
+                            {/* "All Routes" button */}
                             <button
                               onClick={() => setSelectedRoute('all')}
                               className={`w-full text-left p-2 rounded text-sm transition-colors flex items-center space-x-2 ${
@@ -150,16 +163,13 @@ const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
                               }`}
                             >
                               <span className="w-3 h-3 rounded-full bg-slate-400"></span>
-                              <span>All Active Routes ({routeOptions.length})</span>
+                              <span>All Routes ({routeOptions.length})</span>
                             </button>
-                            {routeOptions.map((route, index) => {
-                              // Generate consistent color for route indicator
-                              const routeColors = [
-                                '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
-                                '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1'
-                              ];
-                              const hash = route.value.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                              const routeColor = routeColors[hash % routeColors.length];
+                            
+                            {/* Individual route buttons */}
+                            {routeOptions.map((route) => {
+                              // Use centralized route color utility
+                              const routeColor = getRouteColorByValue(route.value);
                               
                               return (
                                 <button
@@ -259,7 +269,38 @@ const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
                   </AnimatePresence>
                 </div>
               </div>
+
+              {/* Logout Button */}
+              {onSignOut && (
+                <div className="mt-auto pt-4 border-t border-slate-200">
+                  <button
+                    onClick={onSignOut}
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors shadow-sm hover:shadow-md"
+                    title="Sign out"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
             </>
+          )}
+
+          {/* Collapsed Logout Button */}
+          {isNavbarCollapsed && onSignOut && (
+            <div className="absolute bottom-4 left-0 right-0 px-2">
+              <button
+                onClick={onSignOut}
+                className="w-full flex items-center justify-center p-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm hover:shadow-md"
+                title="Sign out"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
       </div>

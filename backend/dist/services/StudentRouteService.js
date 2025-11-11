@@ -104,17 +104,28 @@ class StudentRouteService {
             logger_1.logger.warn('No shift ID found', 'StudentRouteService', { opts });
             return [];
         }
-        const { data: shiftRoutes, error: srErr } = await supabase_1.supabaseAdmin
-            .from('routes')
-            .select('id, name')
-            .eq('is_active', true)
-            .eq('assigned_shift_id', shiftId)
-            .order('name');
-        if (srErr) {
-            logger_1.logger.error('Error fetching routes by shift', 'StudentRouteService', { shiftId, error: srErr });
-            throw srErr;
+        let shiftRoutes = [];
+        try {
+            const { data: routesWithShift, error: routesErr } = await supabase_1.supabaseAdmin
+                .from('routes')
+                .select('*')
+                .eq('is_active', true)
+                .eq('assigned_shift_id', shiftId)
+                .order('name');
+            if (!routesErr && routesWithShift) {
+                shiftRoutes = routesWithShift;
+            }
+            else if (routesErr && routesErr.code !== '42703') {
+                logger_1.logger.error('Error fetching routes by shift', 'StudentRouteService', { shiftId, error: routesErr });
+                throw routesErr;
+            }
         }
-        logger_1.logger.info('Routes found by shift assignment', 'StudentRouteService', { shiftId, count: shiftRoutes?.length || 0, routes: shiftRoutes });
+        catch (err) {
+            if (err.code !== '42703') {
+                logger_1.logger.warn('Error checking routes.assigned_shift_id (column may not exist)', 'StudentRouteService', { error: err });
+            }
+        }
+        logger_1.logger.info('Routes found by shift assignment', 'StudentRouteService', { shiftId, count: shiftRoutes?.length || 0 });
         const { data: buses, error: bErr } = await supabase_1.supabaseAdmin
             .from('buses')
             .select('route_id')
@@ -130,18 +141,60 @@ class StudentRouteService {
         if (routeIdsFromBuses.size > 0) {
             const { data: busRoutes, error: brErr } = await supabase_1.supabaseAdmin
                 .from('routes')
-                .select('id, name')
+                .select('*')
                 .in('id', Array.from(routeIdsFromBuses))
                 .eq('is_active', true);
             if (brErr) {
                 logger_1.logger.error('Error fetching routes from buses', 'StudentRouteService', { routeIds: Array.from(routeIdsFromBuses), error: brErr });
                 throw brErr;
             }
-            logger_1.logger.info('Routes found from bus assignments', 'StudentRouteService', { count: busRoutes?.length || 0, routes: busRoutes });
+            logger_1.logger.info('Routes found from bus assignments', 'StudentRouteService', { count: busRoutes?.length || 0 });
             (busRoutes || []).forEach(r => merged.set(r.id, r));
         }
-        const finalRoutes = Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name));
-        logger_1.logger.info('Final routes for shift', 'StudentRouteService', { shiftId, shiftName: opts.shiftName, count: finalRoutes.length, routes: finalRoutes });
+        const finalRoutes = Array.from(merged.values()).map((route) => {
+            let coordinates = [];
+            const geometry = route.stops || route.geom;
+            if (geometry) {
+                if (geometry.coordinates && Array.isArray(geometry.coordinates)) {
+                    coordinates = geometry.coordinates;
+                }
+                else if (geometry.type === 'LineString' && Array.isArray(geometry.coordinates)) {
+                    coordinates = geometry.coordinates;
+                }
+                else if (typeof geometry === 'string') {
+                    try {
+                        const parsed = JSON.parse(geometry);
+                        if (parsed.coordinates && Array.isArray(parsed.coordinates)) {
+                            coordinates = parsed.coordinates;
+                        }
+                    }
+                    catch (e) {
+                        logger_1.logger.warn('Failed to parse route geometry as JSON', 'StudentRouteService', { routeId: route.id });
+                    }
+                }
+            }
+            return {
+                id: route.id,
+                name: route.name,
+                description: route.description,
+                distance_km: route.distance_km,
+                estimated_duration_minutes: route.estimated_duration_minutes,
+                city: route.city,
+                is_active: route.is_active,
+                created_at: route.created_at,
+                updated_at: route.updated_at,
+                coordinates: coordinates,
+                geom: route.geom,
+                stops: route.stops,
+                ...route
+            };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+        logger_1.logger.info('Final routes for shift', 'StudentRouteService', {
+            shiftId,
+            shiftName: opts.shiftName,
+            count: finalRoutes.length,
+            routesWithGeometry: finalRoutes.filter(r => r.coordinates && r.coordinates.length > 0).length
+        });
         return finalRoutes;
     }
 }

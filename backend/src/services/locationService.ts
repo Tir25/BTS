@@ -155,8 +155,8 @@ export const getDriverBusInfo = async (
       .eq('id', driverId)
       .maybeSingle();
 
-    if (profileData?.full_name) {
-      driverName = profileData.full_name;
+    if ((profileData as any)?.full_name) {
+      driverName = (profileData as any).full_name;
     } else {
       // Fallback to users table
       const { data: userData } = await supabaseAdmin
@@ -165,9 +165,9 @@ export const getDriverBusInfo = async (
         .eq('id', driverId)
         .maybeSingle();
 
-      if (userData) {
+      if (userData as any) {
         driverName =
-          `${userData.first_name || ''} ${userData.last_name || ''}`.trim() ||
+          `${(userData as any).first_name || ''} ${(userData as any).last_name || ''}`.trim() ||
           'Unknown Driver';
       }
     }
@@ -176,25 +176,25 @@ export const getDriverBusInfo = async (
 
     // Get route information only if route_id exists
     let routeName = '';
-    if (busData.route_id) {
+    if ((busData as any).route_id) {
       const { data: routeData, error: routeError } = await supabaseAdmin
         .from('routes')
         .select('name')
-        .eq('id', busData.route_id)
+        .eq('id', (busData as any).route_id)
         .maybeSingle();
 
       console.log('🛣️ Route data found:', routeData);
       console.log('❌ Route error:', routeError);
 
       if (!routeError && routeData) {
-        routeName = routeData.name || '';
+        routeName = (routeData as any).name || '';
       }
     }
 
     const busInfo = {
-      bus_id: busData.id,
-      bus_number: busData.bus_number || busData.vehicle_no || '',
-      route_id: busData.route_id || '',
+      bus_id: (busData as any).id,
+      bus_number: (busData as any).bus_number || (busData as any).vehicle_no || '',
+      route_id: (busData as any).route_id || '',
       route_name: routeName,
       driver_id: driverId,
       driver_name: driverName,
@@ -324,7 +324,7 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
         routes!inner(
           name
         ),
-        profiles!inner(
+        user_profiles!inner(
           full_name
         )
       `
@@ -339,10 +339,10 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
     }
 
     // Handle the case where joined tables return arrays
-    const routeData = Array.isArray(data.routes) ? data.routes[0] : data.routes;
-    const profileData = Array.isArray(data.profiles)
-      ? data.profiles[0]
-      : data.profiles;
+    const routeData = Array.isArray((data as any).routes) ? (data as any).routes[0] : (data as any).routes;
+    const profileData = Array.isArray((data as any).profiles)
+      ? (data as any).profiles[0]
+      : (data as any).profiles;
 
     return {
       bus_id: data.id,

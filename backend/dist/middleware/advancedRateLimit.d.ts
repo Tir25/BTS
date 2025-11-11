@@ -1,4 +1,4 @@
-import { Request } from 'express';
+import { Request, Response, NextFunction } from 'express';
 export declare const createAdvancedRateLimit: (options: {
     windowMs: number;
     max: number;
@@ -9,31 +9,31 @@ export declare const createAdvancedRateLimit: (options: {
     message?: any;
     standardHeaders?: boolean;
     legacyHeaders?: boolean;
-}) => import("express-rate-limit").RateLimitRequestHandler;
+}) => (req: Request, res: Response, next: NextFunction) => void;
 export declare const apiRateLimits: {
-    general: import("express-rate-limit").RateLimitRequestHandler;
-    auth: import("express-rate-limit").RateLimitRequestHandler;
-    assignments: import("express-rate-limit").RateLimitRequestHandler;
-    locations: import("express-rate-limit").RateLimitRequestHandler;
-    admin: import("express-rate-limit").RateLimitRequestHandler;
-    upload: import("express-rate-limit").RateLimitRequestHandler;
-    websocket: import("express-rate-limit").RateLimitRequestHandler;
-    analytics: import("express-rate-limit").RateLimitRequestHandler;
-    development: import("express-rate-limit").RateLimitRequestHandler;
+    general: (req: Request, res: Response, next: NextFunction) => void;
+    auth: (req: Request, res: Response, next: NextFunction) => void;
+    assignments: (req: Request, res: Response, next: NextFunction) => void;
+    locations: (req: Request, res: Response, next: NextFunction) => void;
+    admin: (req: Request, res: Response, next: NextFunction) => void;
+    upload: (req: Request, res: Response, next: NextFunction) => void;
+    websocket: (req: Request, res: Response, next: NextFunction) => void;
+    analytics: (req: Request, res: Response, next: NextFunction) => void;
+    development: (req: Request, res: Response, next: NextFunction) => void;
 };
-export declare const createDynamicRateLimit: (baseLimit: number) => import("express-rate-limit").RateLimitRequestHandler;
+export declare const createDynamicRateLimit: (baseLimit: number) => (req: Request, res: Response, next: NextFunction) => void;
 export declare const userTierRateLimits: {
-    free: import("express-rate-limit").RateLimitRequestHandler;
-    premium: import("express-rate-limit").RateLimitRequestHandler;
-    enterprise: import("express-rate-limit").RateLimitRequestHandler;
+    free: (req: Request, res: Response, next: NextFunction) => void;
+    premium: (req: Request, res: Response, next: NextFunction) => void;
+    enterprise: (req: Request, res: Response, next: NextFunction) => void;
 };
 export declare const operationRateLimits: {
-    busAssignment: import("express-rate-limit").RateLimitRequestHandler;
-    routeCreation: import("express-rate-limit").RateLimitRequestHandler;
-    driverRegistration: import("express-rate-limit").RateLimitRequestHandler;
-    locationUpdate: import("express-rate-limit").RateLimitRequestHandler;
+    busAssignment: (req: Request, res: Response, next: NextFunction) => void;
+    routeCreation: (req: Request, res: Response, next: NextFunction) => void;
+    driverRegistration: (req: Request, res: Response, next: NextFunction) => void;
+    locationUpdate: (req: Request, res: Response, next: NextFunction) => void;
 };
-export declare const defaultRateLimit: import("express-rate-limit").RateLimitRequestHandler;
+export declare const defaultRateLimit: (req: Request, res: Response, next: NextFunction) => void;
 export declare const getRateLimitStats: () => {
     limits: {
         general: {
@@ -75,5 +75,6 @@ export declare const getRateLimitStats: () => {
             max: number;
         };
     };
+    note: string;
 };
 //# sourceMappingURL=advancedRateLimit.d.ts.map

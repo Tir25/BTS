@@ -660,9 +660,10 @@ export class UnifiedDatabaseService {
       let updatedRoleProfile = null;
       
       if (existingUser) {
-        if (existingUser.is_active) {
+        const ex: any = existingUser;
+        if (ex.is_active) {
           // If user exists and is active, check if they're a student (we can convert to driver)
-          if (existingUser.role === 'student') {
+          if (ex.role === 'student') {
             logger.info(`Converting student user to driver: ${driverData.email}`, 'unified-db');
             
             // Update the existing student profile to driver
@@ -677,8 +678,8 @@ export class UnifiedDatabaseService {
                 is_driver: true,
                 profile_photo_url: driverData.profile_photo_url,
                 updated_at: new Date().toISOString()
-              })
-              .eq('id', existingUser.id)
+              } as any)
+              .eq('id', ex.id)
               .select('*')
               .single();
 
@@ -687,10 +688,10 @@ export class UnifiedDatabaseService {
               throw new Error(`Failed to convert user from student to driver: ${updateError.message}`);
             }
 
-            logger.info('User converted from student to driver successfully', 'unified-db', { userId: existingUser.id });
+            logger.info('User converted from student to driver successfully', 'unified-db', { userId: ex.id });
             updatedRoleProfile = updatedProfile;
           } else {
-            throw new Error(`User with email ${driverData.email} already exists with role ${existingUser.role}`);
+            throw new Error(`User with email ${driverData.email} already exists with role ${ex.role}`);
           }
         } else {
           // User exists but is inactive - reactivate them instead of creating new
@@ -709,8 +710,8 @@ export class UnifiedDatabaseService {
               is_active: true,
               profile_photo_url: driverData.profile_photo_url,
               updated_at: new Date().toISOString()
-            })
-            .eq('id', existingUser.id)
+            } as any)
+            .eq('id', ex.id)
             .select('*')
             .single();
 
@@ -719,7 +720,7 @@ export class UnifiedDatabaseService {
             throw new Error(`Failed to reactivate user: ${updateError.message}`);
           }
 
-          logger.info('User reactivated successfully', 'unified-db', { userId: existingUser.id });
+          logger.info('User reactivated successfully', 'unified-db', { userId: ex.id });
           reactivatedProfile = updatedProfile;
         }
       }
@@ -728,13 +729,13 @@ export class UnifiedDatabaseService {
       let authData;
       let authError;
       
-      if (existingUser && !existingUser.is_active) {
+      if (existingUser && !(existingUser as any).is_active) {
         // User exists in profiles but is inactive - try to get their auth user
         try {
-          const { data: authUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(existingUser.id);
+          const { data: authUser, error: getUserError } = await (supabaseAdmin as any).auth.admin.getUserById((existingUser as any).id);
           if (authUser && !getUserError) {
             // Auth user exists, update their password and metadata
-            const { data: updatedAuth, error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
+            const { data: updatedAuth, error: updateAuthError } = await (supabaseAdmin as any).auth.admin.updateUserById((existingUser as any).id, {
               password: driverData.password,
               user_metadata: {
                 full_name: `${driverData.first_name} ${driverData.last_name}`,
@@ -803,7 +804,7 @@ export class UnifiedDatabaseService {
       const { data: profileData, error: profileError } = await supabaseAdmin
         .from('user_profiles')
         .upsert({
-          id: authData.user.id,
+          id: (authData as any).user.id,
           email: driverData.email,
           full_name: `${driverData.first_name} ${driverData.last_name}`,
           first_name: driverData.first_name,
@@ -813,10 +814,10 @@ export class UnifiedDatabaseService {
           is_driver: true,
           is_active: true,
           profile_photo_url: driverData.profile_photo_url,
-        }, {
+        } as any, {
           onConflict: 'id',
           ignoreDuplicates: false
-        })
+        } as any)
         .select('*')
         .single();
 
@@ -825,7 +826,7 @@ export class UnifiedDatabaseService {
         
         // Try to clean up the auth user if profile creation fails
         try {
-          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+          await (supabaseAdmin as any).auth.admin.deleteUser((authData as any).user.id);
         } catch (cleanupError) {
           logger.error('Error cleaning up auth user', 'unified-db', { error: cleanupError });
         }
@@ -927,49 +928,68 @@ export class UnifiedDatabaseService {
         .delete()
         .eq('driver_id', driverId);
 
-      // 2. Update buses to remove driver assignment
-      await supabaseAdmin
+      // 2. Update buses to unassign driver and route (route should remain in database, just unassigned from bus)
+      // Get buses assigned to this driver first to log which routes are being unassigned
+      type BusesRow = import('../config/supabase').Database['public']['Tables']['buses']['Row'];
+      const { data: assignedBuses } = await supabaseAdmin
         .from('buses')
-        .update({ assigned_driver_profile_id: null })
+        .select('id, route_id')
         .eq('assigned_driver_profile_id', driverId);
 
-      // 3. Update buses table to remove assignment
-      await supabaseAdmin
+      // Update buses to remove driver assignment and unassign route (but route stays in database)
+      const { error: busUpdateError } = await supabaseAdmin
         .from('buses')
         .update({
           assigned_driver_profile_id: null,
-          route_id: null,
+          route_id: null, // Unassign route from bus, but route remains in routes table
           assignment_status: 'unassigned',
-          assignment_notes: null,
+          assignment_notes: `Driver deleted - route unassigned at ${new Date().toISOString()}`,
           updated_at: new Date().toISOString()
         })
         .eq('assigned_driver_profile_id', driverId);
 
-      // 4. Delete from bus_route_assignments
+      if (busUpdateError) {
+        logger.error('Error updating buses when deleting driver', 'unified-db', { error: busUpdateError, driverId });
+        throw busUpdateError;
+      }
+
+      // Log which routes were unassigned (for debugging)
+      if (assignedBuses && assignedBuses.length > 0) {
+        const routeIds = (assignedBuses as any[]).map((b: any) => b.route_id).filter(Boolean);
+        if (routeIds.length > 0) {
+          logger.info('Routes unassigned from buses (routes remain in database)', 'unified-db', { 
+            driverId, 
+            routeIds,
+            busIds: (assignedBuses as any[]).map((b: any) => b.id)
+          });
+        }
+      }
+
+      // 3. Delete from bus_route_assignments
       await supabaseAdmin
         .from('bus_route_assignments')
         .delete()
         .eq('assigned_driver_profile_id', driverId);
 
-      // 5. Delete shifts
+      // 4. Delete shifts
       await supabaseAdmin
         .from('shifts')
         .delete()
         .eq('driver_id', driverId);
 
-      // 6. Delete from assignment_history
+      // 5. Delete from assignment_history
       await supabaseAdmin
         .from('assignment_history')
         .delete()
         .eq('driver_id', driverId);
 
-      // 7. Delete user_roles
+      // 6. Delete user_roles
       await supabaseAdmin
         .from('user_roles')
         .delete()
         .eq('user_id', driverId);
 
-      // 8. Delete the driver from auth.users
+      // 7. Delete the driver from auth.users
       try {
         await supabaseAdmin.auth.admin.deleteUser(driverId);
         logger.info('Auth user deleted successfully', 'unified-db', { driverId });

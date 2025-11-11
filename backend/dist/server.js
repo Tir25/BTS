@@ -42,7 +42,6 @@ const systemValidator_1 = require("./utils/systemValidator");
 const memoryOptimization_1 = require("./middleware/memoryOptimization");
 const logRotation_1 = require("./utils/logRotation");
 const deadCodeDetector_1 = require("./utils/deadCodeDetector");
-const advancedRateLimit_1 = require("./middleware/advancedRateLimit");
 const LocationArchiveService_1 = require("./services/LocationArchiveService");
 const app = (0, express_1.default)();
 app.set('trust proxy', 1);
@@ -116,10 +115,6 @@ app.use(monitoring_1.memoryMonitoring);
 app.use(monitoring_1.performanceMonitoring);
 app.use(corsEnhanced_1.corsMiddleware);
 app.use(cors_1.handlePreflight);
-if (!DEMO_MODE) {
-    app.use(securityEnhanced_1.securityManager.getRateLimitConfig());
-    app.use(advancedRateLimit_1.apiRateLimits.general);
-}
 app.use(express_1.default.json({
     limit: '10mb',
     verify: (req, res, buf) => {
@@ -140,19 +135,19 @@ app.use(express_1.default.json({
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestId_1.addRequestIdToError);
 app.use('/health', health_1.default);
-app.use('/auth', ...(DEMO_MODE ? [] : [security_1.authRateLimit]), auth_1.default);
-app.use('/admin', ...(DEMO_MODE ? [] : [advancedRateLimit_1.apiRateLimits.admin]), securityEnhanced_1.fileUploadValidator, admin_1.default);
-app.use('/assignments', ...(DEMO_MODE ? [] : [advancedRateLimit_1.apiRateLimits.assignments, securityEnhanced_1.securityManager.getAuthRateLimitConfig()]), productionAssignments_1.default);
-app.use('/production-assignments', ...(DEMO_MODE ? [] : [advancedRateLimit_1.apiRateLimits.assignments, securityEnhanced_1.securityManager.getAuthRateLimitConfig()]), productionAssignments_1.default);
-app.use('/assignments-optimized', ...(DEMO_MODE ? [] : [advancedRateLimit_1.apiRateLimits.assignments, securityEnhanced_1.securityManager.getAuthRateLimitConfig()]), optimizedAssignments_1.default);
+app.use('/auth', auth_1.default);
+app.use('/admin', securityEnhanced_1.fileUploadValidator, admin_1.default);
+app.use('/assignments', productionAssignments_1.default);
+app.use('/production-assignments', productionAssignments_1.default);
+app.use('/assignments-optimized', optimizedAssignments_1.default);
 app.use('/buses', (0, redisCache_1.smartCacheMiddleware)({
     dataTypeTTL: { 'buses': 600 }
 }), buses_1.default);
 app.use('/routes', (0, redisCache_1.smartCacheMiddleware)({
     dataTypeTTL: { 'routes': 1800 }
 }), routes_1.default);
-app.use('/storage', advancedRateLimit_1.apiRateLimits.upload, securityEnhanced_1.fileUploadValidator, storage_1.default);
-app.use('/locations', advancedRateLimit_1.apiRateLimits.locations, (0, redisCache_1.smartCacheMiddleware)({
+app.use('/storage', securityEnhanced_1.fileUploadValidator, storage_1.default);
+app.use('/locations', (0, redisCache_1.smartCacheMiddleware)({
     dataTypeTTL: { 'locations': 60 }
 }), locations_1.default);
 app.use('/tracking', tracking_1.default);

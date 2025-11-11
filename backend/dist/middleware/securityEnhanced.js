@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ipWhitelist = exports.fileUploadValidator = exports.securityHeaders = exports.requestValidator = exports.requestSizeValidator = exports.securityManager = exports.SecurityManager = void 0;
 const helmet_1 = __importDefault(require("helmet"));
-const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const logger_1 = require("../utils/logger");
 const environment_1 = __importDefault(require("../config/environment"));
 class SecurityManager {
@@ -69,7 +68,7 @@ class SecurityManager {
             res.setHeader('X-Frame-Options', 'DENY');
             res.setHeader('X-XSS-Protection', '1; mode=block');
             res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-            res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+            res.setHeader('Permissions-Policy', 'geolocation=(self), microphone=(), camera=()');
             const requestId = req.headers['x-request-id'] || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             res.setHeader('X-Request-ID', requestId);
             next();
@@ -168,50 +167,14 @@ class SecurityManager {
         });
     }
     getRateLimitConfig() {
-        return (0, express_rate_limit_1.default)({
-            windowMs: environment_1.default.rateLimit.windowMs,
-            max: environment_1.default.rateLimit.maxRequests,
-            message: {
-                error: 'Too many requests from this IP, please try again later.',
-                retryAfter: Math.ceil(environment_1.default.rateLimit.windowMs / 1000)
-            },
-            standardHeaders: true,
-            legacyHeaders: false,
-            handler: (req, res) => {
-                logger_1.logger.warn('Rate limit exceeded', 'security', {
-                    ip: req.ip,
-                    userAgent: req.headers['user-agent'],
-                    path: req.path
-                });
-                res.status(429).json({
-                    error: 'Too many requests from this IP, please try again later.',
-                    retryAfter: Math.ceil(environment_1.default.rateLimit.windowMs / 1000)
-                });
-            }
-        });
+        return (req, res, next) => {
+            next();
+        };
     }
     getAuthRateLimitConfig() {
-        return (0, express_rate_limit_1.default)({
-            windowMs: 15 * 60 * 1000,
-            max: environment_1.default.rateLimit.authMaxRequests,
-            message: {
-                error: 'Too many authentication attempts, please try again later.',
-                retryAfter: 900
-            },
-            standardHeaders: true,
-            legacyHeaders: false,
-            handler: (req, res) => {
-                logger_1.logger.warn('Auth rate limit exceeded', 'security', {
-                    ip: req.ip,
-                    userAgent: req.headers['user-agent'],
-                    path: req.path
-                });
-                res.status(429).json({
-                    error: 'Too many authentication attempts, please try again later.',
-                    retryAfter: 900
-                });
-            }
-        });
+        return (req, res, next) => {
+            next();
+        };
     }
     updateConfig(newConfig) {
         this.config = { ...this.config, ...newConfig };

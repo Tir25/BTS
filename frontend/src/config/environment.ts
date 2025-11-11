@@ -90,7 +90,7 @@ const getWebSocketUrl = () => {
   return 'wss://bus-tracking-backend-sxh8.onrender.com';
 };
 
-// Supabase configuration with validation
+// Supabase configuration with validation (Legacy)
 const getSupabaseConfig = () => {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -114,6 +114,56 @@ const getSupabaseConfig = () => {
   return { url, anonKey };
 };
 
+// Get driver Supabase configuration
+const getDriverSupabaseConfig = () => {
+  const url = import.meta.env.VITE_DRIVER_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_DRIVER_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!url || url === 'your_supabase_project_url' || url === '') {
+    if (isDevelopment()) {
+      logger.warn('VITE_DRIVER_SUPABASE_URL not set. Falling back to legacy config.', 'environment');
+      return { url: null, anonKey: null };
+    }
+    // In production, allow fallback to legacy config
+    return { url: null, anonKey: null };
+  }
+
+  if (!anonKey || anonKey === 'your_supabase_anon_key_here' || anonKey === '') {
+    if (isDevelopment()) {
+      logger.warn('VITE_DRIVER_SUPABASE_ANON_KEY not set. Falling back to legacy config.', 'environment');
+      return { url, anonKey: null };
+    }
+    return { url, anonKey: null };
+  }
+
+  return { url, anonKey };
+};
+
+// Get student Supabase configuration
+const getStudentSupabaseConfig = () => {
+  const url = import.meta.env.VITE_STUDENT_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_STUDENT_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!url || url === 'your_supabase_project_url' || url === '') {
+    if (isDevelopment()) {
+      logger.warn('VITE_STUDENT_SUPABASE_URL not set. Falling back to legacy config.', 'environment');
+      return { url: null, anonKey: null };
+    }
+    // In production, allow fallback to legacy config
+    return { url: null, anonKey: null };
+  }
+
+  if (!anonKey || anonKey === 'your_supabase_anon_key_here' || anonKey === '') {
+    if (isDevelopment()) {
+      logger.warn('VITE_STUDENT_SUPABASE_ANON_KEY not set. Falling back to legacy config.', 'environment');
+      return { url, anonKey: null };
+    }
+    return { url, anonKey: null };
+  }
+
+  return { url, anonKey };
+};
+
 // Unified configuration interface
 export interface AppConfig {
   // Environment
@@ -128,8 +178,17 @@ export interface AppConfig {
     retryAttempts: number;
   };
   
-  // Supabase Configuration
+  // Supabase Configuration (Legacy)
   supabase: {
+    url: string | null;
+    anonKey: string | null;
+  };
+  // Role-based Supabase configurations
+  supabaseDriver: {
+    url: string | null;
+    anonKey: string | null;
+  };
+  supabaseStudent: {
     url: string | null;
     anonKey: string | null;
   };
@@ -257,6 +316,8 @@ const validateConfig = (config: AppConfig): void => {
 // Create unified configuration
 const createConfig = (): AppConfig => {
   const supabaseConfig = getSupabaseConfig();
+  const driverSupabaseConfig = getDriverSupabaseConfig();
+  const studentSupabaseConfig = getStudentSupabaseConfig();
   
   const config: AppConfig = {
     // Environment
@@ -271,8 +332,11 @@ const createConfig = (): AppConfig => {
       retryAttempts: parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'),
     },
     
-    // Supabase Configuration
+    // Supabase Configuration (Legacy)
     supabase: supabaseConfig,
+    // Role-based Supabase configurations
+    supabaseDriver: driverSupabaseConfig,
+    supabaseStudent: studentSupabaseConfig,
     
     // Map Configuration
     map: {
@@ -355,10 +419,18 @@ try {
         timeout: 10000,
         retryAttempts: 3,
       },
-      supabase: {
-        url: null,
-        anonKey: null,
-      },
+    supabase: {
+      url: null,
+      anonKey: null,
+    },
+    supabaseDriver: {
+      url: null,
+      anonKey: null,
+    },
+    supabaseStudent: {
+      url: null,
+      anonKey: null,
+    },
       map: {
         defaultCenter: [72.8777, 23.0225],
         defaultZoom: 12,
@@ -426,13 +498,30 @@ if (environment.isDevelopment) {
     },
   });
   
-  if (!environment.supabase.url || !environment.supabase.anonKey) {
-    logger.warn('Supabase configuration missing. Some features may not work properly.', 'environment');
-    logger.warn('Please check your .env.local file and ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.', 'environment');
+  // Log configuration status
+  const hasDriverConfig = !!(environment.supabaseDriver.url && environment.supabaseDriver.anonKey);
+  const hasStudentConfig = !!(environment.supabaseStudent.url && environment.supabaseStudent.anonKey);
+  const hasLegacyConfig = !!(environment.supabase.url && environment.supabase.anonKey);
+
+  if (hasDriverConfig || hasStudentConfig) {
+    logger.info('✅ Using role-based Supabase configurations', 'environment');
+    if (hasDriverConfig) logger.info('  - Driver: ✅ Configured', 'environment');
+    if (hasStudentConfig) logger.info('  - Student: ✅ Configured', 'environment');
+    if (hasLegacyConfig) logger.warn('  - Legacy: ⚠️ Fallback available', 'environment');
+  } else if (hasLegacyConfig) {
+    logger.warn('⚠️ Using legacy Supabase configuration. Consider migrating to role-based configs.', 'environment');
+    logger.warn('Please check your .env.local file and ensure VITE_DRIVER_SUPABASE_URL and VITE_STUDENT_SUPABASE_URL are set.', 'environment');
+  } else {
+    logger.warn('⚠️ Supabase configuration missing. Some features may not work properly.', 'environment');
+    logger.warn('Please check your .env.local file and ensure Supabase environment variables are set.', 'environment');
   }
 } else {
   // Production: Only log critical errors
-  if (!environment.supabase.url || !environment.supabase.anonKey) {
+  const hasDriverConfig = !!(environment.supabaseDriver.url && environment.supabaseDriver.anonKey);
+  const hasStudentConfig = !!(environment.supabaseStudent.url && environment.supabaseStudent.anonKey);
+  const hasLegacyConfig = !!(environment.supabase.url && environment.supabase.anonKey);
+
+  if (!hasDriverConfig && !hasStudentConfig && !hasLegacyConfig) {
     logger.error('Critical: Supabase configuration missing in production', 'environment');
   }
 }
@@ -456,12 +545,20 @@ export const checkConfigurationHealth = (): {
   }
   
   // Check Supabase configuration
-  if (!environment.supabase.url) {
-    warnings.push('Supabase URL is missing - some features may not work');
+  const hasDriverConfig = !!(environment.supabaseDriver.url && environment.supabaseDriver.anonKey);
+  const hasStudentConfig = !!(environment.supabaseStudent.url && environment.supabaseStudent.anonKey);
+  const hasLegacyConfig = !!(environment.supabase.url && environment.supabase.anonKey);
+
+  if (!hasDriverConfig && !hasLegacyConfig) {
+    warnings.push('Driver Supabase configuration is missing - driver features may not work');
   }
-  
-  if (!environment.supabase.anonKey) {
-    warnings.push('Supabase anon key is missing - some features may not work');
+
+  if (!hasStudentConfig && !hasLegacyConfig) {
+    warnings.push('Student Supabase configuration is missing - student features may not work');
+  }
+
+  if (!hasDriverConfig && !hasStudentConfig && !hasLegacyConfig) {
+    issues.push('No Supabase configuration found - authentication will not work');
   }
   
   // Check performance settings

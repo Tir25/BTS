@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.websocketAdminAuthMiddleware = exports.websocketStudentAuthMiddleware = exports.websocketDriverAuthMiddleware = exports.websocketAuthMiddleware = void 0;
 const supabase_1 = require("../config/supabase");
 const logger_1 = require("../utils/logger");
+const authUtils_1 = require("./authUtils");
 const websocketAuthMiddleware = (socket, next) => {
     const token = socket.handshake.auth.token;
     const clientType = socket.handshake.auth.clientType || 'student';
@@ -54,27 +55,6 @@ const websocketAuthMiddleware = (socket, next) => {
         });
         return next(new Error('Invalid token format'));
     }
-    const rateLimitKey = `auth_attempts_${clientIP}`;
-    const maxAttempts = parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || '5');
-    const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000');
-    const authAttempts = global.authAttemptStore || (global.authAttemptStore = new Map());
-    const now = Date.now();
-    const attempts = authAttempts.get(rateLimitKey) || { count: 0, resetTime: now + windowMs };
-    if (now > attempts.resetTime) {
-        attempts.count = 0;
-        attempts.resetTime = now + windowMs;
-    }
-    if (attempts.count >= maxAttempts) {
-        logger_1.logger.websocket('Too many authentication attempts from IP', {
-            socketId: socket.id,
-            attempts: attempts.count,
-            clientIP,
-            resetTime: new Date(attempts.resetTime).toISOString()
-        });
-        return next(new Error('Too many authentication attempts. Please try again later.'));
-    }
-    attempts.count++;
-    authAttempts.set(rateLimitKey, attempts);
     const authTimeout = setTimeout(() => {
         logger_1.logger.websocket('Authentication timeout', { socketId: socket.id, clientIP });
         next(new Error('Authentication timeout'));
@@ -129,14 +109,9 @@ const websocketAuthMiddleware = (socket, next) => {
                 });
                 return next(new Error('Account is inactive'));
             }
-            const adminEmails = process.env.ADMIN_EMAILS?.split(',').map((email) => email.trim().toLowerCase()) || [];
-            if (adminEmails.length === 0) {
-                logger_1.logger.error('ADMIN_EMAILS environment variable is required', 'websocket', {
-                    socketId: socket.id,
-                    clientIP
-                });
+            const adminEmails = (0, authUtils_1.getAdminEmails)();
+            if (adminEmails.length === 0)
                 return next(new Error('Server configuration error'));
-            }
             const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
             const role = isAdmin ? 'admin' : profile.role;
             if (!['admin', 'driver', 'student'].includes(role)) {

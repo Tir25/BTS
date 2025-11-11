@@ -1,0 +1,1 @@
+{"version":3,"file":"driverClient.d.ts","sourceRoot":"","sources":["../../../src/config/supabase/driverClient.ts"],"names":[],"mappings":"AAOA,OAAO,EAAE,qBAAqB,EAAE,yBAAyB,EAAE,MAAM,SAAS,CAAC;AAY3E,wBAAgB,uBAAuB,IAAI,qBAAqB,CAY/D;AAMD,wBAAgB,sBAAsB,IAAI,yBAAyB,CA6BlE;AAKD,wBAAgB,iBAAiB,IAAI,IAAI,CAIxC;AAKD,wBAAsB,oBAAoB,IAAI,OAAO,CAAC,OAAO,CAAC,CAU7D"}

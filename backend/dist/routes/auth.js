@@ -28,7 +28,8 @@ router.post('/driver/login', async (req, res) => {
             });
         }
         logger_1.logger.info('🔐 Driver login attempt', 'auth', { email });
-        const { data: authData, error: authError } = await supabase_1.supabaseAdmin.auth.signInWithPassword({
+        const driverSupabaseAdmin = (0, supabase_1.getDriverSupabaseAdmin)();
+        const { data: authData, error: authError } = await driverSupabaseAdmin.auth.signInWithPassword({
             email,
             password,
         });
@@ -70,7 +71,7 @@ router.post('/driver/login', async (req, res) => {
             userId: authData.user.id,
             email: authData.user.email
         });
-        const { data: profile, error: profileError } = await supabase_1.supabaseAdmin
+        const { data: profile, error: profileError } = await driverSupabaseAdmin
             .from('user_profiles')
             .select('id, full_name, role, is_active, last_login')
             .eq('id', authData.user.id)
@@ -112,7 +113,7 @@ router.post('/driver/login', async (req, res) => {
                 code: 'INSUFFICIENT_PERMISSIONS'
             });
         }
-        const { data: busData, error: busError } = await supabase_1.supabaseAdmin
+        const { data: busData, error: busError } = await driverSupabaseAdmin
             .from('buses')
             .select(`
         id,
@@ -153,7 +154,7 @@ router.post('/driver/login', async (req, res) => {
         }
         let routeName = '';
         if (busData.route_id) {
-            const { data: routeData, error: routeError } = await supabase_1.supabaseAdmin
+            const { data: routeData, error: routeError } = await driverSupabaseAdmin
                 .from('routes')
                 .select('name')
                 .eq('id', busData.route_id)
@@ -175,7 +176,7 @@ router.post('/driver/login', async (req, res) => {
             updated_at: busData.updated_at
         };
         try {
-            await supabase_1.supabaseAdmin
+            await driverSupabaseAdmin
                 .from('user_profiles')
                 .update({ last_login: new Date().toISOString() })
                 .eq('id', authData.user.id);
@@ -249,7 +250,8 @@ router.get('/driver/assignment', async (req, res) => {
             });
         }
         logger_1.logger.info('🔍 Fetching driver bus assignment', 'auth', { driver_id });
-        const { data: busData, error: busError } = await supabase_1.supabaseAdmin
+        const driverSupabaseAdmin = (0, supabase_1.getDriverSupabaseAdmin)();
+        const { data: busData, error: busError } = await driverSupabaseAdmin
             .from('buses')
             .select('id, bus_number, vehicle_no, route_id')
             .eq('assigned_driver_profile_id', driver_id)
@@ -279,7 +281,7 @@ router.get('/driver/assignment', async (req, res) => {
         }
         let routeName = '';
         if (busData.route_id) {
-            const { data: routeData, error: routeError } = await supabase_1.supabaseAdmin
+            const { data: routeData, error: routeError } = await driverSupabaseAdmin
                 .from('routes')
                 .select('name')
                 .eq('id', busData.route_id)
@@ -289,7 +291,7 @@ router.get('/driver/assignment', async (req, res) => {
             }
         }
         let driverName = 'Unknown Driver';
-        const { data: profileData } = await supabase_1.supabaseAdmin
+        const { data: profileData } = await driverSupabaseAdmin
             .from('user_profiles')
             .select('full_name')
             .eq('id', driver_id)
@@ -339,7 +341,8 @@ router.post('/driver/validate', async (req, res) => {
             });
         }
         const token = authHeader.substring(7);
-        const { data: { user }, error } = await supabase_1.supabaseAdmin.auth.getUser(token);
+        const driverSupabaseAdmin = (0, supabase_1.getDriverSupabaseAdmin)();
+        const { data: { user }, error } = await driverSupabaseAdmin.auth.getUser(token);
         if (error || !user) {
             logger_1.logger.warn('❌ Token validation failed', 'auth', {
                 error: error?.message
@@ -351,7 +354,7 @@ router.post('/driver/validate', async (req, res) => {
                 code: 'INVALID_TOKEN'
             });
         }
-        const { data: profile, error: profileError } = await supabase_1.supabaseAdmin
+        const { data: profile, error: profileError } = await driverSupabaseAdmin
             .from('user_profiles')
             .select('id, full_name, role, is_active')
             .eq('id', user.id)
@@ -372,7 +375,7 @@ router.post('/driver/validate', async (req, res) => {
                 code: 'INSUFFICIENT_PERMISSIONS'
             });
         }
-        const { data: busData, error: busError } = await supabase_1.supabaseAdmin
+        const { data: busData, error: busError } = await driverSupabaseAdmin
             .from('buses')
             .select(`
         id,
@@ -397,7 +400,7 @@ router.post('/driver/validate', async (req, res) => {
         }
         let routeName = '';
         if (busData.route_id) {
-            const { data: routeData } = await supabase_1.supabaseAdmin
+            const { data: routeData } = await driverSupabaseAdmin
                 .from('routes')
                 .select('name')
                 .eq('id', busData.route_id)
@@ -451,6 +454,177 @@ router.post('/driver/validate', async (req, res) => {
             success: false,
             error: 'Internal server error',
             message: 'An unexpected error occurred',
+            code: 'INTERNAL_ERROR'
+        });
+    }
+});
+router.post('/student/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing credentials',
+                message: 'Email and password are required',
+                code: 'MISSING_CREDENTIALS'
+            });
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid email format',
+                message: 'Please enter a valid email address',
+                code: 'INVALID_EMAIL'
+            });
+        }
+        logger_1.logger.info('🎓 Student login attempt', 'auth', { email });
+        let studentSupabaseAdmin;
+        try {
+            studentSupabaseAdmin = (0, supabase_1.getStudentSupabaseAdmin)();
+        }
+        catch (clientError) {
+            logger_1.logger.error('❌ Failed to get student Supabase admin client', 'auth', {
+                error: clientError instanceof Error ? clientError.message : String(clientError),
+                email
+            });
+            return res.status(500).json({
+                success: false,
+                error: 'Authentication service error',
+                message: 'Failed to initialize authentication service. Please contact your administrator.',
+                code: 'SERVICE_ERROR'
+            });
+        }
+        const { data: authData, error: authError } = await studentSupabaseAdmin.auth.signInWithPassword({
+            email,
+            password,
+        });
+        if (authError) {
+            logger_1.logger.warn('❌ Student authentication failed', 'auth', {
+                email,
+                error: authError.message
+            });
+            let errorMessage = 'Invalid credentials';
+            let errorCode = 'INVALID_CREDENTIALS';
+            if (authError.message.includes('Invalid login credentials')) {
+                errorMessage = 'Invalid email or password';
+            }
+            else if (authError.message.includes('Email not confirmed')) {
+                errorMessage = 'Please verify your email address before logging in';
+                errorCode = 'EMAIL_NOT_CONFIRMED';
+            }
+            else if (authError.message.includes('Too many requests')) {
+                errorMessage = 'Too many login attempts. Please wait a moment and try again';
+                errorCode = 'TOO_MANY_REQUESTS';
+            }
+            return res.status(401).json({
+                success: false,
+                error: errorMessage,
+                message: errorMessage,
+                code: errorCode
+            });
+        }
+        if (!authData.user) {
+            logger_1.logger.warn('❌ No user data received from Supabase', 'auth', { email });
+            return res.status(401).json({
+                success: false,
+                error: 'Authentication failed',
+                message: 'Invalid credentials',
+                code: 'AUTH_FAILED'
+            });
+        }
+        logger_1.logger.info('✅ Supabase authentication successful', 'auth', {
+            userId: authData.user.id,
+            email: authData.user.email
+        });
+        const { data: profile, error: profileError } = await studentSupabaseAdmin
+            .from('user_profiles')
+            .select('id, full_name, role, is_active, last_login, email_verified')
+            .eq('id', authData.user.id)
+            .single();
+        if (profileError || !profile) {
+            logger_1.logger.error('❌ Failed to fetch user profile', 'auth', {
+                userId: authData.user.id,
+                error: profileError?.message
+            });
+            return res.status(500).json({
+                success: false,
+                error: 'Profile not found',
+                message: 'Unable to retrieve your profile. Please contact your administrator.',
+                code: 'PROFILE_NOT_FOUND'
+            });
+        }
+        if (!profile.is_active) {
+            logger_1.logger.warn('❌ Inactive account attempted login', 'auth', {
+                userId: authData.user.id,
+                email
+            });
+            return res.status(403).json({
+                success: false,
+                error: 'Account inactive',
+                message: 'Your account is inactive. Please contact your administrator.',
+                code: 'ACCOUNT_INACTIVE'
+            });
+        }
+        if (profile.role !== 'student') {
+            logger_1.logger.warn('❌ Non-student attempted student login', 'auth', {
+                userId: authData.user.id,
+                email,
+                role: profile.role
+            });
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied',
+                message: 'You do not have student privileges. Please use the appropriate login portal.',
+                code: 'INSUFFICIENT_PERMISSIONS'
+            });
+        }
+        try {
+            await studentSupabaseAdmin
+                .from('user_profiles')
+                .update({ last_login: new Date().toISOString() })
+                .eq('id', authData.user.id);
+        }
+        catch (updateError) {
+            logger_1.logger.warn('⚠️ Failed to update last login time', 'auth', {
+                userId: authData.user.id,
+                error: updateError instanceof Error ? updateError.message : 'Unknown error'
+            });
+        }
+        logger_1.logger.info('✅ Student login successful', 'auth', {
+            userId: authData.user.id,
+            email: authData.user.email,
+            studentName: profile.full_name
+        });
+        return res.json({
+            success: true,
+            data: {
+                user: {
+                    id: authData.user.id,
+                    email: authData.user.email,
+                    full_name: profile.full_name,
+                    role: profile.role,
+                    is_active: profile.is_active,
+                    email_verified: profile.email_verified
+                },
+                session: {
+                    access_token: authData.session.access_token,
+                    refresh_token: authData.session.refresh_token,
+                    expires_at: authData.session.expires_at
+                }
+            },
+            message: 'Student login successful',
+            timestamp: new Date().toISOString()
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('❌ Student login error', 'auth', {
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            message: 'An unexpected error occurred. Please try again.',
             code: 'INTERNAL_ERROR'
         });
     }

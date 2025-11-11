@@ -46,6 +46,7 @@
     "verify:admin-sync": "npm run test:admin-driver-sync"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
     "concurrently": "^8.2.2",
     "puppeteer": "^24.26.1",
     "vite": "^5.4.21"

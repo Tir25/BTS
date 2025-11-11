@@ -1,64 +1,54 @@
 ﻿import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { studentAuthService } from '../services/auth/studentAuthService';
+import { useAuthStore } from '../stores/useAuthStore';
+import { logger } from '../utils/logger';
+import { validateEmail, validatePassword } from '../utils/validation';
 
 interface LoginForm {
-  studentId: string;
+  email: string;
   password: string;
 }
 
 interface ValidationErrors {
-  studentId?: string;
+  email?: string;
   password?: string;
 }
 
 interface StudentLoginProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess?: () => void;
 }
 
 const StudentLogin: React.FC<StudentLoginProps> = ({ onLoginSuccess }) => {
+  const navigate = useNavigate();
   const [loginForm, setLoginForm] = useState<LoginForm>({
-    studentId: '',
+    email: '',
     password: '',
   });
   const [loginError, setLoginError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
-  const [touched, setTouched] = useState<{ studentId: boolean; password: boolean }>({
-    studentId: false,
+  const [touched, setTouched] = useState<{ email: boolean; password: boolean }>({
+    email: false,
     password: false,
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  // PRODUCTION FIX: Removed hardcoded credentials
-  // Student authentication has been removed - this component is deprecated
-  // This component should not be used in production
-
   // Client-side validation
-  const validateStudentId = (studentId: string): string | undefined => {
-    if (!studentId) {
-      return 'Student ID is required';
-    }
-    if (studentId.trim().length === 0) {
-      return 'Student ID cannot be empty';
-    }
-    return undefined;
+  const validateEmailField = (email: string): string | undefined => {
+    return validateEmail(email);
   };
 
-  const validatePassword = (password: string): string | undefined => {
-    if (!password) {
-      return 'Password is required';
-    }
-    if (password.length < 3) {
-      return 'Password must be at least 3 characters';
-    }
-    return undefined;
+  const validatePasswordField = (password: string): string | undefined => {
+    return validatePassword(password);
   };
 
   const validateForm = (): boolean => {
     const errors: ValidationErrors = {};
-    const studentIdError = validateStudentId(loginForm.studentId);
-    const passwordError = validatePassword(loginForm.password);
+    const emailError = validateEmailField(loginForm.email);
+    const passwordError = validatePasswordField(loginForm.password);
     
-    if (studentIdError) errors.studentId = studentIdError;
+    if (emailError) errors.email = emailError;
     if (passwordError) errors.password = passwordError;
     
     setValidationErrors(errors);
@@ -73,11 +63,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onLoginSuccess }) => {
     }));
     
     // Mark field as touched
-    setTouched(prev => ({ ...prev, [name]: true }));
+    setTouched(prev => ({ ...prev, [name as keyof typeof prev]: true }));
     
     // Clear validation error for this field
     if (validationErrors[name as keyof ValidationErrors]) {
-      setValidationErrors(prev => ({ ...prev, [name]: undefined }));
+      setValidationErrors(prev => ({ ...prev, [name as keyof ValidationErrors]: undefined }));
     }
     
     // Clear login error when user starts typing
@@ -88,18 +78,18 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onLoginSuccess }) => {
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setTouched(prev => ({ ...prev, [name]: true }));
+    setTouched(prev => ({ ...prev, [name as keyof typeof prev]: true }));
     
     // Validate the field
     let error: string | undefined;
-    if (name === 'studentId') {
-      error = validateStudentId(value);
+    if (name === 'email') {
+      error = validateEmailField(value);
     } else if (name === 'password') {
-      error = validatePassword(value);
+      error = validatePasswordField(value);
     }
     
     if (error) {
-      setValidationErrors(prev => ({ ...prev, [name]: error }));
+      setValidationErrors(prev => ({ ...prev, [name as keyof ValidationErrors]: error }));
     }
   };
 
@@ -115,15 +105,41 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onLoginSuccess }) => {
     }
 
     try {
-      // Simulate API call delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 500));
+      logger.info('🔐 Attempting student login...', 'component');
+      
+      // Call student authentication service
+      const result = await studentAuthService.signIn(loginForm.email, loginForm.password);
 
-      // PRODUCTION FIX: Student authentication has been removed
-      // This component is deprecated and should not be used
-      // Always show error to prevent usage
-      setLoginError('Student login is no longer required. Please access the student map directly.');
-      console.warn('⚠️ StudentLogin component is deprecated. Student authentication has been removed.');
+      if (!result.success) {
+        logger.error('❌ Student login failed:', 'component', { error: result.error });
+        setLoginError(result.error || 'Login failed. Please check your credentials and try again.');
+        return;
+      }
+
+      if (result.user) {
+        logger.info('✅ Student login successful', 'component');
+        
+        // Store user in auth store
+        useAuthStore.getState().setUser({
+          id: result.user.id,
+          email: result.user.email,
+          role: result.user.role as 'student',
+          full_name: result.user.full_name,
+          created_at: result.user.created_at,
+          updated_at: result.user.updated_at,
+        });
+
+        // Redirect to student map
+        if (onLoginSuccess) {
+          onLoginSuccess();
+        } else {
+          navigate('/student-map', { replace: true });
+        }
+      } else {
+        setLoginError('Login failed. Please try again.');
+      }
     } catch (error) {
+      logger.error('❌ Student login error:', 'component', { error });
       setLoginError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
@@ -157,29 +173,29 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onLoginSuccess }) => {
           className="bg-white border border-slate-200 rounded-2xl shadow-lg p-8"
         >
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Student ID Field */}
+            {/* Email Field */}
             <div>
-              <label htmlFor="studentId" className="block text-sm font-medium text-slate-700 mb-2">
-                Student ID
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
+                Email Address
               </label>
               <input
-                type="text"
-                id="studentId"
-                name="studentId"
-                value={loginForm.studentId}
+                type="email"
+                id="email"
+                name="email"
+                value={loginForm.email}
                 onChange={handleInputChange}
                 onBlur={handleBlur}
                 required
                 className={`w-full px-4 py-3 bg-white border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                  touched.studentId && validationErrors.studentId
+                  touched.email && validationErrors.email
                     ? 'border-red-400 focus:ring-red-500'
                     : 'border-slate-300'
                 }`}
-                placeholder="Enter your student ID"
+                placeholder="Enter your email address"
                 disabled={isLoading}
               />
-              {touched.studentId && validationErrors.studentId && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.studentId}</p>
+              {touched.email && validationErrors.email && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.email}</p>
               )}
             </div>
 

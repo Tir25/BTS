@@ -15,8 +15,8 @@ export declare class SecurityManager {
     private constructor();
     static getInstance(): SecurityManager;
     getHelmetConfig(): (req: import("http").IncomingMessage, res: import("http").ServerResponse, next: (err?: unknown) => void) => void;
-    getRateLimitConfig(): import("express-rate-limit").RateLimitRequestHandler;
-    getAuthRateLimitConfig(): import("express-rate-limit").RateLimitRequestHandler;
+    getRateLimitConfig(): (req: Request, res: Response, next: NextFunction) => void;
+    getAuthRateLimitConfig(): (req: Request, res: Response, next: NextFunction) => void;
     requestSizeValidator: (req: Request, res: Response, next: NextFunction) => void;
     requestValidator: (req: Request, res: Response, next: NextFunction) => void;
     securityHeaders: (req: Request, res: Response, next: NextFunction) => void;

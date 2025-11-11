@@ -483,12 +483,87 @@ router.get('/diagnostics', async (req, res) => {
         res.status(500).json({ success: false, error: 'Diagnostics failed', message: error?.message });
     }
 });
+function validateTimeFormat(time) {
+    if (!time || typeof time !== 'string')
+        return false;
+    const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
+    return timeRegex.test(time);
+}
+function timeToMinutes(time) {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+}
+function validateShiftTimes(startTime, endTime) {
+    if (!startTime || !endTime) {
+        return { valid: false, error: 'Start time and end time are required' };
+    }
+    if (!validateTimeFormat(startTime)) {
+        return { valid: false, error: `Invalid start time format: ${startTime}. Use HH:MM format (e.g., 08:00)` };
+    }
+    if (!validateTimeFormat(endTime)) {
+        return { valid: false, error: `Invalid end time format: ${endTime}. Use HH:MM format (e.g., 14:00)` };
+    }
+    const start = timeToMinutes(startTime);
+    const end = timeToMinutes(endTime);
+    if (start === end) {
+        return { valid: false, error: 'Start time and end time cannot be the same' };
+    }
+    return { valid: true };
+}
+async function isShiftInUse(shiftId) {
+    try {
+        const { data: buses, error: busesError } = await supabase_1.supabaseAdmin
+            .from('buses')
+            .select('id')
+            .or(`assigned_shift_id.eq.${shiftId},shift_id.eq.${shiftId}`)
+            .limit(1);
+        if (busesError) {
+            logger_1.logger.warn('Error checking buses for shift usage', 'admin', { error: busesError.message });
+        }
+        if (buses && buses.length > 0)
+            return true;
+        const { data: history, error: historyError } = await supabase_1.supabaseAdmin
+            .from('assignment_history')
+            .select('id')
+            .eq('shift_id', shiftId)
+            .limit(1);
+        if (historyError) {
+            logger_1.logger.warn('Error checking assignment history for shift usage', 'admin', { error: historyError.message });
+        }
+        if (history && history.length > 0)
+            return true;
+        const { data: trips, error: tripsError } = await supabase_1.supabaseAdmin
+            .from('trip_sessions')
+            .select('id')
+            .eq('shift_id', shiftId)
+            .limit(1);
+        if (tripsError) {
+            logger_1.logger.warn('Error checking trip sessions for shift usage', 'admin', { error: tripsError.message });
+        }
+        if (trips && trips.length > 0)
+            return true;
+        return false;
+    }
+    catch (error) {
+        logger_1.logger.error('Error checking if shift is in use', 'admin', { error: error?.message });
+        return true;
+    }
+}
 router.get('/shifts', async (req, res) => {
     try {
-        const { data, error } = await supabase_1.supabaseAdmin.from('shifts').select('id, name, start_time, end_time, description').order('name');
+        const { data, error } = await supabase_1.supabaseAdmin
+            .from('shifts')
+            .select('id, name, start_time, end_time, description, is_active, created_at, updated_at')
+            .order('name');
         if (error)
             throw error;
-        res.json({ success: true, data });
+        const formattedData = (data || []).map((shift) => ({
+            ...shift,
+            start_time: shift.start_time ? shift.start_time.substring(0, 5) : null,
+            end_time: shift.end_time ? shift.end_time.substring(0, 5) : null,
+            is_active: shift.is_active ?? true,
+        }));
+        res.json({ success: true, data: formattedData });
     }
     catch (error) {
         logger_1.logger.error('Error fetching shifts', 'admin', { error: error?.message });
@@ -498,61 +573,233 @@ router.get('/shifts', async (req, res) => {
 router.post('/shifts', async (req, res) => {
     try {
         const { name, start_time, end_time, description, is_active } = req.body;
-        if (!name)
-            return res.status(400).json({ success: false, error: 'Name required' });
+        if (!name || typeof name !== 'string' || name.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Name required',
+                message: 'Shift name is required and cannot be empty'
+            });
+        }
+        if (start_time || end_time) {
+            const timeValidation = validateShiftTimes(start_time || '00:00', end_time || '23:59');
+            if (!timeValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid time format',
+                    message: timeValidation.error
+                });
+            }
+        }
+        const { data: existing } = await supabase_1.supabaseAdmin
+            .from('shifts')
+            .select('id')
+            .eq('name', name.trim())
+            .maybeSingle();
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                error: 'Duplicate shift name',
+                message: `A shift with the name "${name}" already exists`
+            });
+        }
+        const insertData = {
+            name: name.trim(),
+            is_active: is_active !== undefined ? Boolean(is_active) : true,
+        };
+        if (start_time)
+            insertData.start_time = start_time;
+        if (end_time)
+            insertData.end_time = end_time;
+        if (description !== undefined)
+            insertData.description = description?.trim() || null;
         const { data, error } = await supabase_1.supabaseAdmin
             .from('shifts')
-            .insert({ name, start_time, end_time, description })
-            .select('id, name, start_time, end_time, description')
+            .insert(insertData)
+            .select('id, name, start_time, end_time, description, is_active')
             .single();
         if (error)
             throw error;
-        res.status(201).json({ success: true, data });
+        const formattedData = {
+            ...data,
+            start_time: data.start_time ? data.start_time.substring(0, 5) : null,
+            end_time: data.end_time ? data.end_time.substring(0, 5) : null,
+        };
+        logger_1.logger.info('Shift created successfully', 'admin', { shiftId: data.id, name: data.name });
+        res.status(201).json({
+            success: true,
+            data: formattedData,
+            message: 'Shift created successfully'
+        });
     }
     catch (error) {
         logger_1.logger.error('Error creating shift', 'admin', { error: error?.message });
-        res.status(500).json({ success: false, error: 'Failed to create shift', message: error?.message });
+        if (error?.code === '23505') {
+            return res.status(409).json({
+                success: false,
+                error: 'Duplicate shift',
+                message: 'A shift with this name already exists'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: 'Failed to create shift',
+            message: error?.message || 'An unexpected error occurred'
+        });
     }
 });
 router.put('/shifts/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { name, start_time, end_time, description, is_active } = req.body;
+        const { data: existing, error: fetchError } = await supabase_1.supabaseAdmin
+            .from('shifts')
+            .select('id, name, start_time, end_time')
+            .eq('id', id)
+            .single();
+        if (fetchError || !existing) {
+            return res.status(404).json({
+                success: false,
+                error: 'Shift not found',
+                message: `Shift with ID ${id} not found`
+            });
+        }
+        if (name !== undefined) {
+            if (typeof name !== 'string' || name.trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid name',
+                    message: 'Shift name cannot be empty'
+                });
+            }
+            const { data: duplicate } = await supabase_1.supabaseAdmin
+                .from('shifts')
+                .select('id')
+                .eq('name', name.trim())
+                .neq('id', id)
+                .maybeSingle();
+            if (duplicate) {
+                return res.status(409).json({
+                    success: false,
+                    error: 'Duplicate shift name',
+                    message: `A shift with the name "${name}" already exists`
+                });
+            }
+        }
+        const finalStartTime = start_time !== undefined ? start_time : existing.start_time;
+        const finalEndTime = end_time !== undefined ? end_time : existing.end_time;
+        if (finalStartTime || finalEndTime) {
+            const timeValidation = validateShiftTimes(finalStartTime || '00:00', finalEndTime || '23:59');
+            if (!timeValidation.valid) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid time format',
+                    message: timeValidation.error
+                });
+            }
+        }
         const update = {};
         if (name !== undefined)
-            update.name = name;
+            update.name = name.trim();
         if (start_time !== undefined)
             update.start_time = start_time;
         if (end_time !== undefined)
             update.end_time = end_time;
         if (description !== undefined)
-            update.description = description;
+            update.description = description?.trim() || null;
+        if (is_active !== undefined)
+            update.is_active = Boolean(is_active);
+        if (Object.keys(update).length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No changes provided',
+                message: 'At least one field must be provided for update'
+            });
+        }
         const { data, error } = await supabase_1.supabaseAdmin
             .from('shifts')
             .update(update)
             .eq('id', id)
-            .select('id, name, start_time, end_time, description')
+            .select('id, name, start_time, end_time, description, is_active')
             .single();
         if (error)
             throw error;
-        res.json({ success: true, data });
+        const formattedData = {
+            ...data,
+            start_time: data.start_time ? data.start_time.substring(0, 5) : null,
+            end_time: data.end_time ? data.end_time.substring(0, 5) : null,
+        };
+        logger_1.logger.info('Shift updated successfully', 'admin', { shiftId: id });
+        res.json({
+            success: true,
+            data: formattedData,
+            message: 'Shift updated successfully'
+        });
     }
     catch (error) {
         logger_1.logger.error('Error updating shift', 'admin', { error: error?.message });
-        res.status(500).json({ success: false, error: 'Failed to update shift', message: error?.message });
+        if (error?.code === '23505') {
+            return res.status(409).json({
+                success: false,
+                error: 'Duplicate shift',
+                message: 'A shift with this name already exists'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update shift',
+            message: error?.message || 'An unexpected error occurred'
+        });
     }
 });
 router.delete('/shifts/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase_1.supabaseAdmin.from('shifts').delete().eq('id', id);
+        const { data: existing, error: fetchError } = await supabase_1.supabaseAdmin
+            .from('shifts')
+            .select('id, name')
+            .eq('id', id)
+            .single();
+        if (fetchError || !existing) {
+            return res.status(404).json({
+                success: false,
+                error: 'Shift not found',
+                message: `Shift with ID ${id} not found`
+            });
+        }
+        const inUse = await isShiftInUse(id);
+        if (inUse) {
+            return res.status(409).json({
+                success: false,
+                error: 'Shift in use',
+                message: `Cannot delete shift "${existing.name}" because it is currently assigned to buses or used in assignments. Please remove all assignments first.`
+            });
+        }
+        const { error } = await supabase_1.supabaseAdmin
+            .from('shifts')
+            .delete()
+            .eq('id', id);
         if (error)
             throw error;
-        res.json({ success: true });
+        logger_1.logger.info('Shift deleted successfully', 'admin', { shiftId: id, name: existing.name });
+        res.json({
+            success: true,
+            message: `Shift "${existing.name}" deleted successfully`
+        });
     }
     catch (error) {
         logger_1.logger.error('Error deleting shift', 'admin', { error: error?.message });
-        res.status(500).json({ success: false, error: 'Failed to delete shift', message: error?.message });
+        if (error?.code === '23503') {
+            return res.status(409).json({
+                success: false,
+                error: 'Cannot delete shift',
+                message: 'This shift is currently in use and cannot be deleted. Please remove all assignments first.'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete shift',
+            message: error?.message || 'An unexpected error occurred'
+        });
     }
 });
 router.get('/route-stops', async (req, res) => {
@@ -576,16 +823,33 @@ router.get('/route-stops', async (req, res) => {
     }
 });
 router.post('/route-stops', async (req, res) => {
+    let busStopId = null;
     try {
         const { route_id, name } = req.body;
         if (!route_id || !name)
             return res.status(400).json({ success: false, error: 'route_id and name required' });
-        const { data: busStop } = await supabase_1.supabaseAdmin
+        const { data: routeExists, error: routeCheckError } = await supabase_1.supabaseAdmin
+            .from('routes')
+            .select('id')
+            .eq('id', route_id)
+            .single();
+        if (routeCheckError || !routeExists) {
+            return res.status(404).json({ success: false, error: 'Route not found' });
+        }
+        const trimmedName = String(name).trim();
+        if (!trimmedName) {
+            return res.status(400).json({ success: false, error: 'Stop name cannot be empty' });
+        }
+        const { data: busStop, error: busStopError } = await supabase_1.supabaseAdmin
             .from('bus_stops')
-            .insert({ name, is_active: true })
+            .insert({ name: trimmedName, is_active: true })
             .select('id')
             .single();
-        const stopId = busStop?.id;
+        if (busStopError || !busStop?.id) {
+            logger_1.logger.error('Error creating bus stop', 'admin', { error: busStopError?.message });
+            return res.status(500).json({ success: false, error: 'Failed to create bus stop', message: busStopError?.message });
+        }
+        busStopId = busStop.id;
         const { data: maxStop } = await supabase_1.supabaseAdmin
             .from('route_stops')
             .select('sequence')
@@ -596,11 +860,21 @@ router.post('/route-stops', async (req, res) => {
         const nextSeq = (maxStop?.sequence || 0) + 1;
         const { data, error } = await supabase_1.supabaseAdmin
             .from('route_stops')
-            .insert({ route_id, stop_id: stopId, sequence: nextSeq, is_active: true })
+            .insert({ route_id, stop_id: busStopId, sequence: nextSeq, is_active: true })
             .select('id')
             .single();
-        if (error)
+        if (error) {
+            if (busStopId) {
+                try {
+                    await supabase_1.supabaseAdmin.from('bus_stops').delete().eq('id', busStopId);
+                    logger_1.logger.info('Cleaned up orphaned bus_stop after route_stop creation failure', 'admin', { busStopId });
+                }
+                catch (cleanupError) {
+                    logger_1.logger.error('Error cleaning up orphaned bus_stop', 'admin', { error: cleanupError });
+                }
+            }
             throw error;
+        }
         res.status(201).json({ success: true, data });
     }
     catch (error) {
@@ -649,11 +923,51 @@ router.delete('/route-stops/:id', async (req, res) => {
 router.post('/route-stops/reorder', async (req, res) => {
     try {
         const { route_id, ordered_ids } = req.body;
-        if (!route_id || !Array.isArray(ordered_ids))
+        if (!route_id || !Array.isArray(ordered_ids)) {
             return res.status(400).json({ success: false, error: 'route_id and ordered_ids required' });
+        }
+        if (ordered_ids.length > 0) {
+            const { data: existingStops, error: checkError } = await supabase_1.supabaseAdmin
+                .from('route_stops')
+                .select('id, route_id')
+                .in('id', ordered_ids);
+            if (checkError) {
+                logger_1.logger.error('Error validating route stops', 'admin', { error: checkError.message });
+                return res.status(500).json({ success: false, error: 'Failed to validate route stops', message: checkError.message });
+            }
+            const invalidStops = existingStops?.filter(stop => stop.route_id !== route_id) || [];
+            if (invalidStops.length > 0) {
+                logger_1.logger.error('Invalid route stops in reorder request', 'admin', {
+                    invalidStopIds: invalidStops.map(s => s.id),
+                    expectedRouteId: route_id
+                });
+                return res.status(400).json({
+                    success: false,
+                    error: 'Some stops do not belong to the specified route',
+                    invalidStopIds: invalidStops.map(s => s.id)
+                });
+            }
+            const existingIds = new Set(existingStops?.map(s => s.id) || []);
+            const missingIds = ordered_ids.filter(id => !existingIds.has(id));
+            if (missingIds.length > 0) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Some route stop IDs not found',
+                    missingIds
+                });
+            }
+        }
         let seq = 1;
         for (const id of ordered_ids) {
-            await supabase_1.supabaseAdmin.from('route_stops').update({ sequence: seq++ }).eq('id', id).eq('route_id', route_id);
+            const { error } = await supabase_1.supabaseAdmin
+                .from('route_stops')
+                .update({ sequence: seq++ })
+                .eq('id', id)
+                .eq('route_id', route_id);
+            if (error) {
+                logger_1.logger.error('Error updating sequence for route stop', 'admin', { id, error: error.message });
+                throw error;
+            }
         }
         res.json({ success: true });
     }

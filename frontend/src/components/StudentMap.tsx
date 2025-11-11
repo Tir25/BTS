@@ -28,6 +28,9 @@ import { errorHandler } from '../utils/errorHandler';
 import { formatTime } from '../utils/dateFormatter';
 import { useMapInstance } from '../hooks/useMapInstance';
 import { useStudentMapWebSocketBindings } from '../hooks/useStudentMapWebSocketBindings';
+import { useRouteFiltering } from '../hooks/useRouteFiltering';
+import { getRouteColor } from '../utils/routeColors';
+import { busBelongsToRoute, getBusRouteId } from '../utils/busRouteFilter';
 
 // Feature flags for different modes
 interface StudentMapConfig {
@@ -55,6 +58,8 @@ interface StudentMapProps {
     timestamp: number;
   };
   isDriverTracking?: boolean;
+  // Logout handler
+  onSignOut?: () => void;
 }
 
 const defaultConfig: StudentMapConfig = {
@@ -66,26 +71,6 @@ const defaultConfig: StudentMapConfig = {
   updateInterval: 1000,
   enableAccessibility: true,
   enableInternationalization: false,
-};
-
-// PRODUCTION FIX: Generate distinct colors for routes
-const routeColors = [
-  '#3b82f6', // Blue
-  '#ef4444', // Red
-  '#10b981', // Green
-  '#f59e0b', // Amber
-  '#8b5cf6', // Purple
-  '#ec4899', // Pink
-  '#06b6d4', // Cyan
-  '#f97316', // Orange
-  '#14b8a6', // Teal
-  '#6366f1', // Indigo
-];
-
-const getRouteColor = (routeId: string, index: number): string => {
-  // Use route ID hash for consistent color assignment
-  const hash = routeId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return routeColors[hash % routeColors.length];
 };
 
 // PRODUCTION-GRADE: Ultra-optimized comparison function - eliminates complex calculations
@@ -144,6 +129,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
   mode = 'unified',
   driverLocation,
   isDriverTracking = false,
+  onSignOut,
 }) => {
   // Merge config with defaults - CRITICAL FIX: Simplified logic without caching bugs
   const finalConfig = useMemo(() => {
@@ -299,69 +285,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
     []
   );
 
-  // Load routes from API - FIXED: Properly handle API response structure
-  const loadRoutes = useCallback(async () => {
-    try {
-      logger.info('🔄 Loading routes from backend API...', 'component');
-      
-      const response = await apiService.getRoutes();
-      
-      // PRODUCTION FIX: Handle both direct array and wrapped response formats
-      let routesArray: Route[] = [];
-      
-      if (response && typeof response === 'object') {
-        // Check if response has the standard API format {success, data, timestamp}
-        if ('data' in response && Array.isArray(response.data)) {
-          routesArray = response.data;
-          logger.info('✅ Routes loaded from API response', 'component', { 
-            count: routesArray.length,
-            format: 'wrapped'
-          });
-        } 
-        // Fallback: Check if response itself is an array (legacy support)
-        else if (Array.isArray(response)) {
-          routesArray = response;
-          logger.info('✅ Routes loaded as direct array', 'component', { 
-            count: routesArray.length,
-            format: 'direct'
-          });
-        }
-        // Check if response.success indicates an error
-        else if ('success' in response && !response.success) {
-          const errorMsg = ('error' in response ? response.error : 'Failed to load routes') || 'Unknown error';
-          logger.error('❌ API returned error response', 'component', { error: errorMsg });
-          setConnectionError(`Failed to load routes: ${errorMsg}`);
-          setRoutes([]);
-          return;
-        }
-      }
-      
-      if (routesArray.length > 0) {
-        setRoutes(routesArray);
-        logger.info('✅ Routes loaded successfully', 'component', { 
-          count: routesArray.length 
-        });
-      } else {
-        logger.warn('⚠️ No routes data received or empty array', 'component', {
-          responseType: typeof response,
-          hasSuccess: response && typeof response === 'object' && 'success' in response,
-          hasData: response && typeof response === 'object' && 'data' in response
-        });
-        setRoutes([]);
-      }
-    } catch (error) {
-      logger.error('❌ Failed to load routes', 'component', { 
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      // Enhanced error handling with detailed error messages
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setConnectionError(`Failed to load routes: ${errorMessage}`);
-      
-      setRoutes([]);
-    }
-  }, []);
+  // REMOVED: loadRoutes function - now handled by useRouteFiltering hook
 
   // REDUNDANT CODE REMOVED: removeRoutesFromMap and addRoutesToMap functions
   // These were unused and replaced by inline route management in useEffect
@@ -488,6 +412,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
   }, [buses]);
 
   // CRITICAL FIX: Ultra-optimized marker update with minimal DOM manipulation
+  // PRODUCTION FIX: Filter markers by selected route - only show buses on selected route
   const updateBusMarker = useCallback(
     (location: WSBusLocation) => {
       if (!map.current) return;
@@ -632,6 +557,27 @@ const StudentMap: React.FC<StudentMapProps> = ({
         }
       }
 
+      // PRODUCTION FIX: Check if bus belongs to selected route before showing marker
+      // If a specific route is selected, only show buses on that route
+      if (selectedRoute !== 'all' && !busBelongsToRoute(bus, selectedRoute)) {
+        // Bus doesn't belong to selected route - hide/remove marker if it exists
+        const existingMarker = markers.current[canonicalBusId];
+        if (existingMarker) {
+          existingMarker.remove();
+          delete markers.current[canonicalBusId];
+          if (popups.current[canonicalBusId]) {
+            popups.current[canonicalBusId].remove();
+            delete popups.current[canonicalBusId];
+          }
+          logger.debug('🚫 Hiding marker for bus not on selected route', 'component', {
+            busId: canonicalBusId,
+            selectedRoute,
+            busRouteId: getBusRouteId(bus)
+          });
+        }
+        return; // Don't create or update marker for buses not on selected route
+      }
+
       // Check if marker already exists
       let marker = markers.current[canonicalBusId];
 
@@ -758,7 +704,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
         (popup as any)._lastUpdate = Date.now();
       }
     },
-    [getCanonicalBusId] // Use canonical mapping
+    [getCanonicalBusId, selectedRoute] // Include selectedRoute to filter by route
   );
 
   // MEMORY LEAK FIX: Enhanced marker removal with popup cleanup
@@ -797,54 +743,37 @@ const StudentMap: React.FC<StudentMapProps> = ({
     setConnectionError,
   });
 
-  // PRODUCTION FIX: Track loading state for routes
-  const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
-  
-  // Load routes when component mounts (no-op until shift chosen)
-  useEffect(() => {
-    if (!selectedShift) {
-      setRoutes([]);
-      setSelectedRoute('all');
-      setIsLoadingRoutes(false);
-      return;
-    }
-    (async () => {
-      setIsLoadingRoutes(true);
-      try {
-        logger.info('Loading routes for shift', 'StudentMap', { shiftName: selectedShift });
-        const res = await apiService.getRoutesByShift({ shiftName: selectedShift });
-        logger.info('Routes API response', 'StudentMap', { 
-          success: res?.success, 
-          dataType: Array.isArray(res?.data) ? 'array' : typeof res?.data,
-          dataLength: Array.isArray(res?.data) ? res.data.length : 0,
-          data: res?.data 
-        });
-        if (res?.success && Array.isArray(res.data)) {
-          setRoutes(res.data as any);
-          logger.info('Routes set successfully', 'StudentMap', { count: res.data.length, routes: res.data });
-          // If current selected route isn't in list, reset to 'all'
-          if (selectedRoute !== 'all' && !res.data.find(r => r.id === selectedRoute)) {
-            setSelectedRoute('all');
-          }
-        } else {
-          logger.warn('Invalid response format or empty data', 'StudentMap', { response: res });
-          setRoutes([]);
-          setSelectedRoute('all');
+  // PRODUCTION FIX: Use custom hook for route filtering
+  // This hook handles:
+  // - Loading all routes when no shift is selected
+  // - Loading filtered routes when a shift is selected
+  const {
+    isLoading: isLoadingRoutes,
+    error: routesError,
+  } = useRouteFiltering({
+    selectedShift,
+    onRoutesLoaded: useCallback((loadedRoutes) => {
+      // Update routes state with loaded routes
+      setRoutes(loadedRoutes);
+      // If current selected route isn't in the new list, reset to 'all'
+      setSelectedRoute((currentRoute) => {
+        if (currentRoute !== 'all' && !loadedRoutes.find(r => r.id === currentRoute)) {
+          return 'all';
         }
-      } catch (error) {
-        logger.error('Failed to load routes for shift', 'StudentMap', { 
-          shiftName: selectedShift, 
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
-        });
-        setRoutes([]);
-        setSelectedRoute('all');
-        setConnectionError(`Failed to load routes for ${selectedShift} shift`);
-      } finally {
-        setIsLoadingRoutes(false);
-      }
-    })();
-  }, [selectedShift]);
+        return currentRoute;
+      });
+    }, []), // Empty deps - use functional update to avoid stale closure
+    onError: undefined, // Let the useEffect below handle errors to avoid duplication
+  });
+
+  // Handle routes error display (single source of truth for error handling)
+  useEffect(() => {
+    if (routesError) {
+      setConnectionError(routesError);
+      const timeoutId = setTimeout(() => setConnectionError(null), 5000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [routesError]);
 
   // Load student route status when a route is selected
   useEffect(() => {
@@ -975,7 +904,26 @@ const StudentMap: React.FC<StudentMapProps> = ({
   
   // Add routes to map when routes are loaded - ONLY ADD NEW ROUTES
   const routesProcessed = useRef<Set<string>>(new Set());
+  const previousRoutesRef = useRef<Route[]>([]);
+  
   useEffect(() => {
+    // Clear routesProcessed if routes have changed significantly (e.g., shift change)
+    const currentRouteIds = new Set(routes.map(r => r.id));
+    const previousRouteIds = new Set(previousRoutesRef.current.map(r => r.id));
+    
+    // If routes changed significantly (not just additions), clear the processed set
+    const routesChanged = routes.length !== previousRoutesRef.current.length ||
+      !Array.from(currentRouteIds).every(id => previousRouteIds.has(id));
+    
+    if (routesChanged && routes.length > 0) {
+      // Keep only routes that are still in the current list
+      routesProcessed.current = new Set(
+        Array.from(routesProcessed.current).filter(id => currentRouteIds.has(id))
+      );
+    }
+    
+    previousRoutesRef.current = routes;
+    
     if (routes.length > 0 && map.current && map.current.isStyleLoaded()) {
       // Only add routes that haven't been added yet
       routes.forEach((route, index) => {
@@ -1420,13 +1368,11 @@ const StudentMap: React.FC<StudentMapProps> = ({
     // Method 2: If no session bus, check busesWithLiveLocations filtered by route
     if (!targetBusId) {
       // Calculate filtered buses inline from busesWithLiveLocations
+      // PRODUCTION FIX: Use centralized utility function
       // Apply maxBuses limit and filter by route
       const maxBuses = finalConfig.maxBuses;
       const busesToCheck = busesWithLiveLocations.slice(0, maxBuses);
-      const filteredBuses = busesToCheck.filter(bus => {
-        const busRouteId = (bus as any).routeId || (bus as any).route_id;
-        return busRouteId === selectedRoute;
-      });
+      const filteredBuses = busesToCheck.filter(bus => busBelongsToRoute(bus, selectedRoute));
       
       if (filteredBuses.length > 0) {
         for (const bus of filteredBuses) {
@@ -1451,13 +1397,13 @@ const StudentMap: React.FC<StudentMapProps> = ({
         const lastUpdate = new Date(location.timestamp).getTime();
         if (lastUpdate > fiveMinutesAgo) {
           // Check if this bus belongs to the selected route
+          // PRODUCTION FIX: Use centralized utility function
           const bus = buses.find(b => {
             const bId = (b as any).id || (b as any).bus_id;
-            const bRouteId = (b as any).routeId || (b as any).route_id;
-            return bId === busId && bRouteId === selectedRoute;
+            return bId === busId;
           });
           
-          if (bus) {
+          if (bus && busBelongsToRoute(bus, selectedRoute)) {
             targetBusId = busId;
             targetLocation = location;
             logger.info('✅ Found bus from buses array', 'component', { busId, routeId: selectedRoute });
@@ -1466,14 +1412,11 @@ const StudentMap: React.FC<StudentMapProps> = ({
           
           // Also check cached bus
           const cachedBus = busInfoCache.current.get(busId);
-          if (cachedBus) {
-            const busRouteId = (cachedBus as any).routeId || (cachedBus as any).route_id;
-            if (busRouteId === selectedRoute) {
-              targetBusId = busId;
-              targetLocation = location;
-              logger.info('✅ Found bus from cache', 'component', { busId, routeId: selectedRoute });
-              break;
-            }
+          if (cachedBus && busBelongsToRoute(cachedBus, selectedRoute)) {
+            targetBusId = busId;
+            targetLocation = location;
+            logger.info('✅ Found bus from cache', 'component', { busId, routeId: selectedRoute });
+            break;
           }
         }
       }
@@ -1481,12 +1424,10 @@ const StudentMap: React.FC<StudentMapProps> = ({
 
     if (!targetBusId || !targetLocation) {
       // Calculate filtered buses count for logging
+      // PRODUCTION FIX: Use centralized utility function
       const maxBuses = finalConfig.maxBuses;
       const busesToCheck = busesWithLiveLocations.slice(0, maxBuses);
-      const filteredBusesCount = busesToCheck.filter(bus => {
-        const busRouteId = (bus as any).routeId || (bus as any).route_id;
-        return busRouteId === selectedRoute;
-      }).length;
+      const filteredBusesCount = busesToCheck.filter(bus => busBelongsToRoute(bus, selectedRoute)).length;
       
       logger.warn('⚠️ No buses found for selected route', 'component', { 
         selectedRoute,
@@ -1523,12 +1464,10 @@ const StudentMap: React.FC<StudentMapProps> = ({
   }, [busesWithLiveLocations, finalConfig.maxBuses]);
 
   // Filter buses based on selected route - OPTIMIZED with caching
+  // PRODUCTION FIX: Use centralized utility function to avoid duplication
   const displayBuses = useMemo(() => {
     if (selectedRoute === 'all') return limitedBuses;
-    return limitedBuses.filter(bus => {
-      const busRouteId = (bus as any).routeId || (bus as any).route_id;
-      return busRouteId === selectedRoute;
-    });
+    return limitedBuses.filter(bus => busBelongsToRoute(bus, selectedRoute));
   }, [limitedBuses, selectedRoute]);
 
   // PRODUCTION FIX: Check if there's a bus available for the selected route
@@ -1552,6 +1491,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
     if (hasDisplayBus) return true;
     
     // Method 3: Check all buses with live locations for this route
+    // PRODUCTION FIX: Use centralized utility function
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
     for (const [busId, location] of Object.entries(lastBusLocations)) {
       const lastUpdate = new Date(location.timestamp).getTime();
@@ -1559,15 +1499,13 @@ const StudentMap: React.FC<StudentMapProps> = ({
         // Check if this bus belongs to the selected route
         const bus = buses.find(b => {
           const bId = (b as any).id || (b as any).bus_id;
-          const bRouteId = (b as any).routeId || (b as any).route_id;
-          return bId === busId && bRouteId === selectedRoute;
+          return bId === busId;
         });
-        if (bus) return true;
+        if (bus && busBelongsToRoute(bus, selectedRoute)) return true;
         
         // Also check cached bus
         const cachedBus = busInfoCache.current.get(busId);
-        if (cachedBus && 
-            ((cachedBus as any).routeId === selectedRoute || (cachedBus as any).route_id === selectedRoute)) {
+        if (cachedBus && busBelongsToRoute(cachedBus, selectedRoute)) {
           return true;
         }
       }
@@ -1589,6 +1527,121 @@ const StudentMap: React.FC<StudentMapProps> = ({
       }
     });
   }, [selectedRoute, routes]);
+
+  // PRODUCTION FIX: Filter bus markers by selected route
+  // Hide markers for buses not on selected route, show all when "all" is selected
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+
+    // Get all buses with live locations
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const activeBusIds = new Set<string>();
+    
+    // Collect all active bus IDs
+    for (const [busId, location] of Object.entries(lastBusLocations)) {
+      const lastUpdate = new Date(location.timestamp).getTime();
+      if (lastUpdate > fiveMinutesAgo) {
+        activeBusIds.add(busId);
+      }
+    }
+
+    // Also check buses array
+    buses.forEach(bus => {
+      const busId = (bus as any).id || (bus as any).bus_id || bus.busId;
+      if (busId) {
+        activeBusIds.add(busId);
+      }
+    });
+
+    // Update marker visibility based on route selection
+    activeBusIds.forEach(busId => {
+      const marker = markers.current[busId];
+      if (!marker) return; // Marker doesn't exist yet
+
+      // Get bus info from cache or buses array
+      let bus = busInfoCache.current.get(busId);
+      if (!bus) {
+        bus = buses.find(b => {
+          const bId = (b as any).id || (b as any).bus_id || b.busId;
+          return bId === busId;
+        }) || null;
+      }
+
+      const shouldShow = selectedRoute === 'all' || busBelongsToRoute(bus, selectedRoute);
+
+      if (shouldShow) {
+        // Show marker - ensure it's added to map if it was removed
+        if (!marker._map) {
+          marker.addTo(map.current);
+        }
+        // Make marker visible
+        const element = marker.getElement();
+        if (element) {
+          element.style.display = '';
+          element.style.opacity = '1';
+        }
+      } else {
+        // Hide marker - remove from map
+        if (marker._map) {
+          marker.remove();
+        }
+        logger.debug('🚫 Hiding bus marker - not on selected route', 'component', {
+          busId,
+          selectedRoute,
+          busRouteId: getBusRouteId(bus)
+        });
+      }
+    });
+
+    // Re-add markers for buses on selected route that were previously hidden
+    if (selectedRoute !== 'all') {
+      // Check all buses and re-add markers for buses on selected route
+      buses.forEach(bus => {
+        const busId = (bus as any).id || (bus as any).bus_id || bus.busId;
+        if (!busId) return;
+
+        if (busBelongsToRoute(bus, selectedRoute)) {
+          const location = lastBusLocations[busId];
+          if (location) {
+            const lastUpdate = new Date(location.timestamp).getTime();
+            const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+            if (lastUpdate > fiveMinutesAgo) {
+              // Bus is active and on selected route - ensure marker exists
+              if (!markers.current[busId]) {
+                // Trigger marker creation by calling updateBusMarker
+                // This will be handled by the WebSocket update, but we can trigger it here
+                // if we have the location data
+                const wsLocation: WSBusLocation = {
+                  busId: busId,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  timestamp: location.timestamp,
+                  speed: location.speed,
+                  heading: location.heading,
+                };
+                updateBusMarker(wsLocation);
+              } else if (!markers.current[busId]._map) {
+                // Marker exists but was removed - re-add it
+                markers.current[busId].addTo(map.current);
+              }
+            }
+          }
+        }
+      });
+    } else {
+      // "All" selected - re-add all markers that were hidden
+      Object.entries(markers.current).forEach(([busId, marker]) => {
+        if (!marker._map) {
+          marker.addTo(map.current);
+        }
+        const element = marker.getElement();
+        if (element) {
+          element.style.display = '';
+          element.style.opacity = '1';
+        }
+      });
+    }
+  }, [selectedRoute, buses, lastBusLocations, updateBusMarker]);
 
   // PRODUCTION FIX: Auto-fit map bounds when route is selected
   useEffect(() => {
@@ -1699,6 +1752,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
           onCenterOnBus={handleCenterOnBus}
           isLoadingRoutes={isLoadingRoutes}
           onCenterOnBusForRoute={handleCenterOnBusForRoute}
+          onSignOut={onSignOut}
         />
 
         {/* Right Side - Map Container */}
