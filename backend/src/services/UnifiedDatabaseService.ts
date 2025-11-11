@@ -70,8 +70,9 @@ export class UnifiedDatabaseService {
   static async getAllBuses(): Promise<BusWithDriver[]> {
     try {
       // Use the bus_management_view for comprehensive data
+      type BusManagementViewRow = import('../config/supabase').Database['public']['Views']['bus_management_view']['Row'];
       const { data: buses, error: busesError } = await supabaseAdmin
-        .from('bus_management_view')
+        .from<BusManagementViewRow>('bus_management_view')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -905,8 +906,9 @@ export class UnifiedDatabaseService {
   static async deleteDriver(driverId: string): Promise<DriverData | null> {
     try {
       // First, get the driver data before deletion
+      type UserProfilesRow = import('../config/supabase').Database['public']['Tables']['user_profiles']['Row'];
       const { data: driverData, error: fetchError } = await supabaseAdmin
-        .from('user_profiles')
+        .from<Pick<UserProfilesRow,'id'|'email'>>('user_profiles')
         .select('id, email')
         .eq('id', driverId)
         .eq('role', 'driver')
@@ -929,14 +931,15 @@ export class UnifiedDatabaseService {
 
       // 2. Update buses to unassign driver and route (route should remain in database, just unassigned from bus)
       // Get buses assigned to this driver first to log which routes are being unassigned
+      type BusesRow = import('../config/supabase').Database['public']['Tables']['buses']['Row'];
       const { data: assignedBuses } = await supabaseAdmin
-        .from('buses')
+        .from<Pick<BusesRow,'id'|'route_id'>>('buses')
         .select('id, route_id')
         .eq('assigned_driver_profile_id', driverId);
 
       // Update buses to remove driver assignment and unassign route (but route stays in database)
       const { error: busUpdateError } = await supabaseAdmin
-        .from('buses')
+        .from<BusesRow>('buses')
         .update({
           assigned_driver_profile_id: null,
           route_id: null, // Unassign route from bus, but route remains in routes table
@@ -1029,7 +1032,7 @@ export class UnifiedDatabaseService {
 
       // Get all inactive drivers
       const { data: inactiveDrivers, error: fetchError } = await supabaseAdmin
-        .from('user_profiles')
+        .from<Pick<UserProfilesRow,'id'|'email'>>('user_profiles')
         .select('id, email')
         .eq('is_active', false)
         .eq('role', 'driver');
