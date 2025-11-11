@@ -70,9 +70,8 @@ export class UnifiedDatabaseService {
   static async getAllBuses(): Promise<BusWithDriver[]> {
     try {
       // Use the bus_management_view for comprehensive data
-      type BusManagementViewRow = import('../config/supabase').Database['public']['Views']['bus_management_view']['Row'];
       const { data: buses, error: busesError } = await supabaseAdmin
-        .from<BusManagementViewRow>('bus_management_view')
+        .from('bus_management_view')
         .select('*')
         .order('created_at', { ascending: false });
 

@@ -82,7 +82,7 @@ export class RouteService {
       const { data: routes, error } = await supabaseAdmin
         .from('route_management_view')
         .select('*')
-        .returns<RouteManagementViewRow[]>()
+        
         .order('name');
 
       if (error) {
@@ -128,7 +128,7 @@ export class RouteService {
         .select('*')
         .eq('id', routeId)
         .eq('is_active', true)
-        .returns<RouteManagementViewRow[]>()
+        
         .single();
 
       if (error) {
@@ -299,7 +299,7 @@ export class RouteService {
         .from('routes')
         .select('id, name, description, distance_km, estimated_duration_minutes, city, is_active, created_at, updated_at')
         .eq('id', routeId)
-        .returns<RoutesRow[]>()
+        
         .single();
 
       if (fetchError) {
