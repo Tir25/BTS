@@ -91,8 +91,11 @@ export function getSupabase() {
 }
 
 // Re-export for convenience (these will be the primary exports going forward)
-export const supabaseAdmin = getLegacyDriverAdmin();
-export const supabase = getLegacyDriverAdmin(); // For backward compatibility
+// Cast legacy admin client to any to avoid overly strict inference in downstream usage
+// Render's TypeScript environment was inferring `never` for many Supabase query results,
+// so treating the default exports as `any` keeps runtime behaviour while relaxing types.
+export const supabaseAdmin = getLegacyDriverAdmin() as any;
+export const supabase = getLegacyDriverAdmin() as any; // For backward compatibility
 
 // Default export
 export default {
