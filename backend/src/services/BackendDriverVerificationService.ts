@@ -224,7 +224,7 @@ export class BackendDriverVerificationService {
           bus_number,
           assigned_driver_profile_id,
           route_id,
-          user_profiles!assigned_driver_profile_id(full_name),
+          user_profiles!buses_assigned_driver_profile_id_fkey(full_name),
           routes(name)
         `)
         .eq('is_active', true)

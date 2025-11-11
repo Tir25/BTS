@@ -44,7 +44,7 @@ export interface RouteData {
   distance_km?: number;
   estimated_duration_minutes?: number;
   is_active?: boolean;
-  city?: string;
+  city?: string | null;
 }
 
 export class RouteService {

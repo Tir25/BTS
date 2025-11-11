@@ -324,7 +324,7 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
         routes!inner(
           name
         ),
-        profiles!inner(
+        user_profiles!inner(
           full_name
         )
       `

@@ -189,9 +189,51 @@ export interface Database {
         Update: { id?: string; user_id?: string; role?: string };
       };
       shifts: {
-        Row: { id: string; driver_id: string };
-        Insert: { id?: string; driver_id: string };
-        Update: { id?: string; driver_id?: string };
+        Row: { id: string; driver_id: string; name?: string | null; is_active?: boolean | null; created_at?: string | null; updated_at?: string | null };
+        Insert: { id?: string; driver_id: string; name?: string | null; is_active?: boolean | null; created_at?: string | null; updated_at?: string | null };
+        Update: { id?: string; driver_id?: string; name?: string | null; is_active?: boolean | null; created_at?: string | null; updated_at?: string | null };
+      };
+      trip_sessions: {
+        Row: {
+          id: string;
+          driver_id: string;
+          route_id: string | null;
+          shift_id: string | null;
+          bus_id: string | null;
+          started_at: string;
+          ended_at: string | null;
+          last_stop_sequence: number | null;
+        };
+        Insert: {
+          id?: string;
+          driver_id: string;
+          route_id?: string | null;
+          shift_id?: string | null;
+          bus_id?: string | null;
+          started_at?: string;
+          ended_at?: string | null;
+          last_stop_sequence?: number | null;
+        };
+        Update: {
+          id?: string;
+          driver_id?: string;
+          route_id?: string | null;
+          shift_id?: string | null;
+          bus_id?: string | null;
+          started_at?: string;
+          ended_at?: string | null;
+          last_stop_sequence?: number | null;
+        };
+      };
+      bus_stops: {
+        Row: { id: string; name: string };
+        Insert: { id?: string; name: string };
+        Update: { id?: string; name?: string };
+      };
+      locations: {
+        Row: { id: string; bus_id: string; driver_id: string; location: unknown; speed_kmh?: number | null; heading_degrees?: number | null; recorded_at: string };
+        Insert: { id?: string; bus_id: string; driver_id: string; location: unknown; speed_kmh?: number | null; heading_degrees?: number | null; recorded_at?: string };
+        Update: { id?: string; bus_id?: string; driver_id?: string; location?: unknown; speed_kmh?: number | null; heading_degrees?: number | null; recorded_at?: string };
       };
     };
     Views: {

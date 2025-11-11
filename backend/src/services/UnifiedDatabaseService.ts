@@ -906,9 +906,8 @@ export class UnifiedDatabaseService {
   static async deleteDriver(driverId: string): Promise<DriverData | null> {
     try {
       // First, get the driver data before deletion
-      type UserProfilesRow = import('../config/supabase').Database['public']['Tables']['user_profiles']['Row'];
       const { data: driverData, error: fetchError } = await supabaseAdmin
-        .from<Pick<UserProfilesRow,'id'|'email'>>('user_profiles')
+        .from('user_profiles')
         .select('id, email')
         .eq('id', driverId)
         .eq('role', 'driver')
