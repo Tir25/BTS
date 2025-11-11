@@ -241,7 +241,7 @@ export class RouteService {
         return null;
       }
 
-      const { data: route, error } = await supabaseAdmin
+      const { data: route, error } = await (supabaseAdmin as any)
         .from('routes')
         .update(updateData as any)
         .eq('id', routeId)
@@ -327,9 +327,9 @@ export class RouteService {
 
       // 3. Update buses to remove route assignment
       const busClearUpdate: BusesUpdate = { route_id: null };
-      await supabaseAdmin
+      await (supabaseAdmin as any)
         .from('buses')
-        .update(busClearUpdate)
+        .update(busClearUpdate as any)
         .eq('route_id', routeId);
 
       // 4. Delete from bus_route_assignments
@@ -345,9 +345,9 @@ export class RouteService {
         assignment_notes: 'Route deleted',
         updated_at: new Date().toISOString()
       };
-      await supabaseAdmin
+      await (supabaseAdmin as any)
         .from('buses')
-        .update(busUnassignUpdate)
+        .update(busUnassignUpdate as any)
         .eq('route_id', routeId);
 
       // 6. Delete from bus_route_shifts

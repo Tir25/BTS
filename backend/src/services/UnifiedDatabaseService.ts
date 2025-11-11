@@ -933,13 +933,13 @@ export class UnifiedDatabaseService {
       // Get buses assigned to this driver first to log which routes are being unassigned
       type BusesRow = import('../config/supabase').Database['public']['Tables']['buses']['Row'];
       const { data: assignedBuses } = await supabaseAdmin
-        .from<Pick<BusesRow,'id'|'route_id'>>('buses')
+        .from('buses')
         .select('id, route_id')
         .eq('assigned_driver_profile_id', driverId);
 
       // Update buses to remove driver assignment and unassign route (but route stays in database)
       const { error: busUpdateError } = await supabaseAdmin
-        .from<BusesRow>('buses')
+        .from('buses')
         .update({
           assigned_driver_profile_id: null,
           route_id: null, // Unassign route from bus, but route remains in routes table
@@ -956,12 +956,12 @@ export class UnifiedDatabaseService {
 
       // Log which routes were unassigned (for debugging)
       if (assignedBuses && assignedBuses.length > 0) {
-        const routeIds = assignedBuses.map(b => b.route_id).filter(Boolean);
+        const routeIds = (assignedBuses as any[]).map((b: any) => b.route_id).filter(Boolean);
         if (routeIds.length > 0) {
           logger.info('Routes unassigned from buses (routes remain in database)', 'unified-db', { 
             driverId, 
             routeIds,
-            busIds: assignedBuses.map(b => b.id)
+            busIds: (assignedBuses as any[]).map((b: any) => b.id)
           });
         }
       }
@@ -1032,7 +1032,7 @@ export class UnifiedDatabaseService {
 
       // Get all inactive drivers
       const { data: inactiveDrivers, error: fetchError } = await supabaseAdmin
-        .from<Pick<UserProfilesRow,'id'|'email'>>('user_profiles')
+        .from('user_profiles')
         .select('id, email')
         .eq('is_active', false)
         .eq('role', 'driver');
