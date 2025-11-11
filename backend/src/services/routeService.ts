@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../config/supabase';
+import type { Database } from '../config/supabase';
 import { logger } from '../utils/logger';
 import type { LineString } from 'geojson';
 
@@ -76,9 +77,12 @@ export class RouteService {
 
   static async getAllRoutes(): Promise<RouteWithGeoJSON[]> {
     try {
+      type RouteManagementViewRow = Database['public']['Views']['route_management_view']['Row'];
+
       const { data: routes, error } = await supabaseAdmin
         .from('route_management_view')
         .select('*')
+        .returns<RouteManagementViewRow[]>()
         .order('name');
 
       if (error) {
@@ -117,11 +121,14 @@ export class RouteService {
 
   static async getRouteById(routeId: string): Promise<RouteWithGeoJSON | null> {
     try {
+      type RouteManagementViewRow = Database['public']['Views']['route_management_view']['Row'];
+
       const { data: route, error } = await supabaseAdmin
         .from('route_management_view')
         .select('*')
         .eq('id', routeId)
         .eq('is_active', true)
+        .returns<RouteManagementViewRow[]>()
         .single();
 
       if (error) {
@@ -158,16 +165,21 @@ export class RouteService {
 
   static async createRoute(routeData: RouteData): Promise<RouteWithGeoJSON> {
     try {
+      type RoutesRow = Database['public']['Tables']['routes']['Row'];
+      type RoutesInsert = Database['public']['Tables']['routes']['Insert'];
+
+      const insertPayload: RoutesInsert = {
+        name: routeData.name,
+        description: routeData.description || '',
+        distance_km: routeData.distance_km ?? 0,
+        estimated_duration_minutes: routeData.estimated_duration_minutes ?? 0,
+        city: routeData.city ?? null,
+        is_active: routeData.is_active !== false,
+      };
+
       const { data: route, error } = await supabaseAdmin
         .from('routes')
-        .insert({
-          name: routeData.name,
-          description: routeData.description || '',
-          distance_km: routeData.distance_km || 0,
-          estimated_duration_minutes: routeData.estimated_duration_minutes || 0,
-          city: routeData.city || '',
-          is_active: routeData.is_active !== false,
-        })
+        .insert(insertPayload)
         .select(`
           id,
           name,
@@ -179,6 +191,7 @@ export class RouteService {
           created_at,
           updated_at
         `)
+        .returns<RoutesRow[]>()
         .single();
 
       if (error) {
@@ -212,13 +225,16 @@ export class RouteService {
 
   static async updateRoute(routeId: string, routeData: Partial<RouteData>): Promise<RouteWithGeoJSON | null> {
     try {
-      const updateData: any = {};
+      type RoutesRow = Database['public']['Tables']['routes']['Row'];
+      type RoutesUpdate = Database['public']['Tables']['routes']['Update'];
+
+      const updateData: RoutesUpdate = {};
       
       if (routeData.name !== undefined) updateData.name = routeData.name;
       if (routeData.description !== undefined) updateData.description = routeData.description;
       if (routeData.distance_km !== undefined) updateData.distance_km = routeData.distance_km;
       if (routeData.estimated_duration_minutes !== undefined) updateData.estimated_duration_minutes = routeData.estimated_duration_minutes;
-      if (routeData.city !== undefined) updateData.city = routeData.city;
+      if (routeData.city !== undefined) updateData.city = routeData.city ?? null;
       if (routeData.is_active !== undefined) updateData.is_active = routeData.is_active;
 
       if (Object.keys(updateData).length === 0) {
@@ -240,6 +256,7 @@ export class RouteService {
           created_at,
           updated_at
         `)
+        .returns<RoutesRow[]>()
         .single();
 
       if (error) {
@@ -276,11 +293,15 @@ export class RouteService {
 
   static async deleteRoute(routeId: string): Promise<RouteWithGeoJSON | null> {
     try {
+      type RoutesRow = Database['public']['Tables']['routes']['Row'];
+      type BusesUpdate = Database['public']['Tables']['buses']['Update'];
+
       // First, get the route data before deletion
       const { data: route, error: fetchError } = await supabaseAdmin
         .from('routes')
         .select('id, name, description, distance_km, estimated_duration_minutes, city, is_active, created_at, updated_at')
         .eq('id', routeId)
+        .returns<RoutesRow[]>()
         .single();
 
       if (fetchError) {
@@ -305,9 +326,10 @@ export class RouteService {
         .eq('route_id', routeId);
 
       // 3. Update buses to remove route assignment
+      const busClearUpdate: BusesUpdate = { route_id: null };
       await supabaseAdmin
         .from('buses')
-        .update({ route_id: null })
+        .update(busClearUpdate)
         .eq('route_id', routeId);
 
       // 4. Delete from bus_route_assignments
@@ -317,14 +339,15 @@ export class RouteService {
         .eq('route_id', routeId);
 
       // 5. Update buses table to remove route assignments
+      const busUnassignUpdate: BusesUpdate = {
+        route_id: null,
+        assignment_status: 'unassigned',
+        assignment_notes: 'Route deleted',
+        updated_at: new Date().toISOString()
+      };
       await supabaseAdmin
         .from('buses')
-        .update({
-          route_id: null,
-          assignment_status: 'unassigned',
-          assignment_notes: 'Route deleted',
-          updated_at: new Date().toISOString()
-        })
+        .update(busUnassignUpdate)
         .eq('route_id', routeId);
 
       // 6. Delete from bus_route_shifts
