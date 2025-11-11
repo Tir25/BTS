@@ -31,6 +31,28 @@ import {
   DriverLocationData 
 } from '../types/driver';
 
+const formatShiftLabel = (
+  name?: string | null,
+  start?: string | null,
+  end?: string | null
+): string | null => {
+  if (!name && !start && !end) return null;
+  const normalizeTime = (time?: string | null) => {
+    if (!time) return null;
+    return time.length >= 5 ? time.slice(0, 5) : time;
+  };
+  const startFormatted = normalizeTime(start);
+  const endFormatted = normalizeTime(end);
+  if (startFormatted && endFormatted) {
+    return name ? `${name} (${startFormatted} - ${endFormatted})` : `${startFormatted} - ${endFormatted}`;
+  }
+  if (name) return name;
+  if (startFormatted || endFormatted) {
+    return [startFormatted, endFormatted].filter(Boolean).join(' - ') || null;
+  }
+  return null;
+};
+
 const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({ 
   mode = 'login' 
 }) => {
@@ -69,6 +91,26 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
   // PRODUCTION FIX: Enhanced stops loading with route information
   const [stopsState, setStopsState] = React.useState<{ completed: any[]; next: any | null; remaining: any[] } | null>(null);
   const [currentShiftName, setCurrentShiftName] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!busAssignment) {
+      setCurrentShiftName(null);
+      return;
+    }
+    setCurrentShiftName(
+      formatShiftLabel(
+        busAssignment.shift_name,
+        busAssignment.shift_start_time,
+        busAssignment.shift_end_time
+      )
+    );
+  }, [
+    busAssignment?.shift_name,
+    busAssignment?.shift_start_time,
+    busAssignment?.shift_end_time,
+    busAssignment?.bus_id
+  ]);
+
   const refreshStops = React.useCallback(async () => {
     if (!isAuthenticated || !busAssignment) {
       logger.debug('Cannot refresh stops: not authenticated or no assignment', 'UnifiedDriverInterface', {
@@ -108,7 +150,21 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
           });
         } else {
           setStopsState(stopsData);
-          setCurrentShiftName(res.data.shift_name || null);
+          setCurrentShiftName(
+            formatShiftLabel(
+              res.data.shift_name,
+              res.data.shift_start_time,
+              res.data.shift_end_time
+            )
+          );
+          
+          driverActions.updateBusAssignment?.({
+            ...busAssignment,
+            shift_id: res.data.shift_id ?? busAssignment.shift_id ?? null,
+            shift_name: res.data.shift_name ?? busAssignment.shift_name ?? null,
+            shift_start_time: res.data.shift_start_time ?? busAssignment.shift_start_time ?? null,
+            shift_end_time: res.data.shift_end_time ?? busAssignment.shift_end_time ?? null,
+          });
           
           // PRODUCTION FIX: Update route information if provided
           if (res.data.route_name && !busAssignment.route_name) {
@@ -817,7 +873,7 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                 connectionStatus={tracking.connectionStatus === 'reconnecting' ? 'connecting' : tracking.connectionStatus}
                 onStartTracking={async () => {
                   const { apiService } = await import('../api');
-                  await apiService.startTracking(busAssignment?.driver_id);
+                  await apiService.startTracking(busAssignment?.driver_id, busAssignment?.shift_id || null);
                   await tracking.startTracking();
                   await refreshStops();
                 }}
@@ -866,7 +922,7 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                     logger.info('Starting tracking session...', 'UnifiedDriverInterface', {
                       driverId: busAssignment?.driver_id
                     });
-                    const startResult = await apiService.startTracking(busAssignment?.driver_id);
+                    const startResult = await apiService.startTracking(busAssignment?.driver_id, busAssignment?.shift_id || null);
                     
                     if (!startResult.success) {
                       logger.warn('Failed to start tracking session', 'UnifiedDriverInterface', {
@@ -945,7 +1001,7 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                     try {
                       logger.info('Retrying stop reached...', 'UnifiedDriverInterface');
                       notifyWarning('Retrying', 'Attempting to retry marking stop as reached...');
-                      await apiService.startTracking(busAssignment?.driver_id);
+                      await apiService.startTracking(busAssignment?.driver_id, busAssignment?.shift_id || null);
                       const retryResult = await apiService.markStopReached(busAssignment?.driver_id, stopId);
                       if (retryResult.success) {
                         await new Promise(resolve => setTimeout(resolve, 500));

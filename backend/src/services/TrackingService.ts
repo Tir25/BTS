@@ -10,7 +10,7 @@ export class TrackingService {
     const routeId = assignment.route_id;
     const busId = assignment.bus_id;
 
-    let finalShiftId = shiftId;
+    let finalShiftId = shiftId || assignment.shift_id || null;
     if (!finalShiftId) {
       const { data: dayShift } = await supabaseAdmin
         .from('shifts')
@@ -33,13 +33,40 @@ export class TrackingService {
     // Upsert: ensure only one active session per driver
     const { data: existingActive } = await supabaseAdmin
       .from('trip_sessions')
-      .select('id')
+      .select('id, shift_id')
       .eq('driver_id', driverId)
       .is('ended_at', null)
       .maybeSingle();
 
     if (existingActive) {
-      logger.info('Reusing active trip session', 'tracking-service', { driverId, routeId, busId, shiftId: finalShiftId });
+      logger.info('Reusing active trip session', 'tracking-service', { driverId, routeId, busId, shiftId: finalShiftId, sessionShiftId: existingActive.shift_id });
+
+      if (finalShiftId && existingActive.shift_id !== finalShiftId) {
+        const { error: shiftUpdateError } = await supabaseAdmin
+          .from('trip_sessions')
+          .update({ shift_id: finalShiftId })
+          .eq('id', existingActive.id);
+
+        if (shiftUpdateError) {
+          logger.warn('Failed to update session shift_id', 'tracking-service', { error: shiftUpdateError, driverId, sessionId: existingActive.id, desiredShiftId: finalShiftId });
+        } else {
+          logger.info('Session shift_id updated to match assignment', 'tracking-service', { driverId, sessionId: existingActive.id, shiftId: finalShiftId });
+          existingActive.shift_id = finalShiftId;
+        }
+      } else if (!existingActive.shift_id && finalShiftId) {
+        const { error: assignShiftError } = await supabaseAdmin
+          .from('trip_sessions')
+          .update({ shift_id: finalShiftId })
+          .eq('id', existingActive.id);
+        if (assignShiftError) {
+          logger.warn('Failed to assign shift_id to existing session', 'tracking-service', { error: assignShiftError, driverId, sessionId: existingActive.id, shiftId: finalShiftId });
+        } else {
+          existingActive.shift_id = finalShiftId;
+        }
+      } else if (!finalShiftId && existingActive.shift_id) {
+        finalShiftId = existingActive.shift_id;
+      }
+
       return existingActive;
     }
 
@@ -205,6 +232,27 @@ export class TrackingService {
       .is('ended_at', null)
       .maybeSingle();
 
+    if (session && assignment.shift_id && session.shift_id !== assignment.shift_id) {
+      const { error: alignShiftError } = await supabaseAdmin
+        .from('trip_sessions')
+        .update({ shift_id: assignment.shift_id })
+        .eq('id', session.id);
+      if (alignShiftError) {
+        logger.warn('Failed to align session shift_id with assignment', 'tracking-service', { error: alignShiftError, driverId, sessionId: session.id, assignmentShiftId: assignment.shift_id, sessionShiftId: session.shift_id });
+      } else {
+        session.shift_id = assignment.shift_id;
+        logger.info('Session shift_id aligned with assignment', 'tracking-service', { driverId, sessionId: session.id, shiftId: assignment.shift_id });
+      }
+    } else if (session && !session.shift_id && assignment.shift_id) {
+      const { error: assignShiftError } = await supabaseAdmin
+        .from('trip_sessions')
+        .update({ shift_id: assignment.shift_id })
+        .eq('id', session.id);
+      if (!assignShiftError) {
+        session.shift_id = assignment.shift_id;
+      }
+    }
+
     // PRODUCTION FIX: If no active session, start from 0 (all stops should be in remaining)
     // If session exists, use its last_stop_sequence
     const lastSeq = session ? (session.last_stop_sequence || 0) : 0;
@@ -216,14 +264,37 @@ export class TrackingService {
       lastSeq,
       sessionLastSeq: session?.last_stop_sequence
     });
-    let shiftName: string | null = null;
-    if (session?.shift_id) {
-      const { data: shift } = await supabaseAdmin
+    const fetchShiftDetails = async (id: string | null) => {
+      if (!id) return null;
+      const { data, error } = await supabaseAdmin
         .from('shifts')
-        .select('name')
-        .eq('id', session.shift_id)
+        .select('name,start_time,end_time')
+        .eq('id', id)
         .maybeSingle();
-      shiftName = shift?.name || null;
+      if (error) {
+        logger.warn('Error fetching shift information', 'tracking-service', { error, shiftId: id });
+        return null;
+      }
+      if (!data) return null;
+      return {
+        name: (data as any).name || null,
+        start_time: (data as any).start_time ?? null,
+        end_time: (data as any).end_time ?? null,
+      };
+    };
+
+    const effectiveShiftId = session?.shift_id || assignment.shift_id || null;
+    let shiftName: string | null = assignment.shift_name || null;
+    let shiftStartTime: string | null = assignment.shift_start_time || null;
+    let shiftEndTime: string | null = assignment.shift_end_time || null;
+
+    if (effectiveShiftId && (!shiftName || session?.shift_id)) {
+      const resolvedShift = await fetchShiftDetails(effectiveShiftId);
+      if (resolvedShift) {
+        shiftName = resolvedShift.name;
+        shiftStartTime = resolvedShift.start_time;
+        shiftEndTime = resolvedShift.end_time;
+      }
     }
 
     // PRODUCTION FIX: Fetch route stops with proper join to get stop names
@@ -256,8 +327,10 @@ export class TrackingService {
         route_id: assignment.route_id,
         bus_id: assignment.bus_id,
         route_name: assignment.route_name || null,
-        shift_id: session?.shift_id || null,
+        shift_id: effectiveShiftId,
         shift_name: shiftName,
+        shift_start_time: shiftStartTime,
+        shift_end_time: shiftEndTime,
         tracking_active: !!session,
         stops: { completed: [], next: null, remaining: [] }
       };
@@ -325,8 +398,10 @@ export class TrackingService {
       route_id: assignment.route_id,
       bus_id: assignment.bus_id,
       route_name: assignment.route_name || null,
-      shift_id: session?.shift_id || null,
+      shift_id: effectiveShiftId,
       shift_name: shiftName,
+      shift_start_time: shiftStartTime,
+      shift_end_time: shiftEndTime,
       tracking_active: !!session,
       stops: { completed, next: nextStop, remaining }
     };

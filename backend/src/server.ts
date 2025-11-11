@@ -52,6 +52,7 @@ import { logRotationMiddleware, getLogRotationStats, forceLogRotation, logRotato
 import { detectDeadCode, getDeadCodeReport, deadCodeDetector } from './utils/deadCodeDetector';
 // Rate limiting imports removed - system configured for high-volume traffic
 import { locationArchiveService } from './services/LocationArchiveService';
+import { rateLimitMiddleware, authRateLimit } from './middleware/rateLimit';
 
 // Initialize environment configuration - REMOVED, now imported
 // const config = initializeEnvironment();
@@ -65,12 +66,10 @@ const io = new SocketIOServer(server, {
   cors: config.websocket.cors,
 });
 
-const PORT = 3000; // Override config.port to use standard port
+const PORT = config.port;
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
 
-// PRODUCTION FIX: Enhanced process management
-// Set memory limits for Node.js processes
-process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max-old-space-size=512';
+// Note: Memory limits should be configured via runtime/container, not mutated at runtime
 
 // Global error handlers (must be first)
 process.on('unhandledRejection', unhandledRejectionHandler);
@@ -166,7 +165,10 @@ app.use(performanceMonitoring);
 app.use(enhancedCorsMiddleware);
 app.use(handlePreflight);
 
-// Rate limiting disabled - system configured for high-volume traffic
+// Rate limiting (enabled in production)
+if (process.env.NODE_ENV === 'production') {
+  app.use(rateLimitMiddleware);
+}
 
 // Body parsing middleware with enhanced limits
 app.use(express.json({ 
@@ -194,8 +196,8 @@ app.use(addRequestIdToError);
 
 // Enhanced routes with Redis caching and security (rate limiting disabled for high-volume traffic)
 app.use('/health', healthRoutes);
-// Rate limiting removed - system configured for high-volume traffic
-app.use('/auth', authRoutes);
+// Apply stricter rate limit to authentication endpoints only in production
+app.use('/auth', process.env.NODE_ENV === 'production' ? authRateLimit : (req, _res, next) => next(), authRoutes);
 app.use('/admin', fileUploadValidator, adminRoutes);
 app.use('/assignments', productionAssignmentRoutes);
 app.use('/production-assignments', productionAssignmentRoutes);
@@ -265,6 +267,8 @@ const startServer = async () => {
   try {
     logger.info('🚀 Starting University Bus Tracking System Backend...', 'server');
 
+    const isProduction = process.env.NODE_ENV === 'production';
+
     // Validate environment variables - strict validation for security
     logger.info('🔧 Validating environment variables...', 'server');
     try {
@@ -278,22 +282,34 @@ const startServer = async () => {
 
     // Initialize Redis cache
     logger.info('🔴 Initializing Redis cache...', 'server');
+    let redisReady = false;
     try {
       await redisCache.connect();
       logger.info('✅ Redis cache initialized successfully', 'server');
+      redisReady = true;
     } catch (redisError) {
       logger.error('❌ Redis cache initialization failed:', 'server', { error: (redisError as Error).message });
-      logger.warn('💡 Continuing without Redis cache for development...', 'server');
+      if (!isProduction) {
+        logger.warn('💡 Continuing without Redis cache for development...', 'server');
+      } else {
+        throw redisError;
+      }
     }
 
     // Initialize database with retry logic
     logger.info('🗄️ Initializing database connection...', 'server');
+    let dbReady = false;
     try {
       await initializeDatabase();
       logger.info('✅ Database initialized successfully', 'server');
+      dbReady = true;
     } catch (dbError) {
       logger.error('❌ Database initialization failed:', 'server', { error: (dbError as Error).message });
-      logger.warn('💡 Continuing without database connection for development...', 'server');
+      if (!isProduction) {
+        logger.warn('💡 Continuing without database connection for development...', 'server');
+      } else {
+        throw dbError;
+      }
     }
 
     // Test database connection
@@ -307,8 +323,12 @@ const startServer = async () => {
       startDatabaseMonitoring();
       logger.info('📊 Database monitoring started', 'server');
     } catch (dbTestError) {
-      logger.warn('⚠️ Database connection test failed:', 'server', { error: (dbTestError as Error).message });
-      logger.warn('💡 Continuing without database for development...', 'server');
+      if (!isProduction) {
+        logger.warn('⚠️ Database connection test failed:', 'server', { error: (dbTestError as Error).message });
+        logger.warn('💡 Continuing without database for development...', 'server');
+      } else {
+        throw dbTestError as Error;
+      }
     }
 
     // Initialize WebSocket server

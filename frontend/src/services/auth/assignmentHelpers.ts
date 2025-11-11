@@ -4,17 +4,7 @@ import { timeoutConfig } from '../../config/timeoutConfig';
 import { resilientQuery } from '../resilience/ResilientSupabaseService';
 import { standardBackoff } from '../resilience/ExponentialBackoff';
 import { sessionHelpers } from './sessionHelpers';
-
-export interface DriverBusAssignment {
-  driver_id: string;
-  bus_id: string;
-  bus_number: string;
-  route_id: string;
-  route_name: string;
-  driver_name: string;
-  created_at: string;
-  updated_at: string;
-}
+import type { DriverBusAssignment } from '../../types/driver';
 
 /**
  * Assignment helpers
@@ -127,11 +117,12 @@ export class AssignmentHelpers {
       id: string;
       bus_number: string;
       route_id: string | null;
+      assigned_shift_id?: string | null;
     }>(
       async () => {
         const queryResult = await supabase
           .from('buses')
-          .select('id, bus_number, route_id')
+          .select('id, bus_number, route_id, assigned_shift_id')
           .eq('assigned_driver_profile_id', driverId)
           .eq('is_active', true)
           .single();
@@ -153,6 +144,36 @@ export class AssignmentHelpers {
     }
 
     const busData = busResult.data;
+    let shiftName: string | null = null;
+    let shiftStartTime: string | null = null;
+    let shiftEndTime: string | null = null;
+
+    if (busData.assigned_shift_id) {
+      const shiftResult = await resilientQuery<{
+        name: string | null;
+        start_time: string | null;
+        end_time: string | null;
+      } | null>(
+        async () => {
+          const queryResult = await supabase
+            .from('shifts')
+            .select('name,start_time,end_time')
+            .eq('id', busData.assigned_shift_id as string)
+            .maybeSingle();
+          return queryResult;
+        },
+        {
+          timeout: timeoutConfig.api.shortRunning,
+          retryOnFailure: false,
+          maxRetries: 0,
+        }
+      );
+      if (shiftResult.data) {
+        shiftName = shiftResult.data.name || null;
+        shiftStartTime = shiftResult.data.start_time ?? null;
+        shiftEndTime = shiftResult.data.end_time ?? null;
+      }
+    }
 
     // Get route information
     let routeName = '';
@@ -205,6 +226,10 @@ export class AssignmentHelpers {
       driver_name: driverName,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      shift_id: busData.assigned_shift_id || null,
+      shift_name: shiftName,
+      shift_start_time: shiftStartTime,
+      shift_end_time: shiftEndTime,
     };
   }
 

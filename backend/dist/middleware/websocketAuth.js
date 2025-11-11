@@ -16,9 +16,10 @@ const websocketAuthMiddleware = (socket, next) => {
         userAgent: userAgent?.substring(0, 100)
     });
     if (!token && clientType === 'student') {
-        const disallowAnonymous = process.env.DISALLOW_ANONYMOUS_STUDENTS === 'true';
-        if (disallowAnonymous && process.env.NODE_ENV === 'production') {
-            logger_1.logger.websocket('Anonymous student connection rejected (DISALLOW_ANONYMOUS_STUDENTS=true)', {
+        const isProduction = process.env.NODE_ENV === 'production';
+        const allowAnonymous = process.env.ALLOW_ANONYMOUS_STUDENTS === 'true';
+        if (isProduction && !allowAnonymous) {
+            logger_1.logger.websocket('Anonymous student connection rejected by default policy (production)', {
                 socketId: socket.id,
                 clientType,
                 clientIP

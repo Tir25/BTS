@@ -16,6 +16,9 @@ export interface AssignmentData {
   bus_id: string;
   route_id: string;
   shift_id?: string | null;
+  shift_name?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
   assigned_by: string;
   notes?: string;
   assigned_at?: string;
@@ -86,6 +89,37 @@ type RouteRow = {
 };
 
 export class ProductionAssignmentService {
+  private static async fetchShiftDetails(shiftId: string | null): Promise<{
+    id: string;
+    name: string | null;
+    start_time: string | null;
+    end_time: string | null;
+  } | null> {
+    if (!shiftId) return null;
+
+    const { data, error } = await supabaseAdmin
+      .from('shifts')
+      .select('id,name,start_time,end_time')
+      .eq('id', shiftId)
+      .maybeSingle();
+
+    if (error) {
+      logger.warn('Error fetching shift details', 'production-assignment-service', { error, shiftId });
+      return null;
+    }
+
+    if (!data) {
+      logger.warn('Shift not found for assignment', 'production-assignment-service', { shiftId });
+      return null;
+    }
+
+    return {
+      id: data.id,
+      name: (data as any).name || null,
+      start_time: (data as any).start_time ?? null,
+      end_time: (data as any).end_time ?? null,
+    };
+  }
 
   /**
    * Get all assignments with comprehensive data
@@ -109,17 +143,25 @@ export class ProductionAssignmentService {
       const driverIds = Array.from(new Set(busList.map((b: BusRow) => b.assigned_driver_profile_id))).filter(Boolean) as string[];
       const routeIds = Array.from(new Set(busList.map((b: BusRow) => b.route_id))).filter(Boolean) as string[];
 
-      const [{ data: drivers }, { data: routes }] = await Promise.all([
+      const shiftIds = Array.from(new Set(busList.map((b: BusRow) => b.assigned_shift_id))).filter(Boolean) as string[];
+
+      const [{ data: drivers }, { data: routes }, { data: shifts }] = await Promise.all([
         driverIds.length
           ? supabaseAdmin.from('user_profiles').select('id,full_name,first_name,last_name,email,phone').in('id', driverIds)
           : Promise.resolve({ data: [] as any[] } as any),
         routeIds.length
           ? supabaseAdmin.from('routes').select('id,name,description,city').in('id', routeIds)
           : Promise.resolve({ data: [] as any[] } as any),
+        shiftIds.length
+          ? supabaseAdmin.from('shifts').select('id,name,start_time,end_time').in('id', shiftIds)
+          : Promise.resolve({ data: [] as any[] } as any),
       ]);
 
       const driverMap = new Map<string, DriverRow>((drivers as DriverRow[] | undefined || []).map((d: DriverRow) => [d.id, d]));
       const routeMap = new Map<string, RouteRow>((routes as RouteRow[] | undefined || []).map((r: RouteRow) => [r.id, r]));
+      const shiftMap = new Map<string, { id: string; name?: string; start_time?: string | null; end_time?: string | null }>(
+        ((shifts as any[]) || []).map((s: any) => [s.id, { id: s.id, name: s.name, start_time: s.start_time ?? null, end_time: s.end_time ?? null }])
+      );
 
       // PRODUCTION FIX: Log warnings for missing routes or drivers
       const missingRouteIds = busList
@@ -145,6 +187,8 @@ export class ProductionAssignmentService {
       const assignments = busList.map((bus: BusRow) => {
         const d: DriverRow | undefined = driverMap.get(bus.assigned_driver_profile_id);
         const r: RouteRow | undefined = routeMap.get(bus.route_id);
+        const shiftId = bus.assigned_shift_id || null;
+        const shift = shiftId ? shiftMap.get(shiftId) : undefined;
         
         // PRODUCTION FIX: Provide meaningful fallback values
         const routeName = r?.name || `Route ${bus.route_id.substring(0, 8)}... (Not found)`;
@@ -164,7 +208,10 @@ export class ProductionAssignmentService {
           notes: bus.assignment_notes,
           assigned_at: bus.updated_at,
           status: bus.assignment_status || 'active',
-          shift_id: (bus as any).assigned_shift_id || null,
+          shift_id: shiftId,
+          shift_name: shift?.name || null,
+          shift_start_time: shift?.start_time ?? null,
+          shift_end_time: shift?.end_time ?? null,
           bus_number: (bus as any).bus_number,
           vehicle_no: (bus as any).vehicle_no,
           driver_name: d?.full_name || 'Unknown Driver',
@@ -518,8 +565,10 @@ export class ProductionAssignmentService {
         .select(`
           id,
           bus_number,
+          vehicle_no,
           assigned_driver_profile_id,
           route_id,
+          assigned_shift_id,
           assignment_status,
           assignment_notes,
           updated_at
@@ -540,6 +589,9 @@ export class ProductionAssignmentService {
         return null;
       }
 
+      const shiftId = (data as any).assigned_shift_id || null;
+      const shiftDetails = await this.fetchShiftDetails(shiftId);
+
       return {
         id: data.id,
         driver_id: data.assigned_driver_profile_id,
@@ -549,6 +601,10 @@ export class ProductionAssignmentService {
         notes: data.assignment_notes,
         assigned_at: data.updated_at,
         status: data.assignment_status || 'active',
+        shift_id: shiftId,
+        shift_name: shiftDetails?.name || null,
+        shift_start_time: shiftDetails?.start_time ?? null,
+        shift_end_time: shiftDetails?.end_time ?? null,
       };
     } catch (error) {
       logger.error('Error in getAssignmentByBus', 'production-assignment-service', { error, busId });
@@ -569,6 +625,7 @@ export class ProductionAssignmentService {
           vehicle_no,
           assigned_driver_profile_id,
           route_id,
+          assigned_shift_id,
           assignment_status,
           assignment_notes,
           updated_at
@@ -660,6 +717,9 @@ export class ProductionAssignmentService {
         });
       }
 
+      const shiftId = (data as any).assigned_shift_id || null;
+      const shiftDetails = shiftId ? await this.fetchShiftDetails(shiftId) : null;
+
       return {
         id: data.id,
         driver_id: driverId,
@@ -674,6 +734,10 @@ export class ProductionAssignmentService {
         vehicle_no: data.vehicle_no,
         route_name: routeName,
         driver_name: driverName,
+        shift_id: shiftId,
+        shift_name: shiftDetails?.name || null,
+        shift_start_time: shiftDetails?.start_time ?? null,
+        shift_end_time: shiftDetails?.end_time ?? null,
       };
     } catch (error) {
       logger.error('Error in getDriverAssignment', 'production-assignment-service', { error, driverId });

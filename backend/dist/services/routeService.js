@@ -46,7 +46,7 @@ class RouteService {
                 description: route.description,
                 distance_km: route.distance_km,
                 estimated_duration_minutes: route.estimated_duration_minutes,
-                city: route.city,
+                city: route.city ?? undefined,
                 is_active: route.is_active,
                 created_at: route.created_at,
                 updated_at: route.updated_at,
@@ -84,7 +84,7 @@ class RouteService {
                 description: route.description,
                 distance_km: route.distance_km,
                 estimated_duration_minutes: route.estimated_duration_minutes,
-                city: route.city,
+                city: route.city ?? undefined,
                 is_active: route.is_active,
                 created_at: route.created_at,
                 updated_at: route.updated_at,
@@ -101,16 +101,17 @@ class RouteService {
     }
     static async createRoute(routeData) {
         try {
-            const { data: route, error } = await supabase_1.supabaseAdmin
-                .from('routes')
-                .insert({
+            const insertPayload = {
                 name: routeData.name,
                 description: routeData.description || '',
-                distance_km: routeData.distance_km || 0,
-                estimated_duration_minutes: routeData.estimated_duration_minutes || 0,
-                city: routeData.city || '',
+                distance_km: routeData.distance_km ?? 0,
+                estimated_duration_minutes: routeData.estimated_duration_minutes ?? 0,
+                city: routeData.city ?? null,
                 is_active: routeData.is_active !== false,
-            })
+            };
+            const { data: route, error } = await supabase_1.supabaseAdmin
+                .from('routes')
+                .insert(insertPayload)
                 .select(`
           id,
           name,
@@ -134,7 +135,7 @@ class RouteService {
                 description: route.description,
                 distance_km: route.distance_km,
                 estimated_duration_minutes: route.estimated_duration_minutes,
-                city: route.city,
+                city: route.city ?? undefined,
                 is_active: route.is_active,
                 created_at: route.created_at,
                 updated_at: route.updated_at,
@@ -161,7 +162,7 @@ class RouteService {
             if (routeData.estimated_duration_minutes !== undefined)
                 updateData.estimated_duration_minutes = routeData.estimated_duration_minutes;
             if (routeData.city !== undefined)
-                updateData.city = routeData.city;
+                updateData.city = routeData.city ?? null;
             if (routeData.is_active !== undefined)
                 updateData.is_active = routeData.is_active;
             if (Object.keys(updateData).length === 0) {
@@ -197,7 +198,7 @@ class RouteService {
                 description: route.description,
                 distance_km: route.distance_km,
                 estimated_duration_minutes: route.estimated_duration_minutes,
-                city: route.city,
+                city: route.city ?? undefined,
                 is_active: route.is_active,
                 created_at: route.created_at,
                 updated_at: route.updated_at,
@@ -234,22 +235,24 @@ class RouteService {
                 .from('route_details')
                 .delete()
                 .eq('route_id', routeId);
+            const busClearUpdate = { route_id: null };
             await supabase_1.supabaseAdmin
                 .from('buses')
-                .update({ route_id: null })
+                .update(busClearUpdate)
                 .eq('route_id', routeId);
             await supabase_1.supabaseAdmin
                 .from('bus_route_assignments')
                 .delete()
                 .eq('route_id', routeId);
-            await supabase_1.supabaseAdmin
-                .from('buses')
-                .update({
+            const busUnassignUpdate = {
                 route_id: null,
                 assignment_status: 'unassigned',
                 assignment_notes: 'Route deleted',
                 updated_at: new Date().toISOString()
-            })
+            };
+            await supabase_1.supabaseAdmin
+                .from('buses')
+                .update(busUnassignUpdate)
                 .eq('route_id', routeId);
             await supabase_1.supabaseAdmin
                 .from('bus_route_shifts')
@@ -277,7 +280,7 @@ class RouteService {
                 description: route.description,
                 distance_km: route.distance_km,
                 estimated_duration_minutes: route.estimated_duration_minutes,
-                city: route.city,
+                city: route.city ?? undefined,
                 is_active: route.is_active,
                 created_at: route.created_at,
                 updated_at: route.updated_at,

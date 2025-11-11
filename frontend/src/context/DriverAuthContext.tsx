@@ -45,6 +45,13 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
   const [driverEmail, setDriverEmail] = useState<string | null>(null);
   const [driverName, setDriverName] = useState<string | null>(null);
   const [busAssignment, setBusAssignment] = useState<DriverBusAssignment | null>(null);
+  const mergeAssignmentShift = useCallback((assignment: DriverBusAssignment): DriverBusAssignment => ({
+    ...assignment,
+    shift_id: assignment.shift_id ?? busAssignment?.shift_id ?? null,
+    shift_name: assignment.shift_name ?? busAssignment?.shift_name ?? null,
+    shift_start_time: assignment.shift_start_time ?? busAssignment?.shift_start_time ?? null,
+    shift_end_time: assignment.shift_end_time ?? busAssignment?.shift_end_time ?? null,
+  }), [busAssignment]);
   
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
   const [isWebSocketAuthenticated, setIsWebSocketAuthenticated] = useState(false);
@@ -168,7 +175,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
           setDriverId(validationResult.assignment.driver_id);
           setDriverEmail(session.user.email || null);
           setDriverName(validationResult.assignment.driver_name);
-          setBusAssignment(validationResult.assignment);
+          setBusAssignment(mergeAssignmentShift(validationResult.assignment));
           offlineStorage.storeData('driver', `assignment_${validationResult.assignment.driver_id}`, validationResult.assignment as unknown as Record<string, unknown>);
           logger.info('✅ Driver session validated successfully', 'driver-auth', { requestId });
         } else {
@@ -178,7 +185,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
           try {
             const offlineAssignment = await offlineStorage.getData('driver', `assignment_${session.user.id}`);
             if (offlineAssignment && initializationRequestIdRef.current === requestId) {
-              setBusAssignment(offlineAssignment as unknown as DriverBusAssignment);
+              setBusAssignment(mergeAssignmentShift(offlineAssignment as unknown as DriverBusAssignment));
               logger.info('📱 Recovered assignment from offline storage', 'driver-auth', { requestId });
             }
           } catch (offlineError) {
@@ -326,7 +333,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
             
             if (assignment) {
               setDriverName(assignment.driver_name || userProfile.full_name || email);
-              setBusAssignment(assignment);
+              setBusAssignment(mergeAssignmentShift(assignment));
               offlineStorage.storeData('driver', `assignment_${userProfile.id}`, assignment as unknown as Record<string, unknown>);
               logger.info('✅ Driver login successful with assignment', 'driver-auth', { 
                 driverId: userProfile.id,
@@ -524,7 +531,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
       // Also try direct API fetch as fallback
       const assignment = await authService.getDriverBusAssignment(driverId);
       if (assignment) {
-        setBusAssignment(assignment);
+        setBusAssignment(mergeAssignmentShift(assignment));
         setDriverName(assignment.driver_name);
         offlineStorage.storeData('driver', `assignment_${driverId}`, assignment as unknown as Record<string, unknown>);
         logger.info('✅ Assignment refreshed successfully', 'driver-auth', {
@@ -599,7 +606,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
         try {
           const assignment = await authService.getDriverBusAssignment(driverId);
           if (assignment && isMounted) {
-            setBusAssignment(assignment);
+            setBusAssignment(mergeAssignmentShift(assignment));
             setDriverName(assignment.driver_name);
             offlineStorage.storeData('driver', `assignment_${driverId}`, assignment as unknown as Record<string, unknown>);
             logger.info('✅ Assignment loaded in background', 'driver-auth', {
@@ -653,7 +660,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
           created_at: new Date().toISOString(),
           updated_at: data.assignment.lastUpdated
         };
-        setBusAssignment(updatedAssignment);
+        setBusAssignment(mergeAssignmentShift(updatedAssignment));
         offlineStorage.storeData('driver', `assignment_${updatedAssignment.driver_id}`, updatedAssignment as unknown as Record<string, unknown>);
         logger.info('✅ Bus assignment updated from admin changes', 'driver-auth', {
           busNumber: updatedAssignment.bus_number,
@@ -674,7 +681,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
           created_at: new Date().toISOString(),
           updated_at: data.assignment.lastUpdated
         };
-        setBusAssignment(refreshedAssignment);
+        setBusAssignment(mergeAssignmentShift(refreshedAssignment));
         offlineStorage.storeData('driver', `assignment_${refreshedAssignment.driver_id}`, refreshedAssignment as unknown as Record<string, unknown>);
         logger.info('🔄 Bus assignment refreshed', 'driver-auth');
       }

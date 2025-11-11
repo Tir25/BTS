@@ -709,7 +709,10 @@ class ApiService implements IApiService {
         next: any | null;
         remaining: any[];
       };
+      shift_id?: string | null;
       shift_name?: string;
+      shift_start_time?: string | null;
+      shift_end_time?: string | null;
       route_name?: string;
       route_id?: string;
     } | null;
@@ -724,7 +727,10 @@ class ApiService implements IApiService {
             next: any | null;
             remaining: any[];
           };
+          shift_id?: string | null;
           shift_name?: string;
+          shift_start_time?: string | null;
+          shift_end_time?: string | null;
           route_name?: string;
           route_id?: string;
         };
@@ -773,11 +779,16 @@ class ApiService implements IApiService {
    * Start tracking session for driver
    * PRODUCTION FIX: Fixed endpoint to match backend route - use body parameters instead of path
    */
-  async startTracking(driverId: string): Promise<{
+  async startTracking(driverId?: string | null, shiftId?: string | null): Promise<{
     success: boolean;
     error?: string;
   }> {
     try {
+      if (!driverId) {
+        logger.warn('startTracking called without driverId', 'component');
+        return { success: false, error: 'Driver ID is required' };
+      }
+
       // PRODUCTION FIX: Use correct endpoint /tracking/start with body parameters
       const response = await this.backendRequest<{
         success: boolean;
@@ -786,7 +797,8 @@ class ApiService implements IApiService {
       }>('/tracking/start', {
         method: 'POST',
         body: JSON.stringify({
-          driverId
+          driverId,
+          shiftId: shiftId || undefined
         }),
       });
 

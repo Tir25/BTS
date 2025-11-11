@@ -21,6 +21,10 @@ export interface DriverBusAssignment {
   driver_name: string;
   created_at: string;
   updated_at: string;
+  shift_id?: string | null;
+  shift_name?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
 }
 
 export interface DriverLocationData {

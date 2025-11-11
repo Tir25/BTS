@@ -310,6 +310,10 @@ export const useDriverInterface = () => {
     store.driverStore.busAssignment?.driver_id, // Use stable ID instead of entire object
     store.driverStore.busAssignment?.bus_id,
     store.driverStore.busAssignment?.bus_number,
+    store.driverStore.busAssignment?.shift_id,
+    store.driverStore.busAssignment?.shift_name,
+    store.driverStore.busAssignment?.shift_start_time,
+    store.driverStore.busAssignment?.shift_end_time,
     store.locationStore.isTracking,
     store.locationStore.currentLocation?.coords.latitude, // Use stable values instead of object
     store.locationStore.currentLocation?.coords.longitude,

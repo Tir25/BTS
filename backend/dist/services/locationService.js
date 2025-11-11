@@ -248,7 +248,7 @@ const getBusInfo = async (busId) => {
         routes!inner(
           name
         ),
-        profiles!inner(
+        user_profiles!inner(
           full_name
         )
       `)

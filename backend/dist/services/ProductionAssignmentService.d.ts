@@ -4,6 +4,9 @@ export interface AssignmentData {
     bus_id: string;
     route_id: string;
     shift_id?: string | null;
+    shift_name?: string | null;
+    shift_start_time?: string | null;
+    shift_end_time?: string | null;
     assigned_by: string;
     notes?: string;
     assigned_at?: string;
@@ -39,6 +42,7 @@ export interface BulkAssignmentResult {
     }>;
 }
 export declare class ProductionAssignmentService {
+    private static fetchShiftDetails;
     static getAllAssignments(): Promise<AssignmentData[]>;
     static getAssignmentDashboard(): Promise<AssignmentDashboard>;
     static createAssignment(assignmentData: Omit<AssignmentData, 'id' | 'assigned_at'>): Promise<AssignmentData>;

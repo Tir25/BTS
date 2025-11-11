@@ -43,15 +43,15 @@ const memoryOptimization_1 = require("./middleware/memoryOptimization");
 const logRotation_1 = require("./utils/logRotation");
 const deadCodeDetector_1 = require("./utils/deadCodeDetector");
 const LocationArchiveService_1 = require("./services/LocationArchiveService");
+const rateLimit_1 = require("./middleware/rateLimit");
 const app = (0, express_1.default)();
 app.set('trust proxy', 1);
 const server = (0, http_1.createServer)(app);
 const io = new socket_io_1.Server(server, {
     cors: environment_1.default.websocket.cors,
 });
-const PORT = 3000;
+const PORT = environment_1.default.port;
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
-process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max-old-space-size=512';
 process.on('unhandledRejection', errorHandler_1.unhandledRejectionHandler);
 process.on('uncaughtException', errorHandler_1.uncaughtExceptionHandler);
 const MEMORY_WARNING_THRESHOLD = 300 * 1024 * 1024;
@@ -115,6 +115,9 @@ app.use(monitoring_1.memoryMonitoring);
 app.use(monitoring_1.performanceMonitoring);
 app.use(corsEnhanced_1.corsMiddleware);
 app.use(cors_1.handlePreflight);
+if (process.env.NODE_ENV === 'production') {
+    app.use(rateLimit_1.rateLimitMiddleware);
+}
 app.use(express_1.default.json({
     limit: '10mb',
     verify: (req, res, buf) => {
@@ -135,7 +138,7 @@ app.use(express_1.default.json({
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestId_1.addRequestIdToError);
 app.use('/health', health_1.default);
-app.use('/auth', auth_1.default);
+app.use('/auth', process.env.NODE_ENV === 'production' ? rateLimit_1.authRateLimit : (req, _res, next) => next(), auth_1.default);
 app.use('/admin', securityEnhanced_1.fileUploadValidator, admin_1.default);
 app.use('/assignments', productionAssignments_1.default);
 app.use('/production-assignments', productionAssignments_1.default);
@@ -190,6 +193,7 @@ app.use(errorHandler_1.notFoundHandler);
 const startServer = async () => {
     try {
         logger_1.logger.info('🚀 Starting University Bus Tracking System Backend...', 'server');
+        const isProduction = process.env.NODE_ENV === 'production';
         logger_1.logger.info('🔧 Validating environment variables...', 'server');
         try {
             (0, envValidation_1.validateEnvironment)();
@@ -201,22 +205,36 @@ const startServer = async () => {
             throw envError;
         }
         logger_1.logger.info('🔴 Initializing Redis cache...', 'server');
+        let redisReady = false;
         try {
             await RedisCacheService_1.redisCache.connect();
             logger_1.logger.info('✅ Redis cache initialized successfully', 'server');
+            redisReady = true;
         }
         catch (redisError) {
             logger_1.logger.error('❌ Redis cache initialization failed:', 'server', { error: redisError.message });
-            logger_1.logger.warn('💡 Continuing without Redis cache for development...', 'server');
+            if (!isProduction) {
+                logger_1.logger.warn('💡 Continuing without Redis cache for development...', 'server');
+            }
+            else {
+                throw redisError;
+            }
         }
         logger_1.logger.info('🗄️ Initializing database connection...', 'server');
+        let dbReady = false;
         try {
             await (0, database_1.initializeDatabase)();
             logger_1.logger.info('✅ Database initialized successfully', 'server');
+            dbReady = true;
         }
         catch (dbError) {
             logger_1.logger.error('❌ Database initialization failed:', 'server', { error: dbError.message });
-            logger_1.logger.warn('💡 Continuing without database connection for development...', 'server');
+            if (!isProduction) {
+                logger_1.logger.warn('💡 Continuing without database connection for development...', 'server');
+            }
+            else {
+                throw dbError;
+            }
         }
         logger_1.logger.info('🔍 Testing database connection...', 'server');
         try {
@@ -227,8 +245,13 @@ const startServer = async () => {
             logger_1.logger.info('📊 Database monitoring started', 'server');
         }
         catch (dbTestError) {
-            logger_1.logger.warn('⚠️ Database connection test failed:', 'server', { error: dbTestError.message });
-            logger_1.logger.warn('💡 Continuing without database for development...', 'server');
+            if (!isProduction) {
+                logger_1.logger.warn('⚠️ Database connection test failed:', 'server', { error: dbTestError.message });
+                logger_1.logger.warn('💡 Continuing without database for development...', 'server');
+            }
+            else {
+                throw dbTestError;
+            }
         }
         logger_1.logger.info('🔌 Initializing WebSocket server...', 'server');
         (0, websocket_1.initializeWebSocket)(io);

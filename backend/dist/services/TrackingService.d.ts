@@ -1,5 +1,5 @@
 export declare class TrackingService {
-    static startTracking(driverId: string, shiftId?: string): Promise<never>;
+    static startTracking(driverId: string, shiftId?: string): Promise<any>;
     static stopTracking(driverId: string): Promise<{
         success: boolean;
     }>;
@@ -15,23 +15,13 @@ export declare class TrackingService {
         route_name: string | null;
         shift_id: any;
         shift_name: string | null;
+        shift_start_time: string | null;
+        shift_end_time: string | null;
         tracking_active: boolean;
         stops: {
-            completed: {
-                id: any;
-                name: string;
-                sequence: any;
-            }[];
-            next: {
-                id: any;
-                name: string;
-                sequence: any;
-            } | null;
-            remaining: {
-                id: any;
-                name: string;
-                sequence: any;
-            }[];
+            completed: any;
+            next: any;
+            remaining: any;
         };
     } | null>;
 }

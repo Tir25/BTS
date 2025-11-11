@@ -498,8 +498,9 @@ class UnifiedDatabaseService {
             let reactivatedProfile = null;
             let updatedRoleProfile = null;
             if (existingUser) {
-                if (existingUser.is_active) {
-                    if (existingUser.role === 'student') {
+                const ex = existingUser;
+                if (ex.is_active) {
+                    if (ex.role === 'student') {
                         logger_1.logger.info(`Converting student user to driver: ${driverData.email}`, 'unified-db');
                         const { data: updatedProfile, error: updateError } = await supabase_1.supabaseAdmin
                             .from('user_profiles')
@@ -513,18 +514,18 @@ class UnifiedDatabaseService {
                             profile_photo_url: driverData.profile_photo_url,
                             updated_at: new Date().toISOString()
                         })
-                            .eq('id', existingUser.id)
+                            .eq('id', ex.id)
                             .select('*')
                             .single();
                         if (updateError) {
                             logger_1.logger.error('Error converting user from student to driver', 'unified-db', { error: updateError });
                             throw new Error(`Failed to convert user from student to driver: ${updateError.message}`);
                         }
-                        logger_1.logger.info('User converted from student to driver successfully', 'unified-db', { userId: existingUser.id });
+                        logger_1.logger.info('User converted from student to driver successfully', 'unified-db', { userId: ex.id });
                         updatedRoleProfile = updatedProfile;
                     }
                     else {
-                        throw new Error(`User with email ${driverData.email} already exists with role ${existingUser.role}`);
+                        throw new Error(`User with email ${driverData.email} already exists with role ${ex.role}`);
                     }
                 }
                 else {
@@ -542,14 +543,14 @@ class UnifiedDatabaseService {
                         profile_photo_url: driverData.profile_photo_url,
                         updated_at: new Date().toISOString()
                     })
-                        .eq('id', existingUser.id)
+                        .eq('id', ex.id)
                         .select('*')
                         .single();
                     if (updateError) {
                         logger_1.logger.error('Error reactivating user', 'unified-db', { error: updateError });
                         throw new Error(`Failed to reactivate user: ${updateError.message}`);
                     }
-                    logger_1.logger.info('User reactivated successfully', 'unified-db', { userId: existingUser.id });
+                    logger_1.logger.info('User reactivated successfully', 'unified-db', { userId: ex.id });
                     reactivatedProfile = updatedProfile;
                 }
             }
@@ -728,20 +729,34 @@ class UnifiedDatabaseService {
                 .from('live_locations')
                 .delete()
                 .eq('driver_id', driverId);
-            await supabase_1.supabaseAdmin
+            const { data: assignedBuses } = await supabase_1.supabaseAdmin
                 .from('buses')
-                .update({ assigned_driver_profile_id: null })
+                .select('id, route_id')
                 .eq('assigned_driver_profile_id', driverId);
-            await supabase_1.supabaseAdmin
+            const { error: busUpdateError } = await supabase_1.supabaseAdmin
                 .from('buses')
                 .update({
                 assigned_driver_profile_id: null,
                 route_id: null,
                 assignment_status: 'unassigned',
-                assignment_notes: null,
+                assignment_notes: `Driver deleted - route unassigned at ${new Date().toISOString()}`,
                 updated_at: new Date().toISOString()
             })
                 .eq('assigned_driver_profile_id', driverId);
+            if (busUpdateError) {
+                logger_1.logger.error('Error updating buses when deleting driver', 'unified-db', { error: busUpdateError, driverId });
+                throw busUpdateError;
+            }
+            if (assignedBuses && assignedBuses.length > 0) {
+                const routeIds = assignedBuses.map((b) => b.route_id).filter(Boolean);
+                if (routeIds.length > 0) {
+                    logger_1.logger.info('Routes unassigned from buses (routes remain in database)', 'unified-db', {
+                        driverId,
+                        routeIds,
+                        busIds: assignedBuses.map((b) => b.id)
+                    });
+                }
+            }
             await supabase_1.supabaseAdmin
                 .from('bus_route_assignments')
                 .delete()
