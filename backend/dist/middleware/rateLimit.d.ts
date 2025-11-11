@@ -1,3 +1,4 @@
-export declare const rateLimitMiddleware: import("express-rate-limit").RateLimitRequestHandler;
-export declare const authRateLimit: import("express-rate-limit").RateLimitRequestHandler;
+import { Request, Response, NextFunction } from 'express';
+export declare const rateLimitMiddleware: (req: Request, res: Response, next: NextFunction) => void;
+export declare const authRateLimit: (req: Request, res: Response, next: NextFunction) => void;
 //# sourceMappingURL=rateLimit.d.ts.map

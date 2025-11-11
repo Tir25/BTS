@@ -6,13 +6,29 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeEnvironment = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
+const fs_1 = require("fs");
 const isProduction = process.env.NODE_ENV === 'production';
 const envFiles = isProduction
     ? ['.env.production', '.env']
     : ['.env.local', '.env'];
-envFiles.forEach((envFile, index) => {
-    const envPath = path_1.default.resolve(process.cwd(), envFile);
-    const result = dotenv_1.default.config({ path: envPath, override: false });
+function findEnvFile(filename) {
+    const possiblePaths = [
+        path_1.default.resolve(process.cwd(), filename),
+        path_1.default.resolve(process.cwd(), 'backend', filename),
+        path_1.default.resolve(process.cwd(), '..', filename),
+    ];
+    for (const envPath of possiblePaths) {
+        if ((0, fs_1.existsSync)(envPath)) {
+            return envPath;
+        }
+    }
+    return null;
+}
+envFiles.forEach((envFile) => {
+    const envPath = findEnvFile(envFile);
+    const result = envPath
+        ? dotenv_1.default.config({ path: envPath, override: false })
+        : { error: new Error(`File not found: ${envFile}`), parsed: undefined };
     const dotenvVersion = '16.3.1';
     if (result.error) {
         console.log(`[dotenv@${dotenvVersion}] injecting env (0) from ${envFile} -- tip: 📡 add observability to secrets: https://dotenvx.com/ops`);
@@ -28,11 +44,23 @@ const initializeEnvironment = () => {
     const isProduction = nodeEnv === 'production';
     if (isProduction) {
         const requiredEnvVars = [
-            'SUPABASE_URL',
-            'SUPABASE_ANON_KEY',
-            'SUPABASE_SERVICE_ROLE_KEY',
             'DATABASE_URL',
         ];
+        const hasDriverConfig = process.env.DRIVER_SUPABASE_URL &&
+            process.env.DRIVER_SUPABASE_ANON_KEY &&
+            process.env.DRIVER_SUPABASE_SERVICE_ROLE_KEY;
+        const hasStudentConfig = process.env.STUDENT_SUPABASE_URL &&
+            process.env.STUDENT_SUPABASE_ANON_KEY &&
+            process.env.STUDENT_SUPABASE_SERVICE_ROLE_KEY;
+        const hasLegacyConfig = process.env.SUPABASE_URL &&
+            process.env.SUPABASE_ANON_KEY &&
+            process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!hasDriverConfig && !hasLegacyConfig) {
+            requiredEnvVars.push('DRIVER_SUPABASE_URL', 'DRIVER_SUPABASE_ANON_KEY', 'DRIVER_SUPABASE_SERVICE_ROLE_KEY');
+        }
+        if (!hasStudentConfig && !hasLegacyConfig) {
+            requiredEnvVars.push('STUDENT_SUPABASE_URL', 'STUDENT_SUPABASE_ANON_KEY', 'STUDENT_SUPABASE_SERVICE_ROLE_KEY');
+        }
         const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
         if (missingEnvVars.length > 0) {
             console.error('❌ Missing required environment variables:', missingEnvVars);
@@ -42,32 +70,73 @@ const initializeEnvironment = () => {
     }
     else {
         const recommendedEnvVars = [
-            'SUPABASE_URL',
-            'SUPABASE_ANON_KEY',
-            'SUPABASE_SERVICE_ROLE_KEY',
             'DATABASE_URL',
         ];
+        const hasDriverConfig = process.env.DRIVER_SUPABASE_URL &&
+            process.env.DRIVER_SUPABASE_ANON_KEY &&
+            process.env.DRIVER_SUPABASE_SERVICE_ROLE_KEY;
+        const hasStudentConfig = process.env.STUDENT_SUPABASE_URL &&
+            process.env.STUDENT_SUPABASE_ANON_KEY &&
+            process.env.STUDENT_SUPABASE_SERVICE_ROLE_KEY;
+        const hasLegacyConfig = process.env.SUPABASE_URL &&
+            process.env.SUPABASE_ANON_KEY &&
+            process.env.SUPABASE_SERVICE_ROLE_KEY;
+        if (!hasDriverConfig && !hasLegacyConfig) {
+            recommendedEnvVars.push('DRIVER_SUPABASE_URL', 'DRIVER_SUPABASE_ANON_KEY', 'DRIVER_SUPABASE_SERVICE_ROLE_KEY');
+        }
+        if (!hasStudentConfig && !hasLegacyConfig) {
+            recommendedEnvVars.push('STUDENT_SUPABASE_URL', 'STUDENT_SUPABASE_ANON_KEY', 'STUDENT_SUPABASE_SERVICE_ROLE_KEY');
+        }
         const missingEnvVars = recommendedEnvVars.filter((envVar) => !process.env[envVar]);
         if (missingEnvVars.length > 0) {
             console.warn('⚠️ Missing recommended environment variables in development:', missingEnvVars);
             console.warn('💡 For full functionality, please check your .env.local file and ensure all variables are set');
         }
     }
-    let supabaseUrl;
-    let supabaseAnonKey;
-    let supabaseServiceRoleKey;
-    if (isProduction) {
-        supabaseUrl = process.env.SUPABASE_URL || '';
-        supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
-        supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    }
-    else {
-        supabaseUrl = process.env.SUPABASE_URL || '';
-        supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
-        supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-        if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-            console.warn('⚠️ Missing Supabase credentials in development. Check your .env file and ensure all required variables are set.');
-            console.warn('💡 The server will not start without proper credentials for security reasons.');
+    const getSupabaseConfig = (role) => {
+        if (role === 'driver') {
+            return {
+                url: process.env.DRIVER_SUPABASE_URL || process.env.SUPABASE_URL || '',
+                anonKey: process.env.DRIVER_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '',
+                serviceRoleKey: process.env.DRIVER_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+            };
+        }
+        else if (role === 'student') {
+            return {
+                url: process.env.STUDENT_SUPABASE_URL || process.env.SUPABASE_URL || '',
+                anonKey: process.env.STUDENT_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '',
+                serviceRoleKey: process.env.STUDENT_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+            };
+        }
+        else {
+            return {
+                url: process.env.SUPABASE_URL || '',
+                anonKey: process.env.SUPABASE_ANON_KEY || '',
+                serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+            };
+        }
+    };
+    const legacyConfig = getSupabaseConfig('legacy');
+    const driverConfig = getSupabaseConfig('driver');
+    const studentConfig = getSupabaseConfig('student');
+    if (!isProduction) {
+        const hasDriverSpecific = !!(process.env.DRIVER_SUPABASE_URL && process.env.DRIVER_SUPABASE_ANON_KEY);
+        const hasStudentSpecific = !!(process.env.STUDENT_SUPABASE_URL && process.env.STUDENT_SUPABASE_ANON_KEY);
+        const hasLegacy = !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
+        if (hasDriverSpecific || hasStudentSpecific) {
+            console.log('✅ Using role-based Supabase configurations');
+            if (hasDriverSpecific)
+                console.log('  - Driver: ✅ Configured');
+            if (hasStudentSpecific)
+                console.log('  - Student: ✅ Configured');
+            if (hasLegacy)
+                console.log('  - Legacy: ⚠️ Fallback available');
+        }
+        else if (hasLegacy) {
+            console.warn('⚠️ Using legacy Supabase configuration. Consider migrating to role-based configs.');
+        }
+        else {
+            console.warn('⚠️ Missing Supabase credentials. Check your .env file.');
         }
     }
     const config = {
@@ -82,9 +151,19 @@ const initializeEnvironment = () => {
             maxRetries: (0, envValidation_1.getEnvNumber)('DB_MAX_RETRIES', 5),
         },
         supabase: {
-            url: supabaseUrl,
-            anonKey: supabaseAnonKey,
-            serviceRoleKey: supabaseServiceRoleKey,
+            url: legacyConfig.url,
+            anonKey: legacyConfig.anonKey,
+            serviceRoleKey: legacyConfig.serviceRoleKey,
+        },
+        supabaseDriver: {
+            url: driverConfig.url,
+            anonKey: driverConfig.anonKey,
+            serviceRoleKey: driverConfig.serviceRoleKey,
+        },
+        supabaseStudent: {
+            url: studentConfig.url,
+            anonKey: studentConfig.anonKey,
+            serviceRoleKey: studentConfig.serviceRoleKey,
         },
         cors: {
             allowedOrigins: process.env.CORS_ORIGIN
@@ -201,9 +280,17 @@ const initializeEnvironment = () => {
             supabase: {
                 url: config.supabase.url ? '✅ Set' : '❌ Missing',
                 anonKey: config.supabase.anonKey ? '✅ Set' : '❌ Missing',
-                serviceRoleKey: config.supabase.serviceRoleKey
-                    ? '✅ Set'
-                    : '❌ Missing',
+                serviceRoleKey: config.supabase.serviceRoleKey ? '✅ Set' : '❌ Missing',
+            },
+            supabaseDriver: {
+                url: config.supabaseDriver.url ? '✅ Set' : '❌ Missing',
+                anonKey: config.supabaseDriver.anonKey ? '✅ Set' : '❌ Missing',
+                serviceRoleKey: config.supabaseDriver.serviceRoleKey ? '✅ Set' : '❌ Missing',
+            },
+            supabaseStudent: {
+                url: config.supabaseStudent.url ? '✅ Set' : '❌ Missing',
+                anonKey: config.supabaseStudent.anonKey ? '✅ Set' : '❌ Missing',
+                serviceRoleKey: config.supabaseStudent.serviceRoleKey ? '✅ Set' : '❌ Missing',
             },
             cors: {
                 allowedOrigins: config.cors.allowedOrigins.length,

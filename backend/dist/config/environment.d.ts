@@ -14,6 +14,16 @@ export interface EnvironmentConfig {
         anonKey: string;
         serviceRoleKey: string;
     };
+    supabaseDriver: {
+        url: string;
+        anonKey: string;
+        serviceRoleKey: string;
+    };
+    supabaseStudent: {
+        url: string;
+        anonKey: string;
+        serviceRoleKey: string;
+    };
     cors: {
         allowedOrigins: (string | RegExp)[];
         credentials: boolean;

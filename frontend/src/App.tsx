@@ -27,6 +27,7 @@ const lazyWithRetry = (importFunction: () => Promise<any>) => {
 // Lazy load components for better performance with retry logic
 const UnifiedDriverInterface = lazyWithRetry(() => import('./components/UnifiedDriverInterface'));
 const DriverLogin = lazyWithRetry(() => import('./components/DriverLogin'));
+const StudentLogin = lazyWithRetry(() => import('./components/StudentLogin'));
 const StudentMap = lazyWithRetry(() => import('./components/StudentMap'));
 const StudentMapWrapper = lazyWithRetry(() => import('./components/StudentMapWrapper'));
 const AdminDashboard = lazyWithRetry(() => import('./components/AdminDashboard'));
@@ -294,6 +295,25 @@ function App() {
               />
 
               {/* Student Routes */}
+              <Route
+                path="/student-login"
+                element={
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+                        <div className="text-center">
+                          <div className="loading-spinner mx-auto mb-4" />
+                          <p className="text-white text-lg">
+                            Loading Student Login...
+                          </p>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <StudentLogin />
+                  </Suspense>
+                }
+              />
               <Route
                 path="/student-map"
                 element={

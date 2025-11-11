@@ -1203,6 +1203,73 @@ class ApiService implements IApiService {
       };
     }
   }
+
+  /**
+   * Student Login
+   * Authenticates a student and returns session token
+   */
+  async studentLogin(
+    email: string,
+    password: string
+  ): Promise<{
+    success: boolean;
+    data?: {
+      user: {
+        id: string;
+        email: string;
+        full_name: string;
+        role: string;
+        is_active: boolean;
+        email_verified: boolean;
+      };
+      session: {
+        access_token: string;
+        refresh_token: string;
+        expires_at: number;
+      };
+    };
+    error?: string;
+    message?: string;
+    code?: string;
+    timestamp?: string;
+  }> {
+    try {
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: {
+          user: {
+            id: string;
+            email: string;
+            full_name: string;
+            role: string;
+            is_active: boolean;
+            email_verified: boolean;
+          };
+          session: {
+            access_token: string;
+            refresh_token: string;
+            expires_at: number;
+          };
+        };
+        error?: string;
+        message?: string;
+        code?: string;
+        timestamp?: string;
+      }>('/auth/student/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+
+      return response;
+    } catch (error: any) {
+      logger.error('Student login error', 'api', { error: error?.message });
+      return {
+        success: false,
+        error: error?.message || 'Login failed',
+        code: 'LOGIN_ERROR'
+      };
+    }
+  }
 }
 
 export const apiService = new ApiService(API_BASE_URL);

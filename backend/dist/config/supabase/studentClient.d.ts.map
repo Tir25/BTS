@@ -1,0 +1,1 @@
+{"version":3,"file":"studentClient.d.ts","sourceRoot":"","sources":["../../../src/config/supabase/studentClient.ts"],"names":[],"mappings":"AAOA,OAAO,EAAE,qBAAqB,EAAE,0BAA0B,EAAE,MAAM,SAAS,CAAC;AAY5E,wBAAgB,wBAAwB,IAAI,qBAAqB,CAYhE;AAMD,wBAAgB,uBAAuB,IAAI,0BAA0B,CA6BpE;AAKD,wBAAgB,kBAAkB,IAAI,IAAI,CAIzC;AAKD,wBAAsB,qBAAqB,IAAI,OAAO,CAAC,OAAO,CAAC,CAU9D"}

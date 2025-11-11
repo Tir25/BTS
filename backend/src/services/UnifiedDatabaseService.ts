@@ -927,49 +927,67 @@ export class UnifiedDatabaseService {
         .delete()
         .eq('driver_id', driverId);
 
-      // 2. Update buses to remove driver assignment
-      await supabaseAdmin
+      // 2. Update buses to unassign driver and route (route should remain in database, just unassigned from bus)
+      // Get buses assigned to this driver first to log which routes are being unassigned
+      const { data: assignedBuses } = await supabaseAdmin
         .from('buses')
-        .update({ assigned_driver_profile_id: null })
+        .select('id, route_id')
         .eq('assigned_driver_profile_id', driverId);
 
-      // 3. Update buses table to remove assignment
-      await supabaseAdmin
+      // Update buses to remove driver assignment and unassign route (but route stays in database)
+      const { error: busUpdateError } = await supabaseAdmin
         .from('buses')
         .update({
           assigned_driver_profile_id: null,
-          route_id: null,
+          route_id: null, // Unassign route from bus, but route remains in routes table
           assignment_status: 'unassigned',
-          assignment_notes: null,
+          assignment_notes: `Driver deleted - route unassigned at ${new Date().toISOString()}`,
           updated_at: new Date().toISOString()
         })
         .eq('assigned_driver_profile_id', driverId);
 
-      // 4. Delete from bus_route_assignments
+      if (busUpdateError) {
+        logger.error('Error updating buses when deleting driver', 'unified-db', { error: busUpdateError, driverId });
+        throw busUpdateError;
+      }
+
+      // Log which routes were unassigned (for debugging)
+      if (assignedBuses && assignedBuses.length > 0) {
+        const routeIds = assignedBuses.map(b => b.route_id).filter(Boolean);
+        if (routeIds.length > 0) {
+          logger.info('Routes unassigned from buses (routes remain in database)', 'unified-db', { 
+            driverId, 
+            routeIds,
+            busIds: assignedBuses.map(b => b.id)
+          });
+        }
+      }
+
+      // 3. Delete from bus_route_assignments
       await supabaseAdmin
         .from('bus_route_assignments')
         .delete()
         .eq('assigned_driver_profile_id', driverId);
 
-      // 5. Delete shifts
+      // 4. Delete shifts
       await supabaseAdmin
         .from('shifts')
         .delete()
         .eq('driver_id', driverId);
 
-      // 6. Delete from assignment_history
+      // 5. Delete from assignment_history
       await supabaseAdmin
         .from('assignment_history')
         .delete()
         .eq('driver_id', driverId);
 
-      // 7. Delete user_roles
+      // 6. Delete user_roles
       await supabaseAdmin
         .from('user_roles')
         .delete()
         .eq('user_id', driverId);
 
-      // 8. Delete the driver from auth.users
+      // 7. Delete the driver from auth.users
       try {
         await supabaseAdmin.auth.admin.deleteUser(driverId);
         logger.info('Auth user deleted successfully', 'unified-db', { driverId });

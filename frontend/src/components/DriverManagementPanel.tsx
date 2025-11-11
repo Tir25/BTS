@@ -141,7 +141,7 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
   };
 
   const handleDelete = async (driverId: string) => {
-    if (!confirm('Are you sure you want to delete this driver?')) return;
+    if (!confirm('Are you sure you want to delete this driver? This will unassign their route from the bus, but the route will remain in the database.')) return;
 
     setLoading(true);
     setError(null);
@@ -149,8 +149,10 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
     try {
       const result = await adminApiService.deleteDriver(driverId);
       if (result.success) {
-        setSuccessMessage('Driver deleted successfully!');
+        setSuccessMessage('Driver deleted successfully! Route has been unassigned from the bus.');
         loadDrivers();
+        // Dispatch event to refresh dashboard
+        window.dispatchEvent(new CustomEvent('refreshDashboard'));
         setTimeout(() => setSuccessMessage(null), 3000);
       } else {
         setError(result.error || 'Failed to delete driver');

@@ -44,6 +44,17 @@ const AdminDashboard = memo(function AdminDashboard() {
 
   useEffect(() => {
     loadDashboardData();
+    
+    // Listen for refresh events from management panels
+    const handleRefresh = () => {
+      loadDashboardData();
+    };
+    
+    window.addEventListener('refreshDashboard', handleRefresh);
+    
+    return () => {
+      window.removeEventListener('refreshDashboard', handleRefresh);
+    };
   }, []);
 
   const loadDashboardData = async (retryCount = 0) => {

@@ -101,36 +101,86 @@ class TrackingService {
             .eq('is_active', true);
         const total = countData?.length || 0;
         let nextSequence = stop.sequence;
+        const currentSequence = session.last_stop_sequence || 0;
+        logger_1.logger.info('Processing stop reached', 'tracking-service', {
+            driverId,
+            routeStopId,
+            stopSequence: stop.sequence,
+            currentLastSequence: currentSequence,
+            routeId: session.route_id
+        });
         const { data: maxStop } = await supabase_1.supabaseAdmin
             .from('route_stops')
             .select('sequence')
             .eq('route_id', session.route_id)
+            .eq('is_active', true)
             .order('sequence', { ascending: false })
             .limit(1)
             .maybeSingle();
         const maxSequence = maxStop?.sequence || nextSequence;
         if (nextSequence >= maxSequence) {
+            logger_1.logger.info('Last stop reached, resetting sequence to 0', 'tracking-service', {
+                driverId,
+                stopSequence: nextSequence,
+                maxSequence
+            });
             nextSequence = 0;
         }
         const { error } = await supabase_1.supabaseAdmin
             .from('trip_sessions')
             .update({ last_stop_sequence: nextSequence })
             .eq('id', session.id);
-        if (error)
+        if (error) {
+            logger_1.logger.error('Error updating stop sequence', 'tracking-service', {
+                error,
+                driverId,
+                sessionId: session.id,
+                nextSequence
+            });
             throw error;
-        return { success: true, last_stop_sequence: nextSequence };
+        }
+        logger_1.logger.info('Stop sequence updated successfully', 'tracking-service', {
+            driverId,
+            routeStopId,
+            previousSequence: currentSequence,
+            newSequence: nextSequence,
+            routeId: session.route_id
+        });
+        return {
+            success: true,
+            last_stop_sequence: nextSequence,
+            route_id: session.route_id,
+            stop_id: routeStopId
+        };
     }
     static async getDriverAssignmentWithStops(driverId) {
         const assignment = await ProductionAssignmentService_1.ProductionAssignmentService.getDriverAssignment(driverId);
-        if (!assignment)
+        if (!assignment) {
+            logger_1.logger.info('No assignment found for driver', 'tracking-service', { driverId });
             return null;
+        }
+        if (!assignment.route_id) {
+            logger_1.logger.warn('Assignment found but missing route_id', 'tracking-service', {
+                driverId,
+                assignmentId: assignment.id,
+                busId: assignment.bus_id
+            });
+            return null;
+        }
         const { data: session } = await supabase_1.supabaseAdmin
             .from('trip_sessions')
             .select('id, last_stop_sequence, shift_id')
             .eq('driver_id', driverId)
             .is('ended_at', null)
             .maybeSingle();
-        const lastSeq = session?.last_stop_sequence || 0;
+        const lastSeq = session ? (session.last_stop_sequence || 0) : 0;
+        logger_1.logger.info('Route stops calculation', 'tracking-service', {
+            driverId,
+            routeId: assignment.route_id,
+            hasSession: !!session,
+            lastSeq,
+            sessionLastSeq: session?.last_stop_sequence
+        });
         let shiftName = null;
         if (session?.shift_id) {
             const { data: shift } = await supabase_1.supabaseAdmin
@@ -140,21 +190,86 @@ class TrackingService {
                 .maybeSingle();
             shiftName = shift?.name || null;
         }
-        const { data: stops, error } = await supabase_1.supabaseAdmin
+        const { data: stops, error: stopsError } = await supabase_1.supabaseAdmin
             .from('route_stops')
-            .select('id, sequence, is_active, bus_stops:stop_id(name)')
+            .select('id, sequence, is_active, stop_id')
             .eq('route_id', assignment.route_id)
             .eq('is_active', true)
-            .order('sequence');
-        if (error)
-            throw error;
-        const all = (stops || []).map((s) => ({ id: s.id, name: s.bus_stops?.name, sequence: s.sequence }));
-        const completed = all.filter(s => s.sequence <= lastSeq);
+            .order('sequence', { ascending: true });
+        if (stopsError) {
+            logger_1.logger.error('Error fetching route stops', 'tracking-service', {
+                error: stopsError,
+                routeId: assignment.route_id,
+                driverId
+            });
+            throw stopsError;
+        }
+        if (!stops || stops.length === 0) {
+            logger_1.logger.warn('No route stops found for route', 'tracking-service', {
+                routeId: assignment.route_id,
+                routeName: assignment.route_name,
+                driverId,
+                message: 'Route exists but has no stops configured. Admin should add stops to this route.'
+            });
+            return {
+                route_id: assignment.route_id,
+                bus_id: assignment.bus_id,
+                route_name: assignment.route_name || null,
+                shift_id: session?.shift_id || null,
+                shift_name: shiftName,
+                tracking_active: !!session,
+                stops: { completed: [], next: null, remaining: [] }
+            };
+        }
+        const stopIds = stops.map((s) => s.stop_id).filter(Boolean);
+        let stopNamesMap = new Map();
+        if (stopIds.length > 0) {
+            const { data: busStops, error: busStopsError } = await supabase_1.supabaseAdmin
+                .from('bus_stops')
+                .select('id, name')
+                .in('id', stopIds);
+            if (busStopsError) {
+                logger_1.logger.error('Error fetching bus stop names', 'tracking-service', {
+                    error: busStopsError,
+                    routeId: assignment.route_id,
+                    driverId
+                });
+            }
+            else if (busStops) {
+                busStops.forEach((bs) => {
+                    if (bs.id && bs.name) {
+                        stopNamesMap.set(bs.id, bs.name);
+                    }
+                });
+            }
+        }
+        const all = (stops || []).map((s) => {
+            const stopName = stopNamesMap.get(s.stop_id) || `Stop ${s.sequence}`;
+            return {
+                id: s.id,
+                name: stopName.trim(),
+                sequence: s.sequence
+            };
+        });
+        const completed = all.filter(s => s.sequence <= lastSeq && lastSeq > 0);
         const remaining = all.filter(s => s.sequence > lastSeq);
-        const nextStop = remaining[0] || null;
+        const nextStop = remaining.length > 0 ? remaining[0] : null;
+        logger_1.logger.info('Route stops processed', 'tracking-service', {
+            driverId,
+            routeId: assignment.route_id,
+            totalStops: all.length,
+            lastSeq,
+            completedCount: completed.length,
+            remainingCount: remaining.length,
+            hasNext: !!nextStop,
+            allSequences: all.map(s => s.sequence),
+            completedSequences: completed.map(s => s.sequence),
+            remainingSequences: remaining.map(s => s.sequence)
+        });
         return {
             route_id: assignment.route_id,
             bus_id: assignment.bus_id,
+            route_name: assignment.route_name || null,
             shift_id: session?.shift_id || null,
             shift_name: shiftName,
             tracking_active: !!session,

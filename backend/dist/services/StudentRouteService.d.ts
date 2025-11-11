@@ -45,15 +45,12 @@ export declare class StudentRouteService {
         shiftId?: string;
         shiftName?: string;
     }): Promise<{
-        id: any;
-        name: any;
+        id: string;
+        name: string;
     }[]>;
     static getRoutesByShift(opts: {
         shiftId?: string;
         shiftName?: string;
-    }): Promise<{
-        id: string;
-        name: string;
-    }[]>;
+    }): Promise<any[]>;
 }
 //# sourceMappingURL=StudentRouteService.d.ts.map

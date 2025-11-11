@@ -1,20 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
-import config from './environment';
+/**
+ * Legacy Supabase Configuration File
+ * This file re-exports from the new role-based Supabase configuration
+ * @deprecated This file is kept for backward compatibility
+ * New code should import directly from './config/supabase' (which resolves to ./config/supabase/index.ts)
+ */
 
-// Use the centralized environment configuration - REMOVED
+// Re-export everything from the new index file
+export * from './supabase/index';
 
-// Use environment configuration values
-const finalSupabaseUrl = config.supabase.url;
-const finalSupabaseAnonKey = config.supabase.anonKey;
-const finalSupabaseServiceRoleKey = config.supabase.serviceRoleKey;
-
-// Client for public operations (frontend use)
-export const supabase = createClient(finalSupabaseUrl, finalSupabaseAnonKey);
-
-// Admin client for server-side operations
-export const supabaseAdmin = createClient(
-  finalSupabaseUrl,
-  finalSupabaseServiceRoleKey
-);
-
-export default supabase;
+// Re-export default for backward compatibility
+export { supabase as default } from './supabase/index';

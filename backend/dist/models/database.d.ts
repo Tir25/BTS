@@ -156,9 +156,15 @@ export interface DatabaseBusStop {
 export interface DatabaseRouteStop {
     id: string;
     route_id: string;
-    name: string;
-    geom: PostGISGeometry;
-    seq: number;
+    stop_id: string;
+    sequence: number;
+    is_active?: boolean;
+    created_at?: string;
+    updated_at?: string;
+    estimated_arrival_time?: string;
+    is_pickup_only?: boolean;
+    is_dropoff_only?: boolean;
+    notes?: string;
 }
 export interface DatabaseDriverBusAssignment {
     id: string;

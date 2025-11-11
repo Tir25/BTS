@@ -29,6 +29,14 @@ async function cached(key, producer) {
     });
     return inflight[key];
 }
+function invalidateAssignmentCache() {
+    Object.keys(cache).forEach(key => {
+        if (key.startsWith('assignments:')) {
+            delete cache[key];
+        }
+    });
+    logger_1.logger.info('Assignment cache invalidated', 'production-assignments');
+}
 router.get('/', auth_1.requireAdmin, async (req, res) => {
     try {
         const assignments = await cached('assignments:list', () => ProductionAssignmentService_1.ProductionAssignmentService.getAllAssignments());
@@ -177,6 +185,7 @@ router.post('/', auth_1.requireAdmin, async (req, res) => {
             notes,
             status: status || 'active',
         });
+        invalidateAssignmentCache();
         return res.status(201).json({
             success: true,
             data: assignment,
@@ -220,6 +229,7 @@ router.put('/bus/:busId', auth_1.requireAdmin, async (req, res) => {
             notes,
             status,
         });
+        invalidateAssignmentCache();
         return res.json({
             success: true,
             data: assignment,
@@ -263,6 +273,7 @@ router.delete('/bus/:busId', auth_1.requireAdmin, async (req, res) => {
                 message: 'Assignment removal failed',
             });
         }
+        invalidateAssignmentCache();
         return res.json({
             success: true,
             message: 'Assignment removed successfully',
@@ -327,6 +338,7 @@ router.post('/bulk', auth_1.requireAdmin, async (req, res) => {
             assigned_by
         }));
         const result = await ProductionAssignmentService_1.ProductionAssignmentService.bulkAssignDrivers(assignmentsWithAssigner);
+        invalidateAssignmentCache();
         return res.json({
             success: result.success,
             data: result,
