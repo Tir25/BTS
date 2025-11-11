@@ -129,9 +129,8 @@ export const getDriverBusInfo = async (
     console.log('🔍 Fetching bus info for driver:', driverId);
 
     // First, get the bus information without route join
-    type BusesRow = import('../config/supabase').Database['public']['Tables']['buses']['Row'];
     const { data: busData, error: busError } = await supabaseAdmin
-      .from<Pick<BusesRow,'id'|'bus_number'|'vehicle_no'|'route_id'>>('buses')
+      .from('buses')
       .select('id, bus_number, vehicle_no, route_id')
       .eq('assigned_driver_profile_id', driverId)
       .eq('is_active', true)
@@ -150,9 +149,8 @@ export const getDriverBusInfo = async (
     let driverName = 'Unknown Driver';
 
     // First try user_profiles table
-    type UserProfilesRow = import('../config/supabase').Database['public']['Tables']['user_profiles']['Row'];
     const { data: profileData } = await supabaseAdmin
-      .from<Pick<UserProfilesRow,'full_name'>>('user_profiles')
+      .from('user_profiles')
       .select('full_name')
       .eq('id', driverId)
       .maybeSingle();
@@ -161,9 +159,8 @@ export const getDriverBusInfo = async (
       driverName = profileData.full_name;
     } else {
       // Fallback to users table
-      type UsersRow = import('../config/supabase').Database['public']['Tables']['users']['Row'];
       const { data: userData } = await supabaseAdmin
-        .from<Pick<UsersRow,'first_name'|'last_name'>>('users')
+        .from('users')
         .select('first_name, last_name')
         .eq('id', driverId)
         .maybeSingle();
@@ -317,7 +314,7 @@ export const getBusLocationHistory = async (
 export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
   try {
     const { data, error } = await supabaseAdmin
-      .from<any>('buses')
+      .from('buses')
       .select(
         `
         id,
@@ -344,8 +341,8 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
     // Handle the case where joined tables return arrays
     const routeData = Array.isArray((data as any).routes) ? (data as any).routes[0] : (data as any).routes;
     const profileData = Array.isArray((data as any).profiles)
-      ? data.profiles[0]
-      : data.profiles;
+      ? (data as any).profiles[0]
+      : (data as any).profiles;
 
     return {
       bus_id: data.id,

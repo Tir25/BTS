@@ -178,8 +178,8 @@ export class RouteService {
       };
 
       const { data: route, error } = await supabaseAdmin
-        .from<RoutesRow>('routes')
-        .insert<RoutesInsert>(insertPayload)
+        .from('routes')
+        .insert(insertPayload as any)
         .select(`
           id,
           name,
@@ -242,8 +242,8 @@ export class RouteService {
       }
 
       const { data: route, error } = await supabaseAdmin
-        .from<RoutesRow>('routes')
-        .update<RoutesUpdate>(updateData)
+        .from('routes')
+        .update(updateData as any)
         .eq('id', routeId)
         .select(`
           id,
@@ -385,7 +385,7 @@ export class RouteService {
         description: route.description,
         distance_km: route.distance_km,
         estimated_duration_minutes: route.estimated_duration_minutes,
-        city: route.city,
+        city: route.city ?? undefined,
         is_active: route.is_active,
         created_at: route.created_at,
         updated_at: route.updated_at,
