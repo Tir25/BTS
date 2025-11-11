@@ -640,9 +640,14 @@ export class UnifiedDatabaseService {
       }
 
       // Validate password strength
-      if (driverData.password.length < 6) {
-        throw new Error('Password must be at least 6 characters long');
+      // PRODUCTION FIX: Trim password to prevent whitespace issues
+      const trimmedPassword = driverData.password.trim();
+      if (trimmedPassword.length < 6) {
+        throw new Error('Password must be at least 6 characters long (after trimming whitespace)');
       }
+      
+      // Use trimmed password for all operations
+      driverData.password = trimmedPassword;
 
       // Check if email already exists in user_profiles (check both active and inactive users)
       const { data: existingUser, error: checkError } = await supabaseAdmin
@@ -735,8 +740,9 @@ export class UnifiedDatabaseService {
           const { data: authUser, error: getUserError } = await (supabaseAdmin as any).auth.admin.getUserById((existingUser as any).id);
           if (authUser && !getUserError) {
             // Auth user exists, update their password and metadata
+            // PRODUCTION FIX: Use trimmed password and throw error on failure
             const { data: updatedAuth, error: updateAuthError } = await (supabaseAdmin as any).auth.admin.updateUserById((existingUser as any).id, {
-              password: driverData.password,
+              password: driverData.password.trim(), // Use trimmed password
               user_metadata: {
                 full_name: `${driverData.first_name} ${driverData.last_name}`,
                 first_name: driverData.first_name,
@@ -746,23 +752,40 @@ export class UnifiedDatabaseService {
             });
             
             if (updateAuthError) {
-              logger.warn('Could not update auth user, will create new one', 'unified-db', { error: updateAuthError });
-              // Fall through to create new auth user
+              logger.error('❌ CRITICAL: Failed to update auth user during reactivation', 'unified-db', { 
+                error: updateAuthError,
+                userId: (existingUser as any).id,
+                email: driverData.email
+              });
+              throw new Error(`Failed to update auth user during reactivation: ${updateAuthError.message}`);
             } else {
               authData = { user: updatedAuth.user };
               authError = null;
+              logger.info('✅ Auth user updated successfully during reactivation', 'unified-db', { 
+                userId: (existingUser as any).id,
+                email: driverData.email
+              });
             }
           }
         } catch (authCheckError) {
-          logger.warn('Could not check auth user, will create new one', 'unified-db', { error: authCheckError });
+          logger.error('❌ Error checking auth user during reactivation', 'unified-db', { 
+            error: authCheckError,
+            userId: (existingUser as any).id,
+            email: driverData.email
+          });
+          // Don't throw here - if auth user doesn't exist, we'll create a new one
+          logger.info('Auth user not found, will create new one', 'unified-db', { 
+            userId: (existingUser as any).id 
+          });
         }
       }
       
       // If no auth user was found/updated, create a new one
       if (!authData) {
+        // PRODUCTION FIX: Use trimmed password for new user creation
         const createAuthResult = await supabaseAdmin.auth.admin.createUser({
-          email: driverData.email,
-          password: driverData.password,
+          email: driverData.email.trim(),
+          password: driverData.password.trim(), // Use trimmed password
           email_confirm: true,
           user_metadata: {
             full_name: `${driverData.first_name} ${driverData.last_name}`,
@@ -851,24 +874,91 @@ export class UnifiedDatabaseService {
 
   /**
    * Update driver
+   * PRODUCTION FIX: Now updates password in Supabase Auth when password is provided
    */
   static async updateDriver(driverId: string, driverData: Partial<DriverData>): Promise<DriverData | null> {
     try {
       const updateData: any = {};
       
-      if (driverData.email !== undefined) updateData.email = driverData.email;
-      if (driverData.full_name !== undefined) updateData.full_name = driverData.full_name;
-      if (driverData.first_name !== undefined) updateData.first_name = driverData.first_name;
-      if (driverData.last_name !== undefined) updateData.last_name = driverData.last_name;
-      if (driverData.phone !== undefined) updateData.phone = driverData.phone;
+      // PRODUCTION FIX: Handle password update in Supabase Auth FIRST (CRITICAL FIX)
+      if (driverData.password !== undefined && driverData.password !== null && driverData.password !== '') {
+        // Trim password to prevent whitespace issues
+        const trimmedPassword = driverData.password.trim();
+        
+        // Validate password
+        if (trimmedPassword.length < 6) {
+          throw new Error('Password must be at least 6 characters long');
+        }
+        
+        // Update password in Supabase Auth
+        const { data: authUser, error: authUpdateError } = await (supabaseAdmin as any).auth.admin.updateUserById(
+          driverId,
+          {
+            password: trimmedPassword,
+          }
+        );
+        
+        if (authUpdateError) {
+          logger.error('❌ CRITICAL: Error updating password in Supabase Auth', 'unified-db', { 
+            error: authUpdateError, 
+            driverId,
+            email: driverData.email
+          });
+          throw new Error(`Failed to update password in authentication system: ${authUpdateError.message}`);
+        }
+        
+        logger.info('✅ Password updated successfully in Supabase Auth', 'unified-db', { 
+          driverId,
+          email: driverData.email
+        });
+      }
+      
+      // Update other fields in user_profiles table
+      if (driverData.email !== undefined) updateData.email = driverData.email.trim();
+      if (driverData.full_name !== undefined) updateData.full_name = driverData.full_name.trim();
+      if (driverData.first_name !== undefined) updateData.first_name = driverData.first_name.trim();
+      if (driverData.last_name !== undefined) updateData.last_name = driverData.last_name.trim();
+      if (driverData.phone !== undefined) updateData.phone = driverData.phone?.trim();
       if (driverData.role !== undefined) updateData.role = driverData.role;
       if (driverData.is_driver !== undefined) updateData.is_driver = driverData.is_driver;
       if (driverData.is_active !== undefined) updateData.is_active = driverData.is_active;
 
+      // Only update profile if there are other fields to update
+      if (Object.keys(updateData).length > 0) {
+        const { data, error } = await supabaseAdmin
+          .from('user_profiles')
+          .update(updateData)
+          .eq('id', driverId)
+          .select(`
+            id,
+            email,
+            full_name,
+            first_name,
+            last_name,
+            phone,
+            role,
+            is_driver,
+            is_active,
+            created_at,
+            updated_at
+          `)
+          .single();
+
+        if (error) {
+          if (error.code === 'PGRST116') {
+            return null; // No rows returned
+          }
+          logger.error('Error updating driver profile', 'unified-db', { error, driverId, driverData });
+          throw error;
+        }
+
+        logger.info('Driver profile updated successfully', 'unified-db', { driverId });
+        return data;
+      }
+      
+      // If only password was updated, fetch and return the profile
       const { data, error } = await supabaseAdmin
         .from('user_profiles')
-        .update(updateData)
-        .eq('id', driverId)
         .select(`
           id,
           email,
@@ -882,17 +972,14 @@ export class UnifiedDatabaseService {
           created_at,
           updated_at
         `)
+        .eq('id', driverId)
         .single();
-
+      
       if (error) {
-        if (error.code === 'PGRST116') {
-          return null; // No rows returned
-        }
-        logger.error('Error updating driver', 'unified-db', { error, driverId, driverData });
+        logger.error('Error fetching driver profile after password update', 'unified-db', { error, driverId });
         throw error;
       }
-
-      logger.info('Driver updated successfully', 'unified-db', { driverId });
+      
       return data;
     } catch (error) {
       logger.error('Error in updateDriver', 'unified-db', { error, driverId, driverData });

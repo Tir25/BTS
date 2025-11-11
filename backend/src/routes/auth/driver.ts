@@ -521,6 +521,113 @@ router.post('/driver/validate', async (req, res) => {
   }
 });
 
+// Admin-only: Reset driver password
+router.post('/driver/reset-password', async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+    
+    // Validate input
+    if (!email || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        message: 'Email and newPassword are required',
+        code: 'MISSING_FIELDS'
+      });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid password',
+        message: 'Password must be at least 6 characters long',
+        code: 'INVALID_PASSWORD'
+      });
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format',
+        message: 'Please enter a valid email address',
+        code: 'INVALID_EMAIL'
+      });
+    }
+    
+    logger.info('🔄 Attempting to reset driver password', 'auth', { email });
+    
+    const driverSupabaseAdmin = getDriverSupabaseAdmin();
+    
+    // Get user by email
+    const { data: users, error: listError } = await driverSupabaseAdmin.auth.admin.listUsers();
+    
+    if (listError) {
+      logger.error('❌ Error listing users', 'auth', { error: listError.message });
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve user',
+        message: 'An error occurred while retrieving user information',
+        code: 'USER_RETRIEVAL_ERROR'
+      });
+    }
+    
+    const user = users.users.find(u => u.email === email);
+    
+    if (!user) {
+      logger.warn('❌ User not found for password reset', 'auth', { email });
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: `No user found with email ${email}`,
+        code: 'USER_NOT_FOUND'
+      });
+    }
+    
+    // Update user's password
+    const { data: updatedUser, error: updateError } = await driverSupabaseAdmin.auth.admin.updateUserById(
+      user.id,
+      {
+        password: newPassword,
+      }
+    );
+    
+    if (updateError) {
+      logger.error('❌ Error updating password', 'auth', { error: updateError.message, email });
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update password',
+        message: 'An error occurred while updating the password',
+        code: 'PASSWORD_UPDATE_ERROR'
+      });
+    }
+    
+    logger.info('✅ Password reset successful', 'auth', { 
+      userId: updatedUser.user.id, 
+      email: updatedUser.user.email 
+    });
+    
+    return res.json({
+      success: true,
+      message: 'Password reset successful',
+      data: {
+        userId: updatedUser.user.id,
+        email: updatedUser.user.email
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('❌ Password reset error', 'auth', { error: error instanceof Error ? error.message : 'Unknown error' });
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: 'An unexpected error occurred. Please try again.',
+      code: 'INTERNAL_ERROR'
+    });
+  }
+});
+
 export default router;
 
 

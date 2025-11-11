@@ -108,19 +108,41 @@ function DriverManagementPanelContent({ className = '' }: DriverManagementPanelP
       if (editingDriver) {
         // For updates, only send changed fields
         const updateData = { ...formData };
-        if (!updateData.password) {
-          delete updateData.password; // Don't send empty password
+        
+        // PRODUCTION FIX: Handle password - only send if it's not empty and has been changed
+        if (updateData.password && updateData.password.trim().length > 0) {
+          // Validate password length
+          if (updateData.password.trim().length < 6) {
+            setError('Password must be at least 6 characters long');
+            setLoading(false);
+            return;
+          }
+          // Send trimmed password to prevent whitespace issues
+          updateData.password = updateData.password.trim();
+        } else {
+          // Don't send empty password - this means password won't be changed
+          delete updateData.password;
         }
+        
         result = await adminApiService.updateDriver(editingDriver.id, updateData);
       } else {
         // For new drivers, password is required
-        if (!formData.password) {
+        if (!formData.password || formData.password.trim().length === 0) {
           setError('Password is required for new drivers');
           setLoading(false);
           return;
         }
-        // Ensure password is provided for new drivers
-        const createData = { ...formData, password: formData.password || '' };
+        
+        // PRODUCTION FIX: Validate and trim password for new drivers
+        const trimmedPassword = formData.password.trim();
+        if (trimmedPassword.length < 6) {
+          setError('Password must be at least 6 characters long');
+          setLoading(false);
+          return;
+        }
+        
+        // Ensure password is provided for new drivers with trimmed value
+        const createData = { ...formData, password: trimmedPassword };
         result = await adminApiService.createDriver(createData);
       }
 

@@ -363,8 +363,32 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
           }
         } else {
           const errorMsg = (result as any).error || 'Login failed';
+          
+          // PRODUCTION FIX: Prevent retry loops by clearing loading state immediately
+          setIsLoading(false);
           setError(errorMsg);
-          logger.error('❌ Driver login failed', 'driver-auth', { error: errorMsg });
+          
+          logger.error('❌ Driver login failed', 'driver-auth', { 
+            error: errorMsg,
+            email,
+            requestId 
+          });
+          
+          // PRODUCTION FIX: For invalid credentials, stop immediately to prevent loops
+          if (errorMsg.includes('Invalid') || errorMsg.includes('invalid_credentials')) {
+            logger.warn('⚠️ Invalid credentials - stopping login attempts', 'driver-auth', { email });
+            // Clear any pending timeouts
+            if (loginTimeoutRef.current) {
+              clearTimeout(loginTimeoutRef.current);
+              loginTimeoutRef.current = null;
+            }
+            // Clear abort controller
+            if (loginAbortControllerRef.current) {
+              loginAbortControllerRef.current.abort();
+              loginAbortControllerRef.current = null;
+            }
+          }
+          
           return { success: false, error: errorMsg };
         }
       } catch (raceError) {

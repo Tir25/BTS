@@ -271,9 +271,29 @@ class AuthService {
       }
 
       if (result.error) {
-        logger.error('❌ Sign in error:', 'auth', { error: result.error });
+        logger.error('❌ Sign in error:', 'auth', { 
+          error: result.error.message || String(result.error),
+          errorCode: (result.error as any).status || (result.error as any).code
+        });
+        
         // PRODUCTION FIX: Clear token cache on authentication failure
         tokenStorage.clearCache();
+        
+        // PRODUCTION FIX: Stop authentication state to prevent retry loops
+        this._isAuthenticating = false;
+        
+        // Check for invalid credentials specifically
+        const errorMessage = result.error.message || String(result.error);
+        if (errorMessage.includes('Invalid login credentials') || 
+            errorMessage.includes('invalid_credentials') ||
+            errorMessage.includes('400')) {
+          logger.warn('⚠️ Invalid credentials detected - stopping authentication', 'auth', { email });
+          return { 
+            success: false, 
+            error: 'Invalid email or password. Please check your credentials and try again.'
+          };
+        }
+        
         return { 
           success: false, 
           error: this.getFormattedAuthError(result.error)
