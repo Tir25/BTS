@@ -11,10 +11,52 @@ const isDevelopment = () => import.meta.env.DEV;
 const isProduction = () => import.meta.env.PROD;
 
 // Smart API URL detection for cross-laptop testing and VS Code tunnels
+const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'];
+
+/**
+ * Normalize URL by removing trailing slashes and fixing localhost references
+ */
+const normalizeUrl = (url: string): string => {
+  // Remove trailing slashes
+  return url.replace(/\/+$/, '');
+};
+
+const replaceLocalhostWithCurrentHost = (value: string, fallbackPort = '3000') => {
+  try {
+    const parsed = new URL(value);
+    const currentHost = window.location.hostname;
+    const currentProtocol = window.location.protocol;
+
+    if (LOCAL_HOSTNAMES.includes(parsed.hostname) && currentHost && !LOCAL_HOSTNAMES.includes(currentHost)) {
+      // Preserve explicit port if supplied, otherwise fall back to backend default
+      const port = parsed.port || fallbackPort;
+      parsed.hostname = currentHost;
+      parsed.port = port;
+      // Align protocol with current page when original value was http(s)://localhost
+      if (parsed.protocol.startsWith('http')) {
+        parsed.protocol = currentProtocol;
+      }
+      // Remove trailing slash from pathname
+      parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+      return normalizeUrl(parsed.toString());
+    }
+  } catch (error) {
+    logger.warn('Failed to normalize API/WebSocket URL', 'environment', {
+      original: value,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return normalizeUrl(value);
+};
+
 const getApiUrl = () => {
+  let url: string;
+  
   // PRIORITY 1: Environment variable override (for deployment)
   if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+    url = replaceLocalhostWithCurrentHost(import.meta.env.VITE_API_URL);
+    return normalizeUrl(url);
   }
 
   // PRIORITY 2: Production domains
@@ -26,13 +68,14 @@ const getApiUrl = () => {
     currentHost.includes('vercel.app') ||
     currentHost.includes('vercel.com')
   ) {
-    return 'https://bus-tracking-backend-sxh8.onrender.com';
+    return normalizeUrl('https://bus-tracking-backend-sxh8.onrender.com');
   }
 
   // PRIORITY 3: VS Code tunnels
   if (currentHost.includes('devtunnels.ms')) {
     const tunnelId = currentHost.split('.')[0];
-    return `${currentProtocol}//${tunnelId}-3000.inc1.devtunnels.ms`;
+    url = `${currentProtocol}//${tunnelId}-3000.inc1.devtunnels.ms`;
+    return normalizeUrl(url);
   }
 
   // PRIORITY 4: Network IP (cross-laptop)
@@ -41,53 +84,70 @@ const getApiUrl = () => {
     currentHost !== '127.0.0.1' &&
     currentHost !== '0.0.0.0'
   ) {
-    return `http://${currentHost}:3000`;
+    return normalizeUrl(`http://${currentHost}:3000`);
   }
 
   // PRIORITY 5: Development
   if (isDevelopment()) {
-    return 'http://localhost:3000';
+    return normalizeUrl('http://localhost:3000');
   }
 
   // FALLBACK: Production backend
-  return 'https://bus-tracking-backend-sxh8.onrender.com';
+  return normalizeUrl('https://bus-tracking-backend-sxh8.onrender.com');
 };
 
 const getWebSocketUrl = () => {
-  // PRIORITY 1: Environment variable override
-  if (import.meta.env.VITE_WEBSOCKET_URL) {
-    return import.meta.env.VITE_WEBSOCKET_URL;
-  }
-
   const currentHost = window.location.hostname;
   const currentProtocol = window.location.protocol;
+
+  // PRIORITY 1: Environment variable override
+  if (import.meta.env.VITE_WEBSOCKET_URL) {
+    let normalized = replaceLocalhostWithCurrentHost(import.meta.env.VITE_WEBSOCKET_URL, '3000');
+
+    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+      normalized = normalized.replace(
+        /^http(s)?:/,
+        currentProtocol === 'https:' ? 'wss:' : 'ws:'
+      );
+    }
+
+    return normalizeUrl(normalized);
+  }
+
+  // Determine WebSocket protocol based on page protocol
+  // HTTPS pages require WSS (secure WebSocket) due to mixed content restrictions
+  const wsProtocol = currentProtocol === 'https:' ? 'wss:' : 'ws:';
 
   if (
     currentHost.includes('render.com') ||
     currentHost.includes('vercel.app') ||
     currentHost.includes('vercel.com')
   ) {
-    return 'wss://bus-tracking-backend-sxh8.onrender.com';
+    return normalizeUrl('wss://bus-tracking-backend-sxh8.onrender.com');
   }
 
   if (currentHost.includes('devtunnels.ms')) {
     const tunnelId = currentHost.split('.')[0];
-    return `${currentProtocol === 'https:' ? 'wss:' : 'ws:'}//${tunnelId}-3000.inc1.devtunnels.ms`;
+    const url = `${currentProtocol === 'https:' ? 'wss:' : 'ws:'}//${tunnelId}-3000.inc1.devtunnels.ms`;
+    return normalizeUrl(url);
   }
 
+  // MOBILE FIX: Use secure WebSocket (wss://) when page is served over HTTPS
+  // This prevents mixed content errors on mobile browsers
   if (
     currentHost !== 'localhost' &&
     currentHost !== '127.0.0.1' &&
     currentHost !== '0.0.0.0'
   ) {
-    return `ws://${currentHost}:3000`;
+    // Use wss:// for HTTPS pages, ws:// for HTTP pages
+    return normalizeUrl(`${wsProtocol}//${currentHost}:3000`);
   }
 
   if (isDevelopment()) {
-    return 'ws://localhost:3000';
+    return normalizeUrl('ws://localhost:3000');
   }
 
-  return 'wss://bus-tracking-backend-sxh8.onrender.com';
+  return normalizeUrl('wss://bus-tracking-backend-sxh8.onrender.com');
 };
 
 // Supabase configuration with validation (Legacy)

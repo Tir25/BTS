@@ -11,20 +11,34 @@ import { logger } from './utils/logger';
 import ErrorBoundary from './components/error/ErrorBoundary';
 
 // Import Service Worker cache clearer for development only
-// CRITICAL FIX: Double-check environment to prevent loading in production builds
+// PRODUCTION FIX: Check if file exists before loading to prevent syntax errors
 if (import.meta.env.DEV && import.meta.env.MODE === 'development') {
-  // Dynamically load the cache clearer script
-  const script = document.createElement('script');
-  script.src = '/clear-sw-cache.js';
-  script.type = 'application/javascript';
-  script.onload = () => logger.info('Service Worker cache clearer loaded', 'main');
-  script.onerror = () => {
-    // Silently fail - this is expected in production builds
-    if (import.meta.env.DEV) {
-      logger.warn('Service Worker cache clearer not available', 'main');
-    }
-  };
-  document.head.appendChild(script);
+  // Check if the file exists before attempting to load it
+  fetch('/clear-sw-cache.js', { method: 'HEAD' })
+    .then((response) => {
+      if (response.ok) {
+        // File exists, load it safely
+        const script = document.createElement('script');
+        script.src = '/clear-sw-cache.js';
+        script.type = 'application/javascript';
+        script.onload = () => logger.info('Service Worker cache clearer loaded', 'main');
+        script.onerror = () => {
+          logger.debug('Service Worker cache clearer failed to load', 'main');
+        };
+        // Prevent script execution errors from propagating
+        script.addEventListener('error', (e) => {
+          e.stopPropagation();
+        }, true);
+        document.head.appendChild(script);
+      } else {
+        // File doesn't exist, skip loading
+        logger.debug('Service Worker cache clearer not found (skipping)', 'main');
+      }
+    })
+    .catch(() => {
+      // Network error or file doesn't exist, silently skip
+      logger.debug('Service Worker cache clearer check failed (skipping)', 'main');
+    });
 }
 
 // Setup console filter to suppress expected warnings in development

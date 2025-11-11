@@ -173,7 +173,9 @@ class SupabaseUserService {
   ): Promise<any> {
     try {
       // Instead of using admin functions, call the backend API
-      const response = await fetch(`${environment.api.baseUrl}/admin/drivers`, {
+      // PRODUCTION FIX: Normalize URL to prevent double-slash issues
+      const baseUrl = environment.api.baseUrl.replace(/\/+$/, '');
+      const response = await fetch(`${baseUrl}/admin/drivers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -204,8 +206,10 @@ class SupabaseUserService {
   async updateUserMetadata(userId: string, metadata: any): Promise<any> {
     try {
       // Instead of using admin functions, call the backend API
+      // PRODUCTION FIX: Normalize URL to prevent double-slash issues
+      const baseUrl = environment.api.baseUrl.replace(/\/+$/, '');
       const response = await fetch(
-        `${environment.api.baseUrl}/admin/drivers/${userId}`,
+        `${baseUrl}/admin/drivers/${userId}`,
         {
           method: 'PUT',
           headers: {

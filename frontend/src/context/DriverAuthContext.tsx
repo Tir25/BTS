@@ -593,12 +593,26 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
         }
       }
     };
-    const unsubscribeConnectionState = unifiedWebSocketService.onConnectionStateChange((state) => {
-      if (!isMounted) return;
-      setIsWebSocketInitializing(state.connectionState === 'connecting' || state.connectionState === 'reconnecting');
-      setIsWebSocketConnected(state.isConnected);
-      setIsWebSocketAuthenticated(state.isAuthenticated);
-    });
+    // PRODUCTION FIX: Wrap connection state listener in try-catch to prevent crashes
+    let unsubscribeConnectionState: (() => void) | null = null;
+    try {
+      unsubscribeConnectionState = unifiedWebSocketService.onConnectionStateChange((state) => {
+        try {
+          if (!isMounted) return;
+          setIsWebSocketInitializing(state.connectionState === 'connecting' || state.connectionState === 'reconnecting');
+          setIsWebSocketConnected(state.isConnected);
+          setIsWebSocketAuthenticated(state.isAuthenticated);
+        } catch (error) {
+          logger.error('Error updating WebSocket state in DriverAuthContext', 'driver-auth', { error });
+        }
+      });
+    } catch (error) {
+      logger.error('Error subscribing to WebSocket connection state', 'driver-auth', { error });
+      // Continue execution even if subscription fails - set default states
+      setIsWebSocketInitializing(false);
+      setIsWebSocketConnected(false);
+      setIsWebSocketAuthenticated(false);
+    }
     // PRODUCTION FIX: Also retry assignment loading if authenticated but no assignment
     const retryAssignmentIfNeeded = async () => {
       if (isAuthenticated && isDriver && driverId && !busAssignment) {
@@ -635,8 +649,18 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
     }
     return () => {
       isMounted = false;
-      unsubscribeConnectionState();
-      unifiedWebSocketService.disconnect();
+      try {
+        if (unsubscribeConnectionState) {
+          unsubscribeConnectionState();
+        }
+      } catch (error) {
+        logger.warn('Error unsubscribing from connection state', 'driver-auth', { error });
+      }
+      try {
+        unifiedWebSocketService.disconnect();
+      } catch (error) {
+        logger.warn('Error disconnecting WebSocket', 'driver-auth', { error });
+      }
     };
   }, [isAuthenticated, isDriver, driverId, busAssignment]);
 

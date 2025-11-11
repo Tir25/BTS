@@ -15,6 +15,16 @@ export interface ApiResponse<T> {
   timestamp?: string;
 }
 
+/**
+ * Safely join baseUrl and endpoint, handling trailing/leading slashes
+ * PRODUCTION FIX: Prevents double-slash URLs that cause 404 errors
+ */
+function joinUrl(baseUrl: string, endpoint: string): string {
+  const normalizedBase = baseUrl.replace(/\/+$/, '');
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${normalizedBase}${normalizedEndpoint}`;
+}
+
 async function request<T>(
   path: string,
   method: HttpMethod = 'GET',
@@ -31,7 +41,10 @@ async function request<T>(
     if (token) headers['Authorization'] = `Bearer ${token}`;
   } catch {}
 
-  const res = await fetch(`${environment.api.baseUrl}${path}`, {
+  // PRODUCTION FIX: Use safe URL join to prevent double-slash issues
+  const baseUrl = environment.api.baseUrl.replace(/\/+$/, '');
+  const url = joinUrl(baseUrl, path);
+  const res = await fetch(url, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,

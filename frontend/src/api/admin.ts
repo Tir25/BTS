@@ -115,11 +115,16 @@ class AdminApiService {
       const controller = new AbortController();
       timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const baseUrl = API_BASE_URL || environment.api.baseUrl;
+      // Normalize baseUrl to never have trailing slash
+      const rawBaseUrl = API_BASE_URL || environment.api.baseUrl;
+      const baseUrl = rawBaseUrl.replace(/\/+$/, '');
+      
+      // Safely join URLs to prevent double-slash issues
       const isAssignmentEndpoint = endpoint.startsWith('/assignments') || endpoint.startsWith('/production-assignments');
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       const fullUrl = isAssignmentEndpoint 
-        ? `${baseUrl}${endpoint}`
-        : `${baseUrl}/admin${endpoint}`;
+        ? `${baseUrl}${normalizedEndpoint}`
+        : `${baseUrl}/admin${normalizedEndpoint}`;
       
       logger.info('🌐 API Request', 'admin-api', { 
         endpoint, 

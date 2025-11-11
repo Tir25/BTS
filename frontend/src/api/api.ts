@@ -11,11 +11,24 @@ import { IApiService } from '../services/interfaces/IApiService';
 
 import { logger } from '../utils/logger';
 
+/**
+ * Safely join baseUrl and endpoint, handling trailing/leading slashes
+ * PRODUCTION FIX: Prevents double-slash URLs that cause 404 errors
+ */
+function joinUrl(baseUrl: string, endpoint: string): string {
+  // Remove trailing slashes from baseUrl
+  const normalizedBase = baseUrl.replace(/\/+$/, '');
+  // Ensure endpoint starts with a single slash
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${normalizedBase}${normalizedEndpoint}`;
+}
+
 class ApiService implements IApiService {
   private baseUrl: string;
 
   constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+    // Normalize baseUrl to never have trailing slash
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
   }
 
   private async backendRequest<T>(
@@ -28,12 +41,31 @@ class ApiService implements IApiService {
     };
 
     try {
-      const token = authService.getAccessToken();
+      // Try to get token from authService (for drivers/admins)
+      // For student endpoints, the studentAuthService should be used, but we'll try both
+      let token = authService.getAccessToken();
+      
+      // If no token from driver auth and endpoint is student-related, try student auth
+      if (!token && endpoint.includes('/student/')) {
+        try {
+          const { studentAuthService } = await import('../services/auth/studentAuthService');
+          token = studentAuthService.getAccessToken();
+          if (token) {
+            logger.debug('🔑 Using student auth token', 'api', { endpoint });
+          }
+        } catch (studentAuthError) {
+          // Student auth service might not be available, continue without token
+          logger.debug('🔓 Student auth service not available', 'api', { endpoint });
+        }
+      }
+      
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        logger.debug('🔓 Public access - no authentication token available', 'api', { endpoint });
       }
     } catch (error) {
-      logger.info('🔓 Public access - no authentication token available', 'component');
+      logger.info('🔓 Public access - no authentication token available', 'component', { endpoint });
     }
 
     if (options?.headers) {
@@ -92,7 +124,10 @@ class ApiService implements IApiService {
 
   async getHealth(): Promise<HealthResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/health`, {
+      const healthUrl = joinUrl(this.baseUrl, '/health');
+      logger.debug('🔍 Checking backend health', 'component', { url: healthUrl, baseUrl: this.baseUrl });
+      
+      const response = await fetch(healthUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -101,19 +136,33 @@ class ApiService implements IApiService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text().catch(() => response.statusText);
+        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
       }
 
       const data = await response.json();
       logger.debug('✅ Health check successful:', 'component', { data });
       return data;
     } catch (error) {
-      logger.error('Error occurred', 'component', { error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorName = error instanceof Error ? error.name : 'UnknownError';
+      const isNetworkError = errorName === 'TimeoutError' || errorName === 'TypeError' || errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError');
+      
+      logger.error('❌ Health check failed', 'component', { 
+        error: errorMessage,
+        errorName,
+        baseUrl: this.baseUrl,
+        isNetworkError,
+        url: `${this.baseUrl}/health`,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
       return {
         status: 'unhealthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         environment: 'development',
+        error: isNetworkError ? 'Backend server is not accessible. Please check if the server is running.' : errorMessage,
         services: {
           database: {
             status: 'unhealthy',
@@ -550,7 +599,7 @@ class ApiService implements IApiService {
       const [maxLng, maxLat] = bounds[1];
 
       const response = await fetch(
-        `${this.baseUrl}/routes/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`,
+        joinUrl(this.baseUrl, `/routes/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`),
         {
           method: 'GET',
           headers: {
@@ -603,7 +652,7 @@ class ApiService implements IApiService {
       const [maxLng, maxLat] = bounds[1];
 
       const response = await fetch(
-        `${this.baseUrl}/buses/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`,
+        joinUrl(this.baseUrl, `/buses/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`),
         {
           method: 'GET',
           headers: {
@@ -656,7 +705,7 @@ class ApiService implements IApiService {
       const [maxLng, maxLat] = bounds[1];
 
       const response = await fetch(
-        `${this.baseUrl}/locations/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`,
+        joinUrl(this.baseUrl, `/locations/viewport?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}`),
         {
           method: 'GET',
           headers: {
@@ -1175,7 +1224,7 @@ class ApiService implements IApiService {
       const [maxLng, maxLat] = bounds[1];
 
       const response = await fetch(
-        `${this.baseUrl}/buses/clusters?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}&zoom=${zoom}`,
+        joinUrl(this.baseUrl, `/buses/clusters?minLng=${minLng}&minLat=${minLat}&maxLng=${maxLng}&maxLat=${maxLat}&zoom=${zoom}`),
         {
           method: 'GET',
           headers: {

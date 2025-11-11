@@ -215,17 +215,19 @@ const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
               <div className="mb-4">
                 <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
                   <AnimatePresence>
-                    {displayBuses.map((bus) => {
+                    {displayBuses.map((bus, index) => {
+                      // PRODUCTION FIX: Ensure unique key - use busId if available, fallback to index
                       const busId = (bus as any).id || (bus as any).bus_id;
-                      const location = lastBusLocations[busId];
+                      const uniqueKey = busId || `bus-${index}-${(bus as any).busNumber || 'unknown'}`;
+                      const location = lastBusLocations[busId || ''];
                       return (
                         <motion.div
-                          key={busId}
+                          key={uniqueKey}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -10 }}
                           className="p-3 bg-white border border-slate-200 rounded-lg hover:border-blue-400 hover:shadow-sm transition-all cursor-pointer"
-                          onClick={() => onCenterOnBus(busId)}
+                          onClick={() => busId && onCenterOnBus(busId)}
                         >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center space-x-2">
@@ -238,14 +240,16 @@ const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
                               <div className="text-xs text-slate-700 bg-slate-100 px-2 py-1 rounded">
                                 {(bus as any).eta ? `${(bus as any).eta} min` : 'ETA: --'}
                               </div>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); onCenterOnBus(busId); }}
-                                className="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                aria-label={`Center map on ${(bus as any).busNumber}`}
-                                title={`Center on ${(bus as any).busNumber}`}
-                              >
-                                🎯
-                              </button>
+                              {busId && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onCenterOnBus(busId); }}
+                                  className="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                  aria-label={`Center map on ${(bus as any).busNumber || 'bus'}`}
+                                  title={`Center on ${(bus as any).busNumber || 'bus'}`}
+                                >
+                                  🎯
+                                </button>
+                              )}
                             </div>
                           </div>
 

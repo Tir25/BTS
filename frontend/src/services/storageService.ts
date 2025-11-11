@@ -54,8 +54,11 @@ export class StorageService {
     };
 
     // Ensure we're using the correct backend URL for production
-    const baseUrl = API_BASE_URL || environment.api.baseUrl;
-    return fetch(`${baseUrl}/storage${endpoint}`, {
+    // PRODUCTION FIX: Normalize URL to prevent double-slash issues
+    const rawBaseUrl = API_BASE_URL || environment.api.baseUrl;
+    const baseUrl = rawBaseUrl.replace(/\/+$/, '');
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    return fetch(`${baseUrl}/storage${normalizedEndpoint}`, {
       ...options,
       headers: {
         ...defaultHeaders,
@@ -83,7 +86,9 @@ export class StorageService {
       formData.append('busId', busId);
 
       // Ensure we're using the correct backend URL for production
-      const baseUrl = API_BASE_URL || environment.api.baseUrl;
+      // PRODUCTION FIX: Normalize URL to prevent double-slash issues
+      const rawBaseUrl = API_BASE_URL || environment.api.baseUrl;
+      const baseUrl = rawBaseUrl.replace(/\/+$/, '');
       logger.debug('Debug info', 'component', { data: `📤 Sending request to: ${baseUrl}/storage/upload/bus-image` });
       logger.debug('Debug info', 'component', { 
         data: '📋 FormData contents:',
@@ -147,7 +152,9 @@ export class StorageService {
       formData.append('driverId', driverId);
 
       // Ensure we're using the correct backend URL for production
-      const baseUrl = API_BASE_URL || environment.api.baseUrl;
+      // PRODUCTION FIX: Normalize URL to prevent double-slash issues
+      const rawBaseUrl = API_BASE_URL || environment.api.baseUrl;
+      const baseUrl = rawBaseUrl.replace(/\/+$/, '');
       const response = await fetch(`${baseUrl}/storage/upload/driver-photo`, {
         method: 'POST',
         headers: {
@@ -189,7 +196,9 @@ export class StorageService {
       formData.append('routeId', routeId);
 
       // Ensure we're using the correct backend URL for production
-      const baseUrl = API_BASE_URL || environment.api.baseUrl;
+      // PRODUCTION FIX: Normalize URL to prevent double-slash issues
+      const rawBaseUrl = API_BASE_URL || environment.api.baseUrl;
+      const baseUrl = rawBaseUrl.replace(/\/+$/, '');
       const response = await fetch(`${baseUrl}/storage/upload/route-map`, {
         method: 'POST',
         headers: {

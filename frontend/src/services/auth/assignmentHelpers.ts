@@ -59,9 +59,11 @@ export class AssignmentHelpers {
     }
 
     // Use backend API with authentication
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    // PRODUCTION FIX: Normalize URL to prevent double-slash issues
+    const rawApiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const apiBaseUrl = rawApiBaseUrl.replace(/\/+$/, '');
     const response = await fetch(
-      `${API_BASE_URL}/production-assignments/my-assignment`,
+      `${apiBaseUrl}/production-assignments/my-assignment`,
       {
         method: 'GET',
         headers: {

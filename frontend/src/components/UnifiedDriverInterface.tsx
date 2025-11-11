@@ -204,19 +204,46 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
         }
       }
     } catch (error) {
-      logger.error('❌ Error refreshing stops', 'UnifiedDriverInterface', {
-        error: error instanceof Error ? error.message : String(error),
-        driverId: busAssignment?.driver_id,
-        routeId: busAssignment?.route_id,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      // PRODUCTION FIX: Only clear on network/API errors, not on missing data
-      if (error instanceof Error && (
-        error.message.includes('fetch') || 
-        error.message.includes('network') || 
-        error.message.includes('404') ||
-        error.message.includes('Failed to fetch')
-      )) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const statusCode = (error as any)?.status;
+      const errorCode = (error as any)?.code;
+      
+      // PRODUCTION FIX: Handle specific error cases - reduce error spam
+      if (statusCode === 401 || errorCode === 'MISSING_TOKEN' || errorCode === 'INVALID_TOKEN') {
+        // Authentication error - log at debug level (expected during initialization)
+        logger.debug('Authentication error while fetching stops (may be expected)', 'UnifiedDriverInterface', {
+          driverId: busAssignment?.driver_id,
+          error: errorMessage,
+          status: statusCode,
+          code: errorCode
+        });
+      } else if (statusCode === 404 || errorMessage.includes('No assignment found')) {
+        // No assignment found - this is expected for drivers without assignment
+        logger.debug('Driver has no assignment (expected)', 'UnifiedDriverInterface', {
+          driverId: busAssignment?.driver_id,
+          message: 'Driver needs to be assigned to a bus and route by admin'
+        });
+        setStopsState({ completed: [], next: null, remaining: [] });
+      } else if (errorMessage.includes('fetch') || 
+                 errorMessage.includes('network') || 
+                 errorMessage.includes('Failed to fetch')) {
+        // Network error - log at warn level (not error, as it may be temporary)
+        logger.warn('⚠️ Network error while fetching stops', 'UnifiedDriverInterface', {
+          error: errorMessage,
+          driverId: busAssignment?.driver_id,
+          routeId: busAssignment?.route_id
+        });
+        setStopsState({ completed: [], next: null, remaining: [] });
+      } else {
+        // Unexpected error - log at error level
+        logger.error('❌ Error refreshing stops', 'UnifiedDriverInterface', {
+          error: errorMessage,
+          status: statusCode,
+          code: errorCode,
+          driverId: busAssignment?.driver_id,
+          routeId: busAssignment?.route_id,
+          stack: error instanceof Error ? error.stack : undefined
+        });
         setStopsState({ completed: [], next: null, remaining: [] });
       }
     }
@@ -471,18 +498,14 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
           isWebSocketConnected: true,
           isWebSocketAuthenticated: false 
         });
-        // PRODUCTION FIX: Only log warning, don't set error during normal operation
-        logger.debug('Driver interface: WebSocket connected but authentication pending', 'component');
-        // Only set error if authenticated and not initializing
-        if (isAuthenticatedRef.current && !isWebSocketInitializing) {
-          const appError = errorHandler.handleError(
-            new Error('WebSocket authentication failed'), 
-            'UnifiedDriverInterface-websocket-auth'
-          );
-          driverActionsRef.current.setInitializationState({
-            initializationError: appError.userMessage || appError.message
-          });
-        }
+        // PRODUCTION FIX: Wait for initialization to complete before showing errors
+        // Don't show errors during initialization or immediately after connection
+        // The connection state listener in DriverAuthContext will update authentication state
+        // when driver:initialized event is received, so we should wait for that
+        logger.debug('Driver interface: WebSocket connected, waiting for authentication', 'component', {
+          isInitializing: isWebSocketInitializing,
+          isAuthenticated: currentState.isWebSocketAuthenticated
+        });
       } else {
         // Disconnected
         driverActionsRef.current.setConnectionState({ 
@@ -502,11 +525,20 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
         }
       }
     } catch (err) {
-      const appError = errorHandler.handleError(err, 'UnifiedDriverInterface-websocket-status-update');
-      // Only set error if not initializing
-      if (!isWebSocketInitializing) {
-        driverActionsRef.current.setInitializationState({
-          initializationError: appError.userMessage || appError.message
+      // PRODUCTION FIX: Don't create error loops - only log if it's a real error
+      // The error handler might throw, but we don't want to call handleError on its output
+      try {
+        const appError = errorHandler.handleError(err, 'UnifiedDriverInterface-websocket-status-update');
+        // Only set error if not initializing
+        if (!isWebSocketInitializing) {
+          driverActionsRef.current.setInitializationState({
+            initializationError: appError.userMessage || appError.message
+          });
+        }
+      } catch (handlerError) {
+        // Error handler itself failed - just log the original error
+        logger.debug('Error in error handler (non-critical)', 'component', { 
+          originalError: err instanceof Error ? err.message : String(err)
         });
       }
     }

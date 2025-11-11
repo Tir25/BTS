@@ -5,6 +5,18 @@ import { logError } from '../../utils/errorHandler';
 import { environment } from '../../config/environment';
 import { logger } from '../../utils/logger';
 
+/**
+ * Safely join baseUrl and endpoint, handling trailing/leading slashes
+ * PRODUCTION FIX: Prevents double-slash URLs that cause 404 errors
+ */
+function joinUrl(baseUrl: string, endpoint: string): string {
+  // Remove trailing slashes from baseUrl
+  const normalizedBase = baseUrl.replace(/\/+$/, '');
+  // Ensure endpoint starts with a single slash
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${normalizedBase}${normalizedEndpoint}`;
+}
+
 export interface ApiRequestConfig {
   endpoint: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -28,7 +40,9 @@ class ResilientApiService {
   private defaultTimeout: number = 10000; // 10 seconds
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || environment.api.baseUrl;
+    // Normalize baseUrl to never have trailing slash
+    const rawBaseUrl = baseUrl || environment.api.baseUrl;
+    this.baseUrl = rawBaseUrl.replace(/\/+$/, '');
   }
 
   // Main request method with full resilience
@@ -43,7 +57,8 @@ class ResilientApiService {
       retryOnFailure = true,
     } = config;
 
-    const url = `${this.baseUrl}${endpoint}`;
+    // PRODUCTION FIX: Use safe URL join to prevent double-slash issues
+    const url = joinUrl(this.baseUrl, endpoint);
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     try {
@@ -87,9 +102,28 @@ class ResilientApiService {
       };
     } catch (error) {
       // Log error with context
+      // Enhanced error logging with actual error details
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorName = error instanceof Error ? error.name : 'UnknownError';
+      const isNetworkError = errorName === 'TimeoutError' || errorName === 'TypeError' || 
+                            errorMessage.includes('Failed to fetch') || 
+                            errorMessage.includes('NetworkError') ||
+                            errorMessage.includes('ERR_INTERNET_DISCONNECTED') ||
+                            errorMessage.includes('ERR_CONNECTION_REFUSED');
+      
+      logger.error(`❌ API request failed for ${method} ${endpoint}`, 'api', {
+        error: errorMessage,
+        errorName,
+        isNetworkError,
+        endpoint,
+        method,
+        url: `${this.baseUrl}${endpoint}`,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
       logError(
         error,
-        `API request failed for ${method} ${endpoint}`
+        `API request failed for ${method} ${endpoint}: ${errorMessage}`
       );
 
       // Try to get fallback data from offline storage

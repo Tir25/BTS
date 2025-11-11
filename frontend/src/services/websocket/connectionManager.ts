@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { environment } from '../../config/environment';
 import { logger } from '../../utils/logger';
 import { authService } from '../authService';
+import { studentAuthService } from '../auth/studentAuthService';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 
@@ -132,18 +133,39 @@ export class ConnectionManager {
       this.connectionStartTime = Date.now();
       this.totalConnections++;
       
-      logger.info('🔌 Connecting to WebSocket server...', 'component');
-
+      const wsUrl = environment.api.websocketUrl;
       const authToken = await this.getValidAuthToken();
+      
+      logger.info('🔌 Connecting to WebSocket server...', 'component', {
+        url: wsUrl,
+        clientType: this.clientType,
+        hasToken: !!authToken,
+        isMobile: this.isMobile,
+        protocol: window.location.protocol
+      });
+
       this.socket = this.createSocket(authToken);
       
       await this.connectWithTimeout();
       
-      logger.info('✅ WebSocket connected successfully', 'component');
+      logger.info('✅ WebSocket connected successfully', 'component', {
+        url: wsUrl,
+        clientType: this.clientType
+      });
       
     } catch (error) {
-      logger.error('❌ WebSocket connection failed', 'component', { error });
-      this.updateConnectionState('error', error instanceof Error ? error.message : 'Connection failed');
+      const wsUrl = environment.api.websocketUrl;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('❌ WebSocket connection failed', 'component', { 
+        error: errorMessage,
+        url: wsUrl,
+        clientType: this.clientType,
+        isMobile: this.isMobile,
+        protocol: window.location.protocol,
+        hostname: window.location.hostname,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      this.updateConnectionState('error', errorMessage);
       this.failedConnections++;
       throw error;
     }
@@ -151,26 +173,39 @@ export class ConnectionManager {
 
   /**
    * Get authentication token
+   * MOBILE FIX: Use studentAuthService for students to get correct token
    */
   private async getValidAuthToken(): Promise<string | null> {
-    const token = authService.getAccessToken();
+    let token: string | null = null;
     
-    if (!token) {
-      if (this.clientType === 'student') {
-        logger.info('🎓 Student connecting without authentication (anonymous mode)', 'component');
+    // Use appropriate auth service based on client type
+    if (this.clientType === 'student') {
+      token = studentAuthService.getAccessToken();
+      if (token) {
+        logger.info('🔐 Using student authentication token for WebSocket', 'component', {
+          clientType: this.clientType,
+          hasToken: !!token
+        });
+        return token;
+      }
+      // Fallback to anonymous if no token (allowed for students)
+      logger.info('🎓 Student connecting without authentication (anonymous mode)', 'component');
+      return null;
+    } else {
+      // Driver or admin: use driver auth service
+      token = authService.getAccessToken();
+      if (!token) {
+        logger.warn('⚠️ No auth token available for WebSocket', 'component', {
+          clientType: this.clientType
+        });
         return null;
       }
-      
-      logger.warn('⚠️ No auth token available for WebSocket', 'component');
-      return null;
+      logger.info('🔐 Using authentication token for WebSocket', 'component', {
+        clientType: this.clientType,
+        hasToken: !!token
+      });
+      return token;
     }
-
-    logger.info('🔐 Using authentication token for WebSocket', 'component', {
-      clientType: this.clientType,
-      hasToken: !!token
-    });
-
-    return token;
   }
 
   /**
@@ -226,13 +261,29 @@ export class ConnectionManager {
         resolve();
       };
 
-      const onError = (error: Error) => {
+      const onError = (error: Error | unknown) => {
         cleanup();
-        reject(error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const wsUrl = environment.api.websocketUrl;
+        logger.error('❌ WebSocket connection error during handshake', 'component', {
+          error: errorMessage,
+          url: wsUrl,
+          clientType: this.clientType,
+          isMobile: this.isMobile,
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        reject(error instanceof Error ? error : new Error(errorMessage));
       };
 
       const onDisconnect = (reason: string) => {
         cleanup();
+        const wsUrl = environment.api.websocketUrl;
+        logger.error('❌ WebSocket disconnected during connection attempt', 'component', {
+          reason,
+          url: wsUrl,
+          clientType: this.clientType,
+          isMobile: this.isMobile
+        });
         reject(new Error(`Connection failed: ${reason}`));
       };
 
@@ -365,6 +416,14 @@ export class ConnectionManager {
    */
   getConnectionStatus(): boolean {
     return this.connectionState === 'connected' && this.socket?.connected === true;
+  }
+
+  /**
+   * Get current connection state
+   * PRODUCTION FIX: Expose connection state for external use
+   */
+  getConnectionState(): ConnectionState {
+    return this.connectionState;
   }
 
   /**

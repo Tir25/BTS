@@ -103,6 +103,8 @@ class UnifiedWebSocketService {
     connectionManager.disconnect();
     subscriptionManager.setSocket(null);
     this.authenticationState = { isAuthenticated: false };
+    // Notify listeners of disconnection
+    this.notifyConnectionStateListeners();
   }
 
   /**
@@ -153,6 +155,8 @@ class UnifiedWebSocketService {
         userRole: 'student'
       };
       connectionManager.updateConnectionState('connected');
+      // Notify listeners of authentication state change
+      this.notifyConnectionStateListeners();
       
       this.studentConnectedListeners.forEach(listener => listener());
     });
@@ -300,19 +304,122 @@ class UnifiedWebSocketService {
 
   /**
    * Event-driven connection state subscription
+   * PRODUCTION FIX: Notify listeners when authentication state changes
    */
+  private connectionStateListeners: Set<(state: { 
+    isConnected: boolean; 
+    isAuthenticated: boolean; 
+    connectionState: ConnectionState;
+    error?: string;
+  }) => void> = new Set();
+
+  private notifyConnectionStateListeners() {
+    try {
+      const socket = connectionManager?.getSocket?.();
+      const isConnected = socket?.connected || false;
+      
+      // PRODUCTION FIX: Safely get connection state with multiple fallbacks
+      let connectionState: ConnectionState = 'disconnected';
+      try {
+        // Try to get connection state from connectionManager
+        if (connectionManager && typeof connectionManager.getConnectionState === 'function') {
+          connectionState = connectionManager.getConnectionState();
+        } else if (connectionManager && typeof (connectionManager as any).getConnectionStats === 'function') {
+          // Fallback: use getConnectionStats if available
+          const stats = (connectionManager as any).getConnectionStats();
+          connectionState = stats?.connectionState || (isConnected ? 'connected' : 'disconnected');
+        } else {
+          // Final fallback: determine state from socket connection status
+          connectionState = isConnected ? 'connected' : 'disconnected';
+        }
+      } catch (error) {
+        // Fallback: determine state from socket connection status
+        logger.warn('Error getting connection state, using fallback', 'component', { error });
+        connectionState = isConnected ? 'connected' : 'disconnected';
+      }
+      
+      const state = {
+        isConnected,
+        isAuthenticated: this.authenticationState.isAuthenticated,
+        connectionState,
+      };
+      
+      // Notify all listeners
+      this.connectionStateListeners.forEach(listener => {
+        try {
+          listener(state);
+        } catch (listenerError) {
+          logger.error('Error in connection state listener', 'component', { error: listenerError });
+        }
+      });
+    } catch (error) {
+      logger.error('Error notifying connection state listeners', 'component', { error });
+      // Provide a safe default state even on error
+      const defaultState = {
+        isConnected: false,
+        isAuthenticated: false,
+        connectionState: 'disconnected' as ConnectionState,
+      };
+      this.connectionStateListeners.forEach(listener => {
+        try {
+          listener(defaultState);
+        } catch (listenerError) {
+          // Silently fail if even the default state fails
+        }
+      });
+    }
+  }
+
   onConnectionStateChange(listener: (state: { 
     isConnected: boolean; 
     isAuthenticated: boolean; 
     connectionState: ConnectionState;
     error?: string;
   }) => void): () => void {
-    return connectionManager.onConnectionStateChange((state) => {
-      listener({
-        ...state,
-        isAuthenticated: this.authenticationState.isAuthenticated,
+    this.connectionStateListeners.add(listener);
+    
+    // PRODUCTION FIX: Safely notify with current state, handle errors gracefully
+    try {
+      this.notifyConnectionStateListeners();
+    } catch (error) {
+      logger.warn('Error notifying connection state listener on subscription', 'component', { error });
+      // Still provide a default state even if notification fails
+      try {
+        const socket = connectionManager.getSocket();
+        listener({
+          isConnected: socket?.connected || false,
+          isAuthenticated: false,
+          connectionState: 'disconnected',
+        });
+      } catch (fallbackError) {
+        logger.error('Error providing fallback connection state', 'component', { error: fallbackError });
+      }
+    }
+    
+    // Also subscribe to connection manager state changes
+    let connectionStateUnsubscribe: (() => void) | null = null;
+    try {
+      connectionStateUnsubscribe = connectionManager.onConnectionStateChange((state) => {
+        try {
+          this.notifyConnectionStateListeners();
+        } catch (error) {
+          logger.warn('Error notifying connection state listeners', 'component', { error });
+        }
       });
-    });
+    } catch (error) {
+      logger.warn('Error subscribing to connection manager state changes', 'component', { error });
+    }
+    
+    return () => {
+      this.connectionStateListeners.delete(listener);
+      if (connectionStateUnsubscribe) {
+        try {
+          connectionStateUnsubscribe();
+        } catch (error) {
+          logger.warn('Error unsubscribing from connection state changes', 'component', { error });
+        }
+      }
+    };
   }
 
   /**
@@ -437,6 +544,16 @@ class UnifiedWebSocketService {
           driverId: data?.driverId,
           busId: data?.busId 
         });
+        // PRODUCTION FIX: Update authentication state when driver is initialized
+        this.authenticationState = {
+          isAuthenticated: true,
+          userId: data?.driverId,
+          userRole: 'driver'
+        };
+        // Update connection state to reflect authentication
+        connectionManager.updateConnectionState('connected');
+        // Notify listeners of authentication state change
+        this.notifyConnectionStateListeners();
         resolve(true);
       });
 
@@ -446,6 +563,10 @@ class UnifiedWebSocketService {
           error: error?.message || error,
           code: error?.code 
         });
+        // PRODUCTION FIX: Clear authentication state on failure
+        this.authenticationState = { isAuthenticated: false };
+        // Notify listeners of authentication state change
+        this.notifyConnectionStateListeners();
         resolve(false);
       });
 

@@ -53,6 +53,10 @@ export function createSupabaseClient(
     const urlMatch = config.url.match(/https?:\/\/([^.]+)\.supabase\.co/);
     const projectId = urlMatch ? urlMatch[1] : 'default';
     
+    // Generate unique storage key per role to prevent GoTrueClient conflicts
+    // Include role in storage key and use a consistent format
+    const storageKey = options?.storageKey || `sb-${projectId}-${role}-auth`;
+    
     // Merge options with role-specific storage key
     const clientOptions = {
       ...DEFAULT_OPTIONS,
@@ -61,8 +65,9 @@ export function createSupabaseClient(
         autoRefreshToken: options?.autoRefreshToken ?? DEFAULT_OPTIONS.autoRefreshToken,
         persistSession: options?.persistSession ?? DEFAULT_OPTIONS.persistSession,
         detectSessionInUrl: options?.detectSessionInUrl ?? DEFAULT_OPTIONS.detectSessionInUrl,
-        // Use role-specific storage key to prevent conflicts
-        storageKey: options?.storageKey || `sb-${projectId}-${role}-auth-token`,
+        // Use role-specific storage key to prevent conflicts between driver/student clients
+        // This ensures each role has its own localStorage key
+        storageKey,
       },
       global: {
         headers: {
