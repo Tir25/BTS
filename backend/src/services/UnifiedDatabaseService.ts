@@ -661,9 +661,10 @@ export class UnifiedDatabaseService {
       let updatedRoleProfile = null;
       
       if (existingUser) {
-        if (existingUser.is_active) {
+        const ex: any = existingUser;
+        if (ex.is_active) {
           // If user exists and is active, check if they're a student (we can convert to driver)
-          if (existingUser.role === 'student') {
+          if (ex.role === 'student') {
             logger.info(`Converting student user to driver: ${driverData.email}`, 'unified-db');
             
             // Update the existing student profile to driver
@@ -678,8 +679,8 @@ export class UnifiedDatabaseService {
                 is_driver: true,
                 profile_photo_url: driverData.profile_photo_url,
                 updated_at: new Date().toISOString()
-              })
-              .eq('id', existingUser.id)
+              } as any)
+              .eq('id', ex.id)
               .select('*')
               .single();
 
@@ -688,10 +689,10 @@ export class UnifiedDatabaseService {
               throw new Error(`Failed to convert user from student to driver: ${updateError.message}`);
             }
 
-            logger.info('User converted from student to driver successfully', 'unified-db', { userId: existingUser.id });
+            logger.info('User converted from student to driver successfully', 'unified-db', { userId: ex.id });
             updatedRoleProfile = updatedProfile;
           } else {
-            throw new Error(`User with email ${driverData.email} already exists with role ${existingUser.role}`);
+            throw new Error(`User with email ${driverData.email} already exists with role ${ex.role}`);
           }
         } else {
           // User exists but is inactive - reactivate them instead of creating new
@@ -710,8 +711,8 @@ export class UnifiedDatabaseService {
               is_active: true,
               profile_photo_url: driverData.profile_photo_url,
               updated_at: new Date().toISOString()
-            })
-            .eq('id', existingUser.id)
+            } as any)
+            .eq('id', ex.id)
             .select('*')
             .single();
 
@@ -720,7 +721,7 @@ export class UnifiedDatabaseService {
             throw new Error(`Failed to reactivate user: ${updateError.message}`);
           }
 
-          logger.info('User reactivated successfully', 'unified-db', { userId: existingUser.id });
+          logger.info('User reactivated successfully', 'unified-db', { userId: ex.id });
           reactivatedProfile = updatedProfile;
         }
       }
@@ -729,13 +730,13 @@ export class UnifiedDatabaseService {
       let authData;
       let authError;
       
-      if (existingUser && !existingUser.is_active) {
+      if (existingUser && !(existingUser as any).is_active) {
         // User exists in profiles but is inactive - try to get their auth user
         try {
-          const { data: authUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(existingUser.id);
+          const { data: authUser, error: getUserError } = await (supabaseAdmin as any).auth.admin.getUserById((existingUser as any).id);
           if (authUser && !getUserError) {
             // Auth user exists, update their password and metadata
-            const { data: updatedAuth, error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
+            const { data: updatedAuth, error: updateAuthError } = await (supabaseAdmin as any).auth.admin.updateUserById((existingUser as any).id, {
               password: driverData.password,
               user_metadata: {
                 full_name: `${driverData.first_name} ${driverData.last_name}`,
@@ -804,7 +805,7 @@ export class UnifiedDatabaseService {
       const { data: profileData, error: profileError } = await supabaseAdmin
         .from('user_profiles')
         .upsert({
-          id: authData.user.id,
+          id: (authData as any).user.id,
           email: driverData.email,
           full_name: `${driverData.first_name} ${driverData.last_name}`,
           first_name: driverData.first_name,
@@ -814,10 +815,10 @@ export class UnifiedDatabaseService {
           is_driver: true,
           is_active: true,
           profile_photo_url: driverData.profile_photo_url,
-        }, {
+        } as any, {
           onConflict: 'id',
           ignoreDuplicates: false
-        })
+        } as any)
         .select('*')
         .single();
 
@@ -826,7 +827,7 @@ export class UnifiedDatabaseService {
         
         // Try to clean up the auth user if profile creation fails
         try {
-          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+          await (supabaseAdmin as any).auth.admin.deleteUser((authData as any).user.id);
         } catch (cleanupError) {
           logger.error('Error cleaning up auth user', 'unified-db', { error: cleanupError });
         }

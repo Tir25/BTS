@@ -191,7 +191,6 @@ export class RouteService {
           created_at,
           updated_at
         `)
-        .returns<RoutesRow[]>()
         .single();
 
       if (error) {
@@ -256,7 +255,6 @@ export class RouteService {
           created_at,
           updated_at
         `)
-        .returns<RoutesRow[]>()
         .single();
 
       if (error) {

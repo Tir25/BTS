@@ -187,7 +187,7 @@ export const getDriverBusInfo = async (
       console.log('❌ Route error:', routeError);
 
       if (!routeError && routeData) {
-        routeName = routeData.name || '';
+        routeName = (routeData as any).name || '';
       }
     }
 
