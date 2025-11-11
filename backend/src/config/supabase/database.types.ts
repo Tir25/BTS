@@ -52,6 +52,7 @@ export interface Database {
           assigned_driver_profile_id: string | null;
           route_id: string | null;
           assignment_status: string;
+          assignment_notes?: string | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -63,6 +64,7 @@ export interface Database {
           assigned_driver_profile_id?: string | null;
           route_id?: string | null;
           assignment_status?: string;
+          assignment_notes?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -74,6 +76,7 @@ export interface Database {
           assigned_driver_profile_id?: string | null;
           route_id?: string | null;
           assignment_status?: string;
+          assignment_notes?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -83,6 +86,10 @@ export interface Database {
         Row: {
           id: string;
           name: string;
+          description: string;
+          distance_km: number;
+          estimated_duration_minutes: number;
+          city: string | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -90,6 +97,10 @@ export interface Database {
         Insert: {
           id?: string;
           name: string;
+          description?: string;
+          distance_km?: number;
+          estimated_duration_minutes?: number;
+          city?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -97,14 +108,61 @@ export interface Database {
         Update: {
           id?: string;
           name?: string;
+          description?: string;
+          distance_km?: number;
+          estimated_duration_minutes?: number;
+          city?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
         };
       };
+
+      // Minimal tables referenced by service logic (for deletes/updates)
+      route_stops: {
+        Row: { id: string; route_id: string };
+        Insert: { id?: string; route_id: string };
+        Update: { id?: string; route_id?: string };
+      };
+      route_details: {
+        Row: { id: string; route_id: string };
+        Insert: { id?: string; route_id: string };
+        Update: { id?: string; route_id?: string };
+      };
+      bus_route_assignments: {
+        Row: { id: string; route_id: string; bus_id: string };
+        Insert: { id?: string; route_id: string; bus_id: string };
+        Update: { id?: string; route_id?: string; bus_id?: string };
+      };
+      bus_route_shifts: {
+        Row: { id: string; route_id: string; shift_id: string };
+        Insert: { id?: string; route_id: string; shift_id: string };
+        Update: { id?: string; route_id?: string; shift_id?: string };
+      };
+      assignment_history: {
+        Row: { id: string; route_id: string | null };
+        Insert: { id?: string; route_id?: string | null };
+        Update: { id?: string; route_id?: string | null };
+      };
     };
     Views: {
-      [_ in never]: never;
+      // View used by route service to read route metadata
+      route_management_view: {
+        Row: {
+          id: string;
+          name: string;
+          description: string;
+          distance_km: number;
+          estimated_duration_minutes: number;
+          city: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+          // Optional geometry fields if present in the view
+          stops?: any;
+          geom?: any;
+        };
+      };
     };
     Functions: {
       [_ in never]: never;
