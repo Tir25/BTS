@@ -93,16 +93,7 @@ router.post('/driver/login', async (req, res) => {
       .eq('id', authData.user.id)
       .single();
 
-    const profile = profileRaw as {
-      id: string;
-      full_name: string | null;
-      role: 'driver' | 'student' | 'admin';
-      is_active: boolean;
-      last_login?: string | null;
-      email_verified?: boolean;
-    };
-
-    if (profileError || !profile) {
+    if (profileError || !profileRaw) {
       logger.error('❌ Failed to fetch user profile', 'auth', { 
         userId: authData.user.id,
         error: profileError?.message 
@@ -114,6 +105,15 @@ router.post('/driver/login', async (req, res) => {
         code: 'PROFILE_NOT_FOUND'
       });
     }
+
+    const profile = profileRaw as {
+      id: string;
+      full_name: string | null;
+      role: 'driver' | 'student' | 'admin';
+      is_active: boolean;
+      last_login?: string | null;
+      email_verified?: boolean;
+    };
 
     // Check if account is active
     if (!profile.is_active) {
@@ -209,7 +209,7 @@ router.post('/driver/login', async (req, res) => {
         .single();
 
       if (!routeError && routeData) {
-        routeName = routeData.name;
+        routeName = (routeData as any).name;
       }
     }
 
@@ -228,9 +228,9 @@ router.post('/driver/login', async (req, res) => {
 
     // Update last login time
     try {
-      await driverSupabaseAdmin
+      await (driverSupabaseAdmin as any)
         .from('user_profiles')
-        .update({ last_login: new Date().toISOString() } as any)
+        .update({ last_login: new Date().toISOString() })
         .eq('id', authData.user.id);
     } catch (updateError) {
       // Log but don't fail the request
@@ -348,17 +348,23 @@ router.get('/driver/assignment', async (req, res) => {
       });
     }
 
+    const bus = busData2 as {
+      id: string;
+      bus_number: string;
+      route_id: string | null;
+    };
+
     // Get route information
     let routeName = '';
-    if (busData2.route_id) {
+    if (bus.route_id) {
       const { data: routeData, error: routeError } = await driverSupabaseAdmin
         .from('routes')
         .select('name')
-        .eq('id', busData2.route_id)
+        .eq('id', bus.route_id)
         .single();
 
       if (!routeError && routeData) {
-        routeName = routeData.name;
+        routeName = (routeData as any).name;
       }
     }
 
@@ -370,15 +376,15 @@ router.get('/driver/assignment', async (req, res) => {
       .eq('id', driver_id)
       .maybeSingle();
 
-    if (profileData?.full_name) {
-      driverName = profileData.full_name;
+    if ((profileData as any)?.full_name) {
+      driverName = (profileData as any).full_name;
     }
 
     const assignment = {
       driver_id: driver_id as string,
-      bus_id: busData2.id,
-      bus_number: busData2.bus_number,
-      route_id: busData2.route_id || '',
+      bus_id: bus.id,
+      bus_number: bus.bus_number,
+      route_id: bus.route_id || '',
       route_name: routeName,
       driver_name: driverName,
       created_at: new Date().toISOString(),
@@ -386,7 +392,7 @@ router.get('/driver/assignment', async (req, res) => {
     };
 
     logger.info('✅ Bus assignment retrieved successfully', 'auth', {
-      bus_number: busData.bus_number,
+      bus_number: bus.bus_number,
       route_name: routeName
     });
 
@@ -518,7 +524,7 @@ router.post('/driver/validate', async (req, res) => {
         .select('name')
         .eq('id', busData.route_id)
         .single();
-      routeName = routeData?.name || '';
+      routeName = (routeData as any)?.name || '';
     }
 
     const assignment = {

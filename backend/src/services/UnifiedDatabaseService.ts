@@ -656,8 +656,8 @@ export class UnifiedDatabaseService {
         throw new Error(`Error checking existing user: ${checkError.message}`);
       }
 
-      let reactivatedProfile = null;
-      let updatedRoleProfile = null;
+      let reactivatedProfile: any = null;
+      let updatedRoleProfile: any = null;
       
       if (existingUser) {
         const ex: any = existingUser;
