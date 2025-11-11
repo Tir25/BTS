@@ -586,10 +586,21 @@ router.post('/driver/reset-password', async (req, res) => {
     }
     
     // Update user's password
+    // PRODUCTION FIX: Trim password to prevent whitespace issues
+    const trimmedPassword = newPassword.trim();
+    if (trimmedPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid password',
+        message: 'Password must be at least 6 characters long (after trimming whitespace)',
+        code: 'INVALID_PASSWORD'
+      });
+    }
+    
     const { data: updatedUser, error: updateError } = await driverSupabaseAdmin.auth.admin.updateUserById(
       user.id,
       {
-        password: newPassword,
+        password: trimmedPassword,
       }
     );
     
