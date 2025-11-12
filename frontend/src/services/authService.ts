@@ -208,6 +208,16 @@ class AuthService {
     try {
       logger.info(`🔐 Starting sign in process for: ${email}`, 'auth');
 
+      // PRODUCTION FIX: Validate Supabase client before attempting authentication
+      if (!supabase || !supabase.auth) {
+        const errorMsg = 'Supabase client not initialized. Please refresh the page and try again.';
+        logger.error('❌ Supabase client not available', 'auth', { 
+          hasSupabase: !!supabase,
+          hasAuth: !!(supabase && supabase.auth),
+        });
+        return { success: false, error: errorMsg };
+      }
+
       // Clear token cache before starting new authentication
       tokenStorage.clearCache();
 
@@ -244,6 +254,17 @@ class AuthService {
               return res;
             }
             throw new Error('Authentication cancelled');
+          }).catch((authError) => {
+            // PRODUCTION FIX: Capture Supabase errors with full details
+            logger.error('❌ Supabase authentication error:', 'auth', {
+              error: authError,
+              message: authError?.message || String(authError),
+              name: authError?.name || 'Unknown',
+              stack: authError?.stack,
+              // Check if it's a Supabase error
+              isSupabaseError: authError && typeof authError === 'object' && 'message' in authError,
+            });
+            throw authError;
           }),
           timeoutPromise,
         ]);
@@ -257,16 +278,26 @@ class AuthService {
           error: raceResult.error ? new Error(raceResult.error.message) : undefined
         };
       } catch (raceError) {
+        // PRODUCTION FIX: Enhanced error handling for race condition errors
+        const isFirefox = typeof navigator !== 'undefined' && /Firefox/.test(navigator.userAgent);
+        
         // Handle race condition properly
         if (raceError instanceof Error && raceError.message.includes('timeout')) {
-          logger.error('❌ Authentication timeout', 'auth', { error: raceError.message });
+          logger.error('❌ Authentication timeout', 'auth', { 
+            error: raceError.message,
+            isFirefox,
+          });
           // Clear token cache on timeout
           tokenStorage.clearCache();
           return { 
             success: false, 
-            error: 'Login is taking longer than expected. Please check your internet connection and try again.'
+            error: isFirefox
+              ? 'Login timeout. If using Firefox, try disabling Enhanced Tracking Protection or browser extensions and try again.'
+              : 'Login is taking longer than expected. Please check your internet connection and try again.'
           };
         }
+        
+        // Re-throw to be caught by outer catch block for detailed logging
         throw raceError;
       }
 
@@ -411,7 +442,37 @@ class AuthService {
       tokenStorage.clearCache();
       return { success: false, error: 'Authentication failed' };
     } catch (error) {
-      logger.error('❌ Sign in error:', 'auth', { error: String(error) });
+      // PRODUCTION FIX: Enhanced error logging with full error details for debugging
+      const errorDetails = {
+        message: error instanceof Error ? error.message : String(error),
+        name: error instanceof Error ? error.name : 'Unknown',
+        stack: error instanceof Error ? error.stack : undefined,
+        toString: String(error),
+        // Firefox-specific: Check for common Firefox issues
+        isFirefox: typeof navigator !== 'undefined' && /Firefox/.test(navigator.userAgent),
+        hasLocalStorage: (() => {
+          try {
+            const test = '__localStorage_test__';
+            localStorage.setItem(test, test);
+            localStorage.removeItem(test);
+            return true;
+          } catch {
+            return false;
+          }
+        })(),
+        hasSessionStorage: (() => {
+          try {
+            const test = '__sessionStorage_test__';
+            sessionStorage.setItem(test, test);
+            sessionStorage.removeItem(test);
+            return true;
+          } catch {
+            return false;
+          }
+        })(),
+      };
+      
+      logger.error('❌ Sign in error:', 'auth', errorDetails);
       
       // PRODUCTION FIX: Clear token cache on any authentication error
       tokenStorage.clearCache();
@@ -427,27 +488,69 @@ class AuthService {
       
       // OPTIMIZATION: More detailed error handling with user-friendly messages
       if (error instanceof Error) {
-        if (error.message.includes('NetworkError') || error.message.includes('network')) {
+        const errorMessage = error.message || String(error);
+        
+        // Firefox-specific error handling
+        if (errorDetails.isFirefox) {
+          // Check for Firefox-specific issues
+          if (!errorDetails.hasLocalStorage || !errorDetails.hasSessionStorage) {
+            return {
+              success: false,
+              error: 'Firefox storage access issue. Please check your browser settings and allow cookies/storage for this site.',
+            };
+          }
+          
+          // Check for CORS issues (common in Firefox)
+          if (errorMessage.includes('CORS') || errorMessage.includes('Cross-Origin')) {
+            return {
+              success: false,
+              error: 'Cross-origin request blocked. If using Firefox, try disabling Enhanced Tracking Protection for this site.',
+            };
+          }
+          
+          // Check for network issues
+          if (errorMessage.includes('NetworkError') || errorMessage.includes('network') || errorMessage.includes('Failed to fetch')) {
+            return {
+              success: false,
+              error: 'Network connection error. Please check your internet connection and try again. If using Firefox, check if any extensions are blocking requests.',
+            };
+          }
+        }
+        
+        if (errorMessage.includes('NetworkError') || errorMessage.includes('network') || errorMessage.includes('Failed to fetch')) {
           return {
             success: false,
             error: 'Network connection error. Please check your internet connection and try again.',
           };
         }
-        if (error.message.includes('timeout')) {
+        if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
           return {
             success: false,
             error: 'Login is taking longer than expected. Please try again or check your connection.',
           };
         }
-        if (error.message.includes('Invalid login credentials')) {
+        if (errorMessage.includes('Invalid login credentials') || errorMessage.includes('Invalid')) {
           return {
             success: false,
             error: 'Invalid email or password. Please check your credentials and try again.',
           };
         }
+        
+        // Log the full error for debugging
+        logger.error('❌ Detailed sign in error:', 'auth', {
+          errorMessage,
+          errorName: error.name,
+          errorStack: error.stack,
+          isFirefox: errorDetails.isFirefox,
+        });
       }
       
-      return { success: false, error: 'An error occurred during sign in. Please try again.' };
+      return { 
+        success: false, 
+        error: errorDetails.isFirefox 
+          ? 'An error occurred during sign in. If using Firefox, try disabling browser extensions or Enhanced Tracking Protection and try again.'
+          : 'An error occurred during sign in. Please try again.'
+      };
     } finally {
       // PRODUCTION FIX: Always reset authentication state and clear timeout
       this._isAuthenticating = false;

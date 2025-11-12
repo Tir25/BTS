@@ -226,7 +226,13 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
               driver_id: busAssignment.driver_id,
               driver_name: busAssignment.driver_name,
             } : null}
-            connectionStatus={isWebSocketConnected && isWebSocketAuthenticated ? 'connected' : 'disconnected'}
+            connectionStatus={
+              isWebSocketConnected && isWebSocketAuthenticated 
+                ? 'connected' 
+                : isWebSocketConnected || isWebSocketInitializing
+                  ? 'connecting'
+                  : 'disconnected'
+            }
             onSignOut={handleSignOut}
             onRetryConnection={handleRetryConnection}
             onRefreshAssignment={refreshAssignment}
