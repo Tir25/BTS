@@ -189,7 +189,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
 
       const location = {
         name: data.display_name.split(',')[0] || 'Selected Location',
-        coordinates: coordinates,
+        coordinates,
         address: data.display_name,
       };
 
@@ -198,7 +198,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
       logger.error('Error occurred', 'component', { error });
       setSelectedLocation({
         name: 'Selected Location',
-        coordinates: coordinates,
+        coordinates,
         address: `${coordinates[1]}, ${coordinates[0]}`,
       });
     }
@@ -235,7 +235,7 @@ const MapSelector: React.FC<MapSelectorProps> = ({
 
         const location = {
           name: firstResult.display_name.split(',')[0] || searchQuery,
-          coordinates: coordinates,
+          coordinates,
           address: firstResult.display_name,
         };
 

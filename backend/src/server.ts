@@ -165,9 +165,15 @@ app.use(performanceMonitoring);
 app.use(enhancedCorsMiddleware);
 app.use(handlePreflight);
 
-// Rate limiting (enabled in production)
-if (process.env.NODE_ENV === 'production') {
+const rateLimitingEnabled =
+  process.env.DISABLE_RATE_LIMIT?.toLowerCase() !== 'true' &&
+  config.security.enableRateLimit;
+
+// Rate limiting (enabled in production unless explicitly disabled)
+if (process.env.NODE_ENV === 'production' && rateLimitingEnabled) {
   app.use(rateLimitMiddleware);
+} else if (!rateLimitingEnabled) {
+  logger.info('🚫 Rate limiting disabled via configuration', 'server');
 }
 
 // Body parsing middleware with enhanced limits
@@ -196,8 +202,14 @@ app.use(addRequestIdToError);
 
 // Enhanced routes with Redis caching and security (rate limiting disabled for high-volume traffic)
 app.use('/health', healthRoutes);
-// Apply stricter rate limit to authentication endpoints only in production
-app.use('/auth', process.env.NODE_ENV === 'production' ? authRateLimit : (req, _res, next) => next(), authRoutes);
+// Apply stricter rate limit to authentication endpoints only when enabled
+app.use(
+  '/auth',
+  process.env.NODE_ENV === 'production' && rateLimitingEnabled
+    ? authRateLimit
+    : (req, _res, next) => next(),
+  authRoutes
+);
 app.use('/admin', fileUploadValidator, adminRoutes);
 app.use('/assignments', productionAssignmentRoutes);
 app.use('/production-assignments', productionAssignmentRoutes);

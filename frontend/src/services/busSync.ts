@@ -34,17 +34,17 @@ class BusSyncService {
    * @param syncFn - Function that performs the actual sync operation
    * @returns Promise resolving to the synced bus data or null
    */
-  async syncBus<T>(
+  async syncBus(
     busId: string | number,
-    syncFn: () => Promise<T>
-  ): Promise<T> {
+    syncFn: () => Promise<Bus | null>
+  ): Promise<Bus | null> {
     const busIdStr = String(busId);
     const lock = this.getOrCreateLock(busIdStr);
     
     // If sync is already in progress, return the existing promise
     if (lock.isSyncing && lock.promise) {
       logger.debug(`🔄 Sync for bus ${busIdStr} already in progress, waiting...`, 'busSync');
-      return lock.promise as Promise<T>;
+      return lock.promise;
     }
 
     // Check if we should debounce this request
@@ -58,14 +58,14 @@ class BusSyncService {
       }
 
       // Return a promise that resolves after debounce period
-      return new Promise<T>((resolve) => {
+      return new Promise<Bus | null>((resolve) => {
         lock.debounceTimeout = setTimeout(async () => {
           try {
             const result = await this.performSync(busIdStr, syncFn);
             resolve(result);
           } catch (error) {
             logger.error(`❌ Debounced sync failed for bus ${busIdStr}`, 'busSync', { error });
-            resolve(null as T);
+            resolve(null);
           }
         }, this.DEBOUNCE_MS);
       });
@@ -78,10 +78,10 @@ class BusSyncService {
   /**
    * Internal method to perform the actual sync operation
    */
-  private async performSync<T extends Bus | null>(
+  private async performSync(
     busIdStr: string,
-    syncFn: () => Promise<T>
-  ): Promise<T> {
+    syncFn: () => Promise<Bus | null>
+  ): Promise<Bus | null> {
     const lock = this.getOrCreateLock(busIdStr);
     
     // Set sync lock
@@ -98,7 +98,7 @@ class BusSyncService {
       })
       .catch((error) => {
         logger.error(`❌ Sync failed for bus ${busIdStr}`, 'busSync', { error });
-        return null as T;
+        return null;
       })
       .finally(() => {
         // Release lock

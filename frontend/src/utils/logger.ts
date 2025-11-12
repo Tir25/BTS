@@ -64,19 +64,19 @@ class Logger {
     if (this.isDevelopment) {
       switch (entry.level) {
         case LogLevel.ERROR:
-          // eslint-disable-next-line no-console
+           
           console.error(formattedMessage);
           break;
         case LogLevel.WARN:
-          // eslint-disable-next-line no-console
+           
           console.warn(formattedMessage);
           break;
         case LogLevel.INFO:
-          // eslint-disable-next-line no-console
+           
           console.info(formattedMessage);
           break;
         case LogLevel.DEBUG:
-          // eslint-disable-next-line no-console
+           
           console.debug(formattedMessage);
           break;
       }
@@ -85,7 +85,7 @@ class Logger {
       // For now, we'll use a silent approach
       if (entry.level === LogLevel.ERROR) {
         // Only log critical errors in production
-        // eslint-disable-next-line no-console
+         
         console.error(formattedMessage);
       }
     }

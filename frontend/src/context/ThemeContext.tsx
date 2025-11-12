@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { logger } from '../utils/logger';
 
 type Theme = 'light' | 'dark';
 
@@ -10,15 +11,17 @@ interface ThemeContextValue {
 
 export const ThemeContext = createContext<ThemeContextValue>({
   theme: 'light',
-  setTheme: () => {},
-  toggleTheme: () => {},
+  setTheme: () => undefined,
+  toggleTheme: () => undefined,
 });
 
 function getInitialTheme(): Theme {
   try {
     const stored = localStorage.getItem('ui-theme');
     if (stored === 'light' || stored === 'dark') return stored as Theme;
-  } catch {}
+  } catch (error) {
+    logger.warn('Failed to read persisted theme, falling back to system preference.', 'theme-context', { error });
+  }
   if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
     return 'dark';
   }
@@ -41,7 +44,9 @@ export const ThemeProvider: React.FC<React.PropsWithChildren> = ({ children }) =
     applyThemeClass(theme);
     try {
       localStorage.setItem('ui-theme', theme);
-    } catch {}
+    } catch (error) {
+      logger.warn('Failed to persist theme preference.', 'theme-context', { error });
+    }
   }, [theme]);
 
   useEffect(() => {

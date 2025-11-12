@@ -80,11 +80,11 @@ const BusFormModal: React.FC<BusFormModalProps> = ({
               <input
                 type="number"
                 name="capacity"
-                value={formData.capacity}
+                value={formData.capacity || ''}
                 onChange={onInputChange}
                 required
                 min={1}
-                max={100}
+                max={1000}
                 className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
                 placeholder="50"
               />

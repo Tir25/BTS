@@ -266,15 +266,19 @@ function buildApplication(profile, platform) {
   const platformInfo = PLATFORMS[platform];
   const skipValidation = global.__skipValidation || false;
   
-  // For Vercel with skipped validation, use Vite directly to avoid recursive calls
+  // PRODUCTION FIX: Always use npx vite build directly to avoid recursive calls
+  // This prevents infinite loops when unified-build.js calls npm run build
   if (platform === 'vercel' && skipValidation) {
     buildCommand = 'npx vite build';
   } else if (platform === 'vercel') {
-    buildCommand = 'npm run build';
+    buildCommand = 'npx vite build';
   } else if (platform === 'docker') {
-    buildCommand = 'npm run build:optimized';
+    // Docker builds should use vite directly with production mode
+    buildCommand = 'npx vite build --mode production';
   } else {
-    buildCommand = profile === 'production' ? 'npm run build' : 'npm run build:production';
+    // For all other platforms, use vite directly with appropriate mode
+    const mode = profile === 'production' ? 'production' : 'development';
+    buildCommand = `npx vite build --mode ${mode}`;
   }
   
   log(`📦 Platform: ${platformInfo.name}`, 'blue');

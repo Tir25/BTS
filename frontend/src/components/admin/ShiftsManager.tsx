@@ -154,7 +154,7 @@ export default function ShiftsManager() {
 
     try {
       let createdCount = 0;
-      let errors: string[] = [];
+      const errors: string[] = [];
 
       for (const shift of defaultsToCreate) {
         try {

@@ -1,6 +1,6 @@
 import { BusLocation, BusInfo, Bus } from '../types';
 import { IBusService } from './interfaces/IBusService';
-import { apiService } from './api';
+import { apiService } from '../api/api';
 import { logger } from '../utils/logger';
 
 /**
@@ -174,10 +174,11 @@ class BusService implements IBusService {
   async syncBusFromAPI(busId: string, apiData?: Bus): Promise<BusInfo | null> {
     try {
       // If no API data provided, fetch it from the backend
-      if (!apiData) {
+      let resolvedData = apiData;
+      if (!resolvedData) {
         const response = await apiService.getBusInfo(busId);
         if (response.success && response.data) {
-          apiData = response.data;
+          resolvedData = response.data;
         } else {
           logger.error('❌ Failed to fetch bus data from API', 'busService', { busId });
           return null;
@@ -187,14 +188,14 @@ class BusService implements IBusService {
       // CRITICAL FIX: Create BusInfo from API data
       const busInfo: BusInfo = {
         busId,
-        busNumber: apiData.bus_number || apiData.code || `Bus ${busId}`,
-        routeName: apiData.route_name || 'Route TBD',
-        driverName: apiData.driver_full_name || 'Driver TBD',
-        driverId: apiData.assigned_driver_profile_id || '',
-        routeId: apiData.route_id || '',
+        busNumber: resolvedData.bus_number || resolvedData.code || `Bus ${busId}`,
+        routeName: resolvedData.route_name || 'Route TBD',
+        driverName: resolvedData.driver_full_name || 'Driver TBD',
+        driverId: resolvedData.assigned_driver_profile_id || '',
+        routeId: resolvedData.route_id || '',
         currentLocation: {
           busId,
-          driverId: apiData.assigned_driver_profile_id || '',
+          driverId: resolvedData.assigned_driver_profile_id || '',
           latitude: 0,
           longitude: 0,
           timestamp: new Date().toISOString(),

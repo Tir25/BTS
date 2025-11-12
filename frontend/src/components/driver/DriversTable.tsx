@@ -73,13 +73,37 @@ const DriversTable: React.FC<DriversTableProps> = ({ drivers, onEdit, onUnassign
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={() => onEdit(driver)} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly">Edit</button>
+                    <button 
+                      type="button"
+                      onClick={() => onEdit(driver)} 
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
+                    >
+                      Edit
+                    </button>
                     {driver.assigned_bus_id ? (
-                      <button onClick={() => onUnassign(driver.id, driver.assigned_bus_id!)} className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly">Unassign</button>
+                      <button 
+                        type="button"
+                        onClick={() => onUnassign(driver.id, driver.assigned_bus_id!)} 
+                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
+                      >
+                        Unassign
+                      </button>
                     ) : (
-                      <button onClick={() => onAssignNavigate(driver)} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly">Assign</button>
+                      <button 
+                        type="button"
+                        onClick={() => onAssignNavigate(driver)} 
+                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
+                      >
+                        Assign
+                      </button>
                     )}
-                    <button onClick={() => onDelete(driver.id)} className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly">Delete</button>
+                    <button 
+                      type="button"
+                      onClick={() => onDelete(driver.id)} 
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors min-h-[36px] touch-friendly"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </td>
               </tr>

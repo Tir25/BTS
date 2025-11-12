@@ -1,7 +1,7 @@
 /**
  * Hook for managing StudentMap state
  */
-import { useState, useCallback } from 'react';
+import { useState, Dispatch, SetStateAction } from 'react';
 import { BusInfo, Route, BusLocation } from '../../../types';
 
 export interface UseStudentMapStateReturn {
@@ -15,24 +15,24 @@ export interface UseStudentMapStateReturn {
   
   // Data state
   buses: BusInfo[];
-  setBuses: (buses: BusInfo[]) => void;
+  setBuses: Dispatch<SetStateAction<BusInfo[]>>;
   routes: Route[];
-  setRoutes: (routes: Route[]) => void;
+  setRoutes: Dispatch<SetStateAction<Route[]>>;
   selectedRoute: string;
-  setSelectedRoute: (route: string) => void;
+  setSelectedRoute: Dispatch<SetStateAction<string>>;
   selectedShift: 'Day' | 'Afternoon' | '';
-  setSelectedShift: (shift: 'Day' | 'Afternoon' | '') => void;
+  setSelectedShift: Dispatch<SetStateAction<'Day' | 'Afternoon' | ''>>;
   // Note: routeStatus and routeStops are managed by useRouteStatusManagement hook
   isLoading: boolean;
-  setIsLoading: (loading: boolean) => void;
+  setIsLoading: Dispatch<SetStateAction<boolean>>;
   lastBusLocations: { [busId: string]: BusLocation };
   setLastBusLocations: (locations: { [busId: string]: BusLocation } | ((prev: { [busId: string]: BusLocation }) => { [busId: string]: BusLocation })) => void;
   
   // UI state
   isNavbarCollapsed: boolean;
-  setIsNavbarCollapsed: (collapsed: boolean) => void;
+  setIsNavbarCollapsed: Dispatch<SetStateAction<boolean>>;
   isRouteFilterOpen: boolean;
-  setIsRouteFilterOpen: (open: boolean) => void;
+  setIsRouteFilterOpen: Dispatch<SetStateAction<boolean>>;
 }
 
 /**

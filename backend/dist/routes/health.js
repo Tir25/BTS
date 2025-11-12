@@ -7,11 +7,18 @@ const WebSocketHealthService_1 = require("../services/WebSocketHealthService");
 const ConnectionPoolMonitor_1 = require("../services/ConnectionPoolMonitor");
 const logger_1 = require("../utils/logger");
 const router = (0, express_1.Router)();
+const withTimeout = (promise, timeoutMs, errorMessage) => {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(errorMessage)), timeoutMs))
+    ]);
+};
 router.get('/', async (req, res) => {
     try {
+        const HEALTH_CHECK_TIMEOUT = 2000;
         const [databaseHealth, redisHealth, websocketHealth] = await Promise.allSettled([
-            (0, database_1.checkDatabaseHealth)(),
-            RedisCacheService_1.redisCache.getHealth(),
+            withTimeout((0, database_1.checkDatabaseHealth)(), HEALTH_CHECK_TIMEOUT, 'Database health check timeout').catch(err => ({ healthy: false, error: err.message })),
+            withTimeout(RedisCacheService_1.redisCache.getHealth(), HEALTH_CHECK_TIMEOUT, 'Redis health check timeout').catch(err => ({ connected: false, error: err.message })),
             Promise.resolve(WebSocketHealthService_1.webSocketHealth.getHealth())
         ]);
         const dbHealthy = databaseHealth.status === 'fulfilled' && databaseHealth.value.healthy;
@@ -45,9 +52,10 @@ router.get('/detailed', async (req, res) => {
     try {
         const startTime = Date.now();
         const memoryUsage = process.memoryUsage();
+        const HEALTH_CHECK_TIMEOUT = 2000;
         const [databaseHealth, redisHealth, websocketHealth] = await Promise.allSettled([
-            (0, database_1.checkDatabaseHealth)(),
-            RedisCacheService_1.redisCache.getHealth(),
+            withTimeout((0, database_1.checkDatabaseHealth)(), HEALTH_CHECK_TIMEOUT, 'Database health check timeout').catch(err => ({ healthy: false, error: err.message })),
+            withTimeout(RedisCacheService_1.redisCache.getHealth(), HEALTH_CHECK_TIMEOUT, 'Redis health check timeout').catch(err => ({ connected: false, error: err.message })),
             Promise.resolve(WebSocketHealthService_1.webSocketHealth.getHealth())
         ]);
         const dbHealthy = databaseHealth.status === 'fulfilled' && databaseHealth.value.healthy;
@@ -76,15 +84,15 @@ router.get('/detailed', async (req, res) => {
                 database: {
                     status: dbHealthy ? 'connected' : 'disconnected',
                     error: databaseHealth.status === 'rejected' ? String(databaseHealth.reason) :
-                        (databaseHealth.status === 'fulfilled' ? databaseHealth.value.error : null),
-                    metrics: databaseHealth.status === 'fulfilled' ? databaseHealth.value.metrics : null
+                        (databaseHealth.status === 'fulfilled' && 'error' in databaseHealth.value ? databaseHealth.value.error : null),
+                    metrics: databaseHealth.status === 'fulfilled' && 'metrics' in databaseHealth.value ? databaseHealth.value.metrics : null
                 },
                 redis: {
                     status: redisHealthy ? 'connected' : 'disconnected',
                     error: redisHealth.status === 'rejected' ? String(redisHealth.reason) :
-                        (redisHealth.status === 'fulfilled' ? redisHealth.value.error : null),
-                    latency: redisHealth.status === 'fulfilled' ? `${redisHealth.value.latency}ms` : null,
-                    stats: redisHealth.status === 'fulfilled' ? redisHealth.value.stats : null
+                        (redisHealth.status === 'fulfilled' && 'error' in redisHealth.value ? redisHealth.value.error : null),
+                    latency: redisHealth.status === 'fulfilled' && 'latency' in redisHealth.value ? `${redisHealth.value.latency}ms` : null,
+                    stats: redisHealth.status === 'fulfilled' && 'stats' in redisHealth.value ? redisHealth.value.stats : null
                 },
                 websocket: {
                     status: websocketHealthy ? 'connected' : 'disconnected',
@@ -112,9 +120,10 @@ router.get('/detailed', async (req, res) => {
 });
 router.get('/ready', async (req, res) => {
     try {
+        const HEALTH_CHECK_TIMEOUT = 2000;
         const [databaseHealth, redisHealth, websocketHealth] = await Promise.allSettled([
-            (0, database_1.checkDatabaseHealth)(),
-            RedisCacheService_1.redisCache.getHealth(),
+            withTimeout((0, database_1.checkDatabaseHealth)(), HEALTH_CHECK_TIMEOUT, 'Database health check timeout').catch(err => ({ healthy: false, error: err.message })),
+            withTimeout(RedisCacheService_1.redisCache.getHealth(), HEALTH_CHECK_TIMEOUT, 'Redis health check timeout').catch(err => ({ connected: false, error: err.message })),
             Promise.resolve(WebSocketHealthService_1.webSocketHealth.getHealth())
         ]);
         const dbHealthy = databaseHealth.status === 'fulfilled' && databaseHealth.value.healthy;

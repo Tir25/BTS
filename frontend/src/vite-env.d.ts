@@ -6,6 +6,10 @@ interface ImportMetaEnv {
   // Supabase Configuration
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
+  readonly VITE_DRIVER_SUPABASE_URL?: string;
+  readonly VITE_DRIVER_SUPABASE_ANON_KEY?: string;
+  readonly VITE_STUDENT_SUPABASE_URL?: string;
+  readonly VITE_STUDENT_SUPABASE_ANON_KEY?: string;
   
   // API Configuration
   readonly VITE_API_URL?: string;
@@ -71,6 +75,7 @@ interface ImportMetaEnv {
   // Environment Detection
   readonly DEV: boolean;
   readonly PROD: boolean;
+  readonly MODE?: string;
 }
 
 interface ImportMeta {

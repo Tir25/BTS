@@ -192,12 +192,15 @@ class ApiService implements IApiService {
     timestamp: string;
   }> {
     try {
-      const response = await this.backendRequest<{
+      const response = await this.backendRequest<
+        | {
         success: boolean;
         data: Bus[];
         error?: string;
         timestamp: string;
-      }>('/buses');
+          }
+        | Bus[]
+      >('/buses');
 
       if (response && typeof response === 'object' && 'success' in response) {
         if (response.success && response.data) {
@@ -472,12 +475,15 @@ class ApiService implements IApiService {
     timestamp: string;
   }> {
     try {
-      const response = await this.backendRequest<{
+      const response = await this.backendRequest<
+        | {
         success: boolean;
         data: BusLocation[];
         error?: string;
         timestamp: string;
-      }>('/locations/current');
+          }
+        | BusLocation[]
+      >('/locations/current');
 
       if (response && typeof response === 'object' && 'success' in response) {
         if (response.success && response.data) {
@@ -1324,6 +1330,148 @@ class ApiService implements IApiService {
       return response;
     } catch (error: any) {
       logger.error('Student login error', 'api', { error: error?.message });
+      return {
+        success: false,
+        error: error?.message || 'Login failed',
+        code: 'LOGIN_ERROR'
+      };
+    }
+  }
+
+  /**
+   * Driver Login
+   * Authenticates a driver via backend API and returns session token and assignment
+   * PRODUCTION FIX: Uses backend API instead of direct Supabase authentication
+   */
+  async driverLogin(
+    email: string,
+    password: string
+  ): Promise<{
+    success: boolean;
+    data?: {
+      user: {
+        id: string;
+        email: string;
+        full_name: string;
+        role: string;
+        is_active: boolean;
+      };
+      assignment: {
+        id: string;
+        driver_id: string;
+        bus_id: string;
+        bus_number: string;
+        route_id: string;
+        route_name: string;
+        driver_name: string;
+        is_active: boolean;
+        created_at: string;
+        updated_at: string;
+        shift_id: string | null;
+        shift_name: string | null;
+        shift_start_time: string | null;
+        shift_end_time: string | null;
+      };
+      session: {
+        access_token: string;
+        refresh_token: string;
+        expires_at: number;
+      };
+    };
+    error?: string;
+    message?: string;
+    code?: string;
+    status?: number;
+    timestamp?: string;
+  }> {
+    try {
+      logger.info('🔐 Calling backend API for driver login', 'api', { email });
+      
+      // PRODUCTION FIX: Use direct fetch to handle error responses properly
+      // ResilientApiService throws errors, but we need to capture the error response
+      const apiBaseUrl = environment.api.baseUrl;
+      const url = joinUrl(apiBaseUrl, '/auth/driver/login');
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      // PRODUCTION FIX: Safely parse JSON response, handling both success and error cases
+      let data: any;
+      try {
+        const responseText = await response.text();
+        if (!responseText) {
+          throw new Error('Empty response from server');
+        }
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        logger.error('❌ Failed to parse response JSON', 'api', {
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+          status: response.status,
+          statusText: response.statusText
+        });
+        return {
+          success: false,
+          error: `Server error: ${response.status} ${response.statusText}`,
+          message: 'Invalid response from server',
+          code: 'PARSE_ERROR',
+        };
+      }
+
+      if (response.ok && data.success) {
+        logger.info('✅ Driver login successful via backend API', 'api', {
+          userId: data.data?.user.id,
+          busNumber: data.data?.assignment.bus_number
+        });
+        return {
+          ...data,
+          status: response.status,
+        };
+      } else {
+        // Error response from backend - extract error message
+        const errorMessage = data.error || data.message || 'Login failed';
+        const errorCode = data.code || 'LOGIN_ERROR';
+        const status = data.status || response.status;
+
+        logger.error('❌ Driver login failed via backend API', 'api', {
+          error: errorMessage,
+          code: errorCode,
+          status,
+          responseData: data
+        });
+        return {
+          success: false,
+          error: errorMessage,
+          message: data.message || errorMessage,
+          code: errorCode,
+          status,
+          timestamp: data.timestamp
+        };
+      }
+    } catch (error: any) {
+      logger.error('❌ Driver login error', 'api', { error: error?.message });
+      
+      // Handle network errors, timeouts, etc.
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        return {
+          success: false,
+          error: 'Unable to connect to the server. Please check your internet connection and try again.',
+          code: 'NETWORK_ERROR'
+        };
+      }
+      
+      if (error.message?.includes('timeout')) {
+        return {
+          success: false,
+          error: 'Login request timed out. Please try again.',
+          code: 'TIMEOUT_ERROR'
+        };
+      }
+      
       return {
         success: false,
         error: error?.message || 'Login failed',

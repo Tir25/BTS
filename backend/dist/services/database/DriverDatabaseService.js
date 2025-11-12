@@ -121,21 +121,51 @@ class DriverDatabaseService {
             if (!authData.user) {
                 throw new Error('Failed to create driver account: No user returned');
             }
-            const { data: profileData, error: profileError } = await supabase_1.supabaseAdmin
+            const { data: existingProfile } = await supabase_1.supabaseAdmin
                 .from('user_profiles')
-                .insert({
-                id: authData.user.id,
-                email: driverData.email,
-                full_name: `${driverData.first_name} ${driverData.last_name}`,
-                first_name: driverData.first_name,
-                last_name: driverData.last_name,
-                phone: driverData.phone,
-                role: 'driver',
-                is_driver: true,
-                is_active: true,
-            })
-                .select()
-                .single();
+                .select('id')
+                .eq('id', authData.user.id)
+                .maybeSingle();
+            let profileData;
+            let profileError;
+            if (existingProfile) {
+                const { data: updatedProfile, error: updateError } = await supabase_1.supabaseAdmin
+                    .from('user_profiles')
+                    .update({
+                    email: driverData.email,
+                    full_name: `${driverData.first_name} ${driverData.last_name}`,
+                    first_name: driverData.first_name,
+                    last_name: driverData.last_name,
+                    phone: driverData.phone,
+                    role: 'driver',
+                    is_driver: true,
+                    is_active: true,
+                })
+                    .eq('id', authData.user.id)
+                    .select()
+                    .single();
+                profileData = updatedProfile;
+                profileError = updateError;
+            }
+            else {
+                const { data: insertedProfile, error: insertError } = await supabase_1.supabaseAdmin
+                    .from('user_profiles')
+                    .insert({
+                    id: authData.user.id,
+                    email: driverData.email,
+                    full_name: `${driverData.first_name} ${driverData.last_name}`,
+                    first_name: driverData.first_name,
+                    last_name: driverData.last_name,
+                    phone: driverData.phone,
+                    role: 'driver',
+                    is_driver: true,
+                    is_active: true,
+                })
+                    .select()
+                    .single();
+                profileData = insertedProfile;
+                profileError = insertError;
+            }
             if (profileError) {
                 logger_1.logger.error('Error creating driver profile', 'driver-db-service', { error: profileError });
                 try {

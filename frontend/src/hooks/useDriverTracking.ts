@@ -124,7 +124,7 @@ export function useDriverTracking(
       if (trackingStartTimeRef.current > 0) {
         const timeToFirstLocation = Date.now() - trackingStartTimeRef.current;
         logger.info('GPS acquired signal successfully', 'useDriverTracking', {
-          timeToFirstLocation: Math.round(timeToFirstLocation / 1000) + 's',
+          timeToFirstLocation: `${Math.round(timeToFirstLocation / 1000)  }s`,
           isMobile: isMobileDeviceRef.current
         });
       }

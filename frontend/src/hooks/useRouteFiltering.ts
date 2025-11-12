@@ -74,7 +74,11 @@ export function useRouteFiltering({
               count: routesData.length,
             });
           } else if ('success' in response && !response.success) {
-            const errorMsg = ('error' in response ? response.error : 'Failed to load routes') || 'Unknown error';
+            const errorMsg = String(
+              ('error' in response && typeof (response as { error?: unknown }).error === 'string'
+                ? (response as { error?: unknown }).error
+                : 'Failed to load routes') || 'Unknown error'
+            );
             throw new Error(errorMsg);
           }
         }
@@ -92,7 +96,7 @@ export function useRouteFiltering({
             count: routesData.length,
           });
         } else {
-          const errorMsg = response?.error || 'Failed to load routes for shift';
+          const errorMsg = String(response?.error ?? 'Failed to load routes for shift');
           throw new Error(errorMsg);
         }
       }

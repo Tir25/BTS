@@ -63,8 +63,13 @@ exports.pool.on('remove', (client) => {
 const checkDatabaseHealth = async () => {
     let client = null;
     const startTime = Date.now();
+    const HEALTH_CHECK_TIMEOUT = 2000;
     try {
-        client = await exports.pool.connect();
+        const connectPromise = exports.pool.connect();
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Database connection timeout')), HEALTH_CHECK_TIMEOUT);
+        });
+        client = await Promise.race([connectPromise, timeoutPromise]);
         const result = await client.query('SELECT NOW() as current_time, version() as db_version, pg_postmaster_start_time() as start_time');
         const responseTime = Date.now() - startTime;
         const currentTime = result.rows[0].current_time;

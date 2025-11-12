@@ -7,6 +7,8 @@
 const ERROR_MESSAGES = {
   // Authentication errors
   'Invalid login credentials': 'Incorrect email or password. Please check your credentials and try again.',
+  'Invalid email or password': 'Invalid email or password. Please check your credentials and try again.',
+  'Invalid credentials': 'Invalid email or password. Please check your credentials and try again.',
   'Authentication failed': 'Authentication failed. Please log in again.',
   'Please log in again': 'Your session has expired. Please log in again.',
   'No access token available': 'Authentication required. Please log in again.',

@@ -5,6 +5,7 @@
  */
 import { environment } from '../config/environment';
 import { authService } from './authService';
+import { logger } from '../utils/logger';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
@@ -39,7 +40,9 @@ async function request<T>(
   try {
     const token = authService.getAccessToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
-  } catch {}
+  } catch (error) {
+    logger.warn('Unable to attach access token to API request.', 'api-service', { error });
+  }
 
   // PRODUCTION FIX: Use safe URL join to prevent double-slash issues
   const baseUrl = environment.api.baseUrl.replace(/\/+$/, '');

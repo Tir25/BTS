@@ -107,26 +107,25 @@ router.post('/buses', async (req, res) => {
                 message: 'Bus number, vehicle number and capacity are required',
             });
         }
-        const normalizedBusData = {
-            ...busData,
-            bus_number: busNumber,
-            vehicle_no: vehicleNo,
-            capacity: parseInt(capacity) || capacity,
-            model: busData.model || null,
-            year: busData.year ? parseInt(busData.year) : null,
-            bus_image_url: busData.bus_image_url || null,
-            assigned_driver_profile_id: busData.assigned_driver_profile_id,
-            route_id: busData.route_id || null,
-            is_active: busData.is_active === 'on' || busData.is_active === true || busData.is_active === 'true'
-        };
-        const capacityNum = parseInt(capacity) || capacity;
-        if (typeof capacityNum !== 'number' || capacityNum <= 0 || capacityNum > 1000) {
+        const capacityNum = typeof capacity === 'number' ? capacity : parseInt(String(capacity), 10);
+        if (isNaN(capacityNum) || capacityNum <= 0 || capacityNum > 1000) {
             return res.status(400).json({
                 success: false,
                 error: 'Invalid capacity',
                 message: 'Capacity must be a number between 1 and 1000',
             });
         }
+        const normalizedBusData = {
+            bus_number: String(busNumber).trim(),
+            vehicle_no: String(vehicleNo).trim(),
+            capacity: capacityNum,
+            model: busData.model ? String(busData.model).trim() : null,
+            year: busData.year ? parseInt(String(busData.year), 10) : null,
+            bus_image_url: busData.bus_image_url ? String(busData.bus_image_url).trim() : null,
+            assigned_driver_profile_id: busData.assigned_driver_profile_id && busData.assigned_driver_profile_id !== '' ? String(busData.assigned_driver_profile_id).trim() : null,
+            route_id: busData.route_id && busData.route_id !== '' ? String(busData.route_id).trim() : null,
+            is_active: busData.is_active === 'on' || busData.is_active === true || busData.is_active === 'true' || busData.is_active === undefined
+        };
         if (normalizedBusData.year && (typeof normalizedBusData.year !== 'number' || normalizedBusData.year < 1900 || normalizedBusData.year > new Date().getFullYear() + 10)) {
             return res.status(400).json({
                 success: false,
@@ -135,10 +134,12 @@ router.post('/buses', async (req, res) => {
             });
         }
         const newBus = await ConsolidatedAdminService_1.ConsolidatedAdminService.createBus(normalizedBusData);
+        const wasReactivated = newBus.updated_at && newBus.created_at &&
+            new Date(newBus.updated_at).getTime() - new Date(newBus.created_at).getTime() < 5000;
         return res.status(201).json({
             success: true,
             data: newBus,
-            message: 'Bus created successfully',
+            message: wasReactivated ? 'Bus reactivated and updated successfully' : 'Bus created successfully',
             timestamp: new Date().toISOString(),
         });
     }
@@ -147,7 +148,15 @@ router.post('/buses', async (req, res) => {
         let errorMessage = 'Unknown error occurred';
         let statusCode = 500;
         if (error instanceof Error) {
-            if (error.message.includes('already exists') || error.message.includes('already assigned')) {
+            if (error.message.includes('duplicate key') || error.message.includes('unique constraint') || error.message.includes('already exists')) {
+                statusCode = 409;
+                errorMessage = error.message.includes('bus_number')
+                    ? `Bus number already exists. Please use a different bus number.`
+                    : error.message.includes('vehicle_no')
+                        ? `Vehicle number already exists. Please use a different vehicle number.`
+                        : error.message;
+            }
+            else if (error.message.includes('already assigned')) {
                 statusCode = 409;
                 errorMessage = error.message;
             }
@@ -159,12 +168,16 @@ router.post('/buses', async (req, res) => {
                 statusCode = 400;
                 errorMessage = error.message;
             }
-            else if (error.message.includes('violates')) {
+            else if (error.message.includes('violates') || error.message.includes('constraint')) {
                 statusCode = 400;
-                errorMessage = 'Invalid data provided';
+                errorMessage = error.message.includes('capacity')
+                    ? 'Capacity must be between 1 and 1000'
+                    : error.message.includes('year')
+                        ? 'Year must be between 1900 and ' + (new Date().getFullYear() + 10)
+                        : 'Invalid data provided. Please check all fields.';
             }
             else {
-                errorMessage = error.message;
+                errorMessage = error.message || 'Unknown error occurred';
             }
         }
         return res.status(statusCode).json({
@@ -361,13 +374,33 @@ router.post('/drivers', async (req, res) => {
                 message: 'Phone number must be a string',
             });
         }
-        const newDriver = await ConsolidatedAdminService_1.ConsolidatedAdminService.createDriver(driverData);
-        return res.status(201).json({
-            success: true,
-            data: newDriver,
-            message: newDriver.is_active ? 'Driver created successfully with Supabase Auth account' : 'Driver reactivated successfully',
-            timestamp: new Date().toISOString(),
-        });
+        const startTime = Date.now();
+        logger_1.logger.info('Creating driver', 'admin', { email: driverData.email, startTime });
+        try {
+            const newDriver = await ConsolidatedAdminService_1.ConsolidatedAdminService.createDriver(driverData);
+            const duration = Date.now() - startTime;
+            logger_1.logger.info('Driver created successfully', 'admin', {
+                driverId: newDriver.id,
+                email: newDriver.email,
+                duration: `${duration}ms`
+            });
+            const isActive = newDriver.is_active !== undefined ? newDriver.is_active : true;
+            return res.status(201).json({
+                success: true,
+                data: newDriver,
+                message: isActive ? 'Driver created successfully with Supabase Auth account' : 'Driver reactivated successfully',
+                timestamp: new Date().toISOString(),
+            });
+        }
+        catch (createError) {
+            const duration = Date.now() - startTime;
+            logger_1.logger.error('Error in createDriver service call', 'admin', {
+                error: createError instanceof Error ? createError.message : 'Unknown error',
+                duration: `${duration}ms`,
+                email: driverData.email
+            });
+            throw createError;
+        }
     }
     catch (error) {
         logger_1.logger.error('Error creating driver', 'admin', { error: error instanceof Error ? error.message : 'Unknown error' });

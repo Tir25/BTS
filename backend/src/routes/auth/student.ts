@@ -1,5 +1,5 @@
 import express from 'express';
-import { getStudentSupabaseAdmin } from '../../config/supabase';
+import { getStudentSupabaseAdmin, getStudentSupabaseConfig, createSupabaseClient } from '../../config/supabase';
 import { logger } from '../../utils/logger';
 
 const router = express.Router();
@@ -44,7 +44,33 @@ router.post('/student/login', async (req, res) => {
       });
     }
 
-    const { data: authData, error: authError } = await studentSupabaseAdmin.auth.signInWithPassword({
+    const studentAuthClientResult = createSupabaseClient(
+      getStudentSupabaseConfig(),
+      'student-auth',
+      false,
+      {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      }
+    );
+
+    if (studentAuthClientResult.error || !studentAuthClientResult.client) {
+      logger.error('❌ Failed to initialize student auth Supabase client', 'auth', {
+        email,
+        error: studentAuthClientResult.error?.message || 'Unknown error',
+      });
+      return res.status(500).json({
+        success: false,
+        error: 'Authentication service unavailable',
+        message: 'Failed to initialize authentication service. Please contact your administrator.',
+        code: 'SERVICE_ERROR'
+      });
+    }
+
+    const studentSupabaseAuth = studentAuthClientResult.client;
+
+    const { data: authData, error: authError } = await studentSupabaseAuth.auth.signInWithPassword({
       email,
       password,
     });

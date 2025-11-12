@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import config from '../config/environment';
 
-// General rate limiter (enabled in production)
+const isRateLimitDisabled = () =>
+  process.env.DISABLE_RATE_LIMIT &&
+  process.env.DISABLE_RATE_LIMIT.toLowerCase() === 'true';
+
+// General rate limiter (enabled in production unless disabled)
 const generalLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.maxRequests,
@@ -34,6 +38,10 @@ const authLimiter = rateLimit({
 });
 
 export const rateLimitMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  if (isRateLimitDisabled() || !config.security.enableRateLimit) {
+    return next();
+  }
+
   if (process.env.NODE_ENV === 'production') {
     return generalLimiter(req, res, next);
   }
@@ -41,6 +49,10 @@ export const rateLimitMiddleware = (req: Request, res: Response, next: NextFunct
 };
 
 export const authRateLimit = (req: Request, res: Response, next: NextFunction) => {
+  if (isRateLimitDisabled() || !config.security.enableRateLimit) {
+    return next();
+  }
+
   if (process.env.NODE_ENV === 'production') {
     return authLimiter(req, res, next);
   }

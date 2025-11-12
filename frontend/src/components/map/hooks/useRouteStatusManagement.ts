@@ -107,7 +107,12 @@ export function useRouteStatusManagement({
           if (selectedShift) params.shiftName = selectedShift;
           const res = await apiService.getStudentRouteStatus(selectedRoute, params);
           if (res?.success) setRouteStatus(res.data);
-        } catch {}
+        } catch (error) {
+          logger.warn('Failed to refresh student route status from realtime event.', 'useRouteStatusManagement', {
+            error: error instanceof Error ? error.message : String(error),
+            routeId,
+          });
+        }
       })();
     });
     return () => unsubscribe();

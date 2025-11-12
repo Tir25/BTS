@@ -347,7 +347,10 @@ export class MapService implements IMapService {
    * Calculate clusters from bus locations
    */
   private calculateClusters(locations: { [busId: string]: BusLocation }, zoom: number): ClusterPoint[] {
-    const locationArray = Object.entries(locations).map(([busId, loc]) => ({ busId, ...loc }));
+    const locationArray = Object.entries(locations).map(([busId, loc]) => {
+      const { busId: _ignoredBusId, ...rest } = loc;
+      return { busId, ...rest };
+    });
     
     if (locationArray.length === 0) return [];
 
@@ -555,7 +558,7 @@ export class MapService implements IMapService {
       className: 'bus-popup-container',
       closeButton: true,
       closeOnClick: false,
-    }).setHTML(this.createPopupHTML(busId, location, busInfo));
+    }).setHTML(this.createPopupHTML(busId, location, busInfo ?? undefined));
 
     marker.setPopup(popup);
     (popup as any)._lastUpdate = Date.now();
@@ -572,7 +575,7 @@ export class MapService implements IMapService {
     if (popup) {
       // CRITICAL FIX: Get bus info from MapStore instead of cache
       const busInfo = this.getBusInfo(busId);
-      popup.setHTML(this.createPopupHTML(busId, location, busInfo));
+      popup.setHTML(this.createPopupHTML(busId, location, busInfo ?? undefined));
     }
   }
 

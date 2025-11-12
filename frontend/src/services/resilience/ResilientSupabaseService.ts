@@ -126,11 +126,19 @@ class ResilientSupabaseService {
       };
     }
 
-    // Wrap query with timeout
+    // Wrap query with timeout and better error handling
     const queryWithTimeout = async (): Promise<{ data: T | null; error: any }> => {
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+      let queryAborted = false;
+      
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error(`Query timeout after ${timeout}ms`));
+        timeoutHandle = setTimeout(() => {
+          queryAborted = true;
+          const timeoutError = new Error(`Query timeout after ${timeout}ms`);
+          // Add timeout flag to error for better error handling
+          (timeoutError as any).isTimeout = true;
+          (timeoutError as any).timeoutMs = timeout;
+          reject(timeoutError);
         }, timeout);
       });
 
@@ -138,10 +146,41 @@ class ResilientSupabaseService {
         const queryResult = queryFn();
         // Handle both Promise and direct return
         const result = queryResult instanceof Promise ? await queryResult : queryResult;
-        const finalResult = await Promise.race([Promise.resolve(result), timeoutPromise]);
+        
+        // PRODUCTION FIX: Use Promise.race but ensure timeout is cleared if query completes first
+        const finalResult = await Promise.race([
+          Promise.resolve(result).then(data => {
+            // Clear timeout if query completes before timeout
+            if (timeoutHandle) {
+              clearTimeout(timeoutHandle);
+              timeoutHandle = null;
+            }
+            return data;
+          }),
+          timeoutPromise
+        ]);
+        
         return finalResult;
       } catch (error) {
-        throw error;
+        // Clear timeout on error
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
+        
+        // Re-throw timeout errors as-is, wrap other errors
+        if (queryAborted || (error as any)?.isTimeout) {
+          throw error;
+        }
+        
+        // Wrap other errors
+        throw error instanceof Error ? error : new Error(String(error));
+      } finally {
+        // Safety: ensure timeout is always cleared
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
       }
     };
 
@@ -154,7 +193,13 @@ class ResilientSupabaseService {
         );
 
         if (result.error && this.isRetriableError(result.error) && retryOnFailure) {
-          return await this.retryQuery(queryFn, options);
+          return await this.retryQuery(
+            async () => {
+              const maybePromise = queryFn();
+              return maybePromise instanceof Promise ? await maybePromise : maybePromise;
+            },
+            options
+          );
         }
 
         return {
@@ -174,7 +219,13 @@ class ResilientSupabaseService {
 
     // Execute without circuit breaker
     if (retryOnFailure) {
-      return await this.retryQuery(queryFn, options);
+      return await this.retryQuery(
+        async () => {
+          const maybePromise = queryFn();
+          return maybePromise instanceof Promise ? await maybePromise : maybePromise;
+        },
+        options
+      );
     }
 
     try {
@@ -204,8 +255,9 @@ class ResilientSupabaseService {
     const { timeout = this.defaultTimeout, maxRetries = 3, fallbackData = null } = options;
 
     const queryWithTimeout = async (): Promise<{ data: T | null; error: any }> => {
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        timeoutHandle = setTimeout(() => {
           reject(new Error(`Query timeout after ${timeout}ms`));
         }, timeout);
       });
@@ -213,8 +265,11 @@ class ResilientSupabaseService {
       try {
         const result = await Promise.race([queryFn(), timeoutPromise]);
         return result;
-      } catch (error) {
-        throw error;
+      } finally {
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+          timeoutHandle = null;
+        }
       }
     };
 
@@ -290,7 +345,13 @@ class ResilientSupabaseService {
   async checkHealth(): Promise<boolean> {
     try {
       const result = await this.query(
-        () => this.client.from('user_profiles').select('count').limit(1),
+        async () => {
+          const { data, error } = await this.client
+            .from('user_profiles')
+            .select('count')
+            .limit(1);
+          return { data, error };
+        },
         {
           timeout: 5000,
           retryOnFailure: false,

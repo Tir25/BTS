@@ -307,12 +307,12 @@ export const initializeEnvironment = (): EnvironmentConfig => {
     rateLimit: {
       windowMs: getEnvNumber('RATE_LIMIT_WINDOW_MS', 900000), // 15 minutes
       maxRequests: getEnvNumber('RATE_LIMIT_MAX_REQUESTS', isProduction ? 1000 : 5000),
-      authMaxRequests: getEnvNumber('AUTH_RATE_LIMIT_MAX_REQUESTS', 5),
+      authMaxRequests: getEnvNumber('AUTH_RATE_LIMIT_MAX_REQUESTS', isProduction ? 30 : 200),
     },
     security: {
       enableHelmet: getEnvBoolean('ENABLE_HELMET', true),
       enableCors: getEnvBoolean('ENABLE_CORS', true),
-      enableRateLimit: getEnvBoolean('ENABLE_RATE_LIMIT', true),
+      enableRateLimit: getEnvBoolean('ENABLE_RATE_LIMIT', false),
     },
     logging: {
       level: getEnvVar('LOG_LEVEL', isProduction ? 'info' : 'debug'),

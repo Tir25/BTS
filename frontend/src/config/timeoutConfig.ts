@@ -10,6 +10,7 @@ export interface TimeoutConfig {
     signOut: number; // Sign out timeout in milliseconds
     sessionRefresh: number; // Session refresh timeout in milliseconds
     tokenValidation: number; // Token validation timeout in milliseconds
+    sessionSetting: number; // Session setting timeout in milliseconds
   };
   
   // API request timeouts
@@ -53,7 +54,8 @@ export const timeoutConfig: TimeoutConfig = {
     signIn: 10000, // 10 seconds - enough for network variability
     signOut: 5000, // 5 seconds - logout should be fast
     sessionRefresh: 8000, // 8 seconds - session refresh timeout
-    tokenValidation: 5000, // 5 seconds - token validation should be quick
+    tokenValidation: 8000, // 8 seconds - increased for reliability (was 5s)
+    sessionSetting: 10000, // 10 seconds - session setting is critical
   },
   
   api: {

@@ -120,9 +120,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onLoginSuccess }) => {
         logger.info('✅ Student login successful', 'component');
         
         // Store user in auth store
+        const userEmail = result.user.email ?? loginForm.email;
+
         useAuthStore.getState().setUser({
           id: result.user.id,
-          email: result.user.email,
+          email: userEmail,
           role: result.user.role as 'student',
           full_name: result.user.full_name,
           created_at: result.user.created_at,

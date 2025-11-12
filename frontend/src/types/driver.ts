@@ -67,7 +67,7 @@ export interface DriverAuthState {
 export interface DriverControlsProps {
   isTracking: boolean;
   isAuthenticated: boolean;
-  connectionStatus: 'connected' | 'disconnected' | 'connecting';
+  connectionStatus: 'connected' | 'disconnected' | 'connecting' | 'reconnecting';
   onStartTracking: () => void;
   onStopTracking: () => void;
   lastUpdateTime: string | null;

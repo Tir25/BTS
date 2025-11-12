@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase } from '../config/supabase';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { supabase, getDriverSupabaseClient } from '../config/supabase';
 import { DriverBusAssignment, authService } from '../services/authService';
 import { unifiedWebSocketService } from '../services/UnifiedWebSocketService';
 import { offlineStorage } from '../services/offline/OfflineStorage';
-import { timeoutConfig } from '../config/timeoutConfig';
+import { timeoutConfig, withTimeout } from '../config/timeoutConfig';
 import { logger } from '../utils/logger';
+import { apiService } from '../api/api';
 
 interface DriverAuthState {
   isAuthenticated: boolean;
@@ -21,7 +23,7 @@ interface DriverAuthState {
   isWebSocketAuthenticated: boolean;
   isWebSocketInitializing: boolean;
   
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; code?: string }>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<{ success: boolean; error?: string }>;
   clearError: () => void;
@@ -105,7 +107,11 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
       return;
     }
 
-    setIsLoading(true);
+    // PRODUCTION FIX: Don't set loading state if already authenticated (prevents blocking redirect after login)
+    // Only set loading if we're not already authenticated, to avoid interfering with post-login redirect
+    if (!isAuthenticated) {
+      setIsLoading(true);
+    }
     setError(null);
     
     try {
@@ -123,16 +129,44 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
         
         logger.debug('🔄 Waiting for AuthService initialization before validation', 'driver-auth', { requestId });
         
+        // PRODUCTION FIX: Ensure AuthService is ready before validation
+        // Wait for AuthService to be initialized (with timeout protection)
+        let authServiceReady = false;
+        const maxAuthServiceWaitAttempts = 10;
+        const authServiceWaitDelay = 200;
+        
+        for (let waitAttempt = 0; waitAttempt < maxAuthServiceWaitAttempts; waitAttempt++) {
+          if (authService.isInitialized()) {
+            authServiceReady = true;
+            logger.debug('✅ AuthService ready', 'driver-auth', { 
+              requestId, 
+              waitAttempt: waitAttempt + 1 
+            });
+            break;
+          }
+          
+          if (waitAttempt < maxAuthServiceWaitAttempts - 1) {
+            await new Promise(resolve => setTimeout(resolve, authServiceWaitDelay));
+          }
+        }
+        
+        if (!authServiceReady) {
+          logger.warn('⚠️ AuthService not ready after waiting, proceeding anyway', 'driver-auth', {
+            requestId,
+            waitAttempts: maxAuthServiceWaitAttempts
+          });
+        }
+        
         // PRODUCTION FIX: Ensure profile is loaded before validation
         // Try to load profile if not available
-        if (!authService.currentProfile && session.user) {
+        if (!authService.getCurrentProfile() && session.user) {
           logger.info('🔄 Profile not loaded, attempting to load now', 'driver-auth', { requestId });
           try {
             // Wait a bit for authService to initialize after session check
             await new Promise(resolve => setTimeout(resolve, 500));
             
             // If still no profile, try to trigger profile loading
-            if (!authService.currentProfile) {
+            if (!authService.getCurrentProfile()) {
               logger.info('🔄 Triggering profile load', 'driver-auth', { requestId });
               // Profile will be loaded by validateDriverSession if needed
             }
@@ -142,7 +176,7 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
         }
         
         while (retryCount < maxRetries) {
-          if (authService.currentProfile) {
+          if (authService.getCurrentProfile()) {
             logger.info('✅ AuthService ready, proceeding with validation', 'driver-auth', { requestId, retryCount });
             validationResult = await authService.validateDriverSession();
             break;
@@ -205,17 +239,23 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
         setIsDriver(false);
       }
     } finally {
-      if (initializationRequestIdRef.current === requestId) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     }
   };
 
   const loginRequestIdRef = useRef<string | null>(null);
   const loginTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const loginAbortControllerRef = useRef<AbortController | null>(null);
+  const isLoginInProgressRef = useRef<boolean>(false);
 
   const login = useCallback(async (email: string, password: string) => {
+    // PRODUCTION FIX: Prevent concurrent login attempts
+    if (isLoginInProgressRef.current) {
+      logger.warn('⚠️ Login already in progress, rejecting concurrent attempt', 'driver-auth');
+      return { success: false, error: 'Login is already in progress. Please wait.' };
+    }
+    
+    isLoginInProgressRef.current = true;
     setIsLoading(true);
     setError(null);
     const requestId = `login_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -230,173 +270,338 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
       loginTimeoutRef.current = null;
     }
     try {
-      logger.info('🔐 Attempting driver login...', 'driver-auth', { email, requestId });
+      logger.info('🔐 Attempting driver login via backend API...', 'driver-auth', { email, requestId });
+      
+      // PRODUCTION FIX: Call backend API instead of direct Supabase authentication
+      // This ensures proper validation, assignment fetching, and error handling
       const loginTimeoutMs = timeoutConfig.auth.signIn;
-      const loginPromise = authService.signIn(email, password);
+      const loginPromise = apiService.driverLogin(email, password);
+      
+      // PRODUCTION FIX: Create timeout promise that can be cancelled
+      let timeoutHandle: NodeJS.Timeout | null = null;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        loginTimeoutRef.current = setTimeout(() => {
+        timeoutHandle = setTimeout(() => {
           if (loginRequestIdRef.current === requestId && !abortController.signal.aborted) {
             abortController.abort();
             reject(new Error(`Login timeout after ${loginTimeoutMs / 1000}s`));
           }
         }, loginTimeoutMs);
+        loginTimeoutRef.current = timeoutHandle;
       });
 
-      let loginCompleted = false;
-      let loginResult: { success: boolean; error?: string; user?: any } | null = null;
       try {
-        const trackedLoginPromise = loginPromise.then(result => {
-          if (loginRequestIdRef.current === requestId && !abortController.signal.aborted) {
-            loginCompleted = true;
-            loginResult = result;
-            if (loginTimeoutRef.current) {
-              clearTimeout(loginTimeoutRef.current);
+        // PRODUCTION FIX: Use Promise.race to get the first result (login or timeout)
+        // This ensures we don't wait for the timeout if login completes first
+        logger.debug('⏳ Waiting for login (with timeout protection)', 'driver-auth', { requestId, timeoutMs: loginTimeoutMs });
+        
+        const result = await Promise.race([
+          loginPromise.then(result => {
+            // Clear timeout immediately when login completes
+            if (timeoutHandle) {
+              clearTimeout(timeoutHandle);
               loginTimeoutRef.current = null;
             }
+            logger.debug('✅ Login promise resolved', 'driver-auth', { 
+              success: result.success, 
+              hasError: !!result.error,
+              requestId 
+            });
+            
+            // Check if request was cancelled
+            if (loginRequestIdRef.current !== requestId || abortController.signal.aborted) {
+              logger.warn('⚠️ Login completed but request was cancelled', 'driver-auth', { requestId });
+              throw new Error('Login request cancelled');
+            }
+            
             return result;
-          }
-          throw new Error('Login request cancelled');
-        });
-        const trackedTimeoutPromise = timeoutPromise.catch(error => {
-          if (loginCompleted && loginResult) {
-            logger.debug('⚠️ Timeout fired but login already completed', 'driver-auth');
-            return loginResult;
-          }
-          throw error;
-        });
-
-        const [loginSettled, timeoutSettled] = await Promise.allSettled([
-          trackedLoginPromise,
-          trackedTimeoutPromise
+          }),
+          timeoutPromise.catch(error => {
+            // Clear timeout reference
+            loginTimeoutRef.current = null;
+            logger.error('❌ Login timeout', 'driver-auth', { 
+              error: error instanceof Error ? error.message : String(error),
+              requestId 
+            });
+            throw error;
+          })
         ]);
+        
+        // Check if request was superseded
         if (loginRequestIdRef.current !== requestId) {
           logger.warn('⚠️ Login request superseded by newer request', 'driver-auth');
+          setIsLoading(false);
           return { success: false, error: 'Login cancelled' };
         }
-        let result: DriverAuthResult;
-        if (loginSettled.status === 'fulfilled') {
-          result = loginSettled.value;
-          if (loginTimeoutRef.current) {
-            clearTimeout(loginTimeoutRef.current);
-            loginTimeoutRef.current = null;
+        
+        logger.debug('🔍 Processing login result', 'driver-auth', { 
+          success: result.success, 
+          hasData: !!result.data,
+          hasError: !!result.error,
+          requestId 
+        });
+        
+        if (result.success && result.data) {
+          // PRODUCTION FIX: Backend API returns user, assignment, and session in one response
+          const { user, assignment, session } = result.data;
+
+          if (!session?.access_token || !session?.refresh_token) {
+            logger.error('❌ Invalid session payload received from backend login', 'driver-auth', {
+              hasAccessToken: !!session?.access_token,
+              hasRefreshToken: !!session?.refresh_token,
+              driverId: user?.id,
+            });
+            setError('Authentication failed due to invalid session data. Please try again.');
+            if (loginRequestIdRef.current === requestId) {
+              setIsLoading(false);
+            }
+            return { success: false, error: 'Invalid session data received' };
           }
-        } else if (loginCompleted && loginResult) {
-          logger.debug('⚠️ Timeout was processing but login already completed', 'driver-auth');
-          result = loginResult;
-          if (loginTimeoutRef.current) {
-            clearTimeout(loginTimeoutRef.current);
-            loginTimeoutRef.current = null;
-          }
-        } else if (timeoutSettled.status === 'rejected') {
-          const timeoutError = timeoutSettled.reason;
-          if (timeoutError instanceof Error && timeoutError.message.includes('timeout')) {
-            result = { success: false, error: `Login timeout after ${loginTimeoutMs / 1000}s` } as any;
-          } else {
-            result = { success: false, error: 'Login timeout. Please try again.' } as any;
-          }
-        } else {
-          const error = (loginSettled as any).reason;
-          const errorMsg = error instanceof Error ? error.message : 'Login failed';
-          result = { success: false, error: errorMsg } as any;
-        }
-        if (result.success && (result as any).user) {
-          // PRODUCTION FIX: Verify user profile is valid before proceeding
-          const userProfile = (result as any).user;
-          if (!userProfile || !userProfile.id) {
-            logger.error('❌ Invalid user profile returned from sign-in', 'driver-auth');
+          
+          if (!user || !user.id) {
+            logger.error('❌ Invalid user data returned from backend API', 'driver-auth');
             setError('Authentication succeeded but user data is invalid. Please try again.');
             return { success: false, error: 'Invalid user data received' };
           }
           
-          // PRODUCTION FIX: Set authentication state immediately after successful sign-in
-          // Don't wait for assignment to complete - assignment can load in background
+          // PRODUCTION FIX: Set Supabase session using token from backend response with retry logic
+          // This ensures Supabase client has the session for subsequent API calls
+          // Critical: This must succeed for profile loading to work properly
+          let sessionSetSuccessfully = false;
+          const maxSessionRetries = 3;
+          const sessionRetryDelay = 500;
+          
+          for (let attempt = 0; attempt < maxSessionRetries; attempt++) {
+          try {
+            const driverSupabase = getDriverSupabaseClient();
+              
+              // Use longer timeout for session setting (critical operation)
+              const sessionTimeout = attempt === 0 
+                ? timeoutConfig.auth.tokenValidation 
+                : timeoutConfig.auth.tokenValidation * 2; // Double timeout on retries
+              
+            const { error: setSessionError } = await withTimeout(
+              driverSupabase.auth.setSession({
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+              }),
+                sessionTimeout,
+                `Setting Supabase session timed out after ${sessionTimeout}ms (attempt ${attempt + 1}/${maxSessionRetries})`
+            );
+            
+            if (setSessionError) {
+                logger.warn(`⚠️ Failed to set Supabase session (attempt ${attempt + 1}/${maxSessionRetries})`, 'driver-auth', { 
+                  error: setSessionError.message,
+                  attempt: attempt + 1
+                });
+                
+                // If not the last attempt, wait before retrying
+                if (attempt < maxSessionRetries - 1) {
+                  await new Promise(resolve => setTimeout(resolve, sessionRetryDelay * (attempt + 1)));
+                  continue;
+            } else {
+                  // Last attempt failed - log error but continue
+                  logger.error('❌ Failed to set Supabase session after all retries', 'driver-auth', {
+                    error: setSessionError.message,
+                    attempts: maxSessionRetries
+                  });
+                }
+              } else {
+                sessionSetSuccessfully = true;
+                logger.info('✅ Supabase session set successfully', 'driver-auth', {
+                  attempt: attempt + 1
+                });
+                break;
+            }
+          } catch (sessionError) {
+              logger.warn(`⚠️ Error setting Supabase session (attempt ${attempt + 1}/${maxSessionRetries})`, 'driver-auth', { 
+                error: sessionError instanceof Error ? sessionError.message : String(sessionError),
+                attempt: attempt + 1
+              });
+              
+              // If not the last attempt, wait before retrying
+              if (attempt < maxSessionRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, sessionRetryDelay * (attempt + 1)));
+                continue;
+              } else {
+                // Last attempt failed - log error
+                logger.error('❌ Error setting Supabase session after all retries', 'driver-auth', {
+                  error: sessionError instanceof Error ? sessionError.message : String(sessionError),
+                  attempts: maxSessionRetries
+                });
+              }
+            }
+          }
+          
+          // PRODUCTION FIX: If session setting failed, we still continue but log a warning
+          // The backend auth succeeded, so we can proceed, but profile loading might be slower
+          if (!sessionSetSuccessfully) {
+            logger.warn('⚠️ Continuing login despite session setting failure - profile loading may be slower', 'driver-auth', {
+              driverId: user.id
+            });
+          }
+          
+          // PRODUCTION FIX: Set authentication state with data from backend response
           setIsAuthenticated(true);
           setIsDriver(true);
-          setDriverId(userProfile.id);
-          setDriverEmail(email);
+          setDriverId(user.id);
+          setDriverEmail(user.email || email);
+          setDriverName(user.full_name || assignment.driver_name || email);
           
-          // PRODUCTION FIX: Set driver name from profile if available
-          if (userProfile.full_name) {
-            setDriverName(userProfile.full_name);
+          // PRODUCTION FIX: Set assignment from backend response (already includes all data)
+          if (assignment) {
+            const driverAssignment: DriverBusAssignment = {
+              driver_id: assignment.driver_id,
+              bus_id: assignment.bus_id,
+              bus_number: assignment.bus_number,
+              route_id: assignment.route_id,
+              route_name: assignment.route_name,
+              driver_name: assignment.driver_name,
+              created_at: assignment.created_at,
+              updated_at: assignment.updated_at,
+              shift_id: assignment.shift_id,
+              shift_name: assignment.shift_name,
+              shift_start_time: assignment.shift_start_time,
+              shift_end_time: assignment.shift_end_time,
+            };
+            setBusAssignment(mergeAssignmentShift(driverAssignment));
+            offlineStorage.storeData('driver', `assignment_${user.id}`, driverAssignment as unknown as Record<string, unknown>);
+            logger.info('✅ Driver login successful with assignment', 'driver-auth', { 
+              driverId: user.id,
+              busNumber: assignment.bus_number,
+              routeName: assignment.route_name
+            });
+            setError(null); // Clear any previous errors
+          } else {
+            // PRODUCTION FIX: Allow login to proceed even without assignment
+            logger.warn('⚠️ No bus assignment in backend response (allowing login to proceed)', 'driver-auth', {
+              driverId: user.id
+            });
+            setError('No active bus assignment found. Please contact your administrator to get assigned to a bus.');
           }
           
-          // PRODUCTION FIX: Fetch assignment with timeout and proper error handling
-          // Use Promise.race to enforce timeout
-          const assignmentTimeout = timeoutConfig.api.busAssignment || 8000;
-          const assignmentPromise = authService.getDriverBusAssignment(userProfile.id);
-          const timeoutPromise = new Promise<null>((resolve) => {
-            setTimeout(() => resolve(null), assignmentTimeout);
+          // PRODUCTION FIX: Ensure loading is false BEFORE returning to allow redirect to happen
+          // This is critical - the redirect depends on !isLoading, so we must set it false here
+          // Set all state flags atomically to prevent race conditions
+          setIsLoading(false);
+          setIsAuthenticated(true); // Ensure this is set (redundant but safe)
+          initializationInProgressRef.current = false;
+          initializationRef.current = null;
+          initializationRequestIdRef.current = null;
+          
+          // PRODUCTION FIX: Use requestAnimationFrame for state propagation instead of setTimeout
+          // This ensures state updates are flushed before next render cycle
+          await new Promise(resolve => {
+            // Use double RAF to ensure state is fully propagated
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                resolve(undefined);
+              });
+            });
           });
           
-          try {
-            const assignment = await Promise.race([assignmentPromise, timeoutPromise]);
-            
-            if (assignment) {
-              setDriverName(assignment.driver_name || userProfile.full_name || email);
-              setBusAssignment(mergeAssignmentShift(assignment));
-              offlineStorage.storeData('driver', `assignment_${userProfile.id}`, assignment as unknown as Record<string, unknown>);
-              logger.info('✅ Driver login successful with assignment', 'driver-auth', { 
-                driverId: userProfile.id,
-                busNumber: assignment.bus_number 
-              });
-              setError(null); // Clear any previous errors
-            } else {
-              // PRODUCTION FIX: Allow login to proceed even without assignment
-              // Assignment can be loaded later or user can contact admin
-              logger.warn('⚠️ No bus assignment found after login (allowing login to proceed)', 'driver-auth', {
-                driverId: userProfile.id
-              });
-              setError('No active bus assignment found. Please contact your administrator to get assigned to a bus.');
-              // Don't sign out - let user see the dashboard with error message
-            }
-            
-            return { success: true };
-          } catch (assignmentError) {
-            // PRODUCTION FIX: Don't fail login if assignment fetch fails
-            // Authentication succeeded, assignment loading can be retried
-            logger.error('❌ Error fetching assignment after login (allowing login to proceed)', 'driver-auth', { 
-              error: assignmentError instanceof Error ? assignmentError.message : String(assignmentError),
-              driverId: userProfile.id
-            });
-            setError('Login successful, but unable to load bus assignment. Please refresh or contact support.');
-            return { success: true }; // Still return success since auth succeeded
-          }
+          // PRODUCTION FIX: authService will automatically update via Supabase auth state change listener
+          // The session we set above will trigger the listener and load the profile
+          // No need to manually call loadUserProfile as it's handled automatically
+          
+          logger.info('✅ Login complete, state synced, ready for redirect', 'driver-auth', {
+            driverId: user.id,
+            hasAssignment: !!assignment
+          });
+          
+          return { success: true };
         } else {
-          const errorMsg = (result as any).error || 'Login failed';
+          // PRODUCTION FIX: Handle login failure - set error and clear loading state immediately
+          const errorMsg = result.error || result.message || 'Login failed';
+          const errorCode = result.code || 'LOGIN_ERROR';
+          const statusCode = result.status;
+
+          if (errorCode === 'ROUTE_NOT_ASSIGNED' || statusCode === 409) {
+            const assignmentPendingMessage =
+              'Your driver assignment is still being configured. Please contact your administrator to complete the route assignment before logging in.';
+
+            logger.warn('⚠️ Driver login blocked: assignment missing route', 'driver-auth', {
+              email,
+              statusCode,
+              errorCode,
+            });
+
+            setError(assignmentPendingMessage);
+            if (loginRequestIdRef.current === requestId) {
+              setIsLoading(false);
+            }
+
+            return { success: false, error: assignmentPendingMessage, code: 'ROUTE_NOT_ASSIGNED' };
+          }
+          
+          logger.error('❌ Driver login failed via backend API', 'driver-auth', { 
+            error: errorMsg,
+            code: errorCode,
+            result,
+            requestId
+          });
+          
+          // PRODUCTION FIX: Set error state and clear loading immediately
+          // This ensures UI updates immediately on error
           setError(errorMsg);
-          logger.error('❌ Driver login failed', 'driver-auth', { error: errorMsg });
+          // Clear loading state immediately - finally block will also clear it as safety net
+          if (loginRequestIdRef.current === requestId) {
+            setIsLoading(false);
+          }
+          
           return { success: false, error: errorMsg };
         }
       } catch (raceError) {
+        // PRODUCTION FIX: Handle race condition errors
         if (raceError instanceof Error && raceError.message.includes('cancelled')) {
           logger.warn('⚠️ Login request was cancelled', 'driver-auth');
+          setError('Login was cancelled');
           return { success: false, error: 'Login was cancelled' };
         }
+        // Re-throw to be caught by outer catch
         throw raceError;
       }
     } catch (err) {
+      // PRODUCTION FIX: Handle all errors and ensure loading state is cleared
       const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      let finalError = errorMessage;
+      
       if (errorMessage.includes('timeout')) {
-        const timeoutError = 'Login is taking longer than expected. Please check your connection and try again.';
-        setError(timeoutError);
+        finalError = 'Login is taking longer than expected. Please check your connection and try again.';
         logger.error('❌ Driver login timeout', 'driver-auth', { error: errorMessage });
-        return { success: false, error: timeoutError };
-      }
-      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
-        const networkError = 'Unable to connect to the server. Please check your internet connection and try again.';
-        setError(networkError);
+      } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        finalError = 'Unable to connect to the server. Please check your internet connection and try again.';
         logger.error('❌ Driver login network error', 'driver-auth', { error: errorMessage });
-        return { success: false, error: networkError };
+      } else {
+        logger.error('❌ Driver login error', 'driver-auth', { error: errorMessage, err });
       }
-      setError(errorMessage);
-      logger.error('❌ Driver login error', 'driver-auth', { error: errorMessage });
-      return { success: false, error: errorMessage };
+      
+      // Set error state - loading will be cleared in finally block
+      setError(finalError);
+      
+      return { success: false, error: finalError };
     } finally {
-      setIsLoading(false);
+      // PRODUCTION FIX: Always clear loading state and cleanup timeouts
+      // This is a safety net to ensure loading is cleared even if error handling fails
+      logger.debug('🧹 Finally block executing', 'driver-auth', { 
+        requestId, 
+        currentRequestId: loginRequestIdRef.current 
+      });
+      
+      // PRODUCTION FIX: Always clear loading state for this request (safety net)
+      // The error handling above should have already cleared it, but this ensures it's cleared
+      if (loginRequestIdRef.current === requestId || !loginRequestIdRef.current) {
+        logger.debug('✅ Clearing loading state in finally (safety net)', 'driver-auth', { requestId });
+        setIsLoading(false);
+      }
+      
+      // Cleanup timeout
       if (loginTimeoutRef.current) {
         clearTimeout(loginTimeoutRef.current);
         loginTimeoutRef.current = null;
       }
+      
+      // PRODUCTION FIX: Reset login in progress flag
+      isLoginInProgressRef.current = false;
     }
   }, []);
 
@@ -554,14 +759,41 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
   }, [initializeAuth]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      logger.debug('Auth state changed', 'driver-auth', { event: _event, hasSession: !!session });
-      initializeAuth();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      logger.debug('Auth state changed', 'driver-auth', { event, hasSession: !!session });
+
+      // PRODUCTION FIX: Handle SIGNED_IN events to ensure state synchronization
+      // Previously skipped, but this can cause state desync after login
+      if (event === 'SIGNED_IN' && session?.user) {
+        logger.debug('SIGNED_IN event detected, syncing state', 'driver-auth', { userId: session.user.id });
+        
+        // If we're already authenticated, just ensure state is synced
+        // Don't re-initialize if login just completed (to avoid race conditions)
+        // But do sync the state to ensure store is updated
+        if (isAuthenticated) {
+          logger.debug('Already authenticated, skipping re-initialization on SIGNED_IN', 'driver-auth');
+          // State should already be set by login flow, but ensure loading is false
+          setIsLoading(false);
+        } else {
+          // If not authenticated yet, initialize to sync state
+          logger.debug('Not authenticated yet, initializing on SIGNED_IN', 'driver-auth');
+          initializeAuth();
+        }
+        return;
+      }
+
+      // Only re-initialize if we're signed out or session removed
+      if (event === 'SIGNED_OUT' || !session) {
+        initializeAuth();
+      } else {
+        // For other events (TOKEN_REFRESHED, etc.) fall back to initialize to keep state in sync
+        initializeAuth();
+      }
     });
     return () => {
       subscription.unsubscribe();
     };
-  }, [initializeAuth]);
+  }, [initializeAuth, isAuthenticated]);
 
   useEffect(() => {
     let isMounted = true;

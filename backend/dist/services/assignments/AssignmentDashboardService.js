@@ -224,7 +224,9 @@ class AssignmentDashboardService {
         `)
                 .eq('assigned_driver_profile_id', driverId)
                 .eq('is_active', true)
-                .single();
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
             if (error) {
                 if (error.code === 'PGRST116') {
                     return null;

@@ -1,6 +1,7 @@
 import express from 'express';
-import { getDriverSupabaseAdmin } from '../../config/supabase';
+import { getDriverSupabaseAdmin, getDriverSupabaseConfig, createSupabaseClient } from '../../config/supabase';
 import { logger } from '../../utils/logger';
+import { authenticateUser, requireAdminOrDriver } from '../../middleware/auth';
 
 const router = express.Router();
 
@@ -55,7 +56,36 @@ router.post('/driver/login', async (req, res) => {
     logger.info('🔐 Driver login attempt', 'auth', { email });
 
     const driverSupabaseAdmin = getDriverSupabaseAdmin();
-    const { data: authData, error: authError } = await driverSupabaseAdmin.auth.signInWithPassword({
+
+    // Use an anon-key Supabase client for password authentication so that the resulting
+    // refresh token is compatible with frontend clients (which also use the anon key).
+    const driverAuthClientResult = createSupabaseClient(
+      getDriverSupabaseConfig(),
+      'driver-auth',
+      false,
+      {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      }
+    );
+
+    if (driverAuthClientResult.error || !driverAuthClientResult.client) {
+      logger.error('❌ Failed to initialize driver auth Supabase client', 'auth', {
+        email,
+        error: driverAuthClientResult.error?.message || 'Unknown error',
+      });
+      return res.status(500).json({
+        success: false,
+        error: 'Authentication service unavailable',
+        message: 'Failed to initialize authentication service. Please contact your administrator.',
+        code: 'SERVICE_ERROR'
+      });
+    }
+
+    const driverSupabaseAuth = driverAuthClientResult.client;
+
+    const { data: authData, error: authError } = await driverSupabaseAuth.auth.signInWithPassword({
       email,
       password,
     });
@@ -143,7 +173,9 @@ router.post('/driver/login', async (req, res) => {
       `)
       .eq('assigned_driver_profile_id', authData.user.id)
       .eq('is_active', true)
-      .single();
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     const busData = busDataRaw as {
       id: string;
@@ -176,6 +208,20 @@ router.post('/driver/login', async (req, res) => {
       });
     }
 
+    if (!busData.route_id) {
+      logger.warn('⚠️ Driver assignment missing route', 'auth', {
+        userId: authData.user.id,
+        email,
+        busId: busData.id
+      });
+      return res.status(409).json({
+        success: false,
+        error: 'Route not assigned',
+        message: 'Your bus assignment is missing a route. Please contact your administrator to complete the configuration.',
+        code: 'ROUTE_NOT_ASSIGNED'
+      });
+    }
+
     let routeName = '';
     if (busData.route_id) {
       const { data: routeData, error: routeError } = await driverSupabaseAdmin
@@ -198,7 +244,7 @@ router.post('/driver/login', async (req, res) => {
       route_id: busData.route_id || '',
       route_name: routeName,
       driver_name: profile.full_name,
-      is_active: busData.assignment_status === 'assigned',
+      is_active: ['assigned', 'active'].includes((busData.assignment_status || '').toLowerCase()),
       created_at: busData.updated_at,
       updated_at: busData.updated_at,
       shift_id: busData.assigned_shift_id || null,
@@ -271,10 +317,24 @@ router.post('/driver/login', async (req, res) => {
 });
 
 // Get Driver Bus Assignment
-router.get('/driver/assignment', async (req, res) => {
+router.get('/driver/assignment', authenticateUser, requireAdminOrDriver, async (req, res) => {
   try {
-    const { driver_id } = req.query;
-    if (!driver_id) {
+    const { driver_id: driverIdQuery } = req.query;
+    const requester = req.user;
+
+    if (!requester) {
+      logger.warn('Driver assignment requested without authenticated user context', 'auth');
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+        message: 'Please sign in to view driver assignments.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+
+    const driverId = (driverIdQuery as string) || requester.id;
+
+    if (!driverId) {
       return res.status(400).json({
         success: false,
         error: 'Missing driver ID',
@@ -283,19 +343,39 @@ router.get('/driver/assignment', async (req, res) => {
       });
     }
 
-    logger.info('🔍 Fetching driver bus assignment', 'auth', { driver_id });
+    // Drivers can only access their own assignment
+    if (requester.role === 'driver' && driverId !== requester.id) {
+      logger.warn('Driver attempted to access another driver assignment', 'auth', {
+        requesterId: requester.id,
+        requestedDriverId: driverId
+      });
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'You are not allowed to view other drivers’ assignments.',
+        code: 'INSUFFICIENT_PERMISSIONS'
+      });
+    }
+
+    logger.info('🔍 Fetching driver bus assignment', 'auth', {
+      driver_id: driverId,
+      requestedBy: requester.id,
+      requesterRole: requester.role,
+      hasDriverQueryParam: !!driverIdQuery
+    });
 
     const driverSupabaseAdmin = getDriverSupabaseAdmin();
     const { data: busData2, error: busError } = await driverSupabaseAdmin
       .from('buses')
       .select('id, bus_number, vehicle_no, route_id, assigned_shift_id')
-      .eq('assigned_driver_profile_id', driver_id as string)
+      .eq('assigned_driver_profile_id', driverId)
       .eq('is_active', true)
+      .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (busError) {
-      logger.error('❌ Error fetching bus assignment', 'auth', { driver_id, error: busError.message });
+      logger.error('❌ Error fetching bus assignment', 'auth', { driverId, error: busError.message });
       return res.status(500).json({
         success: false,
         error: 'Failed to fetch bus assignment',
@@ -305,7 +385,7 @@ router.get('/driver/assignment', async (req, res) => {
     }
 
     if (!busData2) {
-      logger.warn('⚠️ No bus assignment found for driver', 'auth', { driver_id });
+      logger.warn('⚠️ No bus assignment found for driver', 'auth', { driverId });
       return res.json({
         success: true,
         data: null,
@@ -315,6 +395,20 @@ router.get('/driver/assignment', async (req, res) => {
     }
 
     const bus = busData2 as { id: string; bus_number: string; route_id: string | null; assigned_shift_id?: string | null; vehicle_no?: string | null; };
+
+    if (!bus.route_id) {
+      logger.warn('Driver assignment lookup missing route', 'auth', {
+        requesterId: requester.id,
+        driverId,
+        busId: bus.id
+      });
+      return res.status(409).json({
+        success: false,
+        error: 'Route not assigned',
+        message: 'This driver’s bus assignment is missing a route. Please contact an administrator to complete the setup.',
+        code: 'ROUTE_NOT_ASSIGNED'
+      });
+    }
 
     let routeName = '';
     if (bus.route_id) {
@@ -332,7 +426,7 @@ router.get('/driver/assignment', async (req, res) => {
     const { data: profileData } = await driverSupabaseAdmin
       .from('user_profiles')
       .select('full_name')
-      .eq('id', driver_id)
+      .eq('id', driverId)
       .maybeSingle();
     if ((profileData as any)?.full_name) {
       driverName = (profileData as any).full_name;
@@ -341,7 +435,7 @@ router.get('/driver/assignment', async (req, res) => {
     const shiftDetails = await fetchShiftDetails(driverSupabaseAdmin, bus.assigned_shift_id || null);
 
     const assignment = {
-      driver_id: driver_id as string,
+      driver_id: driverId,
       bus_id: bus.id,
       bus_number: bus.bus_number,
       route_id: bus.route_id || '',
@@ -439,7 +533,9 @@ router.post('/driver/validate', async (req, res) => {
       `)
       .eq('assigned_driver_profile_id', user.id)
       .eq('is_active', true)
-      .single();
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     const busData = busData3 as { id: string; bus_number: string; vehicle_no: string; assigned_driver_profile_id: string | null; route_id: string | null; assignment_status: string; updated_at: string; assigned_shift_id?: string | null; } | null;
     if (busError || !busData) {
@@ -448,6 +544,19 @@ router.post('/driver/validate', async (req, res) => {
         error: 'No assignment',
         message: 'No active bus assignment found',
         code: 'NO_BUS_ASSIGNMENT'
+      });
+    }
+
+    if (!busData.route_id) {
+      logger.warn('Driver session validation failed due to missing route assignment', 'auth', {
+        driverId: user.id,
+        busId: busData.id
+      });
+      return res.status(409).json({
+        success: false,
+        error: 'Route not assigned',
+        message: 'Your bus assignment is missing a route. Please contact your administrator.',
+        code: 'ROUTE_NOT_ASSIGNED'
       });
     }
 
@@ -471,7 +580,7 @@ router.post('/driver/validate', async (req, res) => {
       route_id: busData.route_id || '',
       route_name: routeName,
       driver_name: profile.full_name,
-      is_active: busData.assignment_status === 'assigned',
+      is_active: ['assigned', 'active'].includes((busData.assignment_status || '').toLowerCase()),
       created_at: busData.updated_at,
       updated_at: busData.updated_at,
       shift_id: busData.assigned_shift_id || null,

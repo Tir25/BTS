@@ -15,6 +15,7 @@ export interface UseStopsManagementProps {
   isAuthenticated: boolean;
   busAssignment: {
     driver_id: string;
+    bus_id?: string;
     route_id?: string;
     route_name?: string;
     shift_id?: string | null;

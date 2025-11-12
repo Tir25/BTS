@@ -171,28 +171,52 @@ export class BusDatabaseService {
         throw new Error('Missing required fields: bus_number, vehicle_no, and capacity are required');
       }
 
-      // Check for duplicate bus number (only for active buses)
+      // Check for duplicate bus number (across ALL buses due to UNIQUE constraint)
+      // PRODUCTION FIX: Database has UNIQUE constraint on bus_number, so we must check all buses
+      // If inactive bus exists, reactivate it instead of creating new one
       const { data: existingBus } = await supabaseAdmin
         .from('buses')
-        .select('id, is_active')
+        .select('id, is_active, bus_number')
         .eq('bus_number', busData.bus_number)
-        .eq('is_active', true)
         .maybeSingle();
 
       if (existingBus) {
-        throw new Error(`Bus number ${busData.bus_number} already exists`);
+        if (existingBus.is_active) {
+          throw new Error(`Bus number ${busData.bus_number} already exists and is active`);
+        } else {
+          // Reactivate and update the existing inactive bus
+          logger.info('Reactivating inactive bus', 'bus-db-service', { busId: existingBus.id, busNumber: busData.bus_number });
+          const reactivatedBus = await this.updateBus(existingBus.id, {
+            ...busData,
+            is_active: true
+          });
+          if (!reactivatedBus) {
+            throw new Error('Failed to reactivate existing bus record');
+          }
+          return reactivatedBus;
+        }
       }
 
-      // Check for duplicate vehicle number (only for active buses)
+      // Check for duplicate vehicle number (across ALL buses due to UNIQUE constraint)
+      // PRODUCTION FIX: Database has UNIQUE constraint on vehicle_no, so we must check all buses
+      // If inactive bus exists with same vehicle_no but different bus_number, throw error
       const { data: existingVehicle } = await supabaseAdmin
         .from('buses')
-        .select('id, is_active')
+        .select('id, is_active, vehicle_no, bus_number')
         .eq('vehicle_no', busData.vehicle_no)
-        .eq('is_active', true)
         .maybeSingle();
 
       if (existingVehicle) {
-        throw new Error(`Vehicle number ${busData.vehicle_no} already exists`);
+        if (existingVehicle.is_active) {
+          throw new Error(`Vehicle number ${busData.vehicle_no} already exists and is active`);
+        } else {
+          // If vehicle number matches but bus number is different, we can't reactivate
+          // because bus_number is also unique. User must use different vehicle number.
+          if (existingVehicle.bus_number !== busData.bus_number) {
+            throw new Error(`Vehicle number ${busData.vehicle_no} already exists (inactive) with bus number ${existingVehicle.bus_number}. Please use a different vehicle number.`);
+          }
+          // If both bus_number and vehicle_no match, the bus will be reactivated above
+        }
       }
 
       // Validate driver assignment if provided
@@ -262,8 +286,9 @@ export class BusDatabaseService {
           model: busData.model,
           year: busData.year,
           bus_image_url: busData.bus_image_url,
-          assigned_driver_profile_id: busData.assigned_driver_profile_id === '' ? null : busData.assigned_driver_profile_id,
-          route_id: busData.route_id === '' ? null : busData.route_id,
+          // PRODUCTION FIX: Handle both null and empty string properly
+          assigned_driver_profile_id: (busData.assigned_driver_profile_id && busData.assigned_driver_profile_id !== '') ? busData.assigned_driver_profile_id : null,
+          route_id: (busData.route_id && busData.route_id !== '') ? busData.route_id : null,
           is_active: busData.is_active !== false,
           assignment_status: (busData.assigned_driver_profile_id && busData.route_id) ? 'active' : 'unassigned',
           assignment_notes: (busData.assigned_driver_profile_id && busData.route_id) ? 'Assignment created via bus management' : null,

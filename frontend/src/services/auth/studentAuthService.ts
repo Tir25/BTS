@@ -13,6 +13,10 @@ import { tokenStorage } from './tokenStorage';
 import { sessionHelpers } from './sessionHelpers';
 import { profileHelpers } from './profileHelpers';
 
+const normalizeRole = (value: unknown): 'student' | 'driver' | 'admin' => {
+  return value === 'driver' || value === 'admin' ? value : 'student';
+};
+
 export interface StudentAuthState {
   user: User | null;
   session: Session | null;
@@ -154,7 +158,7 @@ class StudentAuthService {
         this.currentProfile = {
           id: userId,
           email: this.currentUser.email || '',
-          role: (this.currentUser.user_metadata?.role as string) || 'student',
+          role: normalizeRole(this.currentUser.user_metadata?.role),
           full_name: this.currentUser.user_metadata?.full_name || this.currentUser.email?.split('@')[0] || 'Student',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -271,7 +275,7 @@ class StudentAuthService {
             aud: 'authenticated',
             role: 'authenticated',
             email_confirmed_at: user.email_verified ? new Date().toISOString() : null,
-            phone: null,
+            phone: user.phone ?? '',
             confirmed_at: user.email_verified ? new Date().toISOString() : null,
             last_sign_in_at: new Date().toISOString(),
             app_metadata: {},
@@ -300,7 +304,7 @@ class StudentAuthService {
         this.currentProfile = {
           id: user.id,
           email: user.email,
-          role: user.role as 'student',
+          role: normalizeRole(user.role),
           full_name: user.full_name,
           is_active: user.is_active,
           email_verified: user.email_verified,
@@ -314,9 +318,17 @@ class StudentAuthService {
         this.authStateChangeListener();
       }
 
+      const currentProfile = this.currentProfile;
+      if (!currentProfile) {
+        return {
+          success: false,
+          error: 'Profile not available after login',
+        };
+      }
+
       return {
         success: true,
-        user: this.currentProfile,
+        user: currentProfile,
       };
     } catch (error) {
       logger.error('❌ Student sign in error:', 'student-auth', { error: String(error) });

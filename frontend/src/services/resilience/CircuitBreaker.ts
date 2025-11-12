@@ -148,10 +148,10 @@ class CircuitBreaker {
       metrics: {
         state: metrics.currentState,
         successRate: metrics.totalRequests > 0
-            ? (
+            ? `${(
                 (metrics.successfulRequests / metrics.totalRequests) *
                 100
-              ).toFixed(2) + '%'
+              ).toFixed(2)  }%`
             : '0%',
         failureCount: metrics.failureCount,
         totalRequests: metrics.totalRequests

@@ -4,6 +4,7 @@
  */
 
 // Re-export error types and creators
+import type { AppError } from './errorHandler/errorTypes';
 export type { AppError } from './errorHandler/errorTypes';
 export { CustomError, createNetworkError, createValidationError, createAuthenticationError, createAuthorizationError, createNotFoundError, createConflictError, createRateLimitError, createServerError, createServiceUnavailableError } from './errorHandler/errorTypes';
 

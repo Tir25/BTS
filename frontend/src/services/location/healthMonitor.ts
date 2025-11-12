@@ -35,8 +35,8 @@ export class HealthMonitor {
       // Alert if no updates for extended period (2 minutes)
       if (timeSinceLastUpdate > this.HEALTH_ALERT_THRESHOLD_MS) {
         logger.error('🚨 HEALTH ALERT: No location updates for extended period', 'LocationService', {
-          timeSinceLastUpdate: Math.round(timeSinceLastUpdate / 1000) + 's',
-          trackingDuration: Math.round(trackingDuration / 1000 / 60) + ' minutes',
+          timeSinceLastUpdate: `${Math.round(timeSinceLastUpdate / 1000)  }s`,
+          trackingDuration: `${Math.round(trackingDuration / 1000 / 60)  } minutes`,
           lastUpdateTime: new Date(getLastUpdateTime()).toISOString(),
           action: 'Attempting recovery...',
         });
@@ -48,8 +48,8 @@ export class HealthMonitor {
         if (trackingDuration > 0 && Math.floor(trackingDuration / (5 * 60 * 1000)) > 0 && 
             Math.floor(trackingDuration / (5 * 60 * 1000)) % 1 === 0) {
           logger.info('✅ Health check: Location updates active', 'LocationService', {
-            trackingDuration: Math.round(trackingDuration / 1000 / 60) + ' minutes',
-            timeSinceLastUpdate: Math.round(timeSinceLastUpdate / 1000) + 's',
+            trackingDuration: `${Math.round(trackingDuration / 1000 / 60)  } minutes`,
+            timeSinceLastUpdate: `${Math.round(timeSinceLastUpdate / 1000)  }s`,
             lastSuccessfulUpdate: new Date(getLastUpdateTime()).toISOString(),
           });
         }
@@ -57,8 +57,8 @@ export class HealthMonitor {
     }, this.HEALTH_CHECK_INTERVAL_MS);
 
     logger.info('✅ Long-term health monitoring started', 'LocationService', {
-      checkInterval: this.HEALTH_CHECK_INTERVAL_MS / 1000 + 's',
-      alertThreshold: this.HEALTH_ALERT_THRESHOLD_MS / 1000 + 's',
+      checkInterval: `${this.HEALTH_CHECK_INTERVAL_MS / 1000  }s`,
+      alertThreshold: `${this.HEALTH_ALERT_THRESHOLD_MS / 1000  }s`,
     });
   }
 

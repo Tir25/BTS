@@ -1,8 +1,7 @@
-/// <reference types="react" />
-/// <reference types="react-dom" />
-
 // Ensure React JSX types are available
 import React from 'react';
+import type {} from 'react';
+import type {} from 'react-dom';
 
 declare global {
   namespace JSX {

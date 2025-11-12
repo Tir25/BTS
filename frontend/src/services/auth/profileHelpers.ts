@@ -94,6 +94,7 @@ export class ProfileHelpers {
             timeout: timeoutConfig.api.default,
             retryOnFailure: true,
             maxRetries: 3,
+            fallbackData: null, // Allow fallback to temporary profile
           }
         );
 
@@ -109,7 +110,7 @@ export class ProfileHelpers {
       const userProfile: UserProfile = {
         id: profile.id,
         email: currentUser?.email || '',
-        role: role, // Use determined role instead of database role
+        role, // Use determined role instead of database role
         full_name: profile.full_name,
         first_name: profile.full_name?.split(' ')[0] || '',
         last_name: profile.full_name?.split(' ').slice(1).join(' ') || '',
@@ -130,7 +131,9 @@ export class ProfileHelpers {
       return userProfile;
       }
 
-      // Regular single-role user handling
+      // PRODUCTION FIX: Regular single-role user handling with faster timeout for first-time users
+      // Use shorter timeout (5s) for profile queries to fail fast if profile doesn't exist
+      // This prevents getting stuck at 20% during first-time login
       const result = await resilientQuery<{
         id: string;
         full_name: string;
@@ -147,15 +150,33 @@ export class ProfileHelpers {
           return queryResult;
         },
         {
-          timeout: timeoutConfig.api.default,
+          timeout: timeoutConfig.api.shortRunning, // 5 seconds instead of 15 - fail fast for first-time users
           retryOnFailure: true,
-          maxRetries: 3,
+          maxRetries: 1, // Reduced from 3 to 1 - don't retry too many times
+          fallbackData: null, // Allow fallback to temporary profile
         }
       );
 
+      // PRODUCTION FIX: Check for "not found" errors immediately - don't retry
+      // If profile doesn't exist (PGRST116), immediately create temporary profile
+      const errorCode = (result.error as any)?.code;
+      const errorMessage = result.error?.message || '';
+      const isNotFoundError = errorCode === 'PGRST116' || 
+                             errorMessage.includes('No rows') ||
+                             errorMessage.includes('not found');
+      
+      if (isNotFoundError) {
+        logger.info('ℹ️ User profile not found in database (first-time user), creating temporary profile', 'auth', {
+          userId,
+          errorCode,
+        });
+        return await this.createTemporaryProfile(userId, currentUser);
+      }
+
       if (result.error || !result.data) {
         logger.warn('⚠️ Error loading user profile, using temporary profile', 'auth', {
-          error: result.error?.message || 'No data returned',
+          error: errorMessage || 'No data returned',
+          errorCode,
           retries: result.retries || 0,
         });
         return await this.createTemporaryProfile(userId, currentUser);
@@ -163,21 +184,35 @@ export class ProfileHelpers {
 
       const profile = result.data;
 
-      // Check if this is a known admin user - prioritize admin email over database role
-      const isAdmin = this.isAdminEmail(currentUser?.email);
-      const role: 'admin' | 'driver' | 'student' = isAdmin ? 'admin' : (profile.role as 'admin' | 'driver' | 'student');
-
-      logger.debug('User profile loaded', 'auth', {
-        email: currentUser?.email,
-        databaseRole: profile.role,
-        adminCheck: isAdmin,
-        finalRole: role,
-      });
+      // PRODUCTION FIX: Prioritize database role over admin email check
+      // Only use admin email check as a fallback if database role is missing/undefined
+      // This ensures drivers explicitly set in the database are not overridden
+      let role: 'admin' | 'driver' | 'student';
+      
+      if (profile.role && (profile.role === 'admin' || profile.role === 'driver' || profile.role === 'student')) {
+        // Database has an explicit role - use it (trust the database)
+        role = profile.role as 'admin' | 'driver' | 'student';
+        logger.debug('✅ Using database role', 'auth', {
+          email: currentUser?.email,
+          databaseRole: profile.role,
+          finalRole: role,
+        });
+      } else {
+        // Database role is missing or invalid - fallback to admin email check
+        const isAdmin = this.isAdminEmail(currentUser?.email);
+        role = isAdmin ? 'admin' : 'student';
+        logger.debug('⚠️ Database role missing, using admin email check fallback', 'auth', {
+          email: currentUser?.email,
+          databaseRole: profile.role,
+          adminCheck: isAdmin,
+          finalRole: role,
+        });
+      }
 
       const userProfile: UserProfile = {
         id: profile.id,
         email: currentUser?.email || '',
-        role: role,
+        role,
         full_name: profile.full_name,
         first_name: profile.full_name?.split(' ')[0] || '',
         last_name: profile.full_name?.split(' ').slice(1).join(' ') || '',

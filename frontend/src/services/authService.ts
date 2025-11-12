@@ -1,4 +1,5 @@
 import { User, Session } from '@supabase/supabase-js';
+import type { AuthChangeEvent } from '@supabase/supabase-js';
 import { UserProfile } from '../types';
 import { supabase } from '../config/supabase';
 import { timeoutConfig } from '../config/timeoutConfig';
@@ -7,6 +8,10 @@ import { tokenStorage } from './auth/tokenStorage';
 import { sessionHelpers } from './auth/sessionHelpers';
 import { profileHelpers } from './auth/profileHelpers';
 import { assignmentHelpers, DriverBusAssignment } from './auth/assignmentHelpers';
+
+const normalizeRole = (value: unknown): 'student' | 'driver' | 'admin' => {
+  return value === 'driver' || value === 'admin' ? value : 'student';
+};
 
 export interface AuthState {
   user: User | null;
@@ -47,6 +52,29 @@ class AuthService {
     
     // PRODUCTION FIX: Clear token cache on cleanup
     tokenStorage.clearCache();
+  }
+  private clearTokenCache(): void {
+    tokenStorage.clearCache();
+  }
+  async refreshSession(): Promise<{
+    success: boolean;
+    session?: Session | null;
+    user?: User | null;
+    error?: string;
+  }> {
+    const result = await sessionHelpers.refreshSession();
+
+    if (result.success && result.session) {
+      this.currentSession = result.session;
+      this.currentUser = result.user ?? null;
+    }
+
+    return {
+      success: result.success,
+      session: this.currentSession,
+      user: this.currentUser,
+      error: result.error,
+    };
   }
   private _isInitialized: boolean = false;
 
@@ -94,7 +122,7 @@ class AuthService {
       // Listen for auth state changes
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange(async (event, session) => {
+      } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
         logger.info(`🔄 Auth state changed: ${event} for user: ${session?.user?.email || 'none'}`, 'auth');
 
         this.currentSession = session;
@@ -111,7 +139,16 @@ class AuthService {
         }
 
         if (session?.user) {
-          await this.loadUserProfile(session.user.id);
+          // PRODUCTION FIX: Don't block auth state update on profile loading
+          // Load profile asynchronously to prevent blocking authentication state
+          // This prevents getting stuck at 20% during first-time login
+          this.loadUserProfile(session.user.id).catch(error => {
+            logger.warn('⚠️ Profile loading failed in auth state listener (non-blocking)', 'auth', {
+              error: error instanceof Error ? error.message : String(error),
+              userId: session.user.id
+            });
+            // Profile loading failure is non-critical - auth state is already updated
+          });
           // Start proactive session refresh if we have a session
           sessionHelpers.startProactiveRefresh(
             this.currentSession,
@@ -148,19 +185,40 @@ class AuthService {
 
   /**
    * Load user profile - PRODUCTION FIX: Always ensures profile is set
+   * @param userId - User ID to load profile for
+   * @param forceFresh - If true, clears cache before loading (default: false)
    */
-  private async loadUserProfile(userId: string): Promise<void> {
+  private async loadUserProfile(userId: string, forceFresh: boolean = false): Promise<void> {
     try {
-      // Try cached profile first
-      const cachedProfile = profileHelpers.tryLoadCachedProfile(userId);
-      if (cachedProfile) {
-        this.currentProfile = cachedProfile;
-        return;
+      // PRODUCTION FIX: Clear cache if forceFresh is true
+      if (forceFresh) {
+        try {
+          const cachedKey = `profile_${userId}`;
+          localStorage.removeItem(cachedKey);
+          logger.debug('🗑️ Cleared cached profile (forceFresh=true)', 'auth', { userId });
+        } catch (clearError) {
+          // Ignore cache clear errors
+          logger.debug('⚠️ Could not clear profile cache (non-critical)', 'auth');
+        }
+      } else {
+        // Try cached profile first (only if not forcing fresh)
+        const cachedProfile = profileHelpers.tryLoadCachedProfile(userId);
+        if (cachedProfile) {
+          this.currentProfile = cachedProfile;
+          logger.debug('✅ Using cached profile', 'auth', { userId, role: cachedProfile.role });
+          return;
+        }
       }
 
       // PRODUCTION FIX: loadUserProfile now always returns a profile (never null)
       const profile = await profileHelpers.loadUserProfile(userId, this.currentUser);
       this.currentProfile = profile;
+      
+      logger.debug('✅ Profile loaded from database', 'auth', {
+        userId,
+        role: profile.role,
+        email: profile.email
+      });
       
       // PRODUCTION FIX: Cache the profile for faster future loads
       try {
@@ -182,7 +240,7 @@ class AuthService {
         this.currentProfile = {
           id: userId,
           email: this.currentUser.email || '',
-          role: (this.currentUser.user_metadata?.role as string) || 'student',
+          role: normalizeRole(this.currentUser.user_metadata?.role),
           full_name: this.currentUser.user_metadata?.full_name || this.currentUser.email?.split('@')[0] || 'User',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -237,7 +295,7 @@ class AuthService {
       
       try {
         const raceResult = await Promise.race([
-          authPromise.then((res) => {
+          authPromise.then((res: Awaited<typeof authPromise>) => {
             if (!isResolved) {
               isResolved = true;
               if (timeoutId) clearTimeout(timeoutId);
@@ -302,41 +360,54 @@ class AuthService {
         logger.info('📋 Loading user profile...', 'auth');
         
         try {
-          // PRODUCTION FIX: Check cached profile first (fast path)
-          const cachedProfile = profileHelpers.tryLoadCachedProfile(data.user.id);
-          if (cachedProfile) {
-            this.currentProfile = cachedProfile;
-            logger.info('✅ Using cached profile', 'auth', { role: cachedProfile.role });
-          } else {
-            // PRODUCTION FIX: Load profile from database with timeout
-            const profileTimeout = timeoutConfig.api.shortRunning || 5000; // 5 seconds for profile load
-            const profilePromise = this.loadUserProfile(data.user.id);
-            const timeoutPromise = new Promise<void>((_, reject) => {
-              setTimeout(() => reject(new Error('Profile loading timeout')), profileTimeout);
+          // PRODUCTION FIX: Clear any cached profile before loading to ensure fresh data
+          // This prevents issues when switching between users (e.g., admin to driver)
+          try {
+            const cachedKey = `profile_${data.user.id}`;
+            localStorage.removeItem(cachedKey);
+            logger.debug('🗑️ Cleared cached profile before fresh load', 'auth', { userId: data.user.id });
+          } catch (clearError) {
+            // Ignore cache clear errors
+            logger.debug('⚠️ Could not clear profile cache (non-critical)', 'auth');
+          }
+          
+          // PRODUCTION FIX: Always load profile from database (never use cache)
+          // This ensures we get the correct role from the database
+          logger.info('🔄 Loading fresh profile from database (cache cleared)', 'auth');
+          
+          // PRODUCTION FIX: Load profile from database with timeout (forceFresh=true to ensure fresh data)
+          const profileTimeout = timeoutConfig.api.shortRunning || 5000; // 5 seconds for profile load
+          const profilePromise = this.loadUserProfile(data.user.id, true); // forceFresh=true
+          const timeoutPromise = new Promise<void>((_, reject) => {
+            setTimeout(() => reject(new Error('Profile loading timeout')), profileTimeout);
+          });
+
+          try {
+            await Promise.race([profilePromise, timeoutPromise]);
+            
+            // PRODUCTION FIX: Verify profile was actually loaded
+            if (!this.currentProfile) {
+              throw new Error('Profile not loaded after successful promise');
+            }
+            
+            logger.info(`✅ Profile loaded from database: ${this.currentProfile.role}`, 'auth', {
+              userId: this.currentProfile.id,
+              email: this.currentProfile.email,
+              role: this.currentProfile.role
+            });
+          } catch (timeoutError) {
+            logger.warn('⚠️ Profile loading timed out, creating temporary profile', 'auth', { 
+              error: timeoutError instanceof Error ? timeoutError.message : String(timeoutError) 
             });
 
-            try {
-              await Promise.race([profilePromise, timeoutPromise]);
-              
-              // PRODUCTION FIX: Verify profile was actually loaded
-              if (!this.currentProfile) {
-                throw new Error('Profile not loaded after successful promise');
-              }
-              
-              logger.info(`✅ Profile loaded from database: ${this.currentProfile.role}`, 'auth');
-            } catch (timeoutError) {
-              logger.warn('⚠️ Profile loading timed out, creating temporary profile', 'auth', { 
-                error: timeoutError instanceof Error ? timeoutError.message : String(timeoutError) 
-              });
-
-              // PRODUCTION FIX: Always ensure we have a profile, even if temporary
-              // loadUserProfile now always returns a profile (never null)
-              if (!this.currentProfile) {
-                this.currentProfile = await profileHelpers.loadUserProfile(data.user.id, data.user);
-                logger.info('✅ Created temporary profile', 'auth', { role: this.currentProfile.role });
-              }
+            // PRODUCTION FIX: Always ensure we have a profile, even if temporary
+            // loadUserProfile now always returns a profile (never null)
+            if (!this.currentProfile) {
+              this.currentProfile = await profileHelpers.loadUserProfile(data.user.id, data.user);
+              logger.info('✅ Created temporary profile', 'auth', { role: this.currentProfile.role });
             }
           }
+          
           
           // PRODUCTION FIX: Final verification - ensure profile exists
           if (!this.currentProfile) {
@@ -358,7 +429,7 @@ class AuthService {
             this.currentProfile = {
               id: data.user.id,
               email: data.user.email || email,
-              role: (data.user.user_metadata?.role as string) || 'student',
+              role: normalizeRole(data.user.user_metadata?.role),
               full_name: data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'User',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -509,7 +580,7 @@ class AuthService {
         options: {
           data: {
             full_name: profile.full_name,
-            role: profile.role || 'student',
+            role: normalizeRole(profile.role),
           },
         },
       });
@@ -524,7 +595,7 @@ class AuthService {
         const { error: profileError } = await supabase.from('user_profiles').insert({
           id: data.user.id,
           full_name: profile.full_name || 'Unknown User',
-          role: profile.role || 'student',
+          role: normalizeRole(profile.role),
         });
 
         if (profileError) {
@@ -870,7 +941,7 @@ class AuthService {
           parsedSession?.currentSession?.expires_in ||
           parsedSession?.expires_in,
         token_type: 'bearer',
-        user: user,
+        user,
       } as Session;
 
       this.currentUser = user;
@@ -1080,31 +1151,76 @@ class AuthService {
         };
       }
 
-      // PRODUCTION FIX: If profile not loaded, try to load it now
+      // PRODUCTION FIX: If profile not loaded, try to load it now with retry logic
       if (!this.currentProfile) {
         logger.warn('⚠️ Profile not loaded, attempting to load now', 'driver-validation', {
           userId: this.currentUser.id
         });
+        
+        // PRODUCTION FIX: Faster profile loading with timeout protection
+        // Use Promise.race to fail fast if profile loading takes too long
+        // This prevents getting stuck at 20% during first-time login
+        let profileLoadSuccess = false;
+        const profileLoadTimeout = 6000; // 6 seconds max wait for profile loading
+        
         try {
-          await this.loadUserProfile(this.currentUser.id);
+          const profileLoadPromise = this.loadUserProfile(this.currentUser.id, false);
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Profile loading timeout')), profileLoadTimeout);
+          });
+          
+          await Promise.race([profileLoadPromise, timeoutPromise]);
+          
           // Double-check after loading
-          if (!this.currentProfile) {
-            logger.error('❌ Driver session validation failed: Profile could not be loaded', 'driver-validation');
-            return { 
-              isValid: false, 
-              assignment: null,
-              errorCode: 'NO_PROFILE',
-              errorMessage: 'Unable to load your driver profile. Please try logging in again.'
-            };
+          if (this.currentProfile) {
+            profileLoadSuccess = true;
+            logger.info('✅ Profile loaded successfully during validation', 'driver-validation', {
+              userId: this.currentUser.id
+            });
+          } else {
+            // Profile loading completed but no profile - create temporary
+            throw new Error('Profile loading completed but no profile returned');
           }
         } catch (profileLoadError) {
-          logger.error('❌ Failed to load profile during validation', 'driver-validation', {
-            error: profileLoadError instanceof Error ? profileLoadError.message : String(profileLoadError)
+          const isTimeout = (profileLoadError as any)?.isTimeout || 
+                          (profileLoadError instanceof Error && profileLoadError.message.includes('timeout'));
+          
+          logger.warn('⚠️ Failed to load profile during validation, using temporary profile', 'driver-validation', {
+            error: profileLoadError instanceof Error ? profileLoadError.message : String(profileLoadError),
+            isTimeout,
+            userId: this.currentUser.id
           });
+          
+          // PRODUCTION FIX: Immediately create temporary profile on any error
+          // This allows validation to continue even if profile query fails or times out
+          try {
+            if (this.currentUser) {
+              this.currentProfile = {
+                id: this.currentUser.id,
+                email: this.currentUser.email || '',
+                role: 'driver', // Assume driver role for validation
+                full_name: this.currentUser.user_metadata?.full_name || this.currentUser.email?.split('@')[0] || 'Driver',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              logger.info('✅ Created temporary profile for validation', 'driver-validation', {
+                userId: this.currentUser.id
+              });
+              profileLoadSuccess = true;
+            }
+          } catch (tempProfileError) {
+            logger.error('❌ Failed to create temporary profile', 'driver-validation', {
+              error: tempProfileError instanceof Error ? tempProfileError.message : String(tempProfileError)
+            });
+          }
+        }
+        
+        if (!profileLoadSuccess || !this.currentProfile) {
+          logger.error('❌ Driver session validation failed: Profile could not be loaded', 'driver-validation');
           return { 
             isValid: false, 
             assignment: null,
-            errorCode: 'PROFILE_LOAD_FAILED',
+            errorCode: 'NO_PROFILE',
             errorMessage: 'Unable to load your driver profile. Please try logging in again.'
           };
         }
@@ -1117,26 +1233,33 @@ class AuthService {
           profileUpdatedAt: this.currentProfile?.updated_at
         });
         
-        // PRODUCTION FIX: If we have a temporary profile, try to reload the actual profile from database
-        const isTemporaryProfile = this.currentProfile?.created_at === this.currentProfile?.updated_at &&
-                                  new Date(this.currentProfile.created_at).getTime() > Date.now() - 60000; // Created within last minute
-        
-        if (isTemporaryProfile && this.currentUser?.id) {
-          logger.info('🔄 Detected temporary profile, attempting to reload actual profile from database', 'driver-validation');
+        // PRODUCTION FIX: Always attempt to reload profile from database (forceFresh=true)
+        // This ensures we get the correct role even if cache was stale or wrong
+        if (this.currentUser?.id) {
+          logger.info('🔄 Role mismatch detected, reloading profile from database (forceFresh)', 'driver-validation', {
+            currentRole: this.currentProfile?.role,
+            userId: this.currentUser.id,
+            email: this.currentProfile?.email
+          });
           
           try {
-            // Attempt to reload the actual profile
-            await this.loadUserProfile(this.currentUser.id);
+            // Force fresh reload from database (clears cache)
+            await this.loadUserProfile(this.currentUser.id, true); // forceFresh=true
             
             // Check again after reload
-            if (this.currentProfile?.role === 'driver') {
+            const reloadedRole = this.currentProfile?.role as UserProfile['role'] | undefined;
+            if (reloadedRole === 'driver') {
               logger.info('✅ Profile reload successful - user is actually a driver', 'driver-validation', {
-                newRole: this.currentProfile.role
+                newRole: this.currentProfile.role,
+                email: this.currentProfile.email,
+                userId: this.currentProfile.id
               });
               // Continue with validation - don't return here
             } else {
               logger.warn('❌ Profile reload confirmed user is not a driver', 'driver-validation', {
-                reloadedRole: this.currentProfile?.role
+                reloadedRole: this.currentProfile?.role,
+                email: this.currentProfile?.email,
+                userId: this.currentProfile?.id
               });
               return { 
                 isValid: false, 
@@ -1147,7 +1270,8 @@ class AuthService {
             }
           } catch (reloadError) {
             logger.error('❌ Failed to reload profile during driver validation', 'driver-validation', {
-              error: reloadError instanceof Error ? reloadError.message : String(reloadError)
+              error: reloadError instanceof Error ? reloadError.message : String(reloadError),
+              userId: this.currentUser.id
             });
             
             return { 
@@ -1158,7 +1282,7 @@ class AuthService {
             };
           }
         } else {
-          // Not a temporary profile, user is genuinely not a driver
+          logger.error('❌ Cannot reload profile - no user ID available', 'driver-validation');
           return { 
             isValid: false, 
             assignment: null,

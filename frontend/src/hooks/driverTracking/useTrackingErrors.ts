@@ -69,7 +69,7 @@ export function useTrackingErrors({
         retryCount: retryCountRef.current,
         retryDelay,
         isInGracePeriod,
-        timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's'
+        timeSinceTrackingStart: `${Math.round(timeSinceTrackingStart / 1000)  }s`
       });
       
       // Clear existing retry timeout
@@ -93,8 +93,8 @@ export function useTrackingErrors({
         logger.debug('GPS error during grace period (GPS acquiring signal)', 'useTrackingErrors', {
           code: error.code,
           message: error.message,
-          timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's',
-          gracePeriodRemaining: Math.round((MOBILE_GPS_GRACE_PERIOD_MS - timeSinceTrackingStart) / 1000) + 's'
+          timeSinceTrackingStart: `${Math.round(timeSinceTrackingStart / 1000)  }s`,
+          gracePeriodRemaining: `${Math.round((MOBILE_GPS_GRACE_PERIOD_MS - timeSinceTrackingStart) / 1000)  }s`
         });
         return; // Don't set error during grace period
       }

@@ -44,24 +44,37 @@ const DriverLogin: React.FC = () => {
   // PRODUCTION FIX: Auto-redirect when authentication completes
   // Previously waited for busAssignment; now redirect immediately after auth
   useEffect(() => {
-    // Only redirect if:
-    // 1. User is authenticated
-    // 2. Not currently loading auth step
-    // 3. Haven't already initiated navigation
-    if (isAuthenticated && !isLoading && !navigationRef.current) {
+    // PRODUCTION FIX: More aggressive redirect logic - redirect as soon as authenticated
+    // Don't wait for loading to clear, redirect immediately when authenticated
+    if (isAuthenticated && !navigationRef.current) {
       navigationRef.current = true;
-      logger.info('🔄 Auth complete, redirecting to driver dashboard (assignment will load there)', 'component', {
-        hasBusAssignment: !!busAssignment
+      logger.info('🔄 Auth complete, redirecting to driver dashboard', 'component', {
+        hasBusAssignment: !!busAssignment,
+        isLoading,
+        currentPath: window.location.pathname
       });
 
+      // Clear any existing timeout
       if (redirectTimeoutRef.current) {
         clearTimeout(redirectTimeoutRef.current);
       }
 
+      // PRODUCTION FIX: Use requestAnimationFrame for better state propagation
+      // This ensures React state updates are flushed before navigation
       redirectTimeoutRef.current = setTimeout(() => {
-        navigate('/driver-dashboard', { replace: true });
-        redirectTimeoutRef.current = null;
-      }, 150);
+        if (isAuthenticated && navigationRef.current) {
+          // Use double RAF to ensure all state updates are propagated
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+        if (isAuthenticated && navigationRef.current) {
+          logger.info('✅ Executing redirect to driver dashboard', 'component');
+          navigate('/driver-dashboard', { replace: true });
+          redirectTimeoutRef.current = null;
+        }
+            });
+          });
+        }
+      }, 50); // Reduced delay since we're using RAF
     }
 
     if (!isAuthenticated) {
@@ -148,15 +161,12 @@ const DriverLogin: React.FC = () => {
       if (!result.success) {
         logger.error('❌ Driver login failed:', 'component', { error: result.error });
         
-        // Process error through centralized error handler for better user messages
-        const appError = errorHandler.handleError(
-          new Error(result.error || 'Login failed'), 
-          'DriverLogin'
-        );
-        
-        // Get user-friendly error message
+        // PRODUCTION FIX: Use error message directly from backend response
+        // The backend already provides user-friendly error messages (e.g., "Invalid email or password")
+        // Translate it to ensure consistency, but preserve the specific message
+        const errorMessage = result.error || 'Login failed';
         const userFriendlyMessage = getUserFriendlyError(
-          appError.userMessage || appError.message,
+          errorMessage,
           'Login failed. Please check your credentials and try again.'
         );
         
@@ -165,10 +175,27 @@ const DriverLogin: React.FC = () => {
       }
 
       logger.info('✅ Driver login successful', 'component');
+
+      // PRODUCTION FIX: Use requestAnimationFrame for state propagation before redirect
+      // This ensures all state updates are flushed before navigation
+      navigationRef.current = true;
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+        redirectTimeoutRef.current = null;
+      }
       
-      // PRODUCTION FIX: Navigation is now handled by useEffect hook above
-      // which waits for bus assignment to be loaded before redirecting
-      // This ensures the dashboard has all required data when it mounts
+      // Use double RAF to ensure state is fully propagated
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (navigationRef.current) {
+            logger.info('✅ Executing immediate redirect to driver dashboard', 'component');
+      navigate('/driver-dashboard', { replace: true });
+          }
+        });
+      });
+      
+      // PRODUCTION FIX: Immediate navigation keeps the UX responsive even if background initialization runs longer.
+      // The useEffect hook remains as a fallback for scenarios where a session already exists on mount.
       
     } catch (error) {
       logger.error('❌ Login error:', 'component', { error });

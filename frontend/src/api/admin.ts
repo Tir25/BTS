@@ -113,7 +113,11 @@ class AdminApiService {
       }
 
       const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 15000);
+      // PRODUCTION FIX: Extended timeout for operations that may take longer (e.g., Supabase auth)
+      // Use 30 seconds for POST/PUT/DELETE operations, 15 seconds for GET
+      const isMutation = options.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method);
+      const timeoutDuration = isMutation ? 30000 : 15000;
+      timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
       // Normalize baseUrl to never have trailing slash
       const rawBaseUrl = API_BASE_URL || environment.api.baseUrl;
@@ -326,10 +330,90 @@ class AdminApiService {
       password: string;
     }
   ): Promise<ApiResponse<DriverData>> {
-    return this.makeRequest<DriverData>('/drivers', {
-      method: 'POST',
-      body: JSON.stringify(driverData),
-    });
+    // PRODUCTION FIX: Use custom timeout for driver creation (Supabase auth can be slow)
+    // Create a custom request with extended timeout
+    let timeoutId: NodeJS.Timeout | undefined;
+    
+    try {
+      const token = authService.getAccessToken();
+      if (!token) {
+        throw new Error('No access token available');
+      }
+
+      const controller = new AbortController();
+      // Extended timeout for driver creation (30 seconds instead of 15)
+      timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const rawBaseUrl = API_BASE_URL || environment.api.baseUrl;
+      const baseUrl = rawBaseUrl.replace(/\/+$/, '');
+      const fullUrl = `${baseUrl}/admin/drivers`;
+      
+      logger.info('🌐 Creating driver (extended timeout)', 'admin-api', { 
+        endpoint: '/drivers',
+        fullUrl,
+        method: 'POST'
+      });
+
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        body: JSON.stringify(driverData),
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const parseResult = await parseJsonResponse(response, null, '/drivers');
+      
+      if (!parseResult.success) {
+        throw new Error(parseResult.error || 'Failed to parse JSON response');
+      }
+      
+      const data = parseResult.data;
+      
+      if (timeoutId) clearTimeout(timeoutId);
+
+      // Handle 201 Created status code properly
+      if (response.status === 201 || response.ok) {
+        if (!data) {
+          throw new Error('Driver creation succeeded but response payload was empty.');
+        }
+        logger.info('✅ Driver created successfully', 'admin-api', { 
+          driverId: (data as any)?.data?.id,
+          status: response.status
+        });
+        return data as ApiResponse<DriverData>;
+      }
+
+      // Handle error status codes
+      if (response.status >= 500) {
+        throw new Error('Server error. Please try again later.');
+      } else if (response.status === 409) {
+        throw new Error((data as any)?.message || 'Driver already exists');
+      } else if (response.status === 400) {
+        throw new Error((data as any)?.message || (data as any)?.error || 'Invalid request');
+      } else {
+        throw new Error((data as any)?.message || (data as any)?.error || 'Request failed');
+      }
+    } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      // Check if it's a timeout error
+      if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout'))) {
+        logger.error('❌ Driver creation timed out', 'admin-api', { error });
+        return {
+          success: false,
+          error: 'Driver creation is taking longer than expected. The driver may have been created. Please refresh the page to verify.',
+        };
+      }
+      
+      logger.error(`❌ API request failed for /drivers:`, 'component', { error });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Request failed',
+      };
+    }
   }
 
   async updateDriver(

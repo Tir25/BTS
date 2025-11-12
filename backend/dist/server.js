@@ -115,8 +115,13 @@ app.use(monitoring_1.memoryMonitoring);
 app.use(monitoring_1.performanceMonitoring);
 app.use(corsEnhanced_1.corsMiddleware);
 app.use(cors_1.handlePreflight);
-if (process.env.NODE_ENV === 'production') {
+const rateLimitingEnabled = process.env.DISABLE_RATE_LIMIT?.toLowerCase() !== 'true' &&
+    environment_1.default.security.enableRateLimit;
+if (process.env.NODE_ENV === 'production' && rateLimitingEnabled) {
     app.use(rateLimit_1.rateLimitMiddleware);
+}
+else if (!rateLimitingEnabled) {
+    logger_1.logger.info('🚫 Rate limiting disabled via configuration', 'server');
 }
 app.use(express_1.default.json({
     limit: '10mb',
@@ -138,7 +143,9 @@ app.use(express_1.default.json({
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestId_1.addRequestIdToError);
 app.use('/health', health_1.default);
-app.use('/auth', process.env.NODE_ENV === 'production' ? rateLimit_1.authRateLimit : (req, _res, next) => next(), auth_1.default);
+app.use('/auth', process.env.NODE_ENV === 'production' && rateLimitingEnabled
+    ? rateLimit_1.authRateLimit
+    : (req, _res, next) => next(), auth_1.default);
 app.use('/admin', securityEnhanced_1.fileUploadValidator, admin_1.default);
 app.use('/assignments', productionAssignments_1.default);
 app.use('/production-assignments', productionAssignments_1.default);

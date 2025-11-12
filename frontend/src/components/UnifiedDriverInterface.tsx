@@ -164,8 +164,28 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
     enableInternationalization: false,
   }), []);
 
-  // Coordinate loading phases via hook
-  useDriverInitialization(mode, driverState as any, loadingState as any);
+  // PRODUCTION FIX: Create merged state for phase detection that includes both context and store
+  // This prevents getting stuck when context has state but store hasn't synced yet
+  const mergedDriverState = useMemo(() => ({
+    ...driverState,
+    // Override with context state if available (context is source of truth)
+    isAuthenticated: isAuthenticated || driverState.isAuthenticated,
+    busAssignment: busAssignment || driverState.busAssignment,
+    isWebSocketConnected: isWebSocketConnected || driverState.isWebSocketConnected,
+    isWebSocketAuthenticated: isWebSocketAuthenticated || driverState.isWebSocketAuthenticated,
+  }), [
+    driverState.isAuthenticated,
+    driverState.busAssignment,
+    driverState.isWebSocketConnected,
+    driverState.isWebSocketAuthenticated,
+    isAuthenticated,
+    busAssignment,
+    isWebSocketConnected,
+    isWebSocketAuthenticated,
+  ]);
+  
+  // Coordinate loading phases via hook with merged state
+  useDriverInitialization(mode, mergedDriverState as any, loadingState as any);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -186,9 +206,23 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
     return <DriverLogin />;
   }
 
-  // Unified loading state with progress indication
-  // Only show loading if we're actually loading OR if we don't have the essential data
-  if ((loadingState.state.isLoading && (!isAuthenticated || !busAssignment)) || !isAuthenticated || !busAssignment) {
+  // PRODUCTION FIX: Improved loading condition - check both context and store state
+  // This prevents getting stuck when context has state but store hasn't synced yet
+  // Show loading if:
+  // 1. Not authenticated in context OR store (either can be true)
+  // 2. No bus assignment in context OR store (either can be true)
+  // 3. Loading state is active AND we don't have essential data
+  // CRITICAL: Use OR logic - if context has auth, don't wait for store
+  const isAuthenticatedAnywhere = isAuthenticated || driverState.isAuthenticated;
+  const hasBusAssignmentAnywhere = !!busAssignment || !!driverState.busAssignment;
+  
+  const shouldShowLoading = 
+    (!isAuthenticatedAnywhere) || 
+    (!hasBusAssignmentAnywhere) || 
+    (loadingState.state.isLoading && (!isAuthenticatedAnywhere || !hasBusAssignmentAnywhere)) ||
+    (driverState.isLoading && !isAuthenticatedAnywhere);
+
+  if (shouldShowLoading) {
     return (
       <DriverInterfaceLoading
         loadingState={loadingState.state}
@@ -273,7 +307,9 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
                 }}
                 onStopTracking={async () => {
                   const { apiService } = await import('../api');
-                  await apiService.stopTracking(busAssignment?.driver_id);
+                  if (busAssignment?.driver_id) {
+                    await apiService.stopTracking(busAssignment.driver_id);
+                  }
                   tracking.stopTracking();
                   await refreshStops();
                 }}

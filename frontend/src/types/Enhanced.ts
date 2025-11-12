@@ -198,6 +198,7 @@ export interface HealthResponse {
   timestamp: string;
   version: string;
   uptime: number;
+  error?: string;
   services: {
     database: 'connected' | 'disconnected';
     redis: 'connected' | 'disconnected';

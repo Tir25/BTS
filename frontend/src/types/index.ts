@@ -23,6 +23,8 @@ export interface UserProfile {
   last_name?: string;
   role: 'student' | 'driver' | 'admin';
   driver_id?: string;
+  is_active?: boolean;
+  email_verified?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -112,16 +114,17 @@ export interface Bus {
 export interface BusData {
   id?: string;
   code: string;
-  name?: string;
+  name?: string | null;
   bus_number: string;
   capacity: number;
-  model?: string;
-  year?: number;
-  bus_image_url?: string;
-  photo_url?: string;
-  assigned_driver_profile_id?: string;
-  driver_id?: string;
-  route_id?: string;
+  model?: string | null;
+  year?: number | null;
+  bus_image_url?: string | null;
+  photo_url?: string | null;
+  vehicle_no?: string | null;
+  assigned_driver_profile_id?: string | null;
+  driver_id?: string | null;
+  route_id?: string | null;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -381,6 +384,7 @@ export interface HealthResponse {
   timestamp: string;
   uptime: number;
   environment: string;
+  error?: string;
   services: {
     database: {
       status: string;

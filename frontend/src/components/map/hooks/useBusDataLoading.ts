@@ -90,7 +90,7 @@ export function useBusDataLoading({
       isMounted = false;
     };
     // Only load once on mount - lastBusLocations will be empty initially, which is fine
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   return {

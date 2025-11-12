@@ -88,19 +88,21 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerMessage>) => {
 
   try {
     switch (type) {
-      case 'CALCULATE_SPEED':
+      case 'CALCULATE_SPEED': {
         const { lat1, lon1, lat2, lon2, timeDiffMs } = data;
         const speed = calculateSpeed(lat1, lon1, lat2, lon2, timeDiffMs);
         ctx.postMessage({ type: 'SPEED_CALCULATED', data: speed });
         break;
+      }
 
-      case 'CALCULATE_ETA':
+      case 'CALCULATE_ETA': {
         const { currentLocation, destination, averageSpeed } = data;
         const eta = calculateETA(currentLocation, destination, averageSpeed);
         ctx.postMessage({ type: 'ETA_CALCULATED', data: eta });
         break;
+      }
 
-      case 'CALCULATE_DISTANCE':
+      case 'CALCULATE_DISTANCE': {
         const { point1, point2 } = data;
         const distance = calculateDistance(
           point1.latitude,
@@ -110,6 +112,7 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerMessage>) => {
         );
         ctx.postMessage({ type: 'DISTANCE_CALCULATED', data: distance });
         break;
+      }
 
       default:
         ctx.postMessage({ type: 'ERROR', data: 'Unknown message type' });

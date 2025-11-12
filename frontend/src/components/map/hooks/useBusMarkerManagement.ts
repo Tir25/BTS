@@ -80,7 +80,7 @@ export function useBusMarkerManagement({
             bus = cachedBus;
             busIdAliases.current.set(location.busId, cacheKey);
             logger.info('🔍 ENHANCED DEBUG: Found bus in updateBusMarker cache using enhanced matching', 'useBusMarkerManagement', {
-              cacheKey: cacheKey,
+              cacheKey,
               incomingBusId: location.busId,
               matchType: exactMatch ? 'exact' : stringMatch ? 'string' : busNumberMatch ? 'busNumber' : 'partial'
             });
@@ -112,7 +112,7 @@ export function useBusMarkerManagement({
       
       bus = {
         busId: location.busId,
-        busNumber: location.busId.slice(0, 8) + '...',
+        busNumber: `${location.busId.slice(0, 8)  }...`,
         routeName: 'Unknown Route',
         driverName: 'Unknown Driver',
         driverId: (location as any).driverId || '',

@@ -6,6 +6,7 @@ import UnifiedDriverInterface from '../UnifiedDriverInterface';
 import { useDriverStore } from '../../stores/useDriverStore';
 import { useLocationStore } from '../../stores/useLocationStore';
 import { useConnectionStore } from '../../stores/useConnectionStore';
+import * as authServiceModule from '../../services/authService';
 
 // Mock all external dependencies
 vi.mock('../../utils/logger', () => ({
@@ -118,7 +119,7 @@ describe('Driver Dashboard End-to-End Tests', () => {
           },
         });
 
-      vi.mocked(require('../../services/authService').authService.validateDriverSession)
+      vi.mocked(authServiceModule.authService.validateDriverSession)
         .mockImplementation(mockValidateDriverSession);
 
       render(
@@ -554,7 +555,7 @@ describe('Driver Dashboard End-to-End Tests', () => {
     it('should complete sign out workflow', async () => {
       const mockLogout = vi.fn().mockResolvedValue({ success: true });
 
-      vi.mocked(require('../../services/authService').authService.logout)
+      vi.mocked(authServiceModule.authService.logout)
         .mockImplementation(mockLogout);
 
       render(

@@ -47,8 +47,8 @@ export function useWebSocketLocationSync({
         });
         
         unifiedWebSocketService.sendLocationUpdate({
-          driverId: driverId,
-          busId: busId,
+          driverId,
+          busId,
           latitude: lastLocation.latitude,
           longitude: lastLocation.longitude,
           timestamp: new Date(lastLocation.timestamp).toISOString(),
@@ -60,8 +60,8 @@ export function useWebSocketLocationSync({
         lastSuccessfulSendRef.current = Date.now();
         
         logger.info('✅ Location sent to WebSocket successfully', 'useWebSocketLocationSync', {
-          driverId: driverId,
-          busId: busId,
+          driverId,
+          busId,
           latitude: lastLocation.latitude,
           longitude: lastLocation.longitude,
         });
@@ -100,7 +100,7 @@ export function useWebSocketLocationSync({
         // Alert if no successful sends for 3 minutes (indicates WebSocket issue)
         if (timeSinceLastSend > 3 * 60 * 1000 && lastSuccessfulSendRef.current > 0) {
           logger.warn('⚠️ WebSocket health check: No successful location sends for extended period', 'useWebSocketLocationSync', {
-            timeSinceLastSend: Math.round(timeSinceLastSend / 1000) + 's',
+            timeSinceLastSend: `${Math.round(timeSinceLastSend / 1000)  }s`,
             isWebSocketConnected,
             isWebSocketAuthenticated,
             action: 'Checking WebSocket connection health...',

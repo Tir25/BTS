@@ -7,6 +7,7 @@ import { useDriverInterfaceStore } from '../../stores/useDriverInterfaceStore';
 import { useDriverStore } from '../../stores/useDriverStore';
 import { useLocationStore } from '../../stores/useLocationStore';
 import { useConnectionStore } from '../../stores/useConnectionStore';
+import * as authServiceModule from '../../services/authService';
 
 // Mock the logger
 vi.mock('../../utils/logger', () => ({
@@ -180,7 +181,7 @@ describe('UnifiedDriverInterface Integration Tests', () => {
         },
       });
 
-      vi.mocked(require('../../services/authService').authService.validateDriverSession)
+      vi.mocked(authServiceModule.authService.validateDriverSession)
         .mockImplementation(mockValidateDriverSession);
 
       render(
@@ -211,7 +212,7 @@ describe('UnifiedDriverInterface Integration Tests', () => {
         errorMessage: 'Invalid email or password',
       });
 
-      vi.mocked(require('../../services/authService').authService.validateDriverSession)
+      vi.mocked(authServiceModule.authService.validateDriverSession)
         .mockImplementation(mockValidateDriverSession);
 
       render(
@@ -529,7 +530,7 @@ describe('UnifiedDriverInterface Integration Tests', () => {
     it('should handle sign out correctly', async () => {
       const mockLogout = vi.fn().mockResolvedValue({ success: true });
 
-      vi.mocked(require('../../services/authService').authService.logout)
+      vi.mocked(authServiceModule.authService.logout)
         .mockImplementation(mockLogout);
 
       // Set up authenticated state

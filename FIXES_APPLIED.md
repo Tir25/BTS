@@ -94,3 +94,5 @@
 2. `backend/src/utils/migrationRunner.ts` - Source code (should match compiled code in dist/)
 3. `backend/src/migrations/` - Should only contain valid migration files (no rollback_* or fix_* files in processing)
 
+
+

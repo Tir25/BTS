@@ -214,7 +214,7 @@ export class TrackingManager {
       
       if (timeSinceLastUpdate > this.UPDATE_TIMEOUT_MS) {
         logger.warn('watchPosition appears inactive - restarting and enabling fallback', 'LocationService', {
-          timeSinceLastUpdate: Math.round(timeSinceLastUpdate / 1000) + 's',
+          timeSinceLastUpdate: `${Math.round(timeSinceLastUpdate / 1000)  }s`,
           lastUpdateTime: new Date(this.lastUpdateTime).toISOString(),
           deviceType: this.deviceInfo.deviceType,
         });
@@ -264,8 +264,8 @@ export class TrackingManager {
       
       if (isInGracePeriod) {
         logger.debug('Poll fallback: Skipping during GPS acquisition grace period', 'LocationService', {
-          timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's',
-          gracePeriod: Math.round(this.GPS_ACQUISITION_GRACE_PERIOD_MS / 1000) + 's',
+          timeSinceTrackingStart: `${Math.round(timeSinceTrackingStart / 1000)  }s`,
+          gracePeriod: `${Math.round(this.GPS_ACQUISITION_GRACE_PERIOD_MS / 1000)  }s`,
         });
         return;
       }
@@ -273,8 +273,8 @@ export class TrackingManager {
       // 2. Check if poll fallback grace period has passed (wait before starting poll fallback)
       if (this.lastSuccessfulPollTime === 0 && timeSinceTrackingStart < this.POLL_FALLBACK_GRACE_PERIOD_MS) {
         logger.debug('Poll fallback: Waiting for grace period before starting', 'LocationService', {
-          timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's',
-          gracePeriod: Math.round(this.POLL_FALLBACK_GRACE_PERIOD_MS / 1000) + 's',
+          timeSinceTrackingStart: `${Math.round(timeSinceTrackingStart / 1000)  }s`,
+          gracePeriod: `${Math.round(this.POLL_FALLBACK_GRACE_PERIOD_MS / 1000)  }s`,
         });
         return;
       }
@@ -284,7 +284,7 @@ export class TrackingManager {
         // watchPosition is working - reset poll fallback state and skip polling
         if (this.pollFallbackFailures > 0 || this.pollFallbackCircuitBreakerOpen) {
           logger.info('Poll fallback: watchPosition is working - resetting poll fallback state', 'LocationService', {
-            timeSinceLastUpdate: Math.round(timeSinceLastUpdate / 1000) + 's',
+            timeSinceLastUpdate: `${Math.round(timeSinceLastUpdate / 1000)  }s`,
             previousFailures: this.pollFallbackFailures,
           });
           this.pollFallbackFailures = 0;
@@ -299,8 +299,8 @@ export class TrackingManager {
       if (this.pollFallbackCircuitBreakerOpen) {
         if (timeSinceLastSuccessfulPoll < this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS) {
           logger.debug('Poll fallback: Circuit breaker open - skipping poll', 'LocationService', {
-            timeSinceLastSuccessfulPoll: Math.round(timeSinceLastSuccessfulPoll / 1000) + 's',
-            resetAfter: Math.round(this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS / 1000) + 's',
+            timeSinceLastSuccessfulPoll: `${Math.round(timeSinceLastSuccessfulPoll / 1000)  }s`,
+            resetAfter: `${Math.round(this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS / 1000)  }s`,
           });
           return;
         } else {
@@ -391,13 +391,13 @@ export class TrackingManager {
     }, pollInterval);
     
     logger.info('Enhanced polling fallback started with intelligent activation', 'LocationService', {
-      interval: pollInterval / 1000 + 's',
+      interval: `${pollInterval / 1000  }s`,
       deviceType: this.deviceInfo.deviceType,
       hasGPSHardware: this.deviceInfo.hasGPSHardware,
-      gracePeriod: Math.round(this.POLL_FALLBACK_GRACE_PERIOD_MS / 1000) + 's',
-      watchPositionActiveThreshold: Math.round(this.POLL_FALLBACK_WATCHPOSITION_ACTIVE_THRESHOLD_MS / 1000) + 's',
+      gracePeriod: `${Math.round(this.POLL_FALLBACK_GRACE_PERIOD_MS / 1000)  }s`,
+      watchPositionActiveThreshold: `${Math.round(this.POLL_FALLBACK_WATCHPOSITION_ACTIVE_THRESHOLD_MS / 1000)  }s`,
       maxFailures: this.POLL_FALLBACK_MAX_FAILURES,
-      circuitBreakerReset: Math.round(this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS / 1000) + 's',
+      circuitBreakerReset: `${Math.round(this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS / 1000)  }s`,
     });
   }
 
@@ -419,7 +419,7 @@ export class TrackingManager {
       logger.error('Poll fallback: Circuit breaker opened - too many consecutive failures', 'LocationService', {
         failures: this.pollFallbackFailures,
         maxFailures: this.POLL_FALLBACK_MAX_FAILURES,
-        resetAfter: Math.round(this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS / 1000) + 's',
+        resetAfter: `${Math.round(this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS / 1000)  }s`,
         note: 'Poll fallback will be disabled until circuit breaker resets or watchPosition starts working',
       });
     }
@@ -477,8 +477,8 @@ export class TrackingManager {
         } else {
           // Still in grace period - wait for GPS to acquire signal
           logger.debug('💓 Heartbeat: Skipping getCurrentLocation during GPS acquisition grace period', 'LocationService', {
-            timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's',
-            gracePeriod: Math.round(this.GPS_ACQUISITION_GRACE_PERIOD_MS / 1000) + 's',
+            timeSinceTrackingStart: `${Math.round(timeSinceTrackingStart / 1000)  }s`,
+            gracePeriod: `${Math.round(this.GPS_ACQUISITION_GRACE_PERIOD_MS / 1000)  }s`,
             hasGPSHardware: this.deviceInfo.hasGPSHardware,
           });
         }
@@ -486,7 +486,7 @@ export class TrackingManager {
     }, this.PERSISTENT_HEARTBEAT_INTERVAL_MS);
 
     logger.info('✅ Persistent heartbeat started', 'LocationService', {
-      interval: this.PERSISTENT_HEARTBEAT_INTERVAL_MS / 1000 + 's',
+      interval: `${this.PERSISTENT_HEARTBEAT_INTERVAL_MS / 1000  }s`,
     });
   }
 
@@ -502,7 +502,7 @@ export class TrackingManager {
 
     this.watchPositionProactiveRestartInterval = setTimeout(() => {
       logger.info('🔄 Proactive watchPosition restart scheduled (every 4 hours)', 'LocationService', {
-        trackingDuration: Math.round((Date.now() - this.trackingStartTime) / 1000 / 60) + ' minutes',
+        trackingDuration: `${Math.round((Date.now() - this.trackingStartTime) / 1000 / 60)  } minutes`,
       });
 
       onRestart();
@@ -512,7 +512,7 @@ export class TrackingManager {
     }, this.WATCHPOSITION_RESTART_INTERVAL_MS);
 
     logger.info('✅ Proactive watchPosition restart scheduled', 'LocationService', {
-      restartInterval: this.WATCHPOSITION_RESTART_INTERVAL_MS / 1000 / 60 / 60 + ' hours',
+      restartInterval: `${this.WATCHPOSITION_RESTART_INTERVAL_MS / 1000 / 60 / 60  } hours`,
     });
   }
 
@@ -540,7 +540,7 @@ export class TrackingManager {
     
     // Ensure polling fallback is active for low-accuracy devices
     if (this.POLL_FALLBACK_ENABLED && !this.deviceInfo.hasGPSHardware && !this.pollFallbackInterval) {
-      this.startPollFallback(onLocationUpdate, null);
+      this.startPollFallback(onLocationUpdate, () => null);
       logger.info('Polling fallback activated during watchPosition restart', 'LocationService');
     }
   }

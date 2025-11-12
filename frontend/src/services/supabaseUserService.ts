@@ -39,7 +39,7 @@ class SupabaseUserService {
       }
 
       // Convert profiles to SupabaseUser format
-      return (profiles || []).map((profile) => ({
+      return (profiles || []).map((profile: Record<string, unknown>) => ({
         id: profile.id,
         email: profile.email || '',
         user_metadata: {
@@ -89,10 +89,10 @@ class SupabaseUserService {
 
       // Filter out assigned drivers
       const assignedDriverIds = new Set(
-        assignedDrivers?.map((bus) => bus.assigned_driver_profile_id) || []
+        assignedDrivers?.map((bus: { assigned_driver_profile_id: string }) => bus.assigned_driver_profile_id) || []
       );
       const unassignedDrivers =
-        allDrivers?.filter((driver) => !assignedDriverIds.has(driver.id)) || [];
+        allDrivers?.filter((driver: DriverProfile) => !assignedDriverIds.has(driver.id)) || [];
 
       logger.info(`✅ Returning ${unassignedDrivers.length} unassigned drivers`, 'component');
       return unassignedDrivers;

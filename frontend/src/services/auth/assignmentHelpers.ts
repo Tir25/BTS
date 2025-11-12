@@ -5,6 +5,7 @@ import { resilientQuery } from '../resilience/ResilientSupabaseService';
 import { standardBackoff } from '../resilience/ExponentialBackoff';
 import { sessionHelpers } from './sessionHelpers';
 import type { DriverBusAssignment } from '../../types/driver';
+export type { DriverBusAssignment };
 
 /**
  * Assignment helpers
@@ -243,6 +244,13 @@ export class AssignmentHelpers {
     driverId: string,
     currentSession: any
   ): Promise<DriverBusAssignment | null> {
+    if (!currentSession?.access_token) {
+      logger.warn('⚠️ No active Supabase session detected for assignment fetch, using direct Supabase fallback', 'auth', {
+        driverId,
+      });
+      return await this.fetchAssignmentFromSupabase(driverId);
+    }
+
     // PRODUCTION FIX: Overall timeout for entire assignment fetch operation
     const overallTimeout = timeoutConfig.api.busAssignment || 8000;
     const timeoutPromise = new Promise<null>((resolve) => {

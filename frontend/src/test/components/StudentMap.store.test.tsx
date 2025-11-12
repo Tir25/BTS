@@ -247,7 +247,6 @@ describe('StudentMap with Store Integration', () => {
 
   it('should not have duplicate state management', () => {
     // This test verifies that StudentMap doesn't use local useState for store-managed state
-    const studentMapSource = require('../../components/StudentMap.tsx');
     // We can't directly check this, but if tests pass, it means store is being used
     expect(true).toBe(true); // Placeholder - actual verification is done through integration
   });

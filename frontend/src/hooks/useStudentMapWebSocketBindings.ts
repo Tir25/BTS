@@ -179,13 +179,21 @@ export function useStudentMapWebSocketBindings(p: Params) {
 
     const cleanup = () => {
       isMounted = false;
-      p.websocketCleanupFunctions.current.forEach(unsubscribe => { try { unsubscribe(); } catch {} });
+      p.websocketCleanupFunctions.current.forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch (error) {
+          logger.warn('Failed to unsubscribe StudentMap WebSocket listener.', 'StudentMapWebSocketBindings', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      });
       p.websocketCleanupFunctions.current = [];
       logger.info('🧹 StudentMap WebSocket listener cleanup complete', 'component');
     };
     p.cleanupFunctions.current.push(cleanup);
     return cleanup;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [p.enabled]);
 }
 

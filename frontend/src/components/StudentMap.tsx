@@ -511,7 +511,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
           lat: currentLocation.latitude,
           lng: currentLocation.longitude,
           distance: Math.round(distance),
-          threshold: threshold,
+          threshold,
           accuracy: driverLocation.accuracy,
           reason: shouldRecenterByDistance ? 'distance' : 'time',
           timeSinceLastRecenter: Math.round(timeSinceLastRecenter),
@@ -954,7 +954,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
                 // This will be handled by the WebSocket update, but we can trigger it here
                 // if we have the location data
                 const wsLocation: WSBusLocation = {
-                  busId: busId,
+                  busId,
                   latitude: location.latitude,
                   longitude: location.longitude,
                   timestamp: location.timestamp,

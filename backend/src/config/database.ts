@@ -86,9 +86,15 @@ export const checkDatabaseHealth = async (): Promise<{
 }> => {
   let client: PoolClient | null = null;
   const startTime = Date.now();
+  const HEALTH_CHECK_TIMEOUT = 2000; // 2 seconds max for health check
 
   try {
-    client = await pool.connect();
+    // PRODUCTION FIX: Add timeout to pool.connect() to prevent hanging
+    const connectPromise = pool.connect();
+    const timeoutPromise = new Promise<PoolClient>((_, reject) => {
+      setTimeout(() => reject(new Error('Database connection timeout')), HEALTH_CHECK_TIMEOUT);
+    });
+    client = await Promise.race([connectPromise, timeoutPromise]);
     const result = await client.query(
       'SELECT NOW() as current_time, version() as db_version, pg_postmaster_start_time() as start_time'
     );

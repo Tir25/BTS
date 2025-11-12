@@ -40,9 +40,11 @@ const StudentMapWrapper: React.FC = () => {
 
         // Update auth store if needed
         if (!user || user.id !== currentUser.id) {
+          const profileEmail = currentProfile.email ?? currentUser.email ?? '';
+
           useAuthStore.getState().setUser({
             id: currentProfile.id,
-            email: currentProfile.email,
+            email: profileEmail,
             role: currentProfile.role as 'student',
             full_name: currentProfile.full_name,
             created_at: currentProfile.created_at,

@@ -61,49 +61,82 @@ export function useDriverInterfaceState({
     isWebSocketAuthenticated: false,
   });
 
-  // Sync essential data from context to stores
+  // PRODUCTION FIX: Sync authentication state immediately when authenticated, even without busAssignment
+  // This prevents the stuck at 20% issue by ensuring isInitializing is cleared as soon as auth completes
+  // Critical: This must happen synchronously to prevent race conditions
   useEffect(() => {
-    if (busAssignment && isAuthenticated) {
+    if (isAuthenticated) {
       const prevValues = prevValuesRef.current;
       
-      // Only sync if values have actually changed (using stable comparisons)
-      const needsUpdate = 
-        prevValues.driverId !== busAssignment.driver_id ||
-        prevValues.busNumber !== busAssignment.bus_number ||
-        prevValues.routeName !== busAssignment.route_name ||
-        prevValues.isAuthenticated !== isAuthenticated;
-      
-      if (needsUpdate) {
-        // React 18 automatically batches these updates
-        driverActionsRef.current.setDriverData({
-          driverId: busAssignment.driver_id,
-          driverEmail: busAssignment.driver_name,
-          driverName: busAssignment.driver_name,
-          busAssignment: busAssignment,
-        });
-        
+      // Sync auth state immediately when authenticated (don't wait for busAssignment)
+      // Use synchronous updates to prevent race conditions
+      if (prevValues.isAuthenticated !== isAuthenticated) {
+        // PRODUCTION FIX: Set all state flags atomically in a single batch
+        // This prevents intermediate states that could cause phase detection issues
         driverActionsRef.current.setAuthState({
           isAuthenticated: true,
-          isLoading: false,
+          isLoading: false, // Critical: Clear loading immediately
           error: null,
         });
         
-        // Update ref values immediately
+        // PRODUCTION FIX: Clear isInitializing immediately when authenticated
+        // This prevents phase detection from getting stuck at 20%
+        driverActionsRef.current.setInitializationState({
+          isInitializing: false, // Critical: Clear initialization flag
+          initializationError: null,
+        });
+        
+        // Update ref immediately to prevent re-triggering
         prevValuesRef.current = {
-          driverId: busAssignment.driver_id,
-          busNumber: busAssignment.bus_number,
-          routeName: busAssignment.route_name,
-          isAuthenticated: isAuthenticated,
-          isWebSocketConnected: prevValuesRef.current.isWebSocketConnected,
-          isWebSocketAuthenticated: prevValuesRef.current.isWebSocketAuthenticated,
+          ...prevValuesRef.current,
+          isAuthenticated: true,
         };
         
-        logger.info('Essential driver data synced to stores', 'useDriverInterfaceState', {
-          driverId: busAssignment.driver_id,
-          busNumber: busAssignment.bus_number,
-          routeName: busAssignment.route_name,
+        logger.info('Authentication state synced to stores (immediate)', 'useDriverInterfaceState', {
+          isAuthenticated,
+          hasBusAssignment: !!busAssignment,
         });
       }
+      
+      // Sync bus assignment data if available
+      if (busAssignment) {
+        const needsUpdate = 
+          prevValues.driverId !== busAssignment.driver_id ||
+          prevValues.busNumber !== busAssignment.bus_number ||
+          prevValues.routeName !== busAssignment.route_name;
+        
+        if (needsUpdate) {
+          // React 18 automatically batches these updates
+          driverActionsRef.current.setDriverData({
+            driverId: busAssignment.driver_id,
+            driverEmail: busAssignment.driver_name,
+            driverName: busAssignment.driver_name,
+            busAssignment,
+          });
+          
+          // Update ref values immediately
+          prevValuesRef.current = {
+            driverId: busAssignment.driver_id,
+            busNumber: busAssignment.bus_number,
+            routeName: busAssignment.route_name ?? null,
+            isAuthenticated,
+            isWebSocketConnected: prevValuesRef.current.isWebSocketConnected,
+            isWebSocketAuthenticated: prevValuesRef.current.isWebSocketAuthenticated,
+          };
+          
+          logger.info('Bus assignment data synced to stores', 'useDriverInterfaceState', {
+            driverId: busAssignment.driver_id,
+            busNumber: busAssignment.bus_number,
+            routeName: busAssignment.route_name ?? null,
+          });
+        }
+      }
+      
+      // Update ref to track authentication state
+      prevValuesRef.current = {
+        ...prevValuesRef.current,
+        isAuthenticated,
+      };
     }
   }, [
     busAssignment?.driver_id, 
@@ -169,9 +202,9 @@ export function useDriverInterfaceState({
   useEffect(() => {
     // Read ONLY from context values, never from store to prevent circular updates
     const currentState = {
-      isWebSocketConnected: isWebSocketConnected,
-      isWebSocketAuthenticated: isWebSocketAuthenticated,
-      isWebSocketInitializing: isWebSocketInitializing
+      isWebSocketConnected,
+      isWebSocketAuthenticated,
+      isWebSocketInitializing
     };
     
     // Only update if context values actually changed
@@ -260,21 +293,62 @@ export function useDriverInterfaceState({
     }
   }, [isWebSocketConnected, isWebSocketAuthenticated, isWebSocketInitializing]);
 
-  // Clear initialization state when dashboard is ready
+  // PRODUCTION FIX: Clear initialization state more aggressively with timeout protection
+  // Clear isInitializing as soon as authenticated, don't wait for all conditions
+  // Critical: This prevents getting stuck at 20% loading
   const prevReadyStateRef = useRef(false);
+  const initializationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   useEffect(() => {
+    // Clear any existing timeout
+    if (initializationTimeoutRef.current) {
+      clearTimeout(initializationTimeoutRef.current);
+      initializationTimeoutRef.current = null;
+    }
+    
     const isReady = driverState.isAuthenticated && 
                     driverState.busAssignment && 
                     !driverState.isLoading && 
                     !driverState.error;
     
-    // Only update if state changed from not-ready to ready
-    if (isReady && !prevReadyStateRef.current && driverState.isInitializing) {
+    // PRODUCTION FIX: Clear isInitializing immediately when authenticated
+    // Don't wait for isLoading to clear - if authenticated, we're past initialization
+    if (driverState.isAuthenticated && driverState.isInitializing) {
+      // Clear immediately - authentication means initialization is complete
+      driverActionsRef.current.setInitializationState({ isInitializing: false });
+      logger.debug('Cleared isInitializing flag (authenticated)', 'useDriverInterfaceState', {
+        hasBusAssignment: !!driverState.busAssignment,
+        isLoading: driverState.isLoading
+      });
+    }
+    
+    // PRODUCTION FIX: Add timeout fallback - if authenticated but still initializing after 1 second, force clear
+    // This is a safety net in case state sync fails
+    if (driverState.isAuthenticated && driverState.isInitializing) {
+      initializationTimeoutRef.current = setTimeout(() => {
+        if (driverState.isAuthenticated && driverState.isInitializing) {
+          logger.warn('Timeout fallback: Force clearing isInitializing flag', 'useDriverInterfaceState');
+          driverActionsRef.current.setInitializationState({ isInitializing: false });
+        }
+      }, 1000); // 1 second timeout - very aggressive
+    }
+    
+    // Also clear when fully ready
+    if (isReady && !prevReadyStateRef.current) {
       prevReadyStateRef.current = true;
       driverActionsRef.current.setInitializationState({ isInitializing: false });
+      logger.debug('Dashboard fully ready', 'useDriverInterfaceState');
     } else if (!isReady) {
       prevReadyStateRef.current = false;
     }
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (initializationTimeoutRef.current) {
+        clearTimeout(initializationTimeoutRef.current);
+        initializationTimeoutRef.current = null;
+      }
+    };
   }, [
     driverState.isAuthenticated, 
     driverState.busAssignment?.driver_id,
@@ -283,7 +357,7 @@ export function useDriverInterfaceState({
     driverState.isInitializing
   ]);
 
-  // Handle initialization timeout
+  // PRODUCTION FIX: Handle initialization timeout with fallback to clear isInitializing
   const handleInitializationTimeout = useCallback(() => {
     const timeoutError = createNetworkError('Dashboard initialization timed out. Please check your connection and try again.');
     driverActionsRef.current.setInitializationState({
@@ -296,10 +370,13 @@ export function useDriverInterfaceState({
     });
   }, []);
 
-  // Initialize timeout handling
+  // PRODUCTION FIX: This effect is now redundant - handled in the main initialization effect above
+  // Removed to prevent duplicate logic and potential race conditions
+
+  // Initialize timeout handling for full initialization
   useEffect(() => {
     if (driverState.isAuthenticated) {
-      // Set initialization timeout (30 seconds)
+      // Set initialization timeout (30 seconds) for full dashboard initialization
       const timeout = setTimeout(() => {
         if (driverState.isInitializing) {
           handleInitializationTimeout();

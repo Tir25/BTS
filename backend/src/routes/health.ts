@@ -7,12 +7,24 @@ import { logger } from '../utils/logger';
 
 const router = Router();
 
+// Helper function to add timeout to promises
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    )
+  ]);
+};
+
 // Basic health check
 router.get('/', async (req: Request, res: Response) => {
   try {
+    // PRODUCTION FIX: Add timeout to health checks to prevent hanging
+    const HEALTH_CHECK_TIMEOUT = 2000; // 2 seconds max per check
     const [databaseHealth, redisHealth, websocketHealth] = await Promise.allSettled([
-      checkDatabaseHealth(),
-      redisCache.getHealth(),
+      withTimeout(checkDatabaseHealth(), HEALTH_CHECK_TIMEOUT, 'Database health check timeout').catch(err => ({ healthy: false, error: err.message })),
+      withTimeout(redisCache.getHealth(), HEALTH_CHECK_TIMEOUT, 'Redis health check timeout').catch(err => ({ connected: false, error: err.message })),
       Promise.resolve(webSocketHealth.getHealth())
     ]);
     
@@ -52,9 +64,11 @@ router.get('/detailed', async (req: Request, res: Response) => {
     const startTime = Date.now();
     const memoryUsage = process.memoryUsage();
     
+    // PRODUCTION FIX: Add timeout to health checks to prevent hanging
+    const HEALTH_CHECK_TIMEOUT = 2000; // 2 seconds max per check
     const [databaseHealth, redisHealth, websocketHealth] = await Promise.allSettled([
-      checkDatabaseHealth(),
-      redisCache.getHealth(),
+      withTimeout(checkDatabaseHealth(), HEALTH_CHECK_TIMEOUT, 'Database health check timeout').catch(err => ({ healthy: false, error: err.message })),
+      withTimeout(redisCache.getHealth(), HEALTH_CHECK_TIMEOUT, 'Redis health check timeout').catch(err => ({ connected: false, error: err.message })),
       Promise.resolve(webSocketHealth.getHealth())
     ]);
     
@@ -85,15 +99,15 @@ router.get('/detailed', async (req: Request, res: Response) => {
         database: {
           status: dbHealthy ? 'connected' : 'disconnected',
           error: databaseHealth.status === 'rejected' ? String(databaseHealth.reason) : 
-                 (databaseHealth.status === 'fulfilled' ? databaseHealth.value.error : null),
-          metrics: databaseHealth.status === 'fulfilled' ? databaseHealth.value.metrics : null
+                 (databaseHealth.status === 'fulfilled' && 'error' in databaseHealth.value ? databaseHealth.value.error : null),
+          metrics: databaseHealth.status === 'fulfilled' && 'metrics' in databaseHealth.value ? databaseHealth.value.metrics : null
         },
         redis: {
           status: redisHealthy ? 'connected' : 'disconnected',
           error: redisHealth.status === 'rejected' ? String(redisHealth.reason) : 
-                 (redisHealth.status === 'fulfilled' ? redisHealth.value.error : null),
-          latency: redisHealth.status === 'fulfilled' ? `${redisHealth.value.latency}ms` : null,
-          stats: redisHealth.status === 'fulfilled' ? redisHealth.value.stats : null
+                 (redisHealth.status === 'fulfilled' && 'error' in redisHealth.value ? redisHealth.value.error : null),
+          latency: redisHealth.status === 'fulfilled' && 'latency' in redisHealth.value ? `${redisHealth.value.latency}ms` : null,
+          stats: redisHealth.status === 'fulfilled' && 'stats' in redisHealth.value ? redisHealth.value.stats : null
         },
         websocket: {
           status: websocketHealthy ? 'connected' : 'disconnected',
@@ -123,9 +137,11 @@ router.get('/detailed', async (req: Request, res: Response) => {
 // Readiness check
 router.get('/ready', async (req: Request, res: Response) => {
   try {
+    // PRODUCTION FIX: Add timeout to health checks to prevent hanging
+    const HEALTH_CHECK_TIMEOUT = 2000; // 2 seconds max per check
     const [databaseHealth, redisHealth, websocketHealth] = await Promise.allSettled([
-      checkDatabaseHealth(),
-      redisCache.getHealth(),
+      withTimeout(checkDatabaseHealth(), HEALTH_CHECK_TIMEOUT, 'Database health check timeout').catch(err => ({ healthy: false, error: err.message })),
+      withTimeout(redisCache.getHealth(), HEALTH_CHECK_TIMEOUT, 'Redis health check timeout').catch(err => ({ connected: false, error: err.message })),
       Promise.resolve(webSocketHealth.getHealth())
     ]);
     

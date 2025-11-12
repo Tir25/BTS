@@ -37,7 +37,7 @@ export class SessionHelpers {
     // Handle expired sessions
     if (timeUntilExpiry <= 0) {
       logger.warn('⚠️ Session has expired - attempting refresh', 'auth', {
-        expiredBy: Math.round(Math.abs(timeUntilExpiry) / 1000) + 's',
+        expiredBy: `${Math.round(Math.abs(timeUntilExpiry) / 1000)  }s`,
       });
 
       this.isRefreshingSession = true;
@@ -45,7 +45,7 @@ export class SessionHelpers {
         const result = await this.refreshSession();
         if (result.success && result.session) {
           logger.info('✅ Expired session refreshed successfully', 'auth');
-          onSessionUpdate(result.session, result.user);
+          onSessionUpdate(result.session, result.user ?? null);
         } else {
           logger.error('❌ Failed to refresh expired session', 'auth', {
             error: result.error,
@@ -65,14 +65,14 @@ export class SessionHelpers {
     if (timeUntilExpiry <= refreshThreshold && timeUntilExpiry > 0) {
       this.isRefreshingSession = true;
       logger.info('🔄 Proactively refreshing session before expiry', 'auth', {
-        timeUntilExpiry: Math.round(timeUntilExpiry / 1000) + 's',
+        timeUntilExpiry: `${Math.round(timeUntilExpiry / 1000)  }s`,
       });
 
       try {
         const result = await this.refreshSession();
         if (result.success && result.session) {
           logger.info('✅ Proactive session refresh successful', 'auth');
-          onSessionUpdate(result.session, result.user);
+          onSessionUpdate(result.session, result.user ?? null);
         } else {
           logger.warn('⚠️ Proactive session refresh failed', 'auth', {
             error: result.error,
@@ -150,8 +150,8 @@ export class SessionHelpers {
     }, timeoutConfig.session.checkInterval);
 
     logger.info('✅ Proactive session refresh started', 'auth', {
-      checkInterval: timeoutConfig.session.checkInterval / 1000 + 's',
-      refreshThreshold: timeoutConfig.session.refreshBeforeExpiry / 1000 + 's',
+      checkInterval: `${timeoutConfig.session.checkInterval / 1000  }s`,
+      refreshThreshold: `${timeoutConfig.session.refreshBeforeExpiry / 1000  }s`,
     });
   }
 

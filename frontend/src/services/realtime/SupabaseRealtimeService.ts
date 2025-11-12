@@ -81,12 +81,12 @@ class SupabaseRealtimeService {
           table: 'live_locations',
           filter,
         },
-        (payload) => {
+        (payload: unknown) => {
           logger.debug('Debug info', 'component', { data: '📍 Bus location update via Supabase Realtime:', payload });
           callback(payload);
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
@@ -123,12 +123,12 @@ class SupabaseRealtimeService {
           table: 'buses',
           filter,
         },
-        (payload) => {
+        (payload: unknown) => {
           logger.debug('Debug info', 'component', { data: '🚌 Bus update via Supabase Realtime:', payload });
           callback(payload);
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
@@ -165,12 +165,12 @@ class SupabaseRealtimeService {
           table: 'routes',
           filter,
         },
-        (payload) => {
+        (payload: unknown) => {
           logger.debug('Debug info', 'component', { data: '🛣️ Route update via Supabase Realtime:', payload });
           callback(payload);
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
@@ -207,12 +207,12 @@ class SupabaseRealtimeService {
           table: 'driver_bus_assignments',
           filter,
         },
-        (payload) => {
+        (payload: unknown) => {
           logger.debug('Debug info', 'component', { data: '👨‍💼 Driver assignment update via Supabase Realtime:', payload });
           callback(payload);
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);
@@ -251,12 +251,12 @@ class SupabaseRealtimeService {
           table,
           filter,
         },
-        (payload) => {
+        (payload: unknown) => {
           logger.debug('Debug info', 'component', { data: `📊 ${table} ${event} via Supabase Realtime:`, payload });
           callback(payload);
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         logger.debug('Debug info', 'component', { data: `🔌 Supabase Realtime subscription status for ${subscriptionId}: ${status}` });
         if (status === 'SUBSCRIBED') {
           this.channels.set(subscriptionId, channel);

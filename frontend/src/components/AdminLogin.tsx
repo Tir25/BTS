@@ -74,7 +74,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
           // Log this security event
           logger.warn('Non-admin user attempted to access admin panel', 'admin-login', {
             userEmail: email,
-            userRole: userRole,
+            userRole,
             timestamp: new Date().toISOString()
           });
           

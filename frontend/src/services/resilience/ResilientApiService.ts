@@ -179,7 +179,30 @@ class ResilientApiService {
 
       clearTimeout(timeoutId);
 
+      // PRODUCTION FIX: Parse error response from backend to get proper error message
       if (!response.ok) {
+        try {
+          // Try to parse JSON error response from backend
+          const errorData = await response.json();
+          
+          // Backend returns errors in format: { success: false, error: string, message: string, code: string }
+          if (errorData && (errorData.error || errorData.message)) {
+            const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+            const apiError: any = new Error(errorMessage);
+            apiError.status = response.status;
+            apiError.code = errorData.code || 'API_ERROR';
+            apiError.data = errorData;
+            throw apiError;
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, use status text
+          if (parseError instanceof Error && parseError.message && !parseError.message.includes('HTTP')) {
+            // This is the parsed error from above
+            throw parseError;
+          }
+        }
+        
+        // Fallback to generic error if JSON parsing failed
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -191,6 +214,7 @@ class ResilientApiService {
         if (error.name === 'AbortError') {
           throw new Error('Request timeout');
         }
+        // Re-throw error with proper message (already set above)
         throw error;
       }
 

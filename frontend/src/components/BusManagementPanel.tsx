@@ -43,6 +43,15 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
       if (busesResult.success && busesResult.data) {
         const busesWithId = busesResult.data.map((bus: BusData): Bus => ({
           ...bus,
+          name: bus.name ?? undefined,
+          model: bus.model ?? undefined,
+          year: bus.year ?? undefined,
+          bus_image_url: bus.bus_image_url ?? undefined,
+          photo_url: bus.photo_url ?? undefined,
+          assigned_driver_profile_id: bus.assigned_driver_profile_id ?? undefined,
+          driver_id: bus.driver_id ?? undefined,
+          route_id: bus.route_id ?? undefined,
+          vehicle_no: bus.vehicle_no ?? undefined,
           id: bus.id || '',
           created_at: bus.created_at || new Date().toISOString(),
           updated_at: bus.updated_at || new Date().toISOString()
@@ -131,17 +140,39 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
 
     try {
       let result;
+      // Validate required fields before submitting
+      if (!formData.bus_number || !formData.bus_number.trim()) {
+        setError('Bus number is required');
+        setLoading(false);
+        return;
+      }
+
+      if (!formData.vehicle_no || !formData.vehicle_no.trim()) {
+        setError('Vehicle number is required');
+        setLoading(false);
+        return;
+      }
+
+      // Validate capacity before submitting
+      if (!formData.capacity || formData.capacity <= 0 || formData.capacity > 1000) {
+        setError('Capacity must be a number between 1 and 1000');
+        setLoading(false);
+        return;
+      }
+
       // Convert BusFormData to the format expected by the API
+      const trimmedBusNumber = formData.bus_number.trim();
       const apiData = {
-        bus_number: formData.bus_number,  // Fixed: send bus_number as bus_number
-        vehicle_no: formData.vehicle_no,  // Fixed: send vehicle_no as vehicle_no
-        capacity: formData.capacity,
-        model: formData.model,
-        year: formData.year,
-        bus_image_url: formData.bus_image_url,
+        code: trimmedBusNumber,
+        bus_number: trimmedBusNumber,
+        vehicle_no: formData.vehicle_no.trim(),
+        capacity: Number(formData.capacity),
+        model: formData.model?.trim() || undefined,
+        year: formData.year ? Number(formData.year) : undefined,
+        bus_image_url: formData.bus_image_url?.trim() || undefined,
         assigned_driver_profile_id: formData.assigned_driver_profile_id || undefined,
         route_id: formData.route_id || undefined,
-        is_active: formData.is_active !== false // Ensure is_active is true unless explicitly false
+        is_active: formData.is_active !== false
       };
       
       if (editingBus) {
