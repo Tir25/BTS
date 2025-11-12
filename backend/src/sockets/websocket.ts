@@ -4,7 +4,7 @@ import {
   saveLocationUpdate,
 } from '../services/locationService';
 import { optimizedLocationService } from '../services/OptimizedLocationService';
-import { RouteService } from '../services/routeService';
+import { RouteQueryService } from '../services/routes/RouteQueryService';
 import { validateLocationData } from '../utils/validation';
 import { 
   websocketAuthMiddleware, 
@@ -329,7 +329,7 @@ export const initializeWebSocket = (io: SocketIOServer) => {
 
         if (busInfo?.route_id) {
           try {
-            etaInfo = await RouteService.calculateETA(
+            etaInfo = await RouteQueryService.calculateETA(
               {
                 bus_id: socket.busId!,
                 latitude: data.latitude,
@@ -344,7 +344,7 @@ export const initializeWebSocket = (io: SocketIOServer) => {
           }
 
           try {
-            nearStopInfo = await RouteService.checkBusNearStop(
+            nearStopInfo = await RouteQueryService.checkBusNearStop(
               {
                 bus_id: socket.busId!,
                 latitude: data.latitude,

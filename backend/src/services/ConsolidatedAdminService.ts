@@ -10,8 +10,10 @@
  * Uses domain services for all operations to eliminate duplication
  */
 
-import { UnifiedDatabaseService } from './UnifiedDatabaseService';
-import { RouteService } from './routeService';
+import { BusDatabaseService } from './database/BusDatabaseService';
+import { DriverDatabaseService } from './database/DriverDatabaseService';
+import { RouteQueryService } from './routes/RouteQueryService';
+import { RouteMutationService } from './routes/RouteMutationService';
 import { supabaseAdmin } from '../config/supabase';
 import { logger } from '../utils/logger';
 
@@ -39,10 +41,10 @@ export interface SystemHealth {
 }
 
 export class ConsolidatedAdminService {
-  // Bus Management - Delegate to BusService
+  // Bus Management - Delegate to BusDatabaseService
   static async getAllBuses() {
     try {
-      return await UnifiedDatabaseService.getAllBuses();
+      return await BusDatabaseService.getAllBuses();
     } catch (error) {
       logger.error('Error in getAllBuses', 'consolidated-admin', { error });
       throw error;
@@ -51,7 +53,7 @@ export class ConsolidatedAdminService {
 
   static async getBusById(busId: string) {
     try {
-      return await UnifiedDatabaseService.getBusById(busId);
+      return await BusDatabaseService.getBusById(busId);
     } catch (error) {
       logger.error('Error in getBusById', 'consolidated-admin', { error });
       throw error;
@@ -60,7 +62,7 @@ export class ConsolidatedAdminService {
 
   static async createBus(busData: any) {
     try {
-      return await UnifiedDatabaseService.createBus(busData);
+      return await BusDatabaseService.createBus(busData);
     } catch (error) {
       logger.error('Error in createBus', 'consolidated-admin', { error });
       throw error;
@@ -69,7 +71,7 @@ export class ConsolidatedAdminService {
 
   static async updateBus(busId: string, busData: any) {
     try {
-      return await UnifiedDatabaseService.updateBus(busId, busData);
+      return await BusDatabaseService.updateBus(busId, busData);
     } catch (error) {
       logger.error('Error in updateBus', 'consolidated-admin', { error });
       throw error;
@@ -78,17 +80,17 @@ export class ConsolidatedAdminService {
 
   static async deleteBus(busId: string) {
     try {
-      return await UnifiedDatabaseService.deleteBus(busId);
+      return await BusDatabaseService.deleteBus(busId);
     } catch (error) {
       logger.error('Error in deleteBus', 'consolidated-admin', { error });
       throw error;
     }
   }
 
-  // Driver Management - Delegate to DriverService
+  // Driver Management - Delegate to DriverDatabaseService
   static async getAllDrivers() {
     try {
-      return await UnifiedDatabaseService.getAllDrivers();
+      return await DriverDatabaseService.getAllDrivers();
     } catch (error) {
       logger.error('Error in getAllDrivers', 'consolidated-admin', { error });
       throw error;
@@ -97,7 +99,7 @@ export class ConsolidatedAdminService {
 
   static async getDriverById(driverId: string) {
     try {
-      return await UnifiedDatabaseService.getDriverById(driverId);
+      return await DriverDatabaseService.getDriverById(driverId);
     } catch (error) {
       logger.error('Error in getDriverById', 'consolidated-admin', { error });
       throw error;
@@ -106,7 +108,7 @@ export class ConsolidatedAdminService {
 
   static async createDriver(driverData: any) {
     try {
-      return await UnifiedDatabaseService.createDriver(driverData);
+      return await DriverDatabaseService.createDriver(driverData);
     } catch (error) {
       logger.error('Error in createDriver', 'consolidated-admin', { error });
       throw error;
@@ -115,7 +117,7 @@ export class ConsolidatedAdminService {
 
   static async updateDriver(driverId: string, driverData: any) {
     try {
-      return await UnifiedDatabaseService.updateDriver(driverId, driverData);
+      return await DriverDatabaseService.updateDriver(driverId, driverData);
     } catch (error) {
       logger.error('Error in updateDriver', 'consolidated-admin', { error });
       throw error;
@@ -124,7 +126,7 @@ export class ConsolidatedAdminService {
 
   static async deleteDriver(driverId: string) {
     try {
-      return await UnifiedDatabaseService.deleteDriver(driverId);
+      return await DriverDatabaseService.deleteDriver(driverId);
     } catch (error) {
       logger.error('Error in deleteDriver', 'consolidated-admin', { error });
       throw error;
@@ -133,17 +135,17 @@ export class ConsolidatedAdminService {
 
   static async cleanupInactiveDrivers() {
     try {
-      return await UnifiedDatabaseService.cleanupInactiveDrivers();
+      return await DriverDatabaseService.cleanupInactiveDrivers();
     } catch (error) {
       logger.error('Error in cleanupInactiveDrivers', 'consolidated-admin', { error });
       throw error;
     }
   }
 
-  // Route Management - Delegate to RouteService
+  // Route Management - Delegate to RouteQueryService and RouteMutationService
   static async getAllRoutes() {
     try {
-      return await RouteService.getAllRoutes();
+      return await RouteQueryService.getAllRoutes();
     } catch (error) {
       logger.error('Error in getAllRoutes', 'consolidated-admin', { error });
       throw error;
@@ -152,7 +154,7 @@ export class ConsolidatedAdminService {
 
   static async getRouteById(routeId: string) {
     try {
-      return await RouteService.getRouteById(routeId);
+      return await RouteQueryService.getRouteById(routeId);
     } catch (error) {
       logger.error('Error in getRouteById', 'consolidated-admin', { error });
       throw error;
@@ -161,7 +163,7 @@ export class ConsolidatedAdminService {
 
   static async createRoute(routeData: any) {
     try {
-      return await RouteService.createRoute(routeData);
+      return await RouteMutationService.createRoute(routeData);
     } catch (error) {
       logger.error('Error in createRoute', 'consolidated-admin', { error });
       throw error;
@@ -170,7 +172,7 @@ export class ConsolidatedAdminService {
 
   static async updateRoute(routeId: string, routeData: any) {
     try {
-      return await RouteService.updateRoute(routeId, routeData);
+      return await RouteMutationService.updateRoute(routeId, routeData);
     } catch (error) {
       logger.error('Error in updateRoute', 'consolidated-admin', { error });
       throw error;
@@ -179,7 +181,7 @@ export class ConsolidatedAdminService {
 
   static async deleteRoute(routeId: string) {
     try {
-      return await RouteService.deleteRoute(routeId);
+      return await RouteMutationService.deleteRoute(routeId);
     } catch (error) {
       logger.error('Error in deleteRoute', 'consolidated-admin', { error });
       throw error;
@@ -190,9 +192,9 @@ export class ConsolidatedAdminService {
   static async getAnalytics(): Promise<AnalyticsData> {
     try {
       const [buses, drivers, routes] = await Promise.all([
-        UnifiedDatabaseService.getAllBuses(),
-        UnifiedDatabaseService.getAllDrivers(),
-        UnifiedDatabaseService.getAllRoutes()
+        BusDatabaseService.getAllBuses(),
+        DriverDatabaseService.getAllDrivers(),
+        RouteQueryService.getAllRoutes()
       ]);
 
       return {
@@ -214,9 +216,9 @@ export class ConsolidatedAdminService {
   static async getSystemHealth(): Promise<SystemHealth> {
     try {
       const [buses, routes, drivers, recentLocationsResult] = await Promise.all([
-        UnifiedDatabaseService.getAllBuses(),
-        UnifiedDatabaseService.getAllRoutes(),
-        UnifiedDatabaseService.getAllDrivers(),
+        BusDatabaseService.getAllBuses(),
+        RouteQueryService.getAllRoutes(),
+        DriverDatabaseService.getAllDrivers(),
         supabaseAdmin
           .from('live_locations')
           .select('id', { count: 'exact', head: true })
@@ -236,7 +238,7 @@ export class ConsolidatedAdminService {
     }
   }
 
-  // Assignment methods removed - use ProductionAssignmentService instead
+  // Assignment methods removed - use AssignmentDashboardService, AssignmentCreationService, or AssignmentValidationService instead
 
   static async clearAllData() {
     try {

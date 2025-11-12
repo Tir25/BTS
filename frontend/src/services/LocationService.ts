@@ -246,12 +246,17 @@ class LocationService {
         }
       );
       
-      // Start polling fallback if needed
+      // Start polling fallback if needed (only for non-GPS devices as fallback when watchPosition fails)
+      // PRODUCTION FIX: Poll fallback will only activate when watchPosition is not providing updates
       if (this.trackingMgr.isPollFallbackEnabled() && !this.trackingMgr.hasGPSHardware()) {
         this.trackingMgr.startPollFallback(
           (location) => {
             this.lastLocation = location;
             healthMonitor.updateLastSuccessfulUpdate();
+            // Reset error logging flags on successful location update
+            if (this.lastPermissionDeniedLogged) {
+              this.lastPermissionDeniedLogged = false;
+            }
             this.locationListeners.forEach(listener => {
               try {
                 listener(location);
@@ -260,11 +265,12 @@ class LocationService {
               }
             });
           },
-          this.lastLocation
+          () => this.lastLocation // Pass function to get current lastLocation (not stale closure value)
         );
-        logger.info('Polling fallback enabled for desktop/low-accuracy device', 'LocationService', {
+        logger.info('Polling fallback enabled for desktop/low-accuracy device (will activate only if watchPosition fails)', 'LocationService', {
           deviceType: deviceInfo.deviceType,
           hasGPSHardware: deviceInfo.hasGPSHardware,
+          note: 'Poll fallback will only activate when watchPosition is not providing updates',
         });
       }
       
@@ -313,6 +319,10 @@ class LocationService {
             (location) => {
               this.lastLocation = location;
               healthMonitor.updateLastSuccessfulUpdate();
+              // Reset error logging flags on successful location update
+              if (this.lastPermissionDeniedLogged) {
+                this.lastPermissionDeniedLogged = false;
+              }
               this.locationListeners.forEach(listener => {
                 try {
                   listener(location);
@@ -321,7 +331,7 @@ class LocationService {
                 }
               });
             },
-            this.lastLocation
+            () => this.lastLocation // Pass function to get current lastLocation (not stale closure value)
           );
         }
       });
@@ -359,6 +369,10 @@ class LocationService {
               (location) => {
                 this.lastLocation = location;
                 healthMonitor.updateLastSuccessfulUpdate();
+                // Reset error logging flags on successful location update
+                if (this.lastPermissionDeniedLogged) {
+                  this.lastPermissionDeniedLogged = false;
+                }
                 this.locationListeners.forEach(listener => {
                   try {
                     listener(location);
@@ -367,7 +381,7 @@ class LocationService {
                   }
                 });
               },
-              this.lastLocation
+              () => this.lastLocation // Pass function to get current lastLocation (not stale closure value)
             );
           }
         },
@@ -386,7 +400,7 @@ class LocationService {
             }
           });
         },
-        this.lastLocation,
+        () => this.lastLocation, // Pass function to get current lastLocation (not stale closure value)
         () => this.getCurrentLocation()
       );
       

@@ -5,7 +5,8 @@
 
 import { supabaseAdmin } from '../config/supabase';
 import { logger } from '../utils/logger';
-import { ProductionAssignmentService } from './ProductionAssignmentService';
+import { AssignmentDashboardService } from './assignments/AssignmentDashboardService';
+import { AssignmentValidationService } from './assignments/AssignmentValidationService';
 import { optimizedLocationService } from './OptimizedLocationService';
 
 export interface BackendDriverVerificationResult {
@@ -266,7 +267,7 @@ export class BackendDriverVerificationService {
       
       // Test getAllAssignments
       try {
-        const assignments = await ProductionAssignmentService.getAllAssignments();
+        const assignments = await AssignmentDashboardService.getAllAssignments();
         result.assignmentService.getAllAssignments = Array.isArray(assignments);
         logger.info(`✅ getAllAssignments returned ${assignments.length} assignments`, 'backend-verification');
       } catch (error) {
@@ -278,7 +279,7 @@ export class BackendDriverVerificationService {
       if (result.busAssignments.assignments.length > 0) {
         try {
           const firstAssignment = result.busAssignments.assignments[0];
-          const validation = await ProductionAssignmentService.validateAssignment(
+          const validation = await AssignmentValidationService.validateAssignment(
             firstAssignment.driver_id,
             firstAssignment.bus_id,
             firstAssignment.route_id

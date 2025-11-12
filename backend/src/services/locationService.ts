@@ -1,5 +1,4 @@
 import { supabaseAdmin } from '../config/supabase';
-import { UnifiedDatabaseService } from './UnifiedDatabaseService';
 
 interface LocationData {
   driverId: string;

@@ -59,26 +59,75 @@ export class MigrationRunner {
 
   /**
    * Get list of available migration files
+   * Excludes rollback files and other non-migration files
    */
   private getAvailableMigrations(): Migration[] {
     try {
-      const files = readdirSync(this.migrationsPath)
+      // Get all SQL files from the migrations directory
+      const allSqlFiles = readdirSync(this.migrationsPath)
         .filter((file: string) => file.endsWith('.sql'))
         .sort();
 
-      return files.map((file: string) => {
-        const match = file.match(/^(\d+)_(.+)\.sql$/);
-        if (!match) {
-          throw new Error(`Invalid migration filename: ${file}`);
+      // Filter out rollback files, fix files, and ensure proper migration pattern
+      // Migration files must match: {number}_{name}.sql
+      // Exclude: rollback_*.sql, fix_*.sql, and any files that don't start with a number
+      const migrationFiles = allSqlFiles.filter((file: string) => {
+        // Explicitly exclude rollback files
+        if (file.startsWith('rollback_')) {
+          return false;
         }
-        return {
-          id: match[1],
-          name: match[2],
-          filename: file,
-        };
+        
+        // Explicitly exclude fix files (these are usually temporary)
+        if (file.startsWith('fix_')) {
+          return false;
+        }
+        
+        // Must match the migration pattern: {number}_{name}.sql
+        // Pattern: starts with digits, underscore, then name, ends with .sql
+        const migrationPattern = /^(\d+)_(.+)\.sql$/;
+        return migrationPattern.test(file);
       });
+
+      // Extract migration information from valid files
+      const migrations: Migration[] = [];
+      
+      for (const file of migrationFiles) {
+        const match = file.match(/^(\d+)_(.+)\.sql$/);
+        if (match && match[1] && match[2]) {
+          migrations.push({
+            id: match[1],
+            name: match[2],
+            filename: file,
+          });
+        } else {
+          // This should never happen due to the filter above, but log for safety
+          logger.warn(`Skipping file that doesn't match migration pattern: ${file}`, 'migration');
+        }
+      }
+
+      // Log skipped files for transparency (debug level)
+      const skippedFiles = allSqlFiles.filter(file => !migrationFiles.includes(file));
+      
+      if (skippedFiles.length > 0) {
+        logger.debug(`Skipped ${skippedFiles.length} non-migration SQL file(s)`, 'migration', {
+          skippedFiles: skippedFiles.join(', ')
+        });
+      }
+
+      // Sort migrations by ID to ensure proper execution order
+      migrations.sort((a, b) => parseInt(a.id, 10) - parseInt(b.id, 10));
+
+      logger.debug(`Found ${migrations.length} valid migration file(s)`, 'migration', {
+        migrations: migrations.map(m => m.filename).join(', ')
+      });
+
+      return migrations;
     } catch (error) {
-      logger.error('Failed to get available migrations', 'migration', { error: String(error) });
+      // Enhanced error handling - don't throw, just log and return empty array
+      logger.error('Failed to get available migrations', 'migration', { 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       return [];
     }
   }

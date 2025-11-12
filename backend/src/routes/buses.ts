@@ -3,7 +3,7 @@ import {
   getBusInfo,
 } from '../services/locationService';
 import { optimizedLocationService } from '../services/OptimizedLocationService';
-import { UnifiedDatabaseService } from '../services/UnifiedDatabaseService';
+import { BusDatabaseService } from '../services/database/BusDatabaseService';
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
 
     if (driver_id) {
       // Filter buses by driver_id
-      const buses = await UnifiedDatabaseService.getAllBuses();
+      const buses = await BusDatabaseService.getAllBuses();
       const filteredBuses = buses.filter(
         (bus) =>
           bus.driver_id === driver_id
@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
       });
     } else {
       // Get all buses
-      const buses = await UnifiedDatabaseService.getAllBuses();
+      const buses = await BusDatabaseService.getAllBuses();
       res.json({
         success: true,
         data: buses,

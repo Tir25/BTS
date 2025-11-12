@@ -109,15 +109,10 @@ export function useMapInstance({
           });
           mapEventListenersRef.current.clear();
 
-          Object.values(markersRef.current).forEach(marker => {
-            try { marker.remove(); } catch (error) { logger.warn('Warning', 'component', { data: '⚠️ Error removing marker:', error }); }
-          });
-          Object.values(popupsRef.current).forEach(popup => {
-            try { popup.remove(); } catch (error) { logger.warn('Warning', 'component', { data: '⚠️ Error removing popup:', error }); }
-          });
-
-          markersRef.current = {} as any;
-          popupsRef.current = {} as any;
+          // Note: Markers and popups cleanup is handled by useBusMarkerManagement hook
+          // We don't clear them here to avoid conflicts with the hook's cleanup
+          // The hook will call removeAllMarkers() during its own cleanup
+          
           addedRoutesRef.current.clear();
 
           mapRef.current.remove();

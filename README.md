@@ -132,13 +132,49 @@ npm start
 ```
 ├── backend/                 # Backend API server
 │   ├── src/               # Source code
+│   │   ├── services/      # Business logic services
+│   │   │   ├── database/  # Database services (Bus, Driver, Route)
+│   │   │   ├── assignments/ # Assignment services (Dashboard, Creation, Validation)
+│   │   │   └── routes/    # Route services (Query, Mutation)
+│   │   ├── controllers/   # Route controllers
+│   │   ├── routes/        # Express routers
+│   │   ├── middleware/    # Express middleware
+│   │   └── models/        # Database models
 │   └── dist/              # Compiled JavaScript
 ├── frontend/              # React frontend
 │   ├── src/               # Source code
+│   │   ├── components/    # React components
+│   │   │   ├── driver/    # Driver interface components and hooks
+│   │   │   └── map/       # Map components and hooks
+│   │   ├── hooks/         # Custom React hooks
+│   │   │   └── driverTracking/ # Driver tracking hooks
+│   │   ├── services/      # Client-side services
+│   │   └── utils/         # Utility functions
 │   └── dist/              # Built frontend
 ├── docs/                  # Documentation
+│   └── REFACTORING_DOCUMENTATION.md # Refactoring guide
 └── scripts/               # Utility scripts
 ```
+
+### Service Architecture (Backend)
+
+The backend uses a **facade pattern** for backward compatibility while encouraging the use of specialized services:
+
+- **Database Services:** `BusDatabaseService`, `DriverDatabaseService`, `RouteDatabaseService`
+- **Assignment Services:** `AssignmentDashboardService`, `AssignmentCreationService`, `AssignmentValidationService`
+- **Route Services:** `RouteQueryService`, `RouteMutationService`
+
+> **Note:** Legacy services (`UnifiedDatabaseService`, `ProductionAssignmentService`, `RouteService`) still work but are marked as `@deprecated`. New code should use the specialized services directly.
+
+### Component Architecture (Frontend)
+
+The frontend uses **custom hooks** to extract logic from components:
+
+- **Driver Interface:** `useStopsManagement`, `useDriverInterfaceState`, `useDriverSignOut`, `useStopReachedHandler`
+- **Driver Tracking:** `useGPSAccuracy`, `useTrackingErrors`, `useWebSocketLocationSync`
+- **Student Map:** `useStudentMapState`, `useBusMarkerManagement`, `useRouteManagement`, `useBusIdManagement`
+
+> **See:** [REFACTORING_DOCUMENTATION.md](docs/REFACTORING_DOCUMENTATION.md) for detailed migration guide.
 
 ## 📚 Documentation
 
@@ -146,6 +182,7 @@ npm start
 - **[API Documentation](docs/API_DOCUMENTATION.md)** - REST API and WebSocket reference
 - **[System Architecture](docs/SYSTEM_ARCHITECTURE.md)** - Technical architecture details
 - **[Server Management](SERVER_MANAGEMENT_GUIDE.md)** - Server management and troubleshooting
+- **[Refactoring Documentation](docs/REFACTORING_DOCUMENTATION.md)** - Service and component refactoring guide
 
 ## 🤝 Contributing
 

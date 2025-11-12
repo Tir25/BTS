@@ -254,7 +254,7 @@ export interface Database {
           geom?: any;
         };
       };
-      // Views used by UnifiedDatabaseService
+      // Views used by database services (BusDatabaseService, DriverDatabaseService, RouteDatabaseService)
       bus_management_view: {
         Row: {
           id: string;

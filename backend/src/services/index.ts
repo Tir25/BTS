@@ -8,12 +8,18 @@ export * from './locationService';
 export * from './MonitoringService';
 export * from './OptimizedAssignmentService';
 export * from './OptimizedLocationService';
-export * from './ProductionAssignmentService';
 export * from './RedisCacheService';
-export { RouteService } from './routeService';
 export * from './storageService';
 export * from './StudentRouteService';
 export * from './TrackingService';
-export * from './UnifiedDatabaseService';
 export * from './WebSocketHealthService';
+// Export specialized services
+export * from './database/BusDatabaseService';
+export * from './database/DriverDatabaseService';
+export * from './database/RouteDatabaseService';
+export * from './assignments/AssignmentDashboardService';
+export * from './assignments/AssignmentCreationService';
+export * from './assignments/AssignmentValidationService';
+export * from './routes/RouteQueryService';
+export * from './routes/RouteMutationService';
 

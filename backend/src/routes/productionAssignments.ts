@@ -6,7 +6,9 @@
 
 import express from 'express';
 import { authenticateUser, requireAdmin, requireAdminOrDriver } from '../middleware/auth';
-import { ProductionAssignmentService } from '../services/ProductionAssignmentService';
+import { AssignmentDashboardService } from '../services/assignments/AssignmentDashboardService';
+import { AssignmentCreationService } from '../services/assignments/AssignmentCreationService';
+import { AssignmentValidationService } from '../services/assignments/AssignmentValidationService';
 import { logger } from '../utils/logger';
 
 const router = express.Router();
@@ -53,7 +55,7 @@ function invalidateAssignmentCache() {
 router.get('/', requireAdmin, async (req, res) => {
   try {
     const assignments = await cached('assignments:list', () =>
-      ProductionAssignmentService.getAllAssignments()
+      AssignmentDashboardService.getAllAssignments()
     );
     res.json({
       success: true,
@@ -91,7 +93,7 @@ router.get('/my-assignment', requireAdminOrDriver, async (req, res) => {
       });
     }
 
-    const assignment = await ProductionAssignmentService.getDriverAssignment(driverId);
+    const assignment = await AssignmentDashboardService.getDriverAssignment(driverId);
     
     if (!assignment) {
       return res.status(404).json({
@@ -120,7 +122,7 @@ router.get('/my-assignment', requireAdminOrDriver, async (req, res) => {
 router.get('/dashboard', requireAdmin, async (req, res) => {
   try {
     const dashboard = await cached('assignments:dashboard', () =>
-      ProductionAssignmentService.getAssignmentDashboard()
+      AssignmentDashboardService.getAssignmentDashboard()
     );
     res.json({
       success: true,
@@ -141,7 +143,7 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
 router.get('/bus/:busId', requireAdmin, async (req, res) => {
   try {
     const { busId } = req.params;
-    const assignment = await ProductionAssignmentService.getAssignmentByBus(busId);
+    const assignment = await AssignmentDashboardService.getAssignmentByBus(busId);
 
     if (!assignment) {
       return res.status(404).json({
@@ -170,7 +172,7 @@ router.get('/bus/:busId', requireAdmin, async (req, res) => {
 router.get('/bus/:busId/history', requireAdmin, async (req, res) => {
   try {
     const { busId } = req.params;
-    const history = await ProductionAssignmentService.getAssignmentHistory(busId);
+    const history = await AssignmentDashboardService.getAssignmentHistory(busId);
 
     return res.json({
       success: true,
@@ -211,7 +213,7 @@ router.post('/', requireAdmin, async (req, res) => {
       });
     }
 
-    const assignment = await ProductionAssignmentService.createAssignment({
+    const assignment = await AssignmentCreationService.createAssignment({
       driver_id,
       bus_id,
       route_id,
@@ -266,7 +268,7 @@ router.put('/bus/:busId', requireAdmin, async (req, res) => {
       });
     }
 
-    const assignment = await ProductionAssignmentService.updateAssignment(busId, {
+    const assignment = await AssignmentCreationService.updateAssignment(busId, {
       driver_id,
       route_id,
       shift_id,
@@ -319,7 +321,7 @@ router.delete('/bus/:busId', requireAdmin, async (req, res) => {
       });
     }
 
-    const success = await ProductionAssignmentService.removeAssignment(busId, assigned_by, notes);
+    const success = await AssignmentCreationService.removeAssignment(busId, assigned_by, notes);
 
     if (!success) {
       return res.status(500).json({
@@ -360,7 +362,7 @@ router.post('/validate', requireAdmin, async (req, res) => {
       });
     }
 
-    const validation = await ProductionAssignmentService.validateAssignment(driver_id, bus_id, route_id);
+    const validation = await AssignmentValidationService.validateAssignment(driver_id, bus_id, route_id);
 
     return res.json({
       success: true,
@@ -406,7 +408,7 @@ router.post('/bulk', requireAdmin, async (req, res) => {
       assigned_by
     }));
 
-    const result = await ProductionAssignmentService.bulkAssignDrivers(assignmentsWithAssigner);
+    const result = await AssignmentCreationService.bulkAssignDrivers(assignmentsWithAssigner);
     
     // Invalidate cache immediately after bulk assignment
     invalidateAssignmentCache();
@@ -430,7 +432,7 @@ router.post('/bulk', requireAdmin, async (req, res) => {
 // Get available drivers for assignment (Admin only)
 router.get('/available/drivers', requireAdmin, async (req, res) => {
   try {
-    const drivers = await ProductionAssignmentService.getAvailableDrivers();
+    const drivers = await AssignmentDashboardService.getAvailableDrivers();
     res.json({
       success: true,
       data: drivers,
@@ -449,7 +451,7 @@ router.get('/available/drivers', requireAdmin, async (req, res) => {
 // Get available buses for assignment (Admin only)
 router.get('/available/buses', requireAdmin, async (req, res) => {
   try {
-    const buses = await ProductionAssignmentService.getAvailableBuses();
+    const buses = await AssignmentDashboardService.getAvailableBuses();
     res.json({
       success: true,
       data: buses,
@@ -468,7 +470,7 @@ router.get('/available/buses', requireAdmin, async (req, res) => {
 // Get available routes for assignment (Admin only)
 router.get('/available/routes', requireAdmin, async (req, res) => {
   try {
-    const routes = await ProductionAssignmentService.getAvailableRoutes();
+    const routes = await AssignmentDashboardService.getAvailableRoutes();
     res.json({
       success: true,
       data: routes,
@@ -487,7 +489,7 @@ router.get('/available/routes', requireAdmin, async (req, res) => {
 // Get assigned drivers (Admin only)
 router.get('/assigned-drivers', requireAdmin, async (req, res) => {
   try {
-    const assignedDrivers = await ProductionAssignmentService.getAssignedDrivers();
+    const assignedDrivers = await AssignmentDashboardService.getAssignedDrivers();
     res.json({
       success: true,
       data: assignedDrivers,

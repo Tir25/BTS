@@ -32,6 +32,10 @@ export class TrackingManager {
   private isUsingPollFallback = false;
   private lastPollAttempt: number = 0;
   private trackingStartTime: number = 0;
+  private pollFallbackFailures: number = 0; // Track consecutive poll fallback failures
+  private pollFallbackBackoffMs: number = 5000; // Exponential backoff starting at 5 seconds
+  private pollFallbackCircuitBreakerOpen: boolean = false; // Circuit breaker state
+  private lastSuccessfulPollTime: number = 0; // Track last successful poll
   
   private readonly MAX_CONSECUTIVE_FAILURES = 3;
   // CRITICAL FIX: Increased timeout for mobile GPS - GPS can take 20-45 seconds to acquire signal
@@ -41,6 +45,14 @@ export class TrackingManager {
   private readonly LOCATION_REQUEST_TIMEOUT_MS = 45000; // 45 seconds for mobile GPS (was 15s - too short)
   private readonly PERSISTENT_HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
   private readonly WATCHPOSITION_RESTART_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+  // Grace period for GPS to acquire signal - don't call getCurrentLocation during this time
+  private readonly GPS_ACQUISITION_GRACE_PERIOD_MS = 60000; // 60 seconds for GPS devices
+  // Poll fallback configuration
+  private readonly POLL_FALLBACK_GRACE_PERIOD_MS = 30000; // 30 seconds - wait before starting poll fallback
+  private readonly POLL_FALLBACK_MAX_FAILURES = 5; // Stop poll fallback after 5 consecutive failures
+  private readonly POLL_FALLBACK_MAX_BACKOFF_MS = 60000; // Maximum backoff of 60 seconds
+  private readonly POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS = 120000; // Reset circuit breaker after 2 minutes
+  private readonly POLL_FALLBACK_WATCHPOSITION_ACTIVE_THRESHOLD_MS = 10000; // If watchPosition updated in last 10s, don't poll
 
   private deviceInfo: ReturnType<typeof import('../../utils/gpsDetection').detectGPSDeviceInfo>;
   private locationListeners: Set<(location: LocationData) => void> = new Set();
@@ -214,14 +226,25 @@ export class TrackingManager {
 
   /**
    * Start polling fallback for desktop browsers
+   * PRODUCTION FIX: Only activate when watchPosition is not providing updates
+   * - Respects GPS acquisition grace period
+   * - Checks if watchPosition is working before polling
+   * - Implements circuit breaker to stop after repeated failures
+   * - Uses exponential backoff for failures
    */
   startPollFallback(
     onLocationUpdate: (location: LocationData) => void,
-    lastLocation: LocationData | null
+    getLastLocation: () => LocationData | null
   ): void {
     if (this.pollFallbackInterval) {
       clearInterval(this.pollFallbackInterval);
     }
+
+    // Reset poll fallback state
+    this.pollFallbackFailures = 0;
+    this.pollFallbackBackoffMs = this.POLL_FALLBACK_INTERVAL_MS;
+    this.pollFallbackCircuitBreakerOpen = false;
+    this.lastSuccessfulPollTime = 0;
 
     const pollInterval = this.deviceInfo.hasGPSHardware ? 
       this.POLL_FALLBACK_INTERVAL_MS : 
@@ -229,20 +252,84 @@ export class TrackingManager {
 
     this.pollFallbackInterval = setInterval(async () => {
       const now = Date.now();
+      const timeSinceTrackingStart = now - this.trackingStartTime;
       const timeSinceLastPoll = now - this.lastPollAttempt;
-      const minPollInterval = this.deviceInfo.hasGPSHardware ? 2000 : 1000;
+      const timeSinceLastUpdate = now - this.lastUpdateTime;
+      const timeSinceLastSuccessfulPoll = now - this.lastSuccessfulPollTime;
+
+      // 1. Check if we're still in GPS acquisition grace period
+      const isInGracePeriod = this.trackingStartTime > 0 && 
+                               timeSinceTrackingStart < this.GPS_ACQUISITION_GRACE_PERIOD_MS &&
+                               this.deviceInfo.hasGPSHardware;
       
+      if (isInGracePeriod) {
+        logger.debug('Poll fallback: Skipping during GPS acquisition grace period', 'LocationService', {
+          timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's',
+          gracePeriod: Math.round(this.GPS_ACQUISITION_GRACE_PERIOD_MS / 1000) + 's',
+        });
+        return;
+      }
+
+      // 2. Check if poll fallback grace period has passed (wait before starting poll fallback)
+      if (this.lastSuccessfulPollTime === 0 && timeSinceTrackingStart < this.POLL_FALLBACK_GRACE_PERIOD_MS) {
+        logger.debug('Poll fallback: Waiting for grace period before starting', 'LocationService', {
+          timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's',
+          gracePeriod: Math.round(this.POLL_FALLBACK_GRACE_PERIOD_MS / 1000) + 's',
+        });
+        return;
+      }
+
+      // 3. Check if watchPosition is actively providing updates (don't poll if it is)
+      if (timeSinceLastUpdate < this.POLL_FALLBACK_WATCHPOSITION_ACTIVE_THRESHOLD_MS) {
+        // watchPosition is working - reset poll fallback state and skip polling
+        if (this.pollFallbackFailures > 0 || this.pollFallbackCircuitBreakerOpen) {
+          logger.info('Poll fallback: watchPosition is working - resetting poll fallback state', 'LocationService', {
+            timeSinceLastUpdate: Math.round(timeSinceLastUpdate / 1000) + 's',
+            previousFailures: this.pollFallbackFailures,
+          });
+          this.pollFallbackFailures = 0;
+          this.pollFallbackBackoffMs = this.POLL_FALLBACK_INTERVAL_MS;
+          this.pollFallbackCircuitBreakerOpen = false;
+          this.lastSuccessfulPollTime = now;
+        }
+        return;
+      }
+
+      // 4. Check circuit breaker - if open, only retry after reset period
+      if (this.pollFallbackCircuitBreakerOpen) {
+        if (timeSinceLastSuccessfulPoll < this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS) {
+          logger.debug('Poll fallback: Circuit breaker open - skipping poll', 'LocationService', {
+            timeSinceLastSuccessfulPoll: Math.round(timeSinceLastSuccessfulPoll / 1000) + 's',
+            resetAfter: Math.round(this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS / 1000) + 's',
+          });
+          return;
+        } else {
+          // Reset circuit breaker
+          logger.info('Poll fallback: Circuit breaker reset - attempting poll', 'LocationService');
+          this.pollFallbackCircuitBreakerOpen = false;
+          this.pollFallbackFailures = 0;
+          this.pollFallbackBackoffMs = this.POLL_FALLBACK_INTERVAL_MS;
+        }
+      }
+
+      // 5. Check exponential backoff - don't poll if we're in backoff period
+      if (timeSinceLastPoll < this.pollFallbackBackoffMs) {
+        return;
+      }
+
+      // 6. Check minimum poll interval
+      const minPollInterval = this.deviceInfo.hasGPSHardware ? 2000 : 1000;
       if (timeSinceLastPoll < minPollInterval) {
         return;
       }
 
-      const timeSinceLastUpdate = now - this.lastUpdateTime;
+      // 7. Only poll if watchPosition hasn't provided updates recently
       const minUpdateInterval = this.deviceInfo.hasGPSHardware ? 3000 : 1000;
-      
       if (timeSinceLastUpdate < minUpdateInterval) {
         return;
       }
 
+      // 8. Attempt to get location via poll fallback
       try {
         this.lastPollAttempt = now;
         this.isUsingPollFallback = true;
@@ -252,21 +339,28 @@ export class TrackingManager {
         this.isUsingPollFallback = false;
         
         if (location) {
+          // Success - reset failure tracking
           this.lastUpdateTime = Date.now();
           this.consecutiveFailures = 0;
+          this.pollFallbackFailures = 0;
+          this.pollFallbackBackoffMs = this.POLL_FALLBACK_INTERVAL_MS;
+          this.lastSuccessfulPollTime = now;
+          this.pollFallbackCircuitBreakerOpen = false;
+          
+          const currentLastLocation = getLastLocation();
           
           // For desktop, send heartbeat updates even if coordinates unchanged
-          if (lastLocation && !this.deviceInfo.hasGPSHardware) {
+          if (currentLastLocation && !this.deviceInfo.hasGPSHardware) {
             const distance = this.calculateDistance(
-              lastLocation.latitude,
-              lastLocation.longitude,
+              currentLastLocation.latitude,
+              currentLastLocation.longitude,
               location.latitude,
               location.longitude
             );
             
             if (distance < 50) {
               const heartbeatLocation: LocationData = {
-                ...lastLocation,
+                ...currentLastLocation,
                 timestamp: Date.now(),
                 accuracy: location.accuracy,
               };
@@ -276,30 +370,73 @@ export class TrackingManager {
           }
           
           onLocationUpdate(location);
+        } else {
+          // getCurrentLocation returned null - treat as failure
+          this.handlePollFallbackFailure();
         }
       } catch (error) {
         this.isUsingPollFallback = false;
-        logger.warn('Polling fallback: Failed to get location', 'LocationService', { 
-          error: error instanceof Error ? error.message : String(error),
-          deviceType: this.deviceInfo.deviceType,
-        });
+        this.handlePollFallbackFailure();
+        
+        // Only log if not in circuit breaker state (to reduce spam)
+        if (!this.pollFallbackCircuitBreakerOpen) {
+          logger.warn('Poll fallback: Failed to get location', 'LocationService', { 
+            error: error instanceof Error ? error.message : String(error),
+            deviceType: this.deviceInfo.deviceType,
+            failures: this.pollFallbackFailures,
+            backoffMs: this.pollFallbackBackoffMs,
+          });
+        }
       }
     }, pollInterval);
     
-    logger.info('Enhanced polling fallback started', 'LocationService', {
+    logger.info('Enhanced polling fallback started with intelligent activation', 'LocationService', {
       interval: pollInterval / 1000 + 's',
       deviceType: this.deviceInfo.deviceType,
       hasGPSHardware: this.deviceInfo.hasGPSHardware,
-      aggressiveMode: !this.deviceInfo.hasGPSHardware,
+      gracePeriod: Math.round(this.POLL_FALLBACK_GRACE_PERIOD_MS / 1000) + 's',
+      watchPositionActiveThreshold: Math.round(this.POLL_FALLBACK_WATCHPOSITION_ACTIVE_THRESHOLD_MS / 1000) + 's',
+      maxFailures: this.POLL_FALLBACK_MAX_FAILURES,
+      circuitBreakerReset: Math.round(this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS / 1000) + 's',
     });
   }
 
   /**
+   * Handle poll fallback failure - implement exponential backoff and circuit breaker
+   */
+  private handlePollFallbackFailure(): void {
+    this.pollFallbackFailures++;
+    
+    // Exponential backoff - double the backoff time (capped at max)
+    this.pollFallbackBackoffMs = Math.min(
+      this.pollFallbackBackoffMs * 2,
+      this.POLL_FALLBACK_MAX_BACKOFF_MS
+    );
+    
+    // Open circuit breaker if too many failures
+    if (this.pollFallbackFailures >= this.POLL_FALLBACK_MAX_FAILURES) {
+      this.pollFallbackCircuitBreakerOpen = true;
+      logger.error('Poll fallback: Circuit breaker opened - too many consecutive failures', 'LocationService', {
+        failures: this.pollFallbackFailures,
+        maxFailures: this.POLL_FALLBACK_MAX_FAILURES,
+        resetAfter: Math.round(this.POLL_FALLBACK_CIRCUIT_BREAKER_RESET_MS / 1000) + 's',
+        note: 'Poll fallback will be disabled until circuit breaker resets or watchPosition starts working',
+      });
+    }
+  }
+
+  /**
    * Start persistent heartbeat
+   * Note: getCurrentLocation is only called if we're past the GPS acquisition grace period
+   * This prevents errors when GPS hasn't had time to acquire signal yet
+   * 
+   * @param onLocationUpdate - Callback when location is available
+   * @param getLastLocation - Function to get the current last location (not a stale closure value)
+   * @param getCurrentLocation - Function to get current location if needed
    */
   startPersistentHeartbeat(
     onLocationUpdate: (location: LocationData) => void,
-    lastLocation: LocationData | null,
+    getLastLocation: () => LocationData | null,
     getCurrentLocation: () => Promise<LocationData | null>
   ): void {
     if (this.persistentHeartbeatInterval) {
@@ -309,15 +446,26 @@ export class TrackingManager {
     this.persistentHeartbeatInterval = setInterval(async () => {
       const now = Date.now();
       const timeSinceLastUpdate = now - this.lastUpdateTime;
+      const timeSinceTrackingStart = now - this.trackingStartTime;
+
+      // Don't call getCurrentLocation if we're still in the GPS acquisition grace period
+      // This prevents errors when GPS hasn't had time to acquire signal yet
+      const isInGracePeriod = this.trackingStartTime > 0 && 
+                               timeSinceTrackingStart < this.GPS_ACQUISITION_GRACE_PERIOD_MS &&
+                               this.deviceInfo.hasGPSHardware;
 
       if (timeSinceLastUpdate > this.PERSISTENT_HEARTBEAT_INTERVAL_MS) {
-        if (lastLocation) {
+        // Get current lastLocation (not stale closure value)
+        const currentLastLocation = getLastLocation();
+        if (currentLastLocation) {
           const heartbeatLocation: LocationData = {
-            ...lastLocation,
+            ...currentLastLocation,
             timestamp: Date.now(),
           };
           onLocationUpdate(heartbeatLocation);
-        } else {
+        } else if (!isInGracePeriod) {
+          // Only try to get current location if we're past the grace period
+          // This prevents errors when GPS is still acquiring signal
           try {
             const location = await getCurrentLocation();
             if (location) {
@@ -326,6 +474,13 @@ export class TrackingManager {
           } catch (error) {
             logger.warn('💓 Heartbeat: Failed to get current location', 'LocationService', { error });
           }
+        } else {
+          // Still in grace period - wait for GPS to acquire signal
+          logger.debug('💓 Heartbeat: Skipping getCurrentLocation during GPS acquisition grace period', 'LocationService', {
+            timeSinceTrackingStart: Math.round(timeSinceTrackingStart / 1000) + 's',
+            gracePeriod: Math.round(this.GPS_ACQUISITION_GRACE_PERIOD_MS / 1000) + 's',
+            hasGPSHardware: this.deviceInfo.hasGPSHardware,
+          });
         }
       }
     }, this.PERSISTENT_HEARTBEAT_INTERVAL_MS);

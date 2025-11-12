@@ -129,18 +129,8 @@ const DriverLogin: React.FC = () => {
     }
   };
 
-  // PRODUCTION FIX: Prevent multiple simultaneous login attempts
-  const isSubmittingRef = useRef(false);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // PRODUCTION FIX: Prevent multiple submissions
-    if (isSubmittingRef.current || isLoading) {
-      logger.warn('⚠️ Login already in progress, ignoring duplicate submission', 'component');
-      return;
-    }
-    
     setLoginError(null);
     clearError();
 
@@ -150,19 +140,13 @@ const DriverLogin: React.FC = () => {
       return;
     }
 
-    // PRODUCTION FIX: Set submitting flag
-    isSubmittingRef.current = true;
-
     try {
-      logger.info('🔐 Attempting driver login...', 'component', { email: loginForm.email });
+      logger.info('🔐 Attempting driver login...', 'component');
       
-      const result = await login(loginForm.email.trim(), loginForm.password);
+      const result = await login(loginForm.email, loginForm.password);
 
       if (!result.success) {
-        logger.error('❌ Driver login failed:', 'component', { 
-          error: result.error,
-          email: loginForm.email 
-        });
+        logger.error('❌ Driver login failed:', 'component', { error: result.error });
         
         // Process error through centralized error handler for better user messages
         const appError = errorHandler.handleError(
@@ -177,13 +161,6 @@ const DriverLogin: React.FC = () => {
         );
         
         setLoginError(userFriendlyMessage);
-        
-        // PRODUCTION FIX: Clear password field on error to prevent retry loops
-        if (result.error && (result.error.includes('Invalid') || result.error.includes('invalid_credentials'))) {
-          logger.warn('⚠️ Invalid credentials - clearing password field', 'component');
-          // Don't clear password automatically as it's bad UX, but log it
-        }
-        
         return;
       }
 
@@ -206,9 +183,6 @@ const DriverLogin: React.FC = () => {
       );
       
       setLoginError(userFriendlyMessage);
-    } finally {
-      // PRODUCTION FIX: Always clear submitting flag
-      isSubmittingRef.current = false;
     }
   };
 

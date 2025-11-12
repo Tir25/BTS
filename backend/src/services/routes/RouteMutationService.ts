@@ -1,41 +1,13 @@
-import { supabaseAdmin } from '../config/supabase';
-import type { Database } from '../config/supabase';
-import { logger } from '../utils/logger';
+/**
+ * Route Mutation Service
+ * Handles write operations for routes
+ */
+
+import { supabaseAdmin } from '../../config/supabase';
+import type { Database } from '../../config/supabase';
+import { logger } from '../../utils/logger';
 import type { LineString } from 'geojson';
-
-interface Route {
-  id: string;
-  name: string;
-  description: string;
-  stops: LineString;
-  distance_km: number;
-  estimated_duration_minutes: number;
-  city?: string;
-  is_active: boolean;
-}
-
-export interface RouteWithGeoJSON extends Omit<Route, 'stops'> {
-  stops: LineString;
-  created_at?: string;
-  updated_at?: string;
-}
-
-interface BusLocation {
-  bus_id: string;
-  latitude: number;
-  longitude: number;
-  timestamp: string;
-}
-
-interface ETAInfo {
-  bus_id: string;
-  route_id: string;
-  current_location: [number, number];
-  next_stop: string;
-  distance_remaining: number;
-  estimated_arrival_minutes: number;
-  is_near_stop: boolean;
-}
+import { RouteQueryService, RouteWithGeoJSON } from './RouteQueryService';
 
 export interface RouteData {
   id?: string;
@@ -47,125 +19,15 @@ export interface RouteData {
   city?: string | null;
 }
 
-export class RouteService {
-  static async calculateETA(
-    busLocation: BusLocation,
-    routeId: string
-  ): Promise<ETAInfo | null> {
-    try {
-      const query = `
-        SELECT 
-          r.id as route_id,
-          r.name as route_name,
-          ST_AsGeoJSON(r.stops)::json as route_stops,
-          ST_Distance(
-            ST_GeomFromText('POINT($1 $2)', 4326),
-            r.stops
-          ) as distance_to_route
-        FROM routes r 
-        WHERE r.id = $3 AND r.is_active = true
-      `;
-
-      // Note: This method needs to be implemented with proper database connection
-      // For now, return null as this is not critical for admin data loading
-      return null;
-    } catch (error) {
-      console.error('❌ Error calculating ETA:', error);
-      return null;
-    }
-  }
-
-  static async getAllRoutes(): Promise<RouteWithGeoJSON[]> {
-    try {
-      type RouteManagementViewRow = Database['public']['Views']['route_management_view']['Row'];
-
-      const { data: routes, error } = await supabaseAdmin
-        .from('route_management_view')
-        .select('*')
-        
-        .order('name');
-
-      if (error) {
-        logger.error('Error fetching routes', 'route-service', { error });
-        throw error;
-      }
-
-      if (!routes || routes.length === 0) {
-        logger.info('No routes found in database', 'route-service');
-        return [];
-      }
-
-      logger.info(`Fetched ${routes.length} routes from database`, 'route-service');
-      
-      // Transform the data to match the expected interface
-      return routes.map((route: any) => ({
-        id: route.id,
-        name: route.name,
-        description: route.description,
-        distance_km: route.distance_km,
-        estimated_duration_minutes: route.estimated_duration_minutes,
-        city: route.city ?? undefined,
-        is_active: route.is_active,
-        created_at: route.created_at,
-        updated_at: route.updated_at,
-        stops: {
-          type: 'LineString',
-          coordinates: [] // Empty coordinates for now
-        } as LineString
-      }));
-    } catch (error) {
-      logger.error('Error in getAllRoutes', 'route-service', { error });
-      return [];
-    }
-  }
-
-  static async getRouteById(routeId: string): Promise<RouteWithGeoJSON | null> {
-    try {
-      type RouteManagementViewRow = Database['public']['Views']['route_management_view']['Row'];
-
-      const { data: route, error } = await supabaseAdmin
-        .from('route_management_view')
-        .select('*')
-        .eq('id', routeId)
-        .eq('is_active', true)
-        
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          return null; // No rows returned
-        }
-        logger.error('Error fetching route by ID', 'route-service', { error, routeId });
-        throw error;
-      }
-
-      if (!route) return null;
-
-      // Transform the data to match the expected interface
-      return {
-        id: route.id,
-        name: route.name,
-        description: route.description,
-        distance_km: route.distance_km,
-        estimated_duration_minutes: route.estimated_duration_minutes,
-        city: route.city ?? undefined,
-        is_active: route.is_active,
-        created_at: route.created_at,
-        updated_at: route.updated_at,
-        stops: {
-          type: 'LineString',
-          coordinates: [] // Empty coordinates for now
-        } as LineString
-      };
-    } catch (error) {
-      logger.error('Error in getRouteById', 'route-service', { error, routeId });
-      return null;
-    }
-  }
-
+/**
+ * Service for route mutation operations
+ */
+export class RouteMutationService {
+  /**
+   * Create a new route
+   */
   static async createRoute(routeData: RouteData): Promise<RouteWithGeoJSON> {
     try {
-      type RoutesRow = Database['public']['Tables']['routes']['Row'];
       type RoutesInsert = Database['public']['Tables']['routes']['Insert'];
 
       const insertPayload: RoutesInsert = {
@@ -194,11 +56,11 @@ export class RouteService {
         .single();
 
       if (error) {
-        logger.error('Error creating route', 'route-service', { error, routeData });
+        logger.error('Error creating route', 'route-mutation-service', { error, routeData });
         throw error;
       }
 
-      logger.info('Route created successfully', 'route-service', { routeId: route.id });
+      logger.info('Route created successfully', 'route-mutation-service', { routeId: route.id });
       
       // Transform the data to match the expected interface
       return {
@@ -217,14 +79,16 @@ export class RouteService {
         } as LineString
       };
     } catch (error) {
-      logger.error('Error in createRoute', 'route-service', { error, routeData });
+      logger.error('Error in createRoute', 'route-mutation-service', { error, routeData });
       throw error;
     }
   }
 
+  /**
+   * Update a route
+   */
   static async updateRoute(routeId: string, routeData: Partial<RouteData>): Promise<RouteWithGeoJSON | null> {
     try {
-      type RoutesRow = Database['public']['Tables']['routes']['Row'];
       type RoutesUpdate = Database['public']['Tables']['routes']['Update'];
 
       const updateData: RoutesUpdate = {};
@@ -261,11 +125,11 @@ export class RouteService {
         if (error.code === 'PGRST116') {
           return null; // No rows returned
         }
-        logger.error('Error updating route', 'route-service', { error, routeId, routeData });
+        logger.error('Error updating route', 'route-mutation-service', { error, routeId, routeData });
         throw error;
       }
 
-      logger.info('Route updated successfully', 'route-service', { routeId });
+      logger.info('Route updated successfully', 'route-mutation-service', { routeId });
       
       // Transform the data to match the expected interface
       return {
@@ -284,14 +148,16 @@ export class RouteService {
         } as LineString
       };
     } catch (error) {
-      logger.error('Error in updateRoute', 'route-service', { error, routeId, routeData });
+      logger.error('Error in updateRoute', 'route-mutation-service', { error, routeId, routeData });
       throw error;
     }
   }
 
+  /**
+   * Delete a route
+   */
   static async deleteRoute(routeId: string): Promise<RouteWithGeoJSON | null> {
     try {
-      type RoutesRow = Database['public']['Tables']['routes']['Row'];
       type BusesUpdate = Database['public']['Tables']['buses']['Update'];
 
       // First, get the route data before deletion
@@ -299,14 +165,13 @@ export class RouteService {
         .from('routes')
         .select('id, name, description, distance_km, estimated_duration_minutes, city, is_active, created_at, updated_at')
         .eq('id', routeId)
-        
         .single();
 
       if (fetchError) {
         if (fetchError.code === 'PGRST116') {
           return null; // No route found
         }
-        logger.error('Error fetching route for deletion', 'route-service', { error: fetchError, routeId });
+        logger.error('Error fetching route for deletion', 'route-mutation-service', { error: fetchError, routeId });
         throw fetchError;
       }
 
@@ -367,11 +232,11 @@ export class RouteService {
         .eq('id', routeId);
 
       if (deleteError) {
-        logger.error('Error deleting route', 'route-service', { error: deleteError, routeId });
+        logger.error('Error deleting route', 'route-mutation-service', { error: deleteError, routeId });
         throw deleteError;
       }
 
-      logger.info('Route and all related data deleted successfully', 'route-service', { 
+      logger.info('Route and all related data deleted successfully', 'route-mutation-service', { 
         routeId, 
         routeName: route.name 
       });
@@ -393,32 +258,36 @@ export class RouteService {
         } as LineString
       };
     } catch (error) {
-      logger.error('Error in deleteRoute', 'route-service', { error, routeId });
+      logger.error('Error in deleteRoute', 'route-mutation-service', { error, routeId });
       throw error;
     }
-  }
-
-  /**
-   * Get routes within viewport (spatial query)
-   */
-  static async getRoutesInViewport(viewport: any): Promise<RouteWithGeoJSON[]> {
-    // Placeholder implementation
-    return [];
   }
 
   /**
    * Assign bus to route
    */
   static async assignBusToRoute(busId: string, routeId: string): Promise<boolean> {
-    // Placeholder implementation
-    return false;
-  }
+    try {
+      // Update bus with route assignment
+      const { error } = await supabaseAdmin
+        .from('buses')
+        .update({
+          route_id: routeId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', busId);
 
-  /**
-   * Check if bus is near a stop
-   */
-  static async checkBusNearStop(busLocation: any, routeId: string): Promise<any> {
-    // Placeholder implementation
-    return null;
+      if (error) {
+        logger.error('Error assigning bus to route', 'route-mutation-service', { error, busId, routeId });
+        throw error;
+      }
+
+      logger.info('Bus assigned to route successfully', 'route-mutation-service', { busId, routeId });
+      return true;
+    } catch (error) {
+      logger.error('Error in assignBusToRoute', 'route-mutation-service', { error, busId, routeId });
+      throw error;
+    }
   }
 }
+

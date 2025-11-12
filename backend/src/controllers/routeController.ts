@@ -4,7 +4,8 @@
  */
 
 import { Request, Response } from 'express';
-import { RouteService } from '../services/routeService';
+import { RouteQueryService } from '../services/routes/RouteQueryService';
+import { RouteMutationService } from '../services/routes/RouteMutationService';
 import { ConsolidatedAdminService } from '../services/ConsolidatedAdminService';
 import { validateRouteData } from '../utils/validation';
 import { ResponseHelper } from '../utils/responseHelpers';
@@ -16,7 +17,7 @@ export class RouteController {
    */
   static async getAllRoutes(req: Request, res: Response): Promise<void> {
     try {
-      const routes = await RouteService.getAllRoutes();
+      const routes = await RouteQueryService.getAllRoutes();
       ResponseHelper.success(res, routes);
     } catch (error) {
       logger.error('Error fetching routes', 'route-controller', { error });
@@ -43,7 +44,7 @@ export class RouteController {
         maxLat: parseFloat(maxLat as string),
       };
 
-      const routes = await RouteService.getRoutesInViewport(viewport);
+      const routes = await RouteQueryService.getRoutesInViewport(viewport);
       ResponseHelper.success(res, routes);
     } catch (error) {
       logger.error('Error fetching routes in viewport', 'route-controller', { error });
@@ -57,7 +58,7 @@ export class RouteController {
   static async getRouteById(req: Request, res: Response): Promise<void> {
     try {
       const { routeId } = req.params;
-      const route = await RouteService.getRouteById(routeId);
+      const route = await RouteQueryService.getRouteById(routeId);
 
       if (!route) {
         ResponseHelper.notFound(res, `Route with ID ${routeId}`);
@@ -85,7 +86,7 @@ export class RouteController {
         return;
       }
 
-      const newRoute = await RouteService.createRoute(routeData);
+      const newRoute = await RouteMutationService.createRoute(routeData);
 
       if (!newRoute) {
         ResponseHelper.internalError(res, 'Database error occurred');
@@ -154,7 +155,7 @@ export class RouteController {
         return;
       }
 
-      const success = await RouteService.assignBusToRoute(busId, routeId);
+      const success = await RouteMutationService.assignBusToRoute(busId, routeId);
 
       if (!success) {
         ResponseHelper.notFound(res, 'Bus or route not found');
@@ -188,7 +189,7 @@ export class RouteController {
         timestamp: timestamp || new Date().toISOString(),
       };
 
-      const etaInfo = await RouteService.calculateETA(busLocation, routeId);
+      const etaInfo = await RouteQueryService.calculateETA(busLocation, routeId);
 
       if (!etaInfo) {
         ResponseHelper.notFound(res, 'Route not found or invalid data');
@@ -222,7 +223,7 @@ export class RouteController {
         timestamp: timestamp || new Date().toISOString(),
       };
 
-      const nearStopInfo = await RouteService.checkBusNearStop(busLocation, routeId);
+      const nearStopInfo = await RouteQueryService.checkBusNearStop(busLocation, routeId);
       ResponseHelper.success(res, nearStopInfo);
     } catch (error) {
       logger.error('Error checking bus near stop', 'route-controller', { error });

@@ -1,10 +1,10 @@
 import { supabaseAdmin } from '../config/supabase';
 import { logger } from '../utils/logger';
-import { ProductionAssignmentService } from './ProductionAssignmentService';
+import { AssignmentDashboardService } from './assignments/AssignmentDashboardService';
 
 export class TrackingService {
   static async startTracking(driverId: string, shiftId?: string) {
-    const assignment = await ProductionAssignmentService.getDriverAssignment(driverId);
+    const assignment = await AssignmentDashboardService.getDriverAssignment(driverId);
     if (!assignment) throw new Error('No active assignment for driver');
 
     const routeId = assignment.route_id;
@@ -207,7 +207,7 @@ export class TrackingService {
   static async getDriverAssignmentWithStops(driverId: string) {
     // PRODUCTION FIX: Works for any driver - dynamically fetches assignment
     // No hardcoded driver IDs, supports all drivers including newly created ones
-    const assignment = await ProductionAssignmentService.getDriverAssignment(driverId);
+    const assignment = await AssignmentDashboardService.getDriverAssignment(driverId);
     if (!assignment) {
       logger.info('No assignment found for driver', 'tracking-service', { driverId });
       return null;
