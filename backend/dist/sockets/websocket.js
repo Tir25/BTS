@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeWebSocket = exports.globalIO = void 0;
 const locationService_1 = require("../services/locationService");
 const OptimizedLocationService_1 = require("../services/OptimizedLocationService");
-const routeService_1 = require("../services/routeService");
+const RouteQueryService_1 = require("../services/routes/RouteQueryService");
 const validation_1 = require("../utils/validation");
 const websocketAuth_1 = require("../middleware/websocketAuth");
 const logger_1 = require("../utils/logger");
@@ -250,7 +250,7 @@ const initializeWebSocket = (io) => {
                 let nearStopInfo = null;
                 if (busInfo?.route_id) {
                     try {
-                        etaInfo = await routeService_1.RouteService.calculateETA({
+                        etaInfo = await RouteQueryService_1.RouteQueryService.calculateETA({
                             bus_id: socket.busId,
                             latitude: data.latitude,
                             longitude: data.longitude,
@@ -261,7 +261,7 @@ const initializeWebSocket = (io) => {
                         logger_1.logger.error('Error calculating ETA', 'route', undefined, etaError);
                     }
                     try {
-                        nearStopInfo = await routeService_1.RouteService.checkBusNearStop({
+                        nearStopInfo = await RouteQueryService_1.RouteQueryService.checkBusNearStop({
                             bus_id: socket.busId,
                             latitude: data.latitude,
                             longitude: data.longitude,

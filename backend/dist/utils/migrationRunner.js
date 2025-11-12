@@ -43,23 +43,50 @@ class MigrationRunner {
     }
     getAvailableMigrations() {
         try {
-            const files = (0, fs_1.readdirSync)(this.migrationsPath)
+            const allSqlFiles = (0, fs_1.readdirSync)(this.migrationsPath)
                 .filter((file) => file.endsWith('.sql'))
                 .sort();
-            return files.map((file) => {
-                const match = file.match(/^(\d+)_(.+)\.sql$/);
-                if (!match) {
-                    throw new Error(`Invalid migration filename: ${file}`);
+            const migrationFiles = allSqlFiles.filter((file) => {
+                if (file.startsWith('rollback_')) {
+                    return false;
                 }
-                return {
-                    id: match[1],
-                    name: match[2],
-                    filename: file,
-                };
+                if (file.startsWith('fix_')) {
+                    return false;
+                }
+                const migrationPattern = /^(\d+)_(.+)\.sql$/;
+                return migrationPattern.test(file);
             });
+            const migrations = [];
+            for (const file of migrationFiles) {
+                const match = file.match(/^(\d+)_(.+)\.sql$/);
+                if (match && match[1] && match[2]) {
+                    migrations.push({
+                        id: match[1],
+                        name: match[2],
+                        filename: file,
+                    });
+                }
+                else {
+                    logger_1.logger.warn(`Skipping file that doesn't match migration pattern: ${file}`, 'migration');
+                }
+            }
+            const skippedFiles = allSqlFiles.filter(file => !migrationFiles.includes(file));
+            if (skippedFiles.length > 0) {
+                logger_1.logger.debug(`Skipped ${skippedFiles.length} non-migration SQL file(s)`, 'migration', {
+                    skippedFiles: skippedFiles.join(', ')
+                });
+            }
+            migrations.sort((a, b) => parseInt(a.id, 10) - parseInt(b.id, 10));
+            logger_1.logger.debug(`Found ${migrations.length} valid migration file(s)`, 'migration', {
+                migrations: migrations.map(m => m.filename).join(', ')
+            });
+            return migrations;
         }
         catch (error) {
-            logger_1.logger.error('Failed to get available migrations', 'migration', { error: String(error) });
+            logger_1.logger.error('Failed to get available migrations', 'migration', {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined
+            });
             return [];
         }
     }

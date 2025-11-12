@@ -3,10 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TrackingService = void 0;
 const supabase_1 = require("../config/supabase");
 const logger_1 = require("../utils/logger");
-const ProductionAssignmentService_1 = require("./ProductionAssignmentService");
+const AssignmentDashboardService_1 = require("./assignments/AssignmentDashboardService");
 class TrackingService {
     static async startTracking(driverId, shiftId) {
-        const assignment = await ProductionAssignmentService_1.ProductionAssignmentService.getDriverAssignment(driverId);
+        const assignment = await AssignmentDashboardService_1.AssignmentDashboardService.getDriverAssignment(driverId);
         if (!assignment)
             throw new Error('No active assignment for driver');
         const routeId = assignment.route_id;
@@ -182,7 +182,7 @@ class TrackingService {
         };
     }
     static async getDriverAssignmentWithStops(driverId) {
-        const assignment = await ProductionAssignmentService_1.ProductionAssignmentService.getDriverAssignment(driverId);
+        const assignment = await AssignmentDashboardService_1.AssignmentDashboardService.getDriverAssignment(driverId);
         if (!assignment) {
             logger_1.logger.info('No assignment found for driver', 'tracking-service', { driverId });
             return null;

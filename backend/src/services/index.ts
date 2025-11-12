@@ -13,13 +13,13 @@ export * from './storageService';
 export * from './StudentRouteService';
 export * from './TrackingService';
 export * from './WebSocketHealthService';
-// Export specialized services
-export * from './database/BusDatabaseService';
-export * from './database/DriverDatabaseService';
-export * from './database/RouteDatabaseService';
+// Export specialized services - use explicit exports to avoid type conflicts
+export { BusDatabaseService } from './database/BusDatabaseService';
+export { DriverDatabaseService } from './database/DriverDatabaseService';
+export { RouteDatabaseService, type RouteDatabaseData } from './database/RouteDatabaseService';
 export * from './assignments/AssignmentDashboardService';
 export * from './assignments/AssignmentCreationService';
 export * from './assignments/AssignmentValidationService';
 export * from './routes/RouteQueryService';
-export * from './routes/RouteMutationService';
+export { RouteMutationService, type RouteData } from './routes/RouteMutationService';
 

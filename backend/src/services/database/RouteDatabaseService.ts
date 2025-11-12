@@ -6,13 +6,22 @@
 import { supabaseAdmin } from '../../config/supabase';
 import { logger } from '../../utils/logger';
 
-export interface RouteData {
-  id?: string;
+/**
+ * Route data returned from database queries
+ */
+export interface RouteDatabaseData {
+  id: string;
   name: string;
-  description?: string;
-  origin?: string;
-  destination?: string;
-  is_active?: boolean;
+  description: string | null;
+  distance_km: number;
+  estimated_duration_minutes: number;
+  city: string | null;
+  custom_origin: string | null;
+  custom_destination: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  assigned_buses_count?: number;
 }
 
 /**
@@ -22,7 +31,7 @@ export class RouteDatabaseService {
   /**
    * Get all routes
    */
-  static async getAllRoutes(): Promise<RouteData[]> {
+  static async getAllRoutes(): Promise<RouteDatabaseData[]> {
     try {
       // Use the route_management_view for comprehensive data
       const { data: routes, error } = await supabaseAdmin

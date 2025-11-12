@@ -6,13 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const locationService_1 = require("../services/locationService");
 const OptimizedLocationService_1 = require("../services/OptimizedLocationService");
-const UnifiedDatabaseService_1 = require("../services/UnifiedDatabaseService");
+const BusDatabaseService_1 = require("../services/database/BusDatabaseService");
 const router = express_1.default.Router();
 router.get('/', async (req, res) => {
     try {
         const { driver_id } = req.query;
         if (driver_id) {
-            const buses = await UnifiedDatabaseService_1.UnifiedDatabaseService.getAllBuses();
+            const buses = await BusDatabaseService_1.BusDatabaseService.getAllBuses();
             const filteredBuses = buses.filter((bus) => bus.driver_id === driver_id);
             res.json({
                 success: true,
@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
             });
         }
         else {
-            const buses = await UnifiedDatabaseService_1.UnifiedDatabaseService.getAllBuses();
+            const buses = await BusDatabaseService_1.BusDatabaseService.getAllBuses();
             res.json({
                 success: true,
                 data: buses,

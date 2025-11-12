@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RouteController = void 0;
-const routeService_1 = require("../services/routeService");
+const RouteQueryService_1 = require("../services/routes/RouteQueryService");
+const RouteMutationService_1 = require("../services/routes/RouteMutationService");
 const ConsolidatedAdminService_1 = require("../services/ConsolidatedAdminService");
 const validation_1 = require("../utils/validation");
 const responseHelpers_1 = require("../utils/responseHelpers");
@@ -9,7 +10,7 @@ const logger_1 = require("../utils/logger");
 class RouteController {
     static async getAllRoutes(req, res) {
         try {
-            const routes = await routeService_1.RouteService.getAllRoutes();
+            const routes = await RouteQueryService_1.RouteQueryService.getAllRoutes();
             responseHelpers_1.ResponseHelper.success(res, routes);
         }
         catch (error) {
@@ -30,7 +31,7 @@ class RouteController {
                 maxLng: parseFloat(maxLng),
                 maxLat: parseFloat(maxLat),
             };
-            const routes = await routeService_1.RouteService.getRoutesInViewport(viewport);
+            const routes = await RouteQueryService_1.RouteQueryService.getRoutesInViewport(viewport);
             responseHelpers_1.ResponseHelper.success(res, routes);
         }
         catch (error) {
@@ -41,7 +42,7 @@ class RouteController {
     static async getRouteById(req, res) {
         try {
             const { routeId } = req.params;
-            const route = await routeService_1.RouteService.getRouteById(routeId);
+            const route = await RouteQueryService_1.RouteQueryService.getRouteById(routeId);
             if (!route) {
                 responseHelpers_1.ResponseHelper.notFound(res, `Route with ID ${routeId}`);
                 return;
@@ -61,7 +62,7 @@ class RouteController {
                 responseHelpers_1.ResponseHelper.validationError(res, validationError);
                 return;
             }
-            const newRoute = await routeService_1.RouteService.createRoute(routeData);
+            const newRoute = await RouteMutationService_1.RouteMutationService.createRoute(routeData);
             if (!newRoute) {
                 responseHelpers_1.ResponseHelper.internalError(res, 'Database error occurred');
                 return;
@@ -112,7 +113,7 @@ class RouteController {
                 responseHelpers_1.ResponseHelper.badRequest(res, 'Bus ID is required');
                 return;
             }
-            const success = await routeService_1.RouteService.assignBusToRoute(busId, routeId);
+            const success = await RouteMutationService_1.RouteMutationService.assignBusToRoute(busId, routeId);
             if (!success) {
                 responseHelpers_1.ResponseHelper.notFound(res, 'Bus or route not found');
                 return;
@@ -138,7 +139,7 @@ class RouteController {
                 longitude: parseFloat(longitude),
                 timestamp: timestamp || new Date().toISOString(),
             };
-            const etaInfo = await routeService_1.RouteService.calculateETA(busLocation, routeId);
+            const etaInfo = await RouteQueryService_1.RouteQueryService.calculateETA(busLocation, routeId);
             if (!etaInfo) {
                 responseHelpers_1.ResponseHelper.notFound(res, 'Route not found or invalid data');
                 return;
@@ -164,7 +165,7 @@ class RouteController {
                 longitude: parseFloat(longitude),
                 timestamp: timestamp || new Date().toISOString(),
             };
-            const nearStopInfo = await routeService_1.RouteService.checkBusNearStop(busLocation, routeId);
+            const nearStopInfo = await RouteQueryService_1.RouteQueryService.checkBusNearStop(busLocation, routeId);
             responseHelpers_1.ResponseHelper.success(res, nearStopInfo);
         }
         catch (error) {

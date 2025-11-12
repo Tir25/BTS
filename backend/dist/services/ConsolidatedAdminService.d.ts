@@ -20,25 +20,25 @@ export interface SystemHealth {
     timestamp: string;
 }
 export declare class ConsolidatedAdminService {
-    static getAllBuses(): Promise<import("./UnifiedDatabaseService").BusWithDriver[]>;
-    static getBusById(busId: string): Promise<import("./UnifiedDatabaseService").BusWithDriver | null>;
-    static createBus(busData: any): Promise<import("./UnifiedDatabaseService").BusWithDriver>;
-    static updateBus(busId: string, busData: any): Promise<import("./UnifiedDatabaseService").BusWithDriver | null>;
-    static deleteBus(busId: string): Promise<import("./UnifiedDatabaseService").BusWithDriver | null>;
-    static getAllDrivers(): Promise<import("./UnifiedDatabaseService").DriverData[]>;
-    static getDriverById(driverId: string): Promise<import("./UnifiedDatabaseService").DriverData | null>;
-    static createDriver(driverData: any): Promise<import("./UnifiedDatabaseService").DriverData>;
-    static updateDriver(driverId: string, driverData: any): Promise<import("./UnifiedDatabaseService").DriverData | null>;
-    static deleteDriver(driverId: string): Promise<import("./UnifiedDatabaseService").DriverData | null>;
+    static getAllBuses(): Promise<import("./database/BusDatabaseService").BusWithDriver[]>;
+    static getBusById(busId: string): Promise<import("./database/BusDatabaseService").BusWithDriver | null>;
+    static createBus(busData: any): Promise<import("./database/BusDatabaseService").BusWithDriver>;
+    static updateBus(busId: string, busData: any): Promise<import("./database/BusDatabaseService").BusWithDriver | null>;
+    static deleteBus(busId: string): Promise<import("./database/BusDatabaseService").BusWithDriver | null>;
+    static getAllDrivers(): Promise<import("./database/DriverDatabaseService").DriverData[]>;
+    static getDriverById(driverId: string): Promise<import("./database/DriverDatabaseService").DriverData | null>;
+    static createDriver(driverData: any): Promise<import("./database/DriverDatabaseService").DriverData>;
+    static updateDriver(driverId: string, driverData: any): Promise<import("./database/DriverDatabaseService").DriverData | null>;
+    static deleteDriver(driverId: string): Promise<import("./database/DriverDatabaseService").DriverData | null>;
     static cleanupInactiveDrivers(): Promise<{
         cleaned: number;
         errors: string[];
     }>;
-    static getAllRoutes(): Promise<import("./routeService").RouteWithGeoJSON[]>;
-    static getRouteById(routeId: string): Promise<import("./routeService").RouteWithGeoJSON | null>;
-    static createRoute(routeData: any): Promise<import("./routeService").RouteWithGeoJSON>;
-    static updateRoute(routeId: string, routeData: any): Promise<import("./routeService").RouteWithGeoJSON | null>;
-    static deleteRoute(routeId: string): Promise<import("./routeService").RouteWithGeoJSON | null>;
+    static getAllRoutes(): Promise<import("./routes/RouteQueryService").RouteWithGeoJSON[]>;
+    static getRouteById(routeId: string): Promise<import("./routes/RouteQueryService").RouteWithGeoJSON | null>;
+    static createRoute(routeData: any): Promise<import("./routes/RouteQueryService").RouteWithGeoJSON>;
+    static updateRoute(routeId: string, routeData: any): Promise<import("./routes/RouteQueryService").RouteWithGeoJSON | null>;
+    static deleteRoute(routeId: string): Promise<import("./routes/RouteQueryService").RouteWithGeoJSON | null>;
     static getAnalytics(): Promise<AnalyticsData>;
     static getSystemHealth(): Promise<SystemHealth>;
     static clearAllData(): Promise<{

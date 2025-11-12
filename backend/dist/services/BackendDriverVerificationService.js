@@ -3,7 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.backendDriverVerificationService = exports.BackendDriverVerificationService = void 0;
 const supabase_1 = require("../config/supabase");
 const logger_1 = require("../utils/logger");
-const ProductionAssignmentService_1 = require("./ProductionAssignmentService");
+const AssignmentDashboardService_1 = require("./assignments/AssignmentDashboardService");
+const AssignmentValidationService_1 = require("./assignments/AssignmentValidationService");
 const OptimizedLocationService_1 = require("./OptimizedLocationService");
 class BackendDriverVerificationService {
     static getInstance() {
@@ -160,7 +161,7 @@ class BackendDriverVerificationService {
         try {
             logger_1.logger.info('⚙️ Verifying assignment service...', 'backend-verification');
             try {
-                const assignments = await ProductionAssignmentService_1.ProductionAssignmentService.getAllAssignments();
+                const assignments = await AssignmentDashboardService_1.AssignmentDashboardService.getAllAssignments();
                 result.assignmentService.getAllAssignments = Array.isArray(assignments);
                 logger_1.logger.info(`✅ getAllAssignments returned ${assignments.length} assignments`, 'backend-verification');
             }
@@ -171,7 +172,7 @@ class BackendDriverVerificationService {
             if (result.busAssignments.assignments.length > 0) {
                 try {
                     const firstAssignment = result.busAssignments.assignments[0];
-                    const validation = await ProductionAssignmentService_1.ProductionAssignmentService.validateAssignment(firstAssignment.driver_id, firstAssignment.bus_id, firstAssignment.route_id);
+                    const validation = await AssignmentValidationService_1.AssignmentValidationService.validateAssignment(firstAssignment.driver_id, firstAssignment.bus_id, firstAssignment.route_id);
                     result.assignmentService.validateAssignment = validation.is_valid;
                     logger_1.logger.info('✅ validateAssignment test passed', 'backend-verification', { validation });
                 }
