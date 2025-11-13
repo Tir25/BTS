@@ -21,6 +21,8 @@ import DriverLocationMarker from './map/DriverLocationMarker';
 import './StudentMap.css';
 import StudentMapSidebar from './map/StudentMap/Sidebar';
 import RouteStatusPanel from './map/StudentMap/RouteStatusPanel';
+import { MapCanvas } from './StudentMap/MapCanvas';
+import { MapOverlays } from './StudentMap/MapOverlays';
 import { Route, BusLocation } from '../types';
 // onRouteStatusUpdated is handled by useRouteStatusManagement hook
 
@@ -355,7 +357,10 @@ const StudentMap: React.FC<StudentMapProps> = ({
   });
 
   // WebSocket bindings via hook
+  // CRITICAL FIX: Pass isDriverMode flag to prevent creating duplicate WebSocket connection
+  // When StudentMap is used in driver dashboard, it should use the existing driver WebSocket
   useStudentMapWebSocketBindings({
+    isDriverMode: isDriverTracking, // Use isDriverTracking prop to detect driver mode
     enabled: finalConfig.enableRealTime,
     setIsConnected,
     setConnectionStatus,
@@ -1061,11 +1066,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
 
         {/* Right Side - Map Container */}
         <div className="flex-1 h-full relative">
-          <div
-            ref={mapContainer}
-            className="w-full h-full rounded-lg overflow-hidden"
-            style={{ minHeight: '400px' }}
-          />
+          <MapCanvas mapContainerRef={mapContainer} />
           
           {/* Driver Location Marker */}
           {map.current && driverLocation && (
@@ -1077,34 +1078,8 @@ const StudentMap: React.FC<StudentMapProps> = ({
             />
           )}
           
-          {/* Loading overlay */}
-          {isLoading && (
-            <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-10">
-              <div className="text-slate-900 text-center">
-                <div className="loading-spinner mx-auto mb-4" />
-                <p className="font-medium">Loading map...</p>
-              </div>
-            </div>
-          )}
-
-          {/* Error overlay */}
-          {connectionError && (
-            <div className="absolute top-4 right-4 z-10">
-              <div className="p-4 bg-red-50 border border-red-200 rounded-xl shadow-lg">
-                <div className="flex items-center space-x-2">
-                  <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div>
-                    <h3 className="font-semibold text-red-900">
-                      Connection Error
-                    </h3>
-                    <p className="text-sm text-red-700 mt-1">{connectionError}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Loading and Error Overlays */}
+          <MapOverlays isLoading={isLoading} connectionError={connectionError} />
 
           {/* Route status panel for students */}
           <RouteStatusPanel

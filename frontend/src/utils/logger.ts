@@ -22,6 +22,9 @@ class Logger {
   private static instance: Logger;
   private isDevelopment: boolean;
   private isProduction: boolean;
+  // PRODUCTION FIX: Throttle "Debug info" logging to prevent console spam
+  private debugInfoLogTimes: Map<string, number> = new Map();
+  private readonly DEBUG_INFO_THROTTLE_MS = 5000; // Only log "Debug info" once per 5 seconds per component
 
   private constructor() {
     this.isDevelopment = import.meta.env.DEV;
@@ -94,6 +97,16 @@ class Logger {
   error(message: string, component?: string, metadata?: Record<string, unknown>): void {
     const entry = this.formatLog(LogLevel.ERROR, message, component, metadata);
     this.output(entry);
+    
+    // PRODUCTION FIX: Also log metadata to console.error for visibility
+    // This ensures error details are visible even if the logger output doesn't show them
+    if (metadata && Object.keys(metadata).length > 0) {
+      console.error('Error details:', metadata);
+      // If there's a stack trace, log it separately for better visibility
+      if (metadata.stack) {
+        console.error('Stack trace:', metadata.stack);
+      }
+    }
   }
 
   warn(message: string, component?: string, metadata?: Record<string, unknown>): void {
@@ -107,6 +120,21 @@ class Logger {
   }
 
   debug(message: string, component?: string, metadata?: Record<string, unknown>): void {
+    // PRODUCTION FIX: Throttle "Debug info" messages to prevent console spam
+    if (message === 'Debug info') {
+      const componentKey = component || 'unknown';
+      const now = Date.now();
+      const lastLogTime = this.debugInfoLogTimes.get(componentKey) || 0;
+      
+      if (now - lastLogTime < this.DEBUG_INFO_THROTTLE_MS) {
+        // Skip logging if throttled
+        return;
+      }
+      
+      // Update last log time
+      this.debugInfoLogTimes.set(componentKey, now);
+    }
+    
     const entry = this.formatLog(LogLevel.DEBUG, message, component, metadata);
     this.output(entry);
   }

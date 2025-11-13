@@ -15,4 +15,10 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./routeController"), exports);
+__exportStar(require("./healthController"), exports);
+__exportStar(require("./busController"), exports);
+__exportStar(require("./driverController"), exports);
+__exportStar(require("./shiftController"), exports);
+__exportStar(require("./routeStopController"), exports);
+__exportStar(require("./analyticsController"), exports);
 //# sourceMappingURL=index.js.map

@@ -1,5 +1,9 @@
 ﻿# University Bus Tracking System
 
+A production-ready realtime bus tracking platform for universities. Drivers publish live locations, students monitor buses on interactive maps, and administrators manage fleet operations—all backed by Supabase, Express, React, and Socket.IO.
+
+> 📚 For the full technical reference (architecture, APIs, deployment, troubleshooting), read `docs/PROJECT_DOCUMENTATION.md`.
+
 ## Folder Structure (High-Level)
 
 This project follows a clear, navigable structure so new developers can get productive quickly:
@@ -10,7 +14,7 @@ This project follows a clear, navigable structure so new developers can get prod
   - `src/middleware/` – Cross-cutting concerns (auth, validation, rate limits, error handling)
   - `src/services/` – Domain services (DB, caching, monitoring, websockets)
   - `src/utils/` – Utilities (logger, performance guards, etc.)
-  - `src/sockets/` – WebSocket server initialization
+  - `src/websocket/` – Modular WebSocket handlers (connection, location, driver, student, admin)
   - `src/models/` – DB models and initialization
 
 - `frontend/` – React app (Vite)
@@ -47,8 +51,6 @@ This project follows a clear, navigable structure so new developers can get prod
 - Services: `import { api } from '@/services/api'`
 
 > Tip: See each folder's `index.ts` to discover available exports.
-
-A real-time bus tracking system designed for university campuses, providing live location updates, route management, and comprehensive administrative controls.
 
 ## 🚀 Features
 
@@ -91,6 +93,15 @@ A real-time bus tracking system designed for university campuses, providing live
 
 ✅ **PRODUCTION READY** - The system is thoroughly tested and ready for deployment
 
+## 🧭 Architecture At A Glance
+
+- **Realtime pipeline:** Driver WebSocket updates → Express services → Postgres/PostGIS persistence → Socket.IO broadcasts → Student map/Web clients.
+- **Backend services:** Modular Express routes/controllers with Redis caching, monitoring endpoints, and Supabase-backed auth.
+- **Frontend app:** Vite + React SPA with lazy loading, Zustand stores, React Query, and MapLibre for live visualizations.
+- **Ops & tooling:** Docker Compose stack (Postgres, Redis, backend, frontend, Prometheus, Grafana), Render + Vercel deployment targets, Kubernetes manifests, and comprehensive monitoring APIs.
+
+Dive deeper in the [Architecture section of the project documentation](docs/PROJECT_DOCUMENTATION.md#4-architecture-overview).
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -98,7 +109,7 @@ A real-time bus tracking system designed for university campuses, providing live
 - Supabase account
 - Git
 
-### Installation
+### Installation & Environment Setup
 ```bash
 # Clone repository
 git clone <repository-url>
@@ -108,6 +119,10 @@ cd university-bus-tracking-system
 npm install
 cd backend && npm install
 cd ../frontend && npm install
+
+# Copy environment templates (fill in Supabase and DB credentials)
+cp backend/env.template backend/.env.local
+cp frontend/env.template frontend/.env.local
 ```
 
 ### Development
@@ -126,6 +141,15 @@ npm run dev:frontend
 npm run build
 npm start
 ```
+
+## 🚢 Deployment Options
+
+- **Local Docker Stack:** `docker-compose -f deploy/docker-compose.yml up --build` brings up Postgres, Redis, backend, frontend (nginx), Prometheus, and Grafana for an end-to-end lab environment.
+- **Render + Vercel:** Deploy backend via `render.yaml`, serve the frontend with `frontend/vercel.json`, and provision Supabase for database/auth.
+- **Kubernetes:** Sample manifests live in `infrastructure/k8s/`; pair with the load balancer and monitoring configs in `infrastructure/load-balancer/` and `infrastructure/monitoring/`.
+- **Environment management:** Keep production secrets in platform secret stores. Rotate Supabase service-role keys regularly and update `backend/.env.production`.
+
+See [Deployment & Environments](docs/PROJECT_DOCUMENTATION.md#9-deployment-environments--tooling) for detailed instructions and operational checklists.
 
 ## 📁 Project Structure
 
@@ -152,7 +176,7 @@ npm start
 │   │   └── utils/         # Utility functions
 │   └── dist/              # Built frontend
 ├── docs/                  # Documentation
-│   └── REFACTORING_DOCUMENTATION.md # Refactoring guide
+│   └── PROJECT_DOCUMENTATION.md    # Comprehensive system guide
 └── scripts/               # Utility scripts
 ```
 
@@ -174,15 +198,12 @@ The frontend uses **custom hooks** to extract logic from components:
 - **Driver Tracking:** `useGPSAccuracy`, `useTrackingErrors`, `useWebSocketLocationSync`
 - **Student Map:** `useStudentMapState`, `useBusMarkerManagement`, `useRouteManagement`, `useBusIdManagement`
 
-> **See:** [REFACTORING_DOCUMENTATION.md](docs/REFACTORING_DOCUMENTATION.md) for detailed migration guide.
+> **See:** [Project Documentation – Frontend Architecture](docs/PROJECT_DOCUMENTATION.md#7-frontend-application-react--vite) for migration guidance and detailed component patterns.
 
 ## 📚 Documentation
 
-- **[Deployment Guide](docs/DEPLOYMENT_GUIDE.md)** - Complete deployment instructions
-- **[API Documentation](docs/API_DOCUMENTATION.md)** - REST API and WebSocket reference
-- **[System Architecture](docs/SYSTEM_ARCHITECTURE.md)** - Technical architecture details
-- **[Server Management](SERVER_MANAGEMENT_GUIDE.md)** - Server management and troubleshooting
-- **[Refactoring Documentation](docs/REFACTORING_DOCUMENTATION.md)** - Service and component refactoring guide
+- **[Project Documentation](docs/PROJECT_DOCUMENTATION.md)** – Single source of truth covering architecture, APIs, realtime flows, deployment, security, and troubleshooting.
+- `README.md` (this file) – Quick start reference for environment setup and repository structure.
 
 ## 🤝 Contributing
 

@@ -47,11 +47,12 @@ declare class OptimizedLocationService {
     private cacheTTL;
     private constructor();
     static getInstance(): OptimizedLocationService;
-    saveLocationUpdate(data: LocationData): Promise<SavedLocation | null>;
+    saveLocationUpdate(data: LocationData, retryCount?: number): Promise<SavedLocation | null>;
     getCurrentBusLocations(options?: SpatialQueryOptions): Promise<SavedLocation[]>;
     getLocationsInViewport(north: number, south: number, east: number, west: number, timeWindow?: number): Promise<SavedLocation[]>;
     getBusLocationHistory(busId: string, startTime: string, endTime: string, limit?: number): Promise<SavedLocation[]>;
     getDriverBusInfo(driverId: string): Promise<BusInfo | null>;
+    getBusInfo(busId: string): Promise<BusInfo | null>;
     getSpatialStats(): Promise<{
         totalLocations: number;
         activeBuses: number;
@@ -59,6 +60,7 @@ declare class OptimizedLocationService {
         cacheHitRate: number;
     }>;
     private invalidateCache;
+    private invalidateCacheSafely;
     private startCacheCleanup;
     clearCache(): void;
     getCacheStats(): {

@@ -37,6 +37,9 @@ const BusFormModal: React.FC<BusFormModalProps> = ({
 }) => {
   if (!show) return null;
 
+  const currentYear = new Date().getFullYear();
+  const maxAllowedYear = currentYear + 5;
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-gray-900 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -110,9 +113,14 @@ const BusFormModal: React.FC<BusFormModalProps> = ({
                 value={formData.year}
                 onChange={onInputChange}
                 min={1990}
-                max={new Date().getFullYear() + 1}
+                max={maxAllowedYear}
                 className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-blue-500"
+                placeholder={`${currentYear}`}
+                aria-describedby="bus-year-help-text"
               />
+              <p id="bus-year-help-text" className="mt-1 text-xs text-white/60">
+                Enter a manufacturing year between 1990 and {maxAllowedYear}.
+              </p>
             </div>
 
             <div>

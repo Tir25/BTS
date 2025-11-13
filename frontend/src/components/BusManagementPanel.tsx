@@ -147,6 +147,16 @@ export default function BusManagementPanel({ className = '' }: BusManagementPane
         return;
       }
 
+      const currentYear = new Date().getFullYear();
+      const maxAllowedYear = currentYear + 5;
+      if (formData.year) {
+        if (formData.year < 1990 || formData.year > maxAllowedYear) {
+          setError(`Year must be between 1990 and ${maxAllowedYear}`);
+          setLoading(false);
+          return;
+        }
+      }
+
       if (!formData.vehicle_no || !formData.vehicle_no.trim()) {
         setError('Vehicle number is required');
         setLoading(false);

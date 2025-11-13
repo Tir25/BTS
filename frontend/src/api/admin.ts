@@ -97,18 +97,48 @@ interface SystemHealth {
 }
 
 class AdminApiService {
+  // PRODUCTION FIX: Enhanced request method with better error handling and token management
   private async makeRequest<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     let timeoutId: NodeJS.Timeout | undefined;
+    const requestId = `admin_req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      const token = authService.getAccessToken();
-      logger.info('🔑 Token check', 'component', { data: `${endpoint}: ${token ? 'Token exists' : 'No token'}` });
+      let token = authService.getAccessToken();
+      
+      // PRODUCTION FIX: Attempt token refresh if authenticated but no token
+      if (!token && authService.isAuthenticated()) {
+        try {
+          logger.debug('🔄 No token but authenticated, attempting refresh...', 'admin-api', { endpoint, requestId });
+          const refreshResult = await authService.refreshSession();
+          if (refreshResult.success && refreshResult.session) {
+            token = refreshResult.session.access_token;
+            logger.debug('✅ Token refreshed successfully', 'admin-api', { endpoint, requestId });
+          }
+        } catch (refreshError) {
+          logger.warn('⚠️ Token refresh failed', 'admin-api', {
+            endpoint,
+            requestId,
+            error: refreshError instanceof Error ? refreshError.message : String(refreshError)
+          });
+        }
+      }
+      
+      logger.debug('🔑 Token check', 'admin-api', { 
+        endpoint, 
+        requestId,
+        hasToken: !!token,
+        isAuthenticated: authService.isAuthenticated()
+      });
 
       if (!token) {
-        logger.error('Error occurred', 'component', { error: '❌ No access token available for', endpoint });
+        logger.error('❌ No access token available', 'admin-api', { 
+          endpoint, 
+          requestId,
+          isAuthenticated: authService.isAuthenticated()
+        });
         throw new Error('No access token available');
       }
 
@@ -134,14 +164,17 @@ class AdminApiService {
         endpoint, 
         fullUrl, 
         isAssignmentEndpoint,
-        method: options.method || 'GET'
+        method: options.method || 'GET',
+        requestId
       });
+      
       const response = await fetch(fullUrl, {
         ...options,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'X-Request-ID': requestId,
           ...options.headers,
         },
       });
@@ -156,25 +189,55 @@ class AdminApiService {
       
       if (timeoutId) clearTimeout(timeoutId);
 
+      // PRODUCTION FIX: Enhanced error handling with proper error codes
       if (!response.ok) {
+        const errorData = data as any;
+        const errorMessage = errorData?.message || errorData?.error || 'Request failed';
+        const errorCode = errorData?.code || 'API_ERROR';
+        
+        logger.error('Admin API request failed', 'admin-api', {
+          requestId,
+          endpoint,
+          status: response.status,
+          error: errorMessage,
+          code: errorCode
+        });
+        
         if (response.status === 429) {
-          throw new Error(
-            'Rate limit exceeded. Please wait a moment and try again.'
-          );
+          const rateLimitError: any = new Error('Rate limit exceeded. Please wait a moment and try again.');
+          rateLimitError.code = 'RATE_LIMITED';
+          rateLimitError.status = 429;
+          throw rateLimitError;
         } else if (response.status === 401) {
-          throw new Error('Authentication required. Please log in again.');
+          const authError: any = new Error('Authentication required. Please log in again.');
+          authError.code = 'UNAUTHORIZED';
+          authError.status = 401;
+          throw authError;
         } else if (response.status === 403) {
-          throw new Error(
-            'Access denied. You do not have permission for this action.'
-          );
+          const forbiddenError: any = new Error('Access denied. You do not have permission for this action.');
+          forbiddenError.code = 'FORBIDDEN';
+          forbiddenError.status = 403;
+          throw forbiddenError;
         } else if (response.status === 404) {
-          throw new Error('Resource not found.');
+          const notFoundError: any = new Error('Resource not found.');
+          notFoundError.code = 'NOT_FOUND';
+          notFoundError.status = 404;
+          throw notFoundError;
         } else if (response.status === 409) {
-          throw new Error((data as any)?.message || 'Resource already exists');
+          const conflictError: any = new Error(errorMessage);
+          conflictError.code = 'CONFLICT';
+          conflictError.status = 409;
+          throw conflictError;
         } else if (response.status >= 500) {
-          throw new Error('Server error. Please try again later.');
+          const serverError: any = new Error('Server error. Please try again later.');
+          serverError.code = 'SERVER_ERROR';
+          serverError.status = response.status;
+          throw serverError;
         } else {
-          throw new Error((data as any)?.message || (data as any)?.error || 'Request failed');
+          const apiError: any = new Error(errorMessage);
+          apiError.code = errorCode;
+          apiError.status = response.status;
+          throw apiError;
         }
       }
 

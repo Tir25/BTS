@@ -36,6 +36,7 @@ export const queryKeys = {
 } as const;
 
 // Health check query
+// PRODUCTION FIX: Improved retry logic to prevent excessive requests when backend is down
 export const useHealthCheck = () => {
   return useQuery({
     queryKey: queryKeys.health,
@@ -47,8 +48,34 @@ export const useHealthCheck = () => {
       return result;
     },
     staleTime: 30000, // 30 seconds
-    refetchInterval: 60000, // 1 minute
-    retry: 3,
+    refetchInterval: (query) => {
+      // PRODUCTION FIX: Disable refetch if query is in error state to prevent spam
+      // Only refetch if last fetch was successful or query is fresh
+      if (query.state.error) {
+        // If there's an error, wait longer before retrying (5 minutes)
+        return 5 * 60 * 1000;
+      }
+      // Normal refetch interval (1 minute) when healthy
+      return 60000;
+    },
+    retry: (failureCount, error) => {
+      // PRODUCTION FIX: Limit retries to prevent excessive requests
+      // Only retry up to 2 times, and only for network errors (not persistent backend down)
+      if (failureCount >= 2) {
+        return false;
+      }
+      // Only retry if it's a network error (might be temporary)
+      const isNetworkError = error instanceof Error && (
+        error.message.includes('NetworkError') ||
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('timeout')
+      );
+      return isNetworkError;
+    },
+    retryDelay: (attemptIndex) => {
+      // Exponential backoff: 2s, 4s, 8s
+      return Math.min(1000 * Math.pow(2, attemptIndex), 8000);
+    },
   });
 };
 

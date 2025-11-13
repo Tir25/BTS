@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger';
 import { validateGPSLocation } from '../../utils/gpsValidation';
+import { detectGPSDeviceInfo } from '../../utils/gpsDetection';
 
 export interface LocationUpdateData {
   driverId: string;
@@ -14,6 +15,7 @@ export interface LocationUpdateData {
 /**
  * Location throttler for WebSocket
  * Handles deduplication and throttling of location updates
+ * PRODUCTION FIX: Adaptive throttling based on device GPS capabilities
  */
 export class LocationThrottler {
   private lastSentLocation: {
@@ -22,9 +24,12 @@ export class LocationThrottler {
     timestamp: number;
   } | null = null;
   private lastSendTime: number = 0;
-  private readonly MIN_SEND_INTERVAL = 500; // Reduced from 1000ms to 500ms for desktop GPS
-  private readonly MIN_DISTANCE_THRESHOLD = 1; // Reduced from 5m to 1m for desktop GPS
-  private readonly RAPID_DUPLICATE_THRESHOLD = 50; // Reduced from 100ms to 50ms
+  private deviceInfo = detectGPSDeviceInfo();
+  // PRODUCTION FIX: Adaptive thresholds based on device type
+  // Desktop GPS has low accuracy, so we need more lenient thresholds
+  private readonly MIN_SEND_INTERVAL = 1000; // Aligned with backend rate limiter (1000ms)
+  private readonly MIN_DISTANCE_THRESHOLD = this.deviceInfo.hasGPSHardware ? 5 : 100; // 5m for GPS, 100m for desktop (IP-based)
+  private readonly RAPID_DUPLICATE_THRESHOLD = 100; // 100ms for rapid duplicate detection
   private sendThrottleTimeout: NodeJS.Timeout | null = null;
   private pendingLocationUpdatesQueue: LocationUpdateData[] = [];
   private readonly MAX_QUEUE_SIZE = 10;
@@ -75,12 +80,28 @@ export class LocationThrottler {
     }
 
     // LAYER 2: Check if this is an exact duplicate location
+    // PRODUCTION FIX: More lenient duplicate detection for desktop GPS
     if (this.lastSentLocation) {
       const latDiff = Math.abs(this.lastSentLocation.latitude - locationData.latitude);
       const lngDiff = Math.abs(this.lastSentLocation.longitude - locationData.longitude);
       
-      // Exact match (within floating point precision)
-      if (latDiff < 0.000001 && lngDiff < 0.000001 && timeSinceLastSend < this.MIN_SEND_INTERVAL) {
+      // PRODUCTION FIX: For desktop GPS (IP-based), use coarser precision check
+      // Desktop GPS can have same coordinates even when device moves slightly
+      const precisionThreshold = this.deviceInfo.hasGPSHardware ? 0.000001 : 0.0001; // ~11m for desktop
+      
+      // Exact match (within device-appropriate precision)
+      if (latDiff < precisionThreshold && lngDiff < precisionThreshold && timeSinceLastSend < this.MIN_SEND_INTERVAL) {
+        // PRODUCTION FIX: For desktop GPS, allow updates even if coordinates are same if enough time has passed
+        // This handles the case where IP-based location doesn't change but we still want periodic updates
+        // Reduced threshold from 2x to 1.5x for more frequent updates on desktop
+        if (!this.deviceInfo.hasGPSHardware && timeSinceLastSend >= this.MIN_SEND_INTERVAL * 1.5) {
+          // Allow update if it's been 1.5x the minimum interval (ensures periodic updates even with static location)
+          logger.debug('Allowing desktop GPS periodic update (same coordinates)', 'component', {
+            timeSinceLastSend,
+            threshold: this.MIN_SEND_INTERVAL * 1.5,
+          });
+          return { shouldSend: true };
+        }
         return { shouldSend: false, reason: 'exact_duplicate' };
       }
 
@@ -92,8 +113,21 @@ export class LocationThrottler {
         locationData.longitude
       );
 
+      // PRODUCTION FIX: For desktop GPS, allow updates if enough time has passed even if distance is small
       if (distance < this.MIN_DISTANCE_THRESHOLD && timeSinceLastSend < this.MIN_SEND_INTERVAL) {
         return { shouldSend: false, reason: 'distance_threshold' };
+      }
+      
+      // PRODUCTION FIX: For desktop GPS, allow periodic updates even if distance is small
+      // Reduced threshold from 3x to 2x for more frequent updates on desktop
+      if (!this.deviceInfo.hasGPSHardware && distance < this.MIN_DISTANCE_THRESHOLD && timeSinceLastSend >= this.MIN_SEND_INTERVAL * 2) {
+        // Allow update if it's been 2x the minimum interval (ensures periodic updates)
+        logger.debug('Allowing desktop GPS periodic update (small distance)', 'component', {
+          distance,
+          timeSinceLastSend,
+          threshold: this.MIN_SEND_INTERVAL * 2,
+        });
+        return { shouldSend: true };
       }
     }
 
@@ -216,18 +250,33 @@ export class LocationThrottler {
     // Clean up old queue entries periodically
     if (this.locationMessageQueue.size > 100) {
       const cutoffTime = now - this.QUEUE_CLEANUP_INTERVAL;
+      let cleanedCount = 0;
       for (const [key, timestamp] of this.locationMessageQueue.entries()) {
         if (timestamp < cutoffTime) {
           this.locationMessageQueue.delete(key);
+          cleanedCount++;
         }
+      }
+      if (cleanedCount > 0) {
+        logger.debug('Cleaned up old location queue entries', 'component', {
+          cleanedCount,
+          remainingSize: this.locationMessageQueue.size
+        });
       }
     }
     
-    logger.info('✅ Location update sent successfully', 'component');
+    logger.debug('✅ Location update sent successfully', 'component', {
+      driverId: locationData.driverId,
+      busId: locationData.busId,
+      lat: locationData.latitude,
+      lng: locationData.longitude,
+      queueSize: this.pendingLocationUpdatesQueue.length,
+    });
   }
 
   /**
    * Process location update with throttling and deduplication
+   * PRODUCTION FIX: Enhanced processing with better queue management
    */
   processLocationUpdate(
     locationData: LocationUpdateData,
@@ -236,14 +285,50 @@ export class LocationThrottler {
     const check = this.shouldSendImmediately(locationData);
     
     if (!check.shouldSend) {
+      // PRODUCTION FIX: Better logging for blocked updates
       logger.debug(`🚫 BLOCKED: ${check.reason}`, 'component', {
         lat: locationData.latitude,
         lng: locationData.longitude,
+        driverId: locationData.driverId,
+        busId: locationData.busId,
+        deviceType: this.deviceInfo.deviceType,
+        hasGPSHardware: this.deviceInfo.hasGPSHardware,
+        timeSinceLastSend: Date.now() - this.lastSendTime,
       });
       
       if (check.reason === 'time_throttle') {
         // Queue for later
         this.queueLocationUpdate(locationData, onSend);
+      } else if (check.reason === 'exact_duplicate' || check.reason === 'distance_threshold') {
+        // PRODUCTION FIX: For desktop GPS, queue duplicate updates if enough time has passed
+        // This ensures periodic updates even when location doesn't change
+        // Reduced threshold from 2x to 1.5x for more frequent updates
+        if (!this.deviceInfo.hasGPSHardware) {
+          const timeSinceLastSend = Date.now() - this.lastSendTime;
+          if (timeSinceLastSend >= this.MIN_SEND_INTERVAL * 1.5) {
+            // Queue for sending after minimum interval
+            this.queueLocationUpdate(locationData, onSend);
+            logger.debug('Queued desktop GPS update (periodic update despite duplicate)', 'component', {
+              timeSinceLastSend,
+              threshold: this.MIN_SEND_INTERVAL * 1.5,
+            });
+            return;
+          }
+        }
+        // For other reasons (duplicates, etc.), just skip silently
+        logger.debug('Location update skipped (duplicate or invalid)', 'component', {
+          reason: check.reason,
+          lat: locationData.latitude,
+          lng: locationData.longitude,
+          deviceType: this.deviceInfo.deviceType,
+        });
+      } else {
+        // For other reasons, just skip silently
+        logger.debug('Location update skipped', 'component', {
+          reason: check.reason,
+          lat: locationData.latitude,
+          lng: locationData.longitude,
+        });
       }
       return;
     }
@@ -256,7 +341,9 @@ export class LocationThrottler {
       // Process any queued updates before sending new one
       if (this.pendingLocationUpdatesQueue.length > 0) {
         logger.debug('Processing pending queue before immediate send', 'component', {
-          queueSize: this.pendingLocationUpdatesQueue.length
+          queueSize: this.pendingLocationUpdatesQueue.length,
+          driverId: locationData.driverId,
+          busId: locationData.busId,
         });
         this.processPendingQueue(onSend);
       }
@@ -268,6 +355,7 @@ export class LocationThrottler {
 
   /**
    * Reset throttler state
+   * PRODUCTION FIX: Re-detect device info on reset (in case device changes)
    */
   reset(): void {
     this.lastSentLocation = null;
@@ -278,6 +366,8 @@ export class LocationThrottler {
       this.sendThrottleTimeout = null;
     }
     this.locationMessageQueue.clear();
+    // Re-detect device info in case device capabilities changed
+    this.deviceInfo = detectGPSDeviceInfo();
   }
 }
 

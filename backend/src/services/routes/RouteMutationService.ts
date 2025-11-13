@@ -188,25 +188,53 @@ export class RouteMutationService {
         .delete()
         .eq('route_id', routeId);
 
-      // 3. Update buses to remove route assignment
-      const busClearUpdate: BusesUpdate = { route_id: null };
-      await (supabaseAdmin as any)
-        .from('buses')
-        .update(busClearUpdate as any)
-        .eq('route_id', routeId);
+      const now = new Date().toISOString();
 
-      // 4. Delete from bus_route_assignments
-      await supabaseAdmin
+      // 3. Deactivate driver-bus assignments tied to this route
+      const { error: driverAssignmentError } = await supabaseAdmin
+        .from('driver_bus_assignments')
+        .update({
+          is_active: false,
+          updated_at: now
+        })
+        .eq('route_id', routeId)
+        .eq('is_active', true);
+
+      if (driverAssignmentError) {
+        logger.warn('Failed to deactivate driver-bus assignments during route delete', 'route-mutation-service', {
+          routeId,
+          error: driverAssignmentError
+        });
+      }
+
+      // 4. Deactivate bus-route assignments
+      const { error: busRouteAssignmentError } = await supabaseAdmin
         .from('bus_route_assignments')
-        .delete()
-        .eq('route_id', routeId);
+        .update({
+          is_active: false,
+          unassigned_at: now,
+          updated_at: now,
+          assigned_driver_id: null,
+          assigned_driver_profile_id: null
+        })
+        .eq('route_id', routeId)
+        .eq('is_active', true);
+
+      if (busRouteAssignmentError) {
+        logger.warn('Failed to deactivate bus-route assignments during route delete', 'route-mutation-service', {
+          routeId,
+          error: busRouteAssignmentError
+        });
+      }
 
       // 5. Update buses table to remove route assignments
-      const busUnassignUpdate: BusesUpdate = {
+      // Note: Some fields may not be in TypeScript type but exist in database
+      const busUnassignUpdate: BusesUpdate & { assigned_shift_id?: null; shift_id?: null } = {
         route_id: null,
+        assigned_driver_profile_id: null,
         assignment_status: 'unassigned',
         assignment_notes: 'Route deleted',
-        updated_at: new Date().toISOString()
+        updated_at: now
       };
       await (supabaseAdmin as any)
         .from('buses')

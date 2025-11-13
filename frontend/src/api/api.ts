@@ -40,13 +40,13 @@ class ApiService implements IApiService {
       'Content-Type': 'application/json',
     };
 
+    // PRODUCTION FIX: Enhanced token management with automatic refresh
     try {
       // Try to get token from authService (for drivers/admins)
-      // For student endpoints, the studentAuthService should be used, but we'll try both
       let token = authService.getAccessToken();
       
       // If no token from driver auth and endpoint is student-related, try student auth
-      if (!token && endpoint.includes('/student/')) {
+      if (!token && (endpoint.includes('/student/') || endpoint.includes('/auth/student/'))) {
         try {
           const { studentAuthService } = await import('../services/auth/studentAuthService');
           token = studentAuthService.getAccessToken();
@@ -59,13 +59,33 @@ class ApiService implements IApiService {
         }
       }
       
+      // PRODUCTION FIX: Attempt token refresh if authenticated but no token
+      if (!token && authService.isAuthenticated()) {
+        try {
+          logger.debug('🔄 No token but authenticated, attempting refresh...', 'api', { endpoint });
+          const refreshResult = await authService.refreshSession();
+          if (refreshResult.success && refreshResult.session) {
+            token = refreshResult.session.access_token;
+            logger.debug('✅ Token refreshed successfully', 'api', { endpoint });
+          }
+        } catch (refreshError) {
+          logger.warn('⚠️ Token refresh failed', 'api', {
+            endpoint,
+            error: refreshError instanceof Error ? refreshError.message : String(refreshError)
+          });
+        }
+      }
+      
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       } else {
         logger.debug('🔓 Public access - no authentication token available', 'api', { endpoint });
       }
     } catch (error) {
-      logger.info('🔓 Public access - no authentication token available', 'component', { endpoint });
+      logger.debug('🔓 Public access - authentication error', 'api', {
+        endpoint,
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
 
     if (options?.headers) {
@@ -82,7 +102,18 @@ class ApiService implements IApiService {
           endpoint.startsWith('/student/routes-by-shift') ||
           endpoint.startsWith('/student/active-routes')
         );
-        response = await resilientApiService.get<T>(endpoint, { headers, useOfflineStorage: !isVolatile, retryOnFailure: !isVolatile });
+        
+        // PRODUCTION FIX: Use longer timeout for assignment endpoint (does multiple DB queries)
+        const timeout = endpoint.startsWith('/tracking/assignment') 
+          ? timeoutConfig.api.longRunning // 30 seconds for heavy queries
+          : timeoutConfig.api.default; // 15 seconds for normal requests
+        
+        response = await resilientApiService.get<T>(endpoint, { 
+          headers, 
+          useOfflineStorage: !isVolatile, 
+          retryOnFailure: !isVolatile,
+          timeout 
+        });
       } else if (method === 'POST') {
         const body = options?.body
           ? JSON.parse(options.body as string)
@@ -148,13 +179,15 @@ class ApiService implements IApiService {
       const errorName = error instanceof Error ? error.name : 'UnknownError';
       const isNetworkError = errorName === 'TimeoutError' || errorName === 'TypeError' || errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError');
       
-      logger.error('❌ Health check failed', 'component', { 
+      // PRODUCTION FIX: Reduce error logging verbosity for health checks
+      // Only log as warning to prevent console spam, and only log once per error type
+      logger.warn('⚠️ Health check failed', 'component', { 
         error: errorMessage,
         errorName,
         baseUrl: this.baseUrl,
         isNetworkError,
         url: `${this.baseUrl}/health`,
-        stack: error instanceof Error ? error.stack : undefined
+        // Don't log stack trace for health check failures to reduce noise
       });
       
       return {

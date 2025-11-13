@@ -94,18 +94,44 @@ class CircuitBreaker {
     this.failedRequests++;
     this.lastFailureTime = Date.now();
 
-    // Check if this is an expected error
+    // PRODUCTION FIX: Enhanced error classification
     const errorMessage = error?.message || error?.toString() || '';
+    const errorCode = error?.code || '';
+    const errorStatus = error?.status || '';
+    
+    // Check if this is an expected error (don't count as failure)
     const isExpectedError = this.config.expectedErrors.some((pattern) =>
-      errorMessage.includes(pattern)
+      errorMessage.includes(pattern) || 
+      errorCode.includes(pattern) ||
+      String(errorStatus).includes(pattern)
     );
 
-    if (!isExpectedError) {
+    // PRODUCTION FIX: Don't count client errors (4xx) as circuit breaker failures
+    // These are usually user errors, not system failures
+    const isClientError = errorStatus >= 400 && errorStatus < 500;
+    const shouldCountAsFailure = !isExpectedError && !isClientError;
+
+    if (shouldCountAsFailure) {
       this.failureCount++;
+
+      logger.warn('Circuit breaker failure recorded', 'circuit-breaker', {
+        name: this.name,
+        failureCount: this.failureCount,
+        threshold: this.config.failureThreshold,
+        error: errorMessage,
+        code: errorCode,
+        status: errorStatus
+      });
 
       if (this.failureCount >= this.config.failureThreshold) {
         this.transitionToOpen();
       }
+    } else {
+      logger.debug('Error not counted as circuit breaker failure', 'circuit-breaker', {
+        name: this.name,
+        reason: isExpectedError ? 'expected_error' : isClientError ? 'client_error' : 'unknown',
+        error: errorMessage
+      });
     }
   }
 

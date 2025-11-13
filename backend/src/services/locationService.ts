@@ -87,7 +87,9 @@ export const saveLocationUpdate = async (
         ]);
       } catch (historicalError) {
         // Log but don't fail if historical insert fails (non-critical)
-        console.warn('⚠️ Warning: Failed to save to historical locations table:', historicalError);
+        // CRITICAL FIX: Use logger instead of console.warn for consistency
+        const { logger } = await import('../utils/logger');
+        logger.warn('Warning: Failed to save to historical locations table', 'location-service', { error: historicalError });
       }
 
       await client.query('COMMIT');
@@ -109,140 +111,29 @@ export const saveLocationUpdate = async (
       client.release();
     }
   } catch (error) {
-    console.error('❌ Error in saveLocationUpdate:', error);
+    // CRITICAL FIX: Use logger instead of console.error for consistency
+    const { logger } = await import('../utils/logger');
+    logger.error('Error in saveLocationUpdate', 'location-service', { error });
     return null;
   }
 };
 
-/**
- * @deprecated This function has been replaced by optimizedLocationService.getDriverBusInfo()
- * which eliminates N+1 query problems and provides better performance.
- * Use optimizedLocationService.getDriverBusInfo() instead.
- */
-export const getDriverBusInfo = async (
-  driverId: string
-): Promise<BusInfo | null> => {
-  console.warn('⚠️ DEPRECATED: getDriverBusInfo is deprecated. Use optimizedLocationService.getDriverBusInfo() instead.');
-  
-  try {
-    console.log('🔍 Fetching bus info for driver:', driverId);
-
-    // First, get the bus information without route join
-    const { data: busData, error: busError } = await supabaseAdmin
-      .from('buses')
-      .select('id, bus_number, vehicle_no, route_id')
-      .eq('assigned_driver_profile_id', driverId)
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle();
-
-    console.log('🚌 Bus data found:', busData);
-    console.log('❌ Bus error:', busError);
-
-    if (busError || !busData) {
-      console.error('❌ Error fetching driver bus info:', busError);
-      return null;
-    }
-
-    // Then, get the driver profile information from both tables
-    let driverName = 'Unknown Driver';
-
-    // First try user_profiles table
-    const { data: profileData } = await supabaseAdmin
-      .from('user_profiles')
-      .select('full_name')
-      .eq('id', driverId)
-      .maybeSingle();
-
-    if ((profileData as any)?.full_name) {
-      driverName = (profileData as any).full_name;
-    } else {
-      // Fallback to users table
-      const { data: userData } = await supabaseAdmin
-        .from('users')
-        .select('first_name, last_name')
-        .eq('id', driverId)
-        .maybeSingle();
-
-      if (userData as any) {
-        driverName =
-          `${(userData as any).first_name || ''} ${(userData as any).last_name || ''}`.trim() ||
-          'Unknown Driver';
-      }
-    }
-
-    console.log('👤 Driver name resolved:', driverName);
-
-    // Get route information only if route_id exists
-    let routeName = '';
-    if ((busData as any).route_id) {
-      const { data: routeData, error: routeError } = await supabaseAdmin
-        .from('routes')
-        .select('name')
-        .eq('id', (busData as any).route_id)
-        .maybeSingle();
-
-      console.log('🛣️ Route data found:', routeData);
-      console.log('❌ Route error:', routeError);
-
-      if (!routeError && routeData) {
-        routeName = (routeData as any).name || '';
-      }
-    }
-
-    const busInfo = {
-      bus_id: (busData as any).id,
-      bus_number: (busData as any).bus_number || (busData as any).vehicle_no || '',
-      route_id: (busData as any).route_id || '',
-      route_name: routeName,
-      driver_id: driverId,
-      driver_name: driverName,
-    };
-
-    console.log('✅ Final bus info:', busInfo);
-    return busInfo;
-  } catch (error) {
-    console.error('❌ Error in getDriverBusInfo:', error);
-    return null;
-  }
-};
-
-/**
- * @deprecated This function has been replaced by optimizedLocationService.getCurrentBusLocations()
- * which provides better performance with caching and spatial optimization.
- * Use optimizedLocationService.getCurrentBusLocations() instead.
- */
-export const getCurrentBusLocations = async (): Promise<SavedLocation[]> => {
-  console.warn('⚠️ DEPRECATED: getCurrentBusLocations is deprecated. Use optimizedLocationService.getCurrentBusLocations() instead.');
-  try {
-    const query = `
-      SELECT 
-        id, 
-        bus_id, 
-        ST_AsText(location) as location, 
-        speed_kmh, 
-        heading_degrees, 
-        recorded_at
-      FROM live_locations 
-      WHERE recorded_at >= NOW() - INTERVAL '5 minutes'
-      ORDER BY recorded_at DESC;
-    `;
-
-    const result = await pool.query(query);
-    return result.rows.map((row) => ({
-      id: row.id,
-      driver_id: '', // Not stored in live_locations table
-      bus_id: row.bus_id,
-      location: row.location,
-      timestamp: row.recorded_at,
-      speed: row.speed_kmh,
-      heading: row.heading_degrees,
-    }));
-  } catch (error) {
-    console.error('❌ Error in getCurrentBusLocations:', error);
-    return [];
-  }
-};
+// =============================================================================
+// DEPRECATED FUNCTIONS - MIGRATION GUIDE
+// =============================================================================
+// This file contains legacy location service functions that are being phased out.
+// New code should use OptimizedLocationService instead.
+//
+// Migration Guide:
+// - getDriverBusInfo: Use optimizedLocationService.getDriverBusInfo() instead
+// - getCurrentBusLocations: Use optimizedLocationService.getCurrentBusLocations() instead
+// - getBusInfo: Use optimizedLocationService.getBusInfo() instead (NEW)
+// - getBusLocationHistory: Use optimizedLocationService.getBusLocationHistory() instead
+// - saveLocationUpdate: Use optimizedLocationService.saveLocationUpdate() instead
+//
+// DEPRECATED: The functions below are kept for backward compatibility only.
+// They will be removed in a future version. Please migrate to OptimizedLocationService.
+// =============================================================================
 
 export const getBusLocationHistory = async (
   busId: string,
@@ -275,7 +166,9 @@ export const getBusLocationHistory = async (
       heading: row.heading_degrees,
     }));
   } catch (error) {
-    console.error('❌ Error in getBusLocationHistory:', error);
+    // CRITICAL FIX: Use logger instead of console.error
+    const { logger } = await import('../utils/logger');
+    logger.error('Error in getBusLocationHistory', 'location-service', { error });
     // Fallback to live_locations only if function fails
     try {
       const fallbackQuery = `
@@ -304,7 +197,8 @@ export const getBusLocationHistory = async (
         heading: row.heading_degrees,
       }));
     } catch (fallbackError) {
-      console.error('❌ Error in fallback query:', fallbackError);
+      const { logger } = await import('../utils/logger');
+      logger.error('Error in fallback query', 'location-service', { error: fallbackError });
       return [];
     }
   }
@@ -333,7 +227,8 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
       .single();
 
     if (error || !data) {
-      console.error('❌ Error fetching bus info:', error);
+      const { logger } = await import('../utils/logger');
+      logger.error('Error fetching bus info', 'location-service', { error });
       return null;
     }
 
@@ -352,7 +247,8 @@ export const getBusInfo = async (busId: string): Promise<BusInfo | null> => {
       driver_name: profileData?.full_name || 'Unknown Driver',
     };
   } catch (error) {
-    console.error('❌ Error in getBusInfo:', error);
+    const { logger } = await import('../utils/logger');
+    logger.error('Error in getBusInfo', 'location-service', { error });
     return null;
   }
 };

@@ -6,6 +6,7 @@ interface DriverMapSectionProps {
   busAssignment: any | null;
   tracking: { accuracy?: number | null; isTracking: boolean };
   studentMapConfig: any;
+  isDriverTracking?: boolean; // CRITICAL FIX: Pass driver tracking state to StudentMap
 }
 
 const DriverMapSection: React.FC<DriverMapSectionProps> = ({
@@ -13,6 +14,7 @@ const DriverMapSection: React.FC<DriverMapSectionProps> = ({
   busAssignment,
   tracking,
   studentMapConfig,
+  isDriverTracking = false,
 }) => {
   return (
     <div className="space-y-4 sm:space-y-6 order-2 xl:order-1">
@@ -40,7 +42,10 @@ const DriverMapSection: React.FC<DriverMapSectionProps> = ({
       )}
       <div className="h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]">
         {isAuthenticated && busAssignment ? (
-          <StudentMap config={studentMapConfig} />
+          <StudentMap 
+            config={studentMapConfig} 
+            isDriverTracking={true}
+          />
         ) : (
           <div className="h-full flex items-center justify-center bg-slate-100 rounded-xl border border-slate-200">
             <div className="text-center">

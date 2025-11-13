@@ -1,11 +1,9 @@
 import express from 'express';
 import { authenticateUser } from '../middleware/auth';
-import {
-  getCurrentBusLocations,
-  getBusLocationHistory,
-  saveLocationUpdate,
-} from '../services/locationService';
+// CRITICAL FIX: Use OptimizedLocationService instead of legacy locationService
 import { optimizedLocationService } from '../services/OptimizedLocationService';
+import { parsePostGISPoint } from '../utils/postgisHelpers';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -18,23 +16,28 @@ router.get('/current', async (req, res) => {
     const locations = await optimizedLocationService.getCurrentBusLocations();
     
     // Convert PostGIS POINT format to frontend-friendly format with lat/lng
-    const formattedLocations = locations.map((location) => {
-      // Parse PostGIS Point format: "POINT(longitude latitude)"
-      const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
-      const [longitude, latitude] = pointMatch
-        ? pointMatch[1].split(' ').map(Number)
-        : [0, 0];
+    const formattedLocations = locations
+      .map((location) => {
+        const coords = parsePostGISPoint(location.location);
+        if (!coords) {
+          logger.warn('Failed to parse location coordinates', 'locations-route', { 
+            busId: location.bus_id,
+            locationString: location.location 
+          });
+          return null;
+        }
 
-      return {
-        busId: location.bus_id,
-        driverId: location.driver_id || '',
-        latitude,
-        longitude,
-        timestamp: location.timestamp || new Date().toISOString(),
-        speed: location.speed,
-        heading: location.heading,
-      };
-    });
+        return {
+          busId: location.bus_id,
+          driverId: location.driver_id || '',
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          timestamp: location.timestamp || new Date().toISOString(),
+          speed: location.speed,
+          heading: location.heading,
+        };
+      })
+      .filter((loc): loc is NonNullable<typeof loc> => loc !== null);
     
     res.json({
       success: true,
@@ -42,7 +45,7 @@ router.get('/current', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching current locations:', error);
+    logger.error('Error fetching current locations', 'locations-route', { error });
     res.status(500).json({
       success: false,
       error: 'Failed to fetch current locations',
@@ -73,38 +76,39 @@ router.get('/viewport', async (req, res) => {
 
     const locations = await optimizedLocationService.getCurrentBusLocations();
 
-    // Filter locations within viewport
-    const locationsInViewport = locations.filter((location) => {
-      // Parse PostGIS Point format: "POINT(longitude latitude)"
-      const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
-      if (!pointMatch) return false;
+    // Convert to frontend-friendly format and filter by viewport
+    const formattedLocations = locations
+      .map((location) => {
+        const coords = parsePostGISPoint(location.location);
+        if (!coords) {
+          logger.warn('Failed to parse location coordinates in viewport', 'locations-route', { 
+            busId: location.bus_id,
+            locationString: location.location 
+          });
+          return null;
+        }
 
-      const [longitude, latitude] = pointMatch[1].split(' ').map(Number);
-      return (
-        latitude >= viewport.minLat &&
-        latitude <= viewport.maxLat &&
-        longitude >= viewport.minLng &&
-        longitude <= viewport.maxLng
-      );
-    });
+        // Filter by viewport
+        if (
+          coords.latitude < viewport.minLat ||
+          coords.latitude > viewport.maxLat ||
+          coords.longitude < viewport.minLng ||
+          coords.longitude > viewport.maxLng
+        ) {
+          return null;
+        }
 
-    // Convert to frontend-friendly format
-    const formattedLocations = locationsInViewport.map((location) => {
-      const pointMatch = location.location.match(/POINT\(([^)]+)\)/);
-      const [longitude, latitude] = pointMatch
-        ? pointMatch[1].split(' ').map(Number)
-        : [0, 0];
-
-      return {
-        busId: location.bus_id,
-        driverId: location.driver_id,
-        latitude,
-        longitude,
-        timestamp: location.timestamp,
-        speed: location.speed,
-        heading: location.heading,
-      };
-    });
+        return {
+          busId: location.bus_id,
+          driverId: location.driver_id || '',
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          timestamp: location.timestamp,
+          speed: location.speed,
+          heading: location.heading,
+        };
+      })
+      .filter((loc): loc is NonNullable<typeof loc> => loc !== null);
 
     return res.json({
       success: true,
@@ -112,7 +116,7 @@ router.get('/viewport', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching locations in viewport:', error);
+    logger.error('Error fetching locations in viewport', 'locations-route', { error });
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch locations in viewport',
@@ -135,7 +139,8 @@ router.get('/history/:busId', authenticateUser, async (req, res) => {
       });
     }
 
-    const locations = await getBusLocationHistory(
+    // CRITICAL FIX: Use OptimizedLocationService.getBusLocationHistory instead of legacy service
+    const locations = await optimizedLocationService.getBusLocationHistory(
       busId,
       startTime as string,
       endTime as string
@@ -147,7 +152,7 @@ router.get('/history/:busId', authenticateUser, async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching location history:', error);
+    logger.error('Error fetching location history', 'locations-route', { error });
     res.status(500).json({
       success: false,
       error: 'Failed to fetch location history',
@@ -200,7 +205,8 @@ router.post('/update', authenticateUser, async (req, res) => {
       heading: heading ? parseFloat(heading) : undefined,
     };
 
-    const savedLocation = await saveLocationUpdate(locationData);
+    // CRITICAL FIX: Use OptimizedLocationService instead of deprecated locationService
+    const savedLocation = await optimizedLocationService.saveLocationUpdate(locationData);
 
     if (!savedLocation) {
       return res.status(500).json({
@@ -217,7 +223,7 @@ router.post('/update', authenticateUser, async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error updating location:', error);
+    logger.error('Error updating location', 'locations-route', { error });
     res.status(500).json({
       success: false,
       error: 'Failed to update location',

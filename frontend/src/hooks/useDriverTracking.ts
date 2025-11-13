@@ -8,6 +8,7 @@ import { useGPSAccuracy } from './driverTracking/useGPSAccuracy';
 import { useTrackingErrors } from './driverTracking/useTrackingErrors';
 import { useWebSocketLocationSync } from './driverTracking/useWebSocketLocationSync';
 import { detectDeviceType, getPermissionErrorMessage } from './driverTracking/utils/permissionHelpers';
+import { unifiedWebSocketService } from '../services/UnifiedWebSocketService';
 
 export interface TrackingState {
   isTracking: boolean;
@@ -50,6 +51,7 @@ export function useDriverTracking(
   const [lastLocation, setLastLocation] = useState<LocationData | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
+  const [pendingUpdates, setPendingUpdates] = useState(0); // PRODUCTION FIX: Track pending updates
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'reconnecting'>('disconnected');
 
   // Refs for tracking state
@@ -69,6 +71,17 @@ export function useDriverTracking(
       logger.info('Retrying location after recoverable error', 'useDriverTracking');
     },
   });
+
+  // PRODUCTION FIX: Store stable references to prevent infinite loops
+  // These refs ensure we always use the latest functions without causing re-renders
+  const gpsAccuracyRef = useRef(gpsAccuracy);
+  const trackingErrorsRef = useRef(trackingErrors);
+  
+  // Update refs when values change (without triggering re-renders)
+  useEffect(() => {
+    gpsAccuracyRef.current = gpsAccuracy;
+    trackingErrorsRef.current = trackingErrors;
+  }, [gpsAccuracy, trackingErrors]);
 
   // Update connection status
   useEffect(() => {
@@ -98,23 +111,61 @@ export function useDriverTracking(
     },
   });
 
+  // PRODUCTION FIX: Listen for backend feedback on location updates
+  useEffect(() => {
+    if (!isTracking || !isWebSocketConnected) return;
+
+    // Listen for location confirmed events
+    const unsubscribeConfirmed = unifiedWebSocketService.onLocationConfirmed((data) => {
+      logger.debug('Location update confirmed by backend', 'useDriverTracking', {
+        timestamp: data.timestamp,
+        locationId: data.locationId,
+      });
+      // Only increment counter when backend confirms the update was saved
+      setUpdateCount(prev => prev + 1);
+      setPendingUpdates(prev => Math.max(0, prev - 1)); // Decrement pending
+      setLastUpdateTime(Date.now());
+    });
+
+    // Listen for rate limit events
+    const unsubscribeRateLimited = unifiedWebSocketService.onLocationRateLimited((data) => {
+      logger.debug('Location update rate limited by backend', 'useDriverTracking', {
+        timestamp: data.timestamp,
+        nextAllowedTime: data.nextAllowedTime,
+        waitTimeMs: data.waitTimeMs,
+        reason: data.reason,
+      });
+      // Decrement pending since this update was rejected
+      setPendingUpdates(prev => Math.max(0, prev - 1));
+    });
+
+    return () => {
+      unsubscribeConfirmed();
+      unsubscribeRateLimited();
+    };
+  }, [isTracking, isWebSocketConnected]);
+
   // Setup location listeners
+  // PRODUCTION FIX: Only depend on isTracking to prevent infinite loops
+  // Use refs to access latest gpsAccuracy and trackingErrors functions
   useEffect(() => {
     // Location update listener
+    // PRODUCTION FIX: Don't increment counter here - wait for backend confirmation
     const locationListener = (location: LocationData) => {
       setLastLocation(location);
       setLastUpdateTime(Date.now());
-      setUpdateCount(prev => prev + 1);
+      // PRODUCTION FIX: Track as pending instead of incrementing counter
+      setPendingUpdates(prev => prev + 1);
       
-      // Update GPS accuracy
+      // Update GPS accuracy using ref to get latest function
       if (location.accuracy !== undefined) {
-        gpsAccuracy.updateAccuracy(location.accuracy);
+        gpsAccuracyRef.current.updateAccuracy(location.accuracy);
       }
       
       // Auto-clear error on successful location update
-      // Clear error and reset retry on successful location
-      trackingErrors.clearError();
-      trackingErrors.resetRetry();
+      // Clear error and reset retry on successful location using ref
+      trackingErrorsRef.current.clearError();
+      trackingErrorsRef.current.resetRetry();
       
       logger.info('✅ Location update received', 'useDriverTracking', {
         newLocation: { lat: location.latitude, lng: location.longitude, accuracy: location.accuracy }
@@ -132,7 +183,7 @@ export function useDriverTracking(
 
     // Error listener
     const errorListener = (error: LocationError) => {
-      trackingErrors.handleError(error, trackingStartTimeRef.current, isMobileDeviceRef.current);
+      trackingErrorsRef.current.handleError(error, trackingStartTimeRef.current, isMobileDeviceRef.current);
     };
 
     // Store references for cleanup
@@ -152,7 +203,7 @@ export function useDriverTracking(
         locationService.removeErrorListener(errorListenerRef.current);
       }
     };
-  }, [isTracking, gpsAccuracy, trackingErrors]);
+  }, [isTracking]); // PRODUCTION FIX: Only depend on isTracking, use refs for functions
 
   // Start tracking
   const startTracking = useCallback(async () => {

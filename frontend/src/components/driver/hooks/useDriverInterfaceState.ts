@@ -263,32 +263,84 @@ export function useDriverInterfaceState({
           isWebSocketAuthenticated: false 
         });
         logger.debug('Driver interface: WebSocket disconnected', 'useDriverInterfaceState');
-        // Only set error if authenticated and not initializing
-        if (isAuthenticatedRef.current && !isWebSocketInitializing) {
-          const appError = errorHandler.handleError(
-            new Error('WebSocket connection lost'), 
-            'useDriverInterfaceState-websocket-connection'
-          );
-          driverActionsRef.current.setInitializationState({
-            initializationError: appError.userMessage || appError.message
-          });
+        // PRODUCTION FIX: Only set error if authenticated and not initializing
+        // Also check if connection is actually lost (not just connecting)
+        if (isAuthenticatedRef.current && !isWebSocketInitializing && !currentState.isWebSocketConnected) {
+          // PRODUCTION FIX: Don't show error immediately - give reconnection a chance
+          // Only show error after a delay to allow automatic reconnection
+          // Use a ref to track timeout to prevent multiple timeouts
+          const timeoutId = setTimeout(() => {
+            // Check again if still disconnected after delay
+            if (isAuthenticatedRef.current && !isWebSocketInitializing && !currentState.isWebSocketConnected) {
+              // PRODUCTION FIX: Don't log error here - already logged in connectionManager
+              // Just set the user-facing error message
+              const appError = errorHandler.handleError(
+                new Error('WebSocket connection lost. Attempting to reconnect...'), 
+                'useDriverInterfaceState-websocket-connection'
+              );
+              driverActionsRef.current.setInitializationState({
+                initializationError: appError.userMessage || appError.message
+              });
+            }
+          }, 5000); // Wait 5 seconds before showing error (increased from 3)
+          
+          // Store timeout ID for cleanup if needed
+          (window as any).__driverInterfaceErrorTimeout = timeoutId;
         }
       }
     } catch (err) {
-      // Don't create error loops
+      // PRODUCTION FIX: Log error details for debugging, but handle gracefully
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorStack = err instanceof Error ? err.stack : undefined;
+      const errorCode = (err as any)?.code || '';
+      const isAuthError = (err as any)?.isAuthError || false;
+      const isNetworkError = (err as any)?.isNetworkError || false;
+      
+      // PRODUCTION FIX: Log to console for visibility
+      console.error('❌ Error in useDriverInterfaceState WebSocket status update:', {
+        message: errorMessage,
+        code: errorCode,
+        isAuthError,
+        isNetworkError,
+        error: err instanceof Error ? err : String(err),
+        stack: errorStack,
+        isInitializing: isWebSocketInitializing,
+        isConnected: currentState.isWebSocketConnected,
+        isAuthenticated: currentState.isWebSocketAuthenticated
+      });
+      
+      // PRODUCTION FIX: Handle error gracefully without causing loops
       try {
-        const appError = errorHandler.handleError(err, 'useDriverInterfaceState-websocket-status-update');
-        // Only set error if not initializing
+        // Only set user-facing error if not initializing
         if (!isWebSocketInitializing) {
+          // Try to get a user-friendly error message
+          let userMessage = 'WebSocket connection issue';
+          if (isAuthError) {
+            userMessage = 'Authentication failed. Please log out and log in again.';
+          } else if (isNetworkError) {
+            userMessage = 'Cannot connect to server. Please check your connection.';
+          } else if (errorMessage) {
+            userMessage = errorMessage;
+          }
+          
           driverActionsRef.current.setInitializationState({
-            initializationError: appError.userMessage || appError.message
+            initializationError: userMessage
           });
         }
       } catch (handlerError) {
-        // Error handler itself failed - just log the original error
-        logger.debug('Error in error handler (non-critical)', 'useDriverInterfaceState', { 
-          originalError: err instanceof Error ? err.message : String(err)
-        });
+        // Error handler itself failed - log but don't throw to prevent error loops
+        console.error('Error handler failed in useDriverInterfaceState:', handlerError);
+        // Don't rethrow - just set a generic error message
+        if (!isWebSocketInitializing) {
+          try {
+            driverActionsRef.current.setInitializationState({
+              initializationError: 'Connection issue detected'
+            });
+          } catch (setError) {
+            // Even setting state failed - just log and continue
+            console.error('Failed to set error state:', setError);
+          }
+        }
       }
     }
   }, [isWebSocketConnected, isWebSocketAuthenticated, isWebSocketInitializing]);

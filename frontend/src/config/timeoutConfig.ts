@@ -62,13 +62,13 @@ export const timeoutConfig: TimeoutConfig = {
     default: 15000, // 15 seconds - default for most API calls
     longRunning: 30000, // 30 seconds - for heavy operations
     shortRunning: 5000, // 5 seconds - for quick operations
-    busAssignment: 8000, // 8 seconds - bus assignment fetch
+    busAssignment: 15000, // 15 seconds - bus assignment fetch (increased from 8s for slower backend responses)
     healthCheck: 3000, // 3 seconds - health checks should be fast
   },
   
   websocket: {
-    connection: 10000, // 10 seconds - WebSocket connection timeout
-    authentication: 8000, // 8 seconds - WebSocket authentication timeout
+    connection: 15000, // 15 seconds - WebSocket connection timeout (increased from 10s for slower networks)
+    authentication: 10000, // 10 seconds - WebSocket authentication timeout (increased from 8s)
     heartbeat: 30000, // 30 seconds - heartbeat interval
     reconnect: 15000, // 15 seconds - reconnection timeout
   },

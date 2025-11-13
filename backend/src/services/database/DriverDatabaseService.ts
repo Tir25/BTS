@@ -322,6 +322,8 @@ export class DriverDatabaseService {
         throw fetchError;
       }
 
+      const now = new Date().toISOString();
+
       // Delete all driver-related data first
       // 1. Delete live locations
       await supabaseAdmin
@@ -335,15 +337,19 @@ export class DriverDatabaseService {
         .select('id, route_id')
         .eq('assigned_driver_profile_id', driverId);
 
+      const busIds = Array.isArray(assignedBuses) ? (assignedBuses as any[]).map((b: any) => b.id) : [];
+
       // Update buses to remove driver assignment and unassign route
       const { error: busUpdateError } = await supabaseAdmin
         .from('buses')
         .update({
           assigned_driver_profile_id: null,
           route_id: null,
+          assigned_shift_id: null,
+          shift_id: null,
           assignment_status: 'unassigned',
-          assignment_notes: `Driver deleted - route unassigned at ${new Date().toISOString()}`,
-          updated_at: new Date().toISOString()
+          assignment_notes: `Driver deleted - route unassigned at ${now}`,
+          updated_at: now
         })
         .eq('assigned_driver_profile_id', driverId);
 
@@ -364,13 +370,59 @@ export class DriverDatabaseService {
         }
       }
 
-      // 3. Delete from bus_route_assignments
-      await supabaseAdmin
-        .from('bus_route_assignments')
-        .delete()
-        .eq('driver_id', driverId);
+      // 3. Remove any scheduled shifts linked to affected buses
+      if (busIds.length > 0) {
+        const { error: shiftCleanupError } = await supabaseAdmin
+          .from('bus_route_shifts')
+          .delete()
+          .in('bus_id', busIds);
 
-      // 4. Delete driver profile
+        if (shiftCleanupError) {
+          logger.warn('Failed to remove bus route shifts during driver delete', 'driver-db-service', {
+            driverId,
+            error: shiftCleanupError
+          });
+        }
+      }
+
+      // 4. Deactivate driver-bus assignments
+      const { error: driverAssignmentError } = await supabaseAdmin
+        .from('driver_bus_assignments')
+        .update({
+          is_active: false,
+          updated_at: now
+        })
+        .eq('driver_id', driverId)
+        .eq('is_active', true);
+
+      if (driverAssignmentError) {
+        logger.warn('Failed to deactivate driver-bus assignments during driver delete', 'driver-db-service', {
+          driverId,
+          error: driverAssignmentError
+        });
+      }
+
+      // 5. Deactivate bus-route assignments that reference this driver
+      const { error: routeAssignmentError } = await supabaseAdmin
+        .from('bus_route_assignments')
+        .update({
+          is_active: false,
+          unassigned_at: now,
+          updated_at: now,
+          assigned_driver_id: null,
+          assigned_driver_profile_id: null
+        })
+        .eq('is_active', true)
+        .or(`driver_id.eq.${driverId},assigned_driver_profile_id.eq.${driverId}`);
+
+      if (routeAssignmentError) {
+        logger.warn('Failed to deactivate bus-route assignments during driver delete', 'driver-db-service', {
+          driverId,
+          error: routeAssignmentError
+        });
+      }
+
+      // 6. Delete driver profile
       const { error: deleteError } = await supabaseAdmin
         .from('user_profiles')
         .delete()
@@ -382,7 +434,7 @@ export class DriverDatabaseService {
         throw deleteError;
       }
 
-      // 5. Delete from Supabase Auth
+      // 7. Delete from Supabase Auth
       const supabaseUrl = process.env.SUPABASE_URL;
       const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

@@ -40,21 +40,34 @@ const websocketAuthMiddleware = (socket, next) => {
         return next();
     }
     if (!token) {
+        const errorMsg = 'Authentication token required';
         logger_1.logger.websocket('No authentication token provided for privileged connection', {
             socketId: socket.id,
             clientType,
             clientIP,
-            userAgent: userAgent?.substring(0, 100)
+            userAgent: userAgent?.substring(0, 100),
+            authProvided: !!socket.handshake.auth.token,
+            authKeys: Object.keys(socket.handshake.auth || {}),
         });
-        return next(new Error('Authentication token required'));
+        const error = new Error(errorMsg);
+        error.code = 'AUTH_TOKEN_REQUIRED';
+        error.clientType = clientType;
+        return next(error);
     }
     if (typeof token !== 'string' || token.length < 20) {
+        const errorMsg = 'Invalid token format';
         logger_1.logger.websocket('Invalid token format', {
             socketId: socket.id,
             tokenLength: token?.length || 0,
-            clientIP
+            tokenType: typeof token,
+            clientIP,
+            clientType,
         });
-        return next(new Error('Invalid token format'));
+        const error = new Error(errorMsg);
+        error.code = 'AUTH_TOKEN_INVALID';
+        error.clientType = clientType;
+        error.reason = 'Token format invalid or too short';
+        return next(error);
     }
     const authTimeout = setTimeout(() => {
         logger_1.logger.websocket('Authentication timeout', { socketId: socket.id, clientIP });
@@ -64,20 +77,33 @@ const websocketAuthMiddleware = (socket, next) => {
         .then(({ data: { user }, error }) => {
         clearTimeout(authTimeout);
         if (error || !user) {
+            const errorMsg = error?.message || 'Invalid authentication token';
             logger_1.logger.websocket('Token validation failed', {
                 socketId: socket.id,
-                error: error?.message,
-                clientIP
+                error: errorMsg,
+                errorCode: error?.status,
+                clientIP,
+                clientType,
+                tokenLength: token?.length || 0,
             });
-            return next(new Error('Invalid authentication token'));
+            const authError = new Error(errorMsg);
+            authError.code = 'AUTH_TOKEN_INVALID';
+            authError.originalError = error?.message;
+            return next(authError);
         }
         if (!user.id || !user.email) {
+            const errorMsg = 'Invalid user data';
             logger_1.logger.websocket('Invalid user data', {
                 socketId: socket.id,
                 userId: user.id,
-                clientIP
+                userEmail: user.email,
+                clientIP,
+                clientType,
             });
-            return next(new Error('Invalid user data'));
+            const error = new Error(errorMsg);
+            error.code = 'AUTH_USER_INVALID';
+            error.clientType = clientType;
+            return next(error);
         }
         if (!user.email_confirmed_at && process.env.NODE_ENV === 'production') {
             logger_1.logger.websocket('User email not verified', {
@@ -94,34 +120,66 @@ const websocketAuthMiddleware = (socket, next) => {
             .single()
             .then(({ data: profile, error: profileError }) => {
             if (profileError || !profile) {
+                const errorMsg = 'User profile not found';
                 logger_1.logger.websocket('User profile not found', {
                     socketId: socket.id,
                     email: user.email,
+                    userId: user.id,
                     error: profileError?.message,
-                    clientIP
+                    errorCode: profileError?.code,
+                    clientIP,
+                    clientType,
                 }, profileError);
-                return next(new Error('User profile not found'));
+                const error = new Error(errorMsg);
+                error.code = 'AUTH_PROFILE_NOT_FOUND';
+                error.clientType = clientType;
+                error.originalError = profileError?.message;
+                return next(error);
             }
             if (profile.is_active === false) {
+                const errorMsg = 'Account is inactive';
                 logger_1.logger.websocket('Inactive user account', {
                     socketId: socket.id,
                     email: user.email,
-                    clientIP
+                    userId: user.id,
+                    clientIP,
+                    clientType,
                 });
-                return next(new Error('Account is inactive'));
+                const error = new Error(errorMsg);
+                error.code = 'AUTH_ACCOUNT_INACTIVE';
+                error.clientType = clientType;
+                return next(error);
             }
             const adminEmails = (0, authUtils_1.getAdminEmails)();
-            if (adminEmails.length === 0)
-                return next(new Error('Server configuration error'));
+            if (adminEmails.length === 0) {
+                const errorMsg = 'Server configuration error';
+                logger_1.logger.error('Admin emails configuration missing', 'websocket', {
+                    socketId: socket.id,
+                    clientIP,
+                    clientType,
+                });
+                const error = new Error(errorMsg);
+                error.code = 'SERVER_CONFIG_ERROR';
+                error.clientType = clientType;
+                return next(error);
+            }
             const isAdmin = adminEmails.includes(user.email?.toLowerCase() || '');
             const role = isAdmin ? 'admin' : profile.role;
             if (!['admin', 'driver', 'student'].includes(role)) {
+                const errorMsg = `Invalid user role: ${role}`;
                 logger_1.logger.websocket('Invalid user role', {
                     socketId: socket.id,
                     role,
-                    clientIP
+                    email: user.email,
+                    userId: user.id,
+                    clientIP,
+                    clientType,
                 });
-                return next(new Error('Invalid user role'));
+                const error = new Error(errorMsg);
+                error.code = 'AUTH_INVALID_ROLE';
+                error.clientType = clientType;
+                error.role = role;
+                return next(error);
             }
             socket.userId = profile.id;
             socket.userRole = role;
@@ -154,12 +212,20 @@ const websocketAuthMiddleware = (socket, next) => {
     })
         .catch((error) => {
         clearTimeout(authTimeout);
+        const errorMsg = error?.message || 'Authentication failed';
         logger_1.logger.error('WebSocket authentication error', 'websocket', {
             socketId: socket.id,
-            error: error?.message,
-            clientIP
+            error: errorMsg,
+            errorStack: error?.stack,
+            clientIP,
+            clientType,
+            tokenProvided: !!token,
+            tokenLength: token?.length || 0,
         }, error);
-        next(new Error('Authentication failed'));
+        const authError = new Error(errorMsg);
+        authError.code = 'AUTH_FAILED';
+        authError.originalError = error?.message;
+        next(authError);
     });
 };
 exports.websocketAuthMiddleware = websocketAuthMiddleware;

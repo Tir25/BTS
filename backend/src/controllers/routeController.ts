@@ -6,7 +6,6 @@
 import { Request, Response } from 'express';
 import { RouteQueryService } from '../services/routes/RouteQueryService';
 import { RouteMutationService } from '../services/routes/RouteMutationService';
-import { ConsolidatedAdminService } from '../services/ConsolidatedAdminService';
 import { validateRouteData } from '../utils/validation';
 import { ResponseHelper } from '../utils/responseHelpers';
 import { logger } from '../utils/logger';
@@ -108,7 +107,7 @@ export class RouteController {
       const { routeId } = req.params;
       const routeData = req.body;
 
-      const updatedRoute = await ConsolidatedAdminService.updateRoute(routeId, routeData);
+      const updatedRoute = await RouteMutationService.updateRoute(routeId, routeData);
 
       if (!updatedRoute) {
         ResponseHelper.notFound(res, `Route with ID ${routeId}`);
@@ -128,7 +127,7 @@ export class RouteController {
   static async deleteRoute(req: Request, res: Response): Promise<void> {
     try {
       const { routeId } = req.params;
-      const deletedRoute = await ConsolidatedAdminService.deleteRoute(routeId);
+      const deletedRoute = await RouteMutationService.deleteRoute(routeId);
 
       if (!deletedRoute) {
         ResponseHelper.notFound(res, `Route with ID ${routeId}`);

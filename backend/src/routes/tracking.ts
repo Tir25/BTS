@@ -2,36 +2,117 @@ import express from 'express';
 import { authenticateUser, requireAdminOrDriver } from '../middleware/auth';
 import { TrackingService } from '../services/TrackingService';
 import { logger } from '../utils/logger';
-import { globalIO } from '../sockets/websocket';
+import { globalIO } from '../websocket/socketServer';
 
 const router = express.Router();
 
 router.use(authenticateUser);
 
+// PRODUCTION FIX: Enhanced logging and error handling
 router.post('/start', requireAdminOrDriver, async (req, res) => {
+  const requestId = req.headers['x-request-id'] as string || `req_${Date.now()}`;
   try {
     const driverId = (req.body.driverId as string) || req.user?.id;
     const shiftId = req.body.shiftId as string | undefined;
-    if (!driverId) return res.status(400).json({ success: false, error: 'driverId required' });
+    
+    logger.info('Tracking start request received', 'tracking-routes', {
+      requestId,
+      driverId,
+      shiftId,
+      userId: req.user?.id,
+      ip: req.ip
+    });
+    
+    if (!driverId) {
+      logger.warn('Tracking start failed: driverId required', 'tracking-routes', {
+        requestId,
+        hasBodyDriverId: !!req.body.driverId,
+        hasUserContext: !!req.user?.id
+      });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'driverId required',
+        code: 'VALIDATION_ERROR'
+      });
+    }
+    
     const session = await TrackingService.startTracking(driverId, shiftId);
+    
+    logger.info('Tracking started successfully', 'tracking-routes', {
+      requestId,
+      driverId,
+      sessionId: session?.id,
+      shiftId
+    });
+    
     // TODO: broadcast via WebSocket: tracking_started
     return res.json({ success: true, data: session });
   } catch (error: any) {
-    logger.error('Error starting tracking', 'tracking-routes', { error: error?.message });
-    return res.status(500).json({ success: false, error: 'Failed to start tracking', message: error?.message });
+    const errorMessage = error?.message || 'Unknown error';
+    logger.error('Error starting tracking', 'tracking-routes', { 
+      requestId,
+      error: errorMessage,
+      driverId: req.body.driverId || req.user?.id,
+      stack: error?.stack
+    });
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to start tracking', 
+      message: errorMessage,
+      code: 'TRACKING_START_ERROR'
+    });
   }
 });
 
+// PRODUCTION FIX: Enhanced logging and error handling
 router.post('/stop', requireAdminOrDriver, async (req, res) => {
+  const requestId = req.headers['x-request-id'] as string || `req_${Date.now()}`;
   try {
     const driverId = (req.body.driverId as string) || req.user?.id;
-    if (!driverId) return res.status(400).json({ success: false, error: 'driverId required' });
+    
+    logger.info('Tracking stop request received', 'tracking-routes', {
+      requestId,
+      driverId,
+      userId: req.user?.id,
+      ip: req.ip
+    });
+    
+    if (!driverId) {
+      logger.warn('Tracking stop failed: driverId required', 'tracking-routes', {
+        requestId,
+        hasBodyDriverId: !!req.body.driverId,
+        hasUserContext: !!req.user?.id
+      });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'driverId required',
+        code: 'VALIDATION_ERROR'
+      });
+    }
+    
     const result = await TrackingService.stopTracking(driverId);
+    
+    logger.info('Tracking stopped successfully', 'tracking-routes', {
+      requestId,
+      driverId
+    });
+    
     // TODO: broadcast via WebSocket: tracking_stopped
     return res.json({ success: true, data: result });
   } catch (error: any) {
-    logger.error('Error stopping tracking', 'tracking-routes', { error: error?.message });
-    return res.status(500).json({ success: false, error: 'Failed to stop tracking', message: error?.message });
+    const errorMessage = error?.message || 'Unknown error';
+    logger.error('Error stopping tracking', 'tracking-routes', { 
+      requestId,
+      error: errorMessage,
+      driverId: req.body.driverId || req.user?.id,
+      stack: error?.stack
+    });
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to stop tracking', 
+      message: errorMessage,
+      code: 'TRACKING_STOP_ERROR'
+    });
   }
 });
 

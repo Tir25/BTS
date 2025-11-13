@@ -621,6 +621,18 @@ class AuthService {
       // Stop proactive session refresh
       sessionHelpers.stopProactiveRefresh();
 
+      // PRODUCTION FIX: Clear in-memory assignment cache before sign out
+      const driverId = this.currentUser?.id || null;
+      if (driverId && this.currentProfile?.role === 'driver') {
+        try {
+          const { assignmentHelpers } = await import('./auth/assignmentHelpers');
+          assignmentHelpers.clearInMemoryCache(driverId);
+          logger.debug('🗑️ Cleared assignment cache on sign out', 'auth', { driverId });
+        } catch (cacheError) {
+          logger.warn('⚠️ Failed to clear assignment cache on sign out', 'auth', { error: cacheError });
+        }
+      }
+
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
 
@@ -1354,9 +1366,17 @@ class AuthService {
    */
   async logout(): Promise<void> {
     try {
-      // Clear driver assignment if exists
-      if (this.currentUser && this.currentProfile?.role === 'driver') {
+      // PRODUCTION FIX: Clear in-memory assignment cache before logout
+      const driverId = this.currentUser?.id || null;
+      if (driverId && this.currentProfile?.role === 'driver') {
         await this.clearDriverBusAssignment();
+        try {
+          const { assignmentHelpers } = await import('./auth/assignmentHelpers');
+          assignmentHelpers.clearInMemoryCache(driverId);
+          logger.debug('🗑️ Cleared assignment cache on logout', 'auth', { driverId });
+        } catch (cacheError) {
+          logger.warn('⚠️ Failed to clear assignment cache on logout', 'auth', { error: cacheError });
+        }
       }
 
       // Clear current state
@@ -1364,6 +1384,9 @@ class AuthService {
       this.currentSession = null;
       this.currentProfile = null;
       this.currentDriverAssignment = null;
+
+      // Clear token cache
+      tokenStorage.clearCache();
 
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut();

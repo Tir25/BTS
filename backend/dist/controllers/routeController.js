@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RouteController = void 0;
 const RouteQueryService_1 = require("../services/routes/RouteQueryService");
 const RouteMutationService_1 = require("../services/routes/RouteMutationService");
-const ConsolidatedAdminService_1 = require("../services/ConsolidatedAdminService");
 const validation_1 = require("../utils/validation");
 const responseHelpers_1 = require("../utils/responseHelpers");
 const logger_1 = require("../utils/logger");
@@ -78,7 +77,7 @@ class RouteController {
         try {
             const { routeId } = req.params;
             const routeData = req.body;
-            const updatedRoute = await ConsolidatedAdminService_1.ConsolidatedAdminService.updateRoute(routeId, routeData);
+            const updatedRoute = await RouteMutationService_1.RouteMutationService.updateRoute(routeId, routeData);
             if (!updatedRoute) {
                 responseHelpers_1.ResponseHelper.notFound(res, `Route with ID ${routeId}`);
                 return;
@@ -93,7 +92,7 @@ class RouteController {
     static async deleteRoute(req, res) {
         try {
             const { routeId } = req.params;
-            const deletedRoute = await ConsolidatedAdminService_1.ConsolidatedAdminService.deleteRoute(routeId);
+            const deletedRoute = await RouteMutationService_1.RouteMutationService.deleteRoute(routeId);
             if (!deletedRoute) {
                 responseHelpers_1.ResponseHelper.notFound(res, `Route with ID ${routeId}`);
                 return;

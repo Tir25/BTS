@@ -1,32 +1,14 @@
 // Enhanced Vite config with cache busting, build optimization, and MIME type fixes
 import { resolve } from 'path';
 
-// Custom plugin to fix MIME type issues
-const mimeTypeFixPlugin = () => {
-  return {
-    name: 'mime-type-fix',
-    configureServer(server) {
-      // Fix MIME types for Vite dependency files
-      server.middlewares.use('/node_modules/.vite/deps', (req, res, next) => {
-        if (req.url && req.url.endsWith('.js')) {
-          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-        }
-        next();
-      });
-
-      // Fix MIME types for all JavaScript files
-      server.middlewares.use((req, res, next) => {
-        if (req.url && req.url.endsWith('.js')) {
-          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-        }
-        next();
-      });
-    }
-  };
-};
+// PRODUCTION FIX: Removed MIME type fix plugin - no longer needed
+// The issue was caused by a direct CSS link in index.html, which has been removed
+// Vite handles CSS imports correctly through JavaScript modules (import './index.css')
+// CSS is now only imported in main.tsx, so no direct link tag is needed in HTML
 
 export default {
-  plugins: [mimeTypeFixPlugin()],
+  // PRODUCTION FIX: Removed mimeTypeFixPlugin - CSS is now properly handled through JS imports
+  plugins: [],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
@@ -58,7 +40,9 @@ export default {
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom'],
     // Force pre-bundling to avoid MIME type issues
-    force: true
+    force: true,
+    // Exclude problematic dependencies from optimization
+    exclude: []
   },
   // Ensure proper module resolution
   esbuild: {

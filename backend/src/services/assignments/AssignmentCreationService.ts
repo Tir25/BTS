@@ -155,7 +155,7 @@ export class AssignmentCreationService {
       
       // Broadcast WebSocket update to affected driver
       try {
-        const { globalIO } = require('../../sockets/websocket');
+        const { globalIO } = require('../../websocket/socketServer');
         if (globalIO && (globalIO as any).broadcastAssignmentUpdate) {
           const assignmentData = {
             driverId: newDriverId,

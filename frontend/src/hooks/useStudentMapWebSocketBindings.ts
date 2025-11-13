@@ -34,6 +34,10 @@ interface Params {
     };
     timestamp: string;
   }) => void;
+  // CRITICAL FIX: Add flag to indicate if StudentMap is used in driver mode
+  // When true, StudentMap should NOT create its own WebSocket connection
+  // Instead, it should use the existing driver WebSocket connection
+  isDriverMode?: boolean;
 }
 
 export function useStudentMapWebSocketBindings(p: Params) {
@@ -84,13 +88,124 @@ export function useStudentMapWebSocketBindings(p: Params) {
 
     const initializeWebSocket = async (loadedBuses: BusInfo[]) => {
       try {
+        // CRITICAL FIX: If in driver mode, skip creating a new WebSocket connection
+        // The driver WebSocket connection already exists and can be used for bus location updates
+        if (p.isDriverMode) {
+          logger.info('🚌 StudentMap in driver mode - using existing driver WebSocket connection', 'component', { 
+            busCount: loadedBuses.length,
+            note: 'Will listen to bus location updates from driver WebSocket connection'
+          });
+          
+          // CRITICAL FIX: Import connectionManager to check client type
+          const { connectionManager } = await import('../services/websocket/connectionManager');
+          const currentClientType = connectionManager.getClientType();
+          const connectionStatus = unifiedWebSocketService.getConnectionStatus();
+          
+          // If already connected as driver, use it
+          if (connectionStatus && currentClientType === 'driver') {
+            logger.info('✅ Driver WebSocket connection available for StudentMap', 'component', {
+              clientType: currentClientType,
+              isConnected: connectionStatus
+            });
+            p.setIsConnected(true);
+            p.setConnectionStatus('connected');
+            return;
+          } 
+          // If connected but not as driver, we need to wait for driver connection
+          // This shouldn't happen in normal flow, but handle it gracefully
+          else if (connectionStatus && currentClientType !== 'driver') {
+            logger.warn('⚠️ WebSocket connected but not as driver - StudentMap will wait for driver connection', 'component', {
+              currentClientType,
+              note: 'This may indicate a race condition - driver connection should be established first'
+            });
+            p.setConnectionStatus('connecting');
+            // Wait for driver connection (max 10 seconds)
+            let attempts = 0;
+            const maxAttempts = 100; // 100 * 100ms = 10 seconds
+            while (attempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              const newClientType = connectionManager.getClientType();
+              const newConnectionStatus = unifiedWebSocketService.getConnectionStatus();
+              if (newConnectionStatus && newClientType === 'driver') {
+                logger.info('✅ Driver WebSocket connection established - StudentMap ready', 'component');
+                p.setIsConnected(true);
+                p.setConnectionStatus('connected');
+                return;
+              }
+              attempts++;
+            }
+            logger.warn('⚠️ Driver WebSocket connection timeout - StudentMap will continue without live updates', 'component');
+            p.setConnectionStatus('disconnected');
+            return;
+          } 
+          // Not connected yet - wait for driver connection
+          else {
+            logger.warn('⚠️ Driver WebSocket not connected yet - StudentMap will wait for connection', 'component');
+            p.setConnectionStatus('connecting');
+            // Wait for driver connection (max 10 seconds)
+            let attempts = 0;
+            const maxAttempts = 100; // 100 * 100ms = 10 seconds
+            while (attempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              const newClientType = connectionManager.getClientType();
+              const newConnectionStatus = unifiedWebSocketService.getConnectionStatus();
+              if (newConnectionStatus && newClientType === 'driver') {
+                logger.info('✅ Driver WebSocket connection established - StudentMap ready', 'component');
+                p.setIsConnected(true);
+                p.setConnectionStatus('connected');
+                return;
+              }
+              attempts++;
+            }
+            logger.warn('⚠️ Driver WebSocket connection timeout - StudentMap will continue without live updates', 'component');
+            p.setConnectionStatus('disconnected');
+            return;
+          }
+        }
+        
         logger.info('🔌 Initializing WebSocket connection for live bus updates...', 'component', { busCount: loadedBuses.length });
+        
+        // CRITICAL FIX: Set client type BEFORE connecting to prevent race conditions
         unifiedWebSocketService.setClientType('student');
+        
+        // CRITICAL FIX: Check if already connected with correct client type
+        const connectionStatus = unifiedWebSocketService.getConnectionStatus();
+        if (connectionStatus) {
+          logger.info('✅ WebSocket already connected for student map', 'component');
+          return;
+        }
+        
         await unifiedWebSocketService.connect();
         logger.info('✅ WebSocket connection established for student map', 'component');
       } catch (error) {
+        // PRODUCTION FIX: Log full error details before processing
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorCode = (error as any)?.code || '';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        const isAuthError = (error as any)?.isAuthError || false;
+        const isNetworkError = (error as any)?.isNetworkError || false;
+        
+        // PRODUCTION FIX: Log to console for visibility
+        console.error('❌ StudentMap WebSocket connection error:', {
+          message: errorMessage,
+          code: errorCode,
+          isAuthError,
+          isNetworkError,
+          error: error instanceof Error ? error : String(error),
+          stack: errorStack,
+          fullError: error
+        });
+        
         const wsError = errorHandler.handleError(error, 'StudentMap-WebSocketInit');
-        logger.error('WebSocket connection error', 'component', { error: wsError.message, code: wsError.code });
+        logger.error('WebSocket connection error', 'component', { 
+          error: wsError.message, 
+          code: wsError.code,
+          originalError: errorMessage,
+          originalCode: errorCode,
+          isAuthError,
+          isNetworkError,
+          stack: errorStack
+        });
         p.setConnectionError(wsError.userMessage || 'Failed to connect to live updates');
       }
     };
@@ -109,31 +224,63 @@ export function useStudentMapWebSocketBindings(p: Params) {
 
     initializeSequentially();
 
+    // CRITICAL FIX: Optimized handler for concurrent location updates from multiple drivers
+    // Uses requestAnimationFrame to batch updates and prevent blocking the main thread
     handleBusLocationUpdateRef.current = (location: WSBusLocation) => {
-      const canonicalBusId = p.getCanonicalBusId(location.busId);
-      const busLocation: any = {
-        busId: canonicalBusId,
-        driverId: (location as any).driverId || '',
-        latitude: location.latitude,
-        longitude: location.longitude,
-        timestamp: location.timestamp,
-        speed: location.speed,
-        heading: location.heading,
-      };
-      p.setLastBusLocations(prev => ({ ...prev, [canonicalBusId]: busLocation }));
-      p.debouncedLocationUpdate(location);
-      p.updateBusMarker({ ...location, busId: canonicalBusId });
-      if (!p.busInfoCache.current.get(canonicalBusId)) {
-        p.busInfoCache.current.set(canonicalBusId, {
+      // Use requestAnimationFrame to batch concurrent updates efficiently
+      requestAnimationFrame(() => {
+        if (!isMounted) return;
+        
+        const canonicalBusId = p.getCanonicalBusId(location.busId);
+        const busLocation: any = {
           busId: canonicalBusId,
-          busNumber: `Bus ${canonicalBusId.slice(0, 8)}...`,
-          routeName: 'Loading...',
-          driverName: 'Loading...',
           driverId: (location as any).driverId || '',
-          routeId: '',
-          currentLocation: busLocation,
-        } as any);
-      }
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timestamp: location.timestamp,
+          speed: location.speed,
+          heading: location.heading,
+        };
+        
+        // CRITICAL FIX: Batch state updates for concurrent location updates
+        // React will batch these automatically, but we ensure atomic updates
+        p.setLastBusLocations(prev => {
+          // Only update if this location is newer than existing one
+          const existing = prev[canonicalBusId];
+          if (existing && existing.timestamp && location.timestamp) {
+            const existingTime = new Date(existing.timestamp).getTime();
+            const newTime = new Date(location.timestamp).getTime();
+            if (newTime <= existingTime) {
+              // Older location, skip update
+              return prev;
+            }
+          }
+          return { ...prev, [canonicalBusId]: busLocation };
+        });
+        
+        // Debounced update for API sync (handles multiple concurrent updates)
+        p.debouncedLocationUpdate(location);
+        
+        // Update marker asynchronously to prevent blocking
+        requestAnimationFrame(() => {
+          if (isMounted) {
+            p.updateBusMarker({ ...location, busId: canonicalBusId });
+          }
+        });
+        
+        // Update cache if needed (non-blocking)
+        if (!p.busInfoCache.current.get(canonicalBusId)) {
+          p.busInfoCache.current.set(canonicalBusId, {
+            busId: canonicalBusId,
+            busNumber: `Bus ${canonicalBusId.slice(0, 8)}...`,
+            routeName: 'Loading...',
+            driverName: 'Loading...',
+            driverId: (location as any).driverId || '',
+            routeId: '',
+            currentLocation: busLocation,
+          } as any);
+        }
+      });
     };
 
     handleDriverConnectedRef.current = (data: any) => { logger.debug('🚌 Driver connected:', 'component', { data }); };
@@ -194,7 +341,7 @@ export function useStudentMapWebSocketBindings(p: Params) {
     p.cleanupFunctions.current.push(cleanup);
     return cleanup;
      
-  }, [p.enabled]);
+  }, [p.enabled, p.isDriverMode]); // CRITICAL FIX: Include isDriverMode in dependencies
 }
 
 

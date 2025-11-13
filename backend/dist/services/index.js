@@ -17,7 +17,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RouteMutationService = exports.RouteDatabaseService = exports.DriverDatabaseService = exports.BusDatabaseService = exports.inMemoryCache = exports.InMemoryCacheService = void 0;
 __exportStar(require("./BackendDriverVerificationService"), exports);
 __exportStar(require("./ConnectionPoolMonitor"), exports);
-__exportStar(require("./ConsolidatedAdminService"), exports);
 var InMemoryCacheService_1 = require("./InMemoryCacheService");
 Object.defineProperty(exports, "InMemoryCacheService", { enumerable: true, get: function () { return InMemoryCacheService_1.InMemoryCacheService; } });
 Object.defineProperty(exports, "inMemoryCache", { enumerable: true, get: function () { return InMemoryCacheService_1.inMemoryCache; } });

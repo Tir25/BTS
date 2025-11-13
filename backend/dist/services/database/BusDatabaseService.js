@@ -382,14 +382,57 @@ class BusDatabaseService {
                     route_name: undefined,
                 };
             }
+            const now = new Date().toISOString();
+            const { error: driverAssignmentError } = await supabase_1.supabaseAdmin
+                .from('driver_bus_assignments')
+                .update({
+                is_active: false,
+                updated_at: now
+            })
+                .eq('bus_id', busId)
+                .eq('is_active', true);
+            if (driverAssignmentError) {
+                logger_1.logger.warn('Failed to deactivate driver assignments during bus delete', 'bus-db-service', {
+                    busId,
+                    error: driverAssignmentError
+                });
+            }
+            const { error: routeAssignmentError } = await supabase_1.supabaseAdmin
+                .from('bus_route_assignments')
+                .update({
+                is_active: false,
+                unassigned_at: now,
+                updated_at: now
+            })
+                .eq('bus_id', busId)
+                .eq('is_active', true);
+            if (routeAssignmentError) {
+                logger_1.logger.warn('Failed to deactivate bus-route assignments during bus delete', 'bus-db-service', {
+                    busId,
+                    error: routeAssignmentError
+                });
+            }
+            const { error: shiftLinkError } = await supabase_1.supabaseAdmin
+                .from('bus_route_shifts')
+                .delete()
+                .eq('bus_id', busId);
+            if (shiftLinkError) {
+                logger_1.logger.warn('Failed to remove bus route shifts during bus delete', 'bus-db-service', {
+                    busId,
+                    error: shiftLinkError
+                });
+            }
             const { data: updatedData, error: updateError } = await supabase_1.supabaseAdmin
                 .from('buses')
                 .update({
                 is_active: false,
                 assigned_driver_profile_id: null,
                 route_id: null,
+                assigned_shift_id: null,
+                shift_id: null,
                 assignment_status: 'unassigned',
-                updated_at: new Date().toISOString()
+                assignment_notes: 'Bus deactivated via admin delete',
+                updated_at: now
             })
                 .eq('id', busId)
                 .select(`
@@ -404,7 +447,8 @@ class BusDatabaseService {
           created_at,
           updated_at,
           assigned_driver_profile_id,
-          route_id
+          route_id,
+          assigned_shift_id
         `)
                 .single();
             if (updateError) {

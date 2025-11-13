@@ -10,8 +10,77 @@ export type { DriverBusAssignment };
 /**
  * Assignment helpers
  * Handles driver bus assignment fetching with retry logic and fallbacks
+ * PRODUCTION FIX: Added caching to prevent repeated API calls
  */
 export class AssignmentHelpers {
+  // PRODUCTION FIX: Cache for assignment data to prevent repeated API calls
+  private assignmentCache: Map<string, { assignment: DriverBusAssignment; timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 30000; // 30 seconds cache TTL
+  private readonly MAX_CACHE_SIZE = 10; // Maximum cache entries
+  
+  /**
+   * Clear expired cache entries
+   */
+  private cleanCache(): void {
+    const now = Date.now();
+    const entriesToDelete: string[] = [];
+    
+    this.assignmentCache.forEach((value, key) => {
+      if (now - value.timestamp > this.CACHE_TTL) {
+        entriesToDelete.push(key);
+      }
+    });
+    
+    entriesToDelete.forEach(key => this.assignmentCache.delete(key));
+    
+    // If cache is still too large, remove oldest entries
+    if (this.assignmentCache.size > this.MAX_CACHE_SIZE) {
+      const sortedEntries = Array.from(this.assignmentCache.entries())
+        .sort((a, b) => a[1].timestamp - b[1].timestamp);
+      
+      const entriesToRemove = sortedEntries.slice(0, this.assignmentCache.size - this.MAX_CACHE_SIZE);
+      entriesToRemove.forEach(([key]) => this.assignmentCache.delete(key));
+    }
+  }
+  
+  /**
+   * Get in-memory cached assignment if available and not expired
+   */
+  private getInMemoryCache(driverId: string): DriverBusAssignment | null {
+    this.cleanCache();
+    const cached = this.assignmentCache.get(driverId);
+    if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL) {
+      logger.debug('📦 Using in-memory cached assignment data', 'auth', { driverId, age: Date.now() - cached.timestamp });
+      return cached.assignment;
+    }
+    return null;
+  }
+  
+  /**
+   * Cache assignment data in memory
+   */
+  private setInMemoryCache(driverId: string, assignment: DriverBusAssignment): void {
+    this.cleanCache();
+    this.assignmentCache.set(driverId, {
+      assignment,
+      timestamp: Date.now()
+    });
+    logger.debug('📦 Cached assignment data in memory', 'auth', { driverId });
+  }
+  
+  /**
+   * Clear in-memory cache for a specific driver or all drivers
+   */
+  clearInMemoryCache(driverId?: string): void {
+    if (driverId) {
+      this.assignmentCache.delete(driverId);
+      logger.debug('🗑️ Cleared in-memory cache for driver', 'auth', { driverId });
+    } else {
+      this.assignmentCache.clear();
+      logger.debug('🗑️ Cleared all in-memory assignment cache', 'auth');
+    }
+  }
+
   /**
    * Check if error is retriable
    */
@@ -238,21 +307,33 @@ export class AssignmentHelpers {
 
   /**
    * Get driver bus assignment with retry logic and timeout
-   * PRODUCTION FIX: Added overall timeout to prevent hanging
+   * PRODUCTION FIX: Added overall timeout to prevent hanging and caching to prevent repeated API calls
    */
   async getDriverBusAssignment(
     driverId: string,
     currentSession: any
   ): Promise<DriverBusAssignment | null> {
+    // PRODUCTION FIX: Check in-memory cache first to prevent repeated API calls
+    const cachedAssignment = this.getInMemoryCache(driverId);
+    if (cachedAssignment) {
+      logger.debug('📦 Returning in-memory cached assignment', 'auth', { driverId });
+      return cachedAssignment;
+    }
+
     if (!currentSession?.access_token) {
       logger.warn('⚠️ No active Supabase session detected for assignment fetch, using direct Supabase fallback', 'auth', {
         driverId,
       });
-      return await this.fetchAssignmentFromSupabase(driverId);
+      const assignment = await this.fetchAssignmentFromSupabase(driverId);
+      if (assignment) {
+        this.setInMemoryCache(driverId, assignment);
+      }
+      return assignment;
     }
 
     // PRODUCTION FIX: Overall timeout for entire assignment fetch operation
-    const overallTimeout = timeoutConfig.api.busAssignment || 8000;
+    // Increased timeout to 15 seconds to handle slower backend responses
+    const overallTimeout = timeoutConfig.api.busAssignment || 15000;
     const timeoutPromise = new Promise<null>((resolve) => {
       setTimeout(() => {
         logger.warn('⚠️ Assignment fetch timed out', 'auth', { 
@@ -291,18 +372,28 @@ export class AssignmentHelpers {
         });
 
         if (backoffResult.success && backoffResult.result) {
+          // PRODUCTION FIX: Cache successful assignment in memory
+          this.setInMemoryCache(driverId, backoffResult.result);
           return backoffResult.result;
         }
 
         // If retry failed, try Supabase fallback
         logger.info('🔄 API retry failed, trying Supabase fallback', 'auth');
-        return await this.fetchAssignmentFromSupabase(driverId);
+        const fallbackAssignment = await this.fetchAssignmentFromSupabase(driverId);
+        if (fallbackAssignment) {
+          this.setInMemoryCache(driverId, fallbackAssignment);
+        }
+        return fallbackAssignment;
       } catch (error) {
         logger.error('❌ Error in getDriverBusAssignment after retries:', 'auth', { error });
         
         // Final fallback to Supabase
         try {
-          return await this.fetchAssignmentFromSupabase(driverId);
+          const fallbackAssignment = await this.fetchAssignmentFromSupabase(driverId);
+          if (fallbackAssignment) {
+            this.setInMemoryCache(driverId, fallbackAssignment);
+          }
+          return fallbackAssignment;
         } catch (fallbackError) {
           logger.error('❌ All assignment fetch methods failed', 'auth', { error: fallbackError });
           return null;
@@ -311,7 +402,14 @@ export class AssignmentHelpers {
     })();
 
     // Race between assignment fetch and timeout
-    return await Promise.race([assignmentPromise, timeoutPromise]);
+    const result = await Promise.race([assignmentPromise, timeoutPromise]);
+    
+    // PRODUCTION FIX: Cache result in memory if it's not from timeout
+    if (result && result.driver_id === driverId) {
+      this.setInMemoryCache(driverId, result);
+    }
+    
+    return result;
   }
 
   /**

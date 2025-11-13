@@ -1,9 +1,8 @@
 import express from 'express';
-import {
-  getBusInfo,
-} from '../services/locationService';
+// CRITICAL FIX: Use OptimizedLocationService instead of legacy locationService
 import { optimizedLocationService } from '../services/OptimizedLocationService';
 import { BusDatabaseService } from '../services/database/BusDatabaseService';
+import { parsePostGISPoint } from '../utils/postgisHelpers';
 
 const router = express.Router();
 
@@ -35,7 +34,8 @@ router.get('/', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Error fetching buses:', error);
+    const { logger } = await import('../utils/logger');
+    logger.error('Error fetching buses', 'buses-route', { error });
     res.status(500).json({
       success: false,
       error: 'Failed to fetch buses',
@@ -85,28 +85,22 @@ router.get('/viewport', async (req, res) => {
     const busesInViewport: any[] = [];
 
     for (const busId of busIds) {
-      const busInfo = await getBusInfo(busId as string);
+      // CRITICAL FIX: Use OptimizedLocationService.getBusInfo instead of legacy service
+      const busInfo = await optimizedLocationService.getBusInfo(busId as string);
       if (busInfo) {
         const location = locationsInViewport.find(
           (loc: { bus_id: string }) => loc.bus_id === busId
         );
+        const coords = location ? parsePostGISPoint(location.location) : null;
         busesInViewport.push({
           ...busInfo,
-          currentLocation: location
+          currentLocation: coords && location
             ? {
-                latitude: parseFloat(
-                  location.location
-                    .match(/POINT\([^)]+\)/)?.[1]
-                    ?.split(' ')[1] || '0'
-                ),
-                longitude: parseFloat(
-                  location.location
-                    .match(/POINT\([^)]+\)/)?.[1]
-                    ?.split(' ')[0] || '0'
-                ),
-                timestamp: location.timestamp,
-                speed: location.speed,
-                heading: location.heading,
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                timestamp: location.timestamp || new Date().toISOString(),
+                speed: location.speed || undefined,
+                heading: location.heading || undefined,
               }
             : null,
         });
@@ -119,7 +113,8 @@ router.get('/viewport', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching buses in viewport:', error);
+    const { logger } = await import('../utils/logger');
+    logger.error('Error fetching buses in viewport', 'buses-route', { error });
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch buses in viewport',
@@ -229,7 +224,8 @@ router.get('/clusters', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching bus clusters:', error);
+    const { logger } = await import('../utils/logger');
+    logger.error('Error fetching bus clusters', 'buses-route', { error });
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch bus clusters',
@@ -242,7 +238,8 @@ router.get('/clusters', async (req, res) => {
 router.get('/:busId', async (req, res) => {
   try {
     const { busId } = req.params;
-    const busInfo = await getBusInfo(busId);
+    // CRITICAL FIX: Use OptimizedLocationService.getBusInfo instead of legacy service
+    const busInfo = await optimizedLocationService.getBusInfo(busId);
 
     if (!busInfo) {
       return res.status(404).json({
@@ -258,7 +255,8 @@ router.get('/:busId', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ Error fetching bus info:', error);
+    const { logger } = await import('../utils/logger');
+    logger.error('Error fetching bus info', 'buses-route', { error });
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch bus information',

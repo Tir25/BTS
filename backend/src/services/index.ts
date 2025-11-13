@@ -1,7 +1,6 @@
 // Export only concrete service classes/singletons to avoid duplicate type re-exports
 export * from './BackendDriverVerificationService';
 export * from './ConnectionPoolMonitor';
-export * from './ConsolidatedAdminService';
 export { InMemoryCacheService, inMemoryCache } from './InMemoryCacheService';
 export * from './LocationArchiveService';
 export * from './locationService';

@@ -291,6 +291,7 @@ const UnifiedDriverInterface: React.FC<UnifiedDriverInterfaceProps> = memo(({
               busAssignment={busAssignment || null}
               tracking={{ accuracy: tracking.accuracy, isTracking: locationState.isTracking }}
               studentMapConfig={studentMapConfig}
+              isDriverTracking={tracking.isTracking}
             />
 
             {/* Controls Section */}

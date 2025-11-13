@@ -106,7 +106,7 @@ class AssignmentCreationService {
             });
             logger_1.logger.info('Assignment updated successfully', 'assignment-creation-service', { busId });
             try {
-                const { globalIO } = require('../../sockets/websocket');
+                const { globalIO } = require('../../websocket/socketServer');
                 if (globalIO && globalIO.broadcastAssignmentUpdate) {
                     const assignmentData = {
                         driverId: newDriverId,

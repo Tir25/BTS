@@ -2,11 +2,11 @@
   "name": "bus-tracking-backend",
   "version": "1.0.0",
   "description": "Backend for University Bus Tracking System",
-  "main": "dist/server.js",
+  "main": "dist/server/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/server/index.ts",
     "test": "echo \"No tests configured yet\" && exit 0",
     "lint": "eslint src/**/*.{ts,js} --ext .ts,.js --max-warnings 20",
     "lint:fix": "eslint src/**/*.{ts,js} --ext .ts,.js --fix",

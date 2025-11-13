@@ -1,0 +1,1 @@
+{"version":3,"file":"busLocationHandler.d.ts","sourceRoot":"","sources":["../../src/websocket/busLocationHandler.ts"],"names":[],"mappings":"AAKA,OAAO,EAAE,MAAM,IAAI,cAAc,EAAE,MAAM,WAAW,CAAC;AAKrD,OAAO,EAAE,mBAAmB,EAAmC,MAAM,eAAe,CAAC;AAyCrF,wBAAgB,uBAAuB,CACrC,EAAE,EAAE,cAAc,EAClB,MAAM,EAAE,mBAAmB,GAC1B,IAAI,CAmMN;AAKD,wBAAgB,0BAA0B,CAAC,QAAQ,EAAE,MAAM,GAAG,IAAI,CAEjE"}

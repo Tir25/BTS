@@ -28,8 +28,6 @@ interface SavedLocation {
     heading?: number;
 }
 export declare const saveLocationUpdate: (data: LocationData) => Promise<SavedLocation | null>;
-export declare const getDriverBusInfo: (driverId: string) => Promise<BusInfo | null>;
-export declare const getCurrentBusLocations: () => Promise<SavedLocation[]>;
 export declare const getBusLocationHistory: (busId: string, startTime: string, endTime: string) => Promise<SavedLocation[]>;
 export declare const getBusInfo: (busId: string) => Promise<BusInfo | null>;
 export {};
