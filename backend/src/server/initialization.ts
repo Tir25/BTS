@@ -12,6 +12,8 @@ import { performanceGuard } from '../utils/performanceGuard';
 import { systemValidator } from '../utils/systemValidator';
 import { locationArchiveService } from '../services/LocationArchiveService';
 import { logger } from '../utils/logger';
+import { getDriverSupabaseAdmin, testDriverConnection } from '../config/supabase';
+import { getStudentSupabaseAdmin, testStudentConnection } from '../config/supabase';
 
 /**
  * Initializes all services required for the server to run
@@ -97,5 +99,38 @@ export async function initializeServices(): Promise<void> {
   locationArchiveService.startAutoArchive(60); // Archive every hour
   locationArchiveService.startAutoCleanup(24); // Cleanup daily
   logger.info('📦 Location archive service started', 'server');
+
+  // Pre-initialize Supabase clients to prevent race conditions on first request
+  logger.info('🔐 Pre-initializing Supabase clients...', 'server');
+  try {
+    // Initialize driver Supabase admin client
+    const driverAdmin = getDriverSupabaseAdmin();
+    const driverConnectionTest = await testDriverConnection();
+    if (driverConnectionTest) {
+      logger.info('✅ Driver Supabase client initialized and tested', 'server');
+    } else {
+      logger.warn('⚠️ Driver Supabase client initialized but connection test failed', 'server');
+    }
+
+    // Initialize student Supabase admin client
+    const studentAdmin = getStudentSupabaseAdmin();
+    const studentConnectionTest = await testStudentConnection();
+    if (studentConnectionTest) {
+      logger.info('✅ Student Supabase client initialized and tested', 'server');
+    } else {
+      logger.warn('⚠️ Student Supabase client initialized but connection test failed', 'server');
+    }
+
+    logger.info('✅ All Supabase clients pre-initialized successfully', 'server');
+  } catch (supabaseError) {
+    logger.error('❌ Supabase client pre-initialization failed:', 'server', { 
+      error: (supabaseError as Error).message 
+    });
+    if (!isProduction) {
+      logger.warn('💡 Continuing without Supabase pre-initialization for development...', 'server');
+    } else {
+      throw supabaseError;
+    }
+  }
 }
 

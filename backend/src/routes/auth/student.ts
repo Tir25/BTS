@@ -28,23 +28,30 @@ router.post('/student/login', async (req, res) => {
 
     logger.info('🎓 Student login attempt', 'auth', { email });
 
-    let studentSupabaseAdmin;
+    // PRODUCTION FIX: Pre-initialize admin client to ensure it's ready
+    // This prevents race conditions on first request
+    let studentSupabaseAdmin: ReturnType<typeof getStudentSupabaseAdmin>;
     try {
       studentSupabaseAdmin = getStudentSupabaseAdmin();
-    } catch (clientError) {
-      logger.error('❌ Failed to get student Supabase admin client', 'auth', {
-        error: clientError instanceof Error ? clientError.message : String(clientError),
-        email
+      // Warm up the client with a simple query to ensure it's fully initialized
+      await studentSupabaseAdmin.from('user_profiles').select('id').limit(1);
+    } catch (initError) {
+      logger.error('❌ Failed to initialize student Supabase admin client', 'auth', {
+        email,
+        error: initError instanceof Error ? initError.message : String(initError),
       });
       return res.status(500).json({
         success: false,
-        error: 'Authentication service error',
-        message: 'Failed to initialize authentication service. Please contact your administrator.',
+        error: 'Authentication service unavailable',
+        message: 'Failed to initialize authentication service. Please try again.',
         code: 'SERVICE_ERROR'
       });
     }
 
-    const studentAuthClientResult = createSupabaseClient(
+    // Use an anon-key Supabase client for password authentication so that the resulting
+    // refresh token is compatible with frontend clients (which also use the anon key).
+    // PRODUCTION FIX: Add retry logic for client creation
+    let studentAuthClientResult = createSupabaseClient(
       getStudentSupabaseConfig(),
       'student-auth',
       false,
@@ -55,25 +62,90 @@ router.post('/student/login', async (req, res) => {
       }
     );
 
-    if (studentAuthClientResult.error || !studentAuthClientResult.client) {
-      logger.error('❌ Failed to initialize student auth Supabase client', 'auth', {
+    // Retry client creation if it fails (up to 2 retries)
+    let retryCount = 0;
+    const maxRetries = 2;
+    while ((studentAuthClientResult.error || !studentAuthClientResult.client) && retryCount < maxRetries) {
+      retryCount++;
+      logger.warn(`⚠️ Student auth client creation failed, retrying (${retryCount}/${maxRetries})`, 'auth', {
         email,
         error: studentAuthClientResult.error?.message || 'Unknown error',
+      });
+      
+      // Wait a bit before retrying
+      await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+      
+      studentAuthClientResult = createSupabaseClient(
+        getStudentSupabaseConfig(),
+        'student-auth',
+        false,
+        {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false,
+        }
+      );
+    }
+
+    if (studentAuthClientResult.error || !studentAuthClientResult.client) {
+      logger.error('❌ Failed to initialize student auth Supabase client after retries', 'auth', {
+        email,
+        error: studentAuthClientResult.error?.message || 'Unknown error',
+        retries: retryCount,
       });
       return res.status(500).json({
         success: false,
         error: 'Authentication service unavailable',
-        message: 'Failed to initialize authentication service. Please contact your administrator.',
+        message: 'Failed to initialize authentication service. Please try again.',
         code: 'SERVICE_ERROR'
       });
     }
 
     const studentSupabaseAuth = studentAuthClientResult.client;
 
-    const { data: authData, error: authError } = await studentSupabaseAuth.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // PRODUCTION FIX: Add retry logic for authentication with exponential backoff
+    let authData: any = null;
+    let authError: any = null;
+    let authRetryCount = 0;
+    const maxAuthRetries = 2;
+    
+    while (authRetryCount <= maxAuthRetries) {
+      const authResult = await studentSupabaseAuth.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      authData = authResult.data;
+      authError = authResult.error;
+
+      // If authentication succeeds, break out of retry loop
+      if (!authError && authData?.user) {
+        break;
+      }
+
+      // If it's a credential error, don't retry (user error, not system error)
+      if (authError && (
+        authError.message.includes('Invalid login credentials') ||
+        authError.message.includes('Email not confirmed') ||
+        authError.message.includes('User not found')
+      )) {
+        break;
+      }
+
+      // Retry for system errors (network, timeout, etc.)
+      if (authRetryCount < maxAuthRetries) {
+        authRetryCount++;
+        const retryDelay = 200 * authRetryCount; // Exponential backoff: 200ms, 400ms
+        logger.warn(`⚠️ Authentication attempt ${authRetryCount} failed, retrying in ${retryDelay}ms...`, 'auth', {
+          email,
+          error: authError?.message || 'Unknown error',
+          attempt: authRetryCount,
+        });
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      } else {
+        break;
+      }
+    }
 
     if (authError) {
       logger.warn('❌ Student authentication failed', 'auth', { email, error: authError.message });

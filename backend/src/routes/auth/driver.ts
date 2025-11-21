@@ -55,11 +55,30 @@ router.post('/driver/login', async (req, res) => {
 
     logger.info('🔐 Driver login attempt', 'auth', { email });
 
-    const driverSupabaseAdmin = getDriverSupabaseAdmin();
+    // PRODUCTION FIX: Pre-initialize admin client to ensure it's ready
+    // This prevents race conditions on first request
+    let driverSupabaseAdmin: ReturnType<typeof getDriverSupabaseAdmin>;
+    try {
+      driverSupabaseAdmin = getDriverSupabaseAdmin();
+      // Warm up the client with a simple query to ensure it's fully initialized
+      await driverSupabaseAdmin.from('user_profiles').select('id').limit(1);
+    } catch (initError) {
+      logger.error('❌ Failed to initialize driver Supabase admin client', 'auth', {
+        email,
+        error: initError instanceof Error ? initError.message : String(initError),
+      });
+      return res.status(500).json({
+        success: false,
+        error: 'Authentication service unavailable',
+        message: 'Failed to initialize authentication service. Please try again.',
+        code: 'SERVICE_ERROR'
+      });
+    }
 
     // Use an anon-key Supabase client for password authentication so that the resulting
     // refresh token is compatible with frontend clients (which also use the anon key).
-    const driverAuthClientResult = createSupabaseClient(
+    // PRODUCTION FIX: Add retry logic for client creation
+    let driverAuthClientResult = createSupabaseClient(
       getDriverSupabaseConfig(),
       'driver-auth',
       false,
@@ -70,25 +89,90 @@ router.post('/driver/login', async (req, res) => {
       }
     );
 
-    if (driverAuthClientResult.error || !driverAuthClientResult.client) {
-      logger.error('❌ Failed to initialize driver auth Supabase client', 'auth', {
+    // Retry client creation if it fails (up to 2 retries)
+    let retryCount = 0;
+    const maxRetries = 2;
+    while ((driverAuthClientResult.error || !driverAuthClientResult.client) && retryCount < maxRetries) {
+      retryCount++;
+      logger.warn(`⚠️ Driver auth client creation failed, retrying (${retryCount}/${maxRetries})`, 'auth', {
         email,
         error: driverAuthClientResult.error?.message || 'Unknown error',
+      });
+      
+      // Wait a bit before retrying
+      await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+      
+      driverAuthClientResult = createSupabaseClient(
+        getDriverSupabaseConfig(),
+        'driver-auth',
+        false,
+        {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false,
+        }
+      );
+    }
+
+    if (driverAuthClientResult.error || !driverAuthClientResult.client) {
+      logger.error('❌ Failed to initialize driver auth Supabase client after retries', 'auth', {
+        email,
+        error: driverAuthClientResult.error?.message || 'Unknown error',
+        retries: retryCount,
       });
       return res.status(500).json({
         success: false,
         error: 'Authentication service unavailable',
-        message: 'Failed to initialize authentication service. Please contact your administrator.',
+        message: 'Failed to initialize authentication service. Please try again.',
         code: 'SERVICE_ERROR'
       });
     }
 
     const driverSupabaseAuth = driverAuthClientResult.client;
 
-    const { data: authData, error: authError } = await driverSupabaseAuth.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // PRODUCTION FIX: Add retry logic for authentication with exponential backoff
+    let authData: any = null;
+    let authError: any = null;
+    let authRetryCount = 0;
+    const maxAuthRetries = 2;
+    
+    while (authRetryCount <= maxAuthRetries) {
+      const authResult = await driverSupabaseAuth.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      authData = authResult.data;
+      authError = authResult.error;
+
+      // If authentication succeeds, break out of retry loop
+      if (!authError && authData?.user) {
+        break;
+      }
+
+      // If it's a credential error, don't retry (user error, not system error)
+      if (authError && (
+        authError.message.includes('Invalid login credentials') ||
+        authError.message.includes('Email not confirmed') ||
+        authError.message.includes('User not found')
+      )) {
+        break;
+      }
+
+      // Retry for system errors (network, timeout, etc.)
+      if (authRetryCount < maxAuthRetries) {
+        authRetryCount++;
+        const retryDelay = 200 * authRetryCount; // Exponential backoff: 200ms, 400ms
+        logger.warn(`⚠️ Authentication attempt ${authRetryCount} failed, retrying in ${retryDelay}ms...`, 'auth', {
+          email,
+          error: authError?.message || 'Unknown error',
+          attempt: authRetryCount,
+        });
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      } else {
+        break;
+      }
+    }
 
     if (authError) {
       logger.warn('❌ Driver authentication failed', 'auth', { email, error: authError.message });
