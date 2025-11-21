@@ -276,7 +276,7 @@ export function useDriverInit({
   // PRODUCTION FIX: Only initialize once on mount, not when initializeAuth changes
   useEffect(() => {
     initializeAuth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []); // Empty dependency array - only run on mount
 
   // Listen for auth state changes

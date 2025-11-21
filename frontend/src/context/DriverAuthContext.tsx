@@ -4,12 +4,14 @@
  * Uses modular hooks for better maintainability and testability
  */
 
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDriverAuthState } from './hooks/useDriverAuth';
 import { useDriverSocket } from './hooks/useDriverSocket';
 import { useDriverAssignments } from './hooks/useDriverAssignments';
 import { useDriverInit } from './hooks/useDriverInit';
 import { DriverBusAssignment } from '../services/authService';
+import { logger } from '../utils/logger';
 
 interface DriverAuthState {
   isAuthenticated: boolean;
@@ -43,8 +45,11 @@ interface DriverAuthProviderProps {
 /**
  * Driver Auth Provider
  * Orchestrates all driver authentication, WebSocket, and assignment management
+ * Includes navigation guards to prevent unauthorized access
  */
 export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children }) => {
+  const navigate = useNavigate();
+  
   // Use modular hooks for different responsibilities
   const auth = useDriverAuthState();
   const socket = useDriverSocket({
@@ -76,6 +81,16 @@ export const DriverAuthProvider: React.FC<DriverAuthProviderProps> = ({ children
     setBusAssignment: auth.setBusAssignment,
     busAssignment: auth.busAssignment,
   });
+
+  // Navigation guard: Redirect non-drivers away from driver routes
+  useEffect(() => {
+    if (!auth.isLoading && auth.isAuthenticated && !auth.isDriver) {
+      logger.warn('Non-driver user attempted to access driver interface', 'driver-auth', {
+        path: window.location.pathname
+      });
+      navigate('/driver/login');
+    }
+  }, [auth.isLoading, auth.isAuthenticated, auth.isDriver, navigate]);
 
   // Combine all state and functions into context value
   const value: DriverAuthState = {

@@ -393,7 +393,7 @@ export function useStopsManagement({
     // This prevents infinite loops when refreshStops is recreated
     // We check isAuthenticated and busAssignment.driver_id, which are the actual dependencies
     // Note: refreshStops is intentionally omitted to prevent loops, but we call it inside the effect
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [isAuthenticated, busAssignment?.driver_id]);
 
   return {

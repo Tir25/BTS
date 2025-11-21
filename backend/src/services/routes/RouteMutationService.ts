@@ -7,6 +7,7 @@ import { supabaseAdmin } from '../../config/supabase';
 import type { Database } from '../../config/supabase';
 import { logger } from '../../utils/logger';
 import type { LineString } from 'geojson';
+import pool from '../../config/database';
 import { RouteQueryService, RouteWithGeoJSON } from './RouteQueryService';
 
 export interface RouteData {
@@ -17,6 +18,7 @@ export interface RouteData {
   estimated_duration_minutes?: number;
   is_active?: boolean;
   city?: string | null;
+  coordinates?: [number, number][]; // Optional: Array of [lng, lat] coordinates for route path
 }
 
 /**
@@ -25,6 +27,7 @@ export interface RouteData {
 export class RouteMutationService {
   /**
    * Create a new route
+   * If coordinates are provided, they will be persisted as PostGIS LineString geometry
    */
   static async createRoute(routeData: RouteData): Promise<RouteWithGeoJSON> {
     try {
@@ -39,6 +42,73 @@ export class RouteMutationService {
         is_active: routeData.is_active !== false,
       };
 
+      // If coordinates are provided, use raw SQL to insert with PostGIS geometry
+      if (routeData.coordinates && routeData.coordinates.length >= 2) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+
+          // Convert coordinates array to PostGIS LineString format
+          const coordinatesStr = routeData.coordinates
+            .map(coord => `${coord[0]} ${coord[1]}`)
+            .join(', ');
+          const linestring = `LINESTRING(${coordinatesStr})`;
+
+          // Insert route with geometry
+          const insertQuery = `
+            INSERT INTO routes (name, description, distance_km, estimated_duration_minutes, city, is_active, stops)
+            VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromText($7, 4326))
+            RETURNING 
+              id, name, description, distance_km, estimated_duration_minutes, city, is_active, 
+              created_at, updated_at,
+              ST_AsGeoJSON(stops)::json as stops_geojson
+          `;
+
+          const result = await client.query(insertQuery, [
+            routeData.name,
+            routeData.description || '',
+            routeData.distance_km ?? 0,
+            routeData.estimated_duration_minutes ?? 0,
+            routeData.city ?? null,
+            routeData.is_active !== false,
+            linestring,
+          ]);
+
+          await client.query('COMMIT');
+
+          if (result.rows.length === 0) {
+            throw new Error('No route returned after insert');
+          }
+
+          const route = result.rows[0];
+          const stopsGeoJSON = route.stops_geojson || { type: 'LineString', coordinates: [] };
+
+          logger.info('Route created successfully with coordinates', 'route-mutation-service', { 
+            routeId: route.id,
+            coordinateCount: routeData.coordinates.length
+          });
+
+          return {
+            id: route.id,
+            name: route.name,
+            description: route.description,
+            distance_km: route.distance_km,
+            estimated_duration_minutes: route.estimated_duration_minutes,
+            city: route.city ?? undefined,
+            is_active: route.is_active,
+            created_at: route.created_at,
+            updated_at: route.updated_at,
+            stops: stopsGeoJSON as LineString,
+          };
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
+      }
+
+      // If no coordinates provided, use Supabase insert (simpler, no geometry)
       const { data: route, error } = await supabaseAdmin
         .from('routes')
         .insert(insertPayload as any)
@@ -60,7 +130,7 @@ export class RouteMutationService {
         throw error;
       }
 
-      logger.info('Route created successfully', 'route-mutation-service', { routeId: route.id });
+      logger.info('Route created successfully (without coordinates)', 'route-mutation-service', { routeId: route.id });
       
       // Transform the data to match the expected interface
       return {
@@ -75,7 +145,7 @@ export class RouteMutationService {
         updated_at: route.updated_at,
         stops: {
           type: 'LineString',
-          coordinates: [] // Empty coordinates for now
+          coordinates: [] // Empty coordinates - can be added later via route stops or update
         } as LineString
       };
     } catch (error) {

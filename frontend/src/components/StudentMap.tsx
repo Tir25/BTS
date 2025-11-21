@@ -29,6 +29,7 @@ import { Route, BusLocation } from '../types';
 import { logger } from '../utils/logger';
 // formatTime is used by hooks internally, not needed here
 import { useMapInstance } from '../hooks/useMapInstance';
+import { apiService } from '../api';
 import { useStudentMapWebSocketBindings } from '../hooks/useStudentMapWebSocketBindings';
 import { useRouteFiltering } from '../hooks/useRouteFiltering';
 // getRouteColor is now used by useRouteManagement hook, not needed here
@@ -234,6 +235,42 @@ const StudentMap: React.FC<StudentMapProps> = ({
     isRouteFilterOpen,
     setIsRouteFilterOpen,
   } = useStudentMapState();
+
+  // Shifts state for filter dropdown
+  const [availableShifts, setAvailableShifts] = useState<Array<{ id: string; name: string; start_time: string | null; end_time: string | null }>>([]);
+  const [isLoadingShifts, setIsLoadingShifts] = useState(false);
+
+  // Fetch shifts on mount and periodically
+  const fetchShifts = useCallback(async () => {
+    setIsLoadingShifts(true);
+    try {
+      const result = await apiService.getAllShifts();
+      if (result.success && result.data) {
+        setAvailableShifts(result.data);
+        logger.info('✅ Shifts loaded successfully', 'student-map', { count: result.data.length });
+      } else {
+        logger.warn('⚠️ Failed to load shifts', 'student-map', { error: result.error });
+      }
+    } catch (error) {
+      logger.error('❌ Error loading shifts', 'student-map', { error: String(error) });
+    } finally {
+      setIsLoadingShifts(false);
+    }
+  }, []);
+
+  // Fetch shifts on mount
+  useEffect(() => {
+    fetchShifts();
+  }, [fetchShifts]);
+
+  // Auto-refresh shifts every 5 minutes to detect new shifts
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchShifts();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [fetchShifts]);
 
   // Phase 2: Debounced Location Updates - Use centralized hook
   const debouncedLocationUpdate = useDebouncedLocationUpdates(setLastBusLocations);
@@ -1052,7 +1089,7 @@ const StudentMap: React.FC<StudentMapProps> = ({
           busesCount={buses.length}
           activeCount={busesWithLiveLocations.length}
           selectedShift={selectedShift}
-          setSelectedShift={(v:any) => setSelectedShift(v)}
+          setSelectedShift={(v: string) => setSelectedShift(v)}
           selectedRoute={selectedRoute}
           setSelectedRoute={setSelectedRoute}
           routeOptions={routeOptions}
@@ -1062,6 +1099,8 @@ const StudentMap: React.FC<StudentMapProps> = ({
           isLoadingRoutes={isLoadingRoutes}
           onCenterOnBusForRoute={handleCenterOnBusForRoute}
           onSignOut={onSignOut}
+          availableShifts={availableShifts}
+          isLoadingShifts={isLoadingShifts}
         />
 
         {/* Right Side - Map Container */}

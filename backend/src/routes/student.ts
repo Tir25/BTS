@@ -78,6 +78,35 @@ router.get('/routes-by-shift', async (req, res) => {
   }
 });
 
+// Public endpoint: get all shifts (for student map filter)
+router.get('/shifts', async (req, res) => {
+  try {
+    // Fetch all active shifts, ordered by name
+    const { data, error } = await supabaseAdmin
+      .from('shifts')
+      .select('id, name, start_time, end_time, is_active')
+      .eq('is_active', true)
+      .order('name');
+    
+    if (error) throw error;
+    
+    // Format times to HH:MM format (remove seconds if present)
+    const formattedData = (data || []).map((shift: any) => ({
+      id: shift.id,
+      name: shift.name,
+      start_time: shift.start_time ? shift.start_time.substring(0, 5) : null,
+      end_time: shift.end_time ? shift.end_time.substring(0, 5) : null,
+      is_active: shift.is_active ?? true,
+    }));
+    
+    logger.info('Shifts fetched for student', 'student-routes', { count: formattedData.length });
+    return res.json({ success: true, data: formattedData });
+  } catch (error: any) {
+    logger.error('Error fetching shifts for student', 'student-routes', { error: error?.message });
+    return res.status(500).json({ success: false, error: 'Failed to fetch shifts', message: error?.message });
+  }
+});
+
 export default router;
 
 

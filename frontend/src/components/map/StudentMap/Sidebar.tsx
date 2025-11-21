@@ -27,8 +27,10 @@ interface StudentMapSidebarProps {
   isConnected: boolean;
   busesCount: number;
   activeCount: number;
-  selectedShift: 'Day' | 'Afternoon' | '';
-  setSelectedShift: (val: 'Day' | 'Afternoon' | '') => void;
+  selectedShift: string;
+  setSelectedShift: (val: string) => void;
+  availableShifts: Array<{ id: string; name: string; start_time: string | null; end_time: string | null }>;
+  isLoadingShifts?: boolean;
   selectedRoute: string;
   setSelectedRoute: (val: string) => void;
   routeOptions: RouteOption[];
@@ -57,6 +59,8 @@ const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
   isLoadingRoutes = false,
   onCenterOnBusForRoute,
   onSignOut,
+  availableShifts = [],
+  isLoadingShifts = false,
 }) => {
   const [isRouteFilterOpen, setIsRouteFilterOpen] = React.useState(true);
 
@@ -200,15 +204,28 @@ const StudentMapSidebar: React.FC<StudentMapSidebarProps> = ({
               <div className="mb-4">
                 <div className="flex items-center justify-between w-full p-2 bg-slate-100 rounded-lg">
                   <span className="font-medium text-slate-900">⏱️ Shift</span>
-                  <select
-                    value={selectedShift}
-                    onChange={(e) => setSelectedShift(e.target.value as any)}
-                    className="ml-2 bg-white text-slate-900 text-sm rounded-lg px-3 py-1 border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="" disabled>Select shift</option>
-                    <option value="Day">Day</option>
-                    <option value="Afternoon">Afternoon</option>
-                  </select>
+                  {isLoadingShifts ? (
+                    <div className="ml-2 flex items-center space-x-2 text-slate-600 text-sm">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <span>Loading shifts...</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedShift}
+                      onChange={(e) => setSelectedShift(e.target.value)}
+                      className="ml-2 bg-white text-slate-900 text-sm rounded-lg px-3 py-1 border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">All Shifts</option>
+                      {availableShifts.map((shift) => (
+                        <option key={shift.id} value={shift.name}>
+                          {shift.name}
+                          {shift.start_time && shift.end_time 
+                            ? ` (${shift.start_time} - ${shift.end_time})`
+                            : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 

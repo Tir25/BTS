@@ -1,0 +1,51 @@
+================================================================================
+ENVIRONMENT VARIABLES SETUP INSTRUCTIONS
+================================================================================
+
+The .env file needs to be created manually in the frontend/ directory.
+
+STEP 1: Navigate to frontend directory
+  cd frontend
+
+STEP 2: Create .env file with the following content:
+
+# Admin Supabase (NEW - Required for admin panel)
+VITE_ADMIN_SUPABASE_URL=https://gthwmwfwvhyriygpcdlr.supabase.co
+VITE_ADMIN_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI
+
+# Driver Supabase
+VITE_DRIVER_SUPABASE_URL=https://gthwmwfwvhyriygpcdlr.supabase.co
+VITE_DRIVER_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI
+
+# Student Supabase
+VITE_STUDENT_SUPABASE_URL=https://gthwmwfwvhyriygpcdlr.supabase.co
+VITE_STUDENT_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI
+
+# Legacy (fallback, optional)
+VITE_SUPABASE_URL=https://gthwmwfwvhyriygpcdlr.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0aHdtd2Z3dmh5cml5Z3BjZGxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NzE0NTUsImV4cCI6MjA3MDU0NzQ1NX0.gY0ghDtKZ9b8XlgE7XtbQsT3efXYOBizGQKPJABGvAI
+
+# Admin Emails (comma-separated)
+VITE_ADMIN_EMAILS=tirthraval27@gmail.com
+
+STEP 3: Restart your development server
+  npm run dev
+
+STEP 4: Verify in browser console
+  Look for: "✅ admin Supabase client created successfully"
+
+================================================================================
+ALTERNATIVE: Use the setup script
+================================================================================
+
+Windows PowerShell:
+  cd frontend
+  .\setup-env.ps1
+
+Linux/Mac:
+  cd frontend
+  chmod +x setup-env.sh
+  ./setup-env.sh
+
+================================================================================
+

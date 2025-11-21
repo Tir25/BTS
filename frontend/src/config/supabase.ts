@@ -11,12 +11,16 @@
 export {
   getDriverSupabaseClient,
   getStudentSupabaseClient,
+  getAdminSupabaseClient,
   getDriverSupabaseConfig,
   getStudentSupabaseConfig,
+  getAdminSupabaseConfig,
   resetDriverClient,
   resetStudentClient,
+  resetAdminClient,
   testDriverConnection,
   testStudentConnection,
+  testAdminConnection,
   // Legacy exports
   getSupabase,
 } from './supabase/index';
@@ -25,6 +29,7 @@ export {
 export type {
   DriverSupabaseClient,
   StudentSupabaseClient,
+  AdminSupabaseClient,
   UserRole,
   SupabaseProjectConfig,
   SupabaseClientOptions,

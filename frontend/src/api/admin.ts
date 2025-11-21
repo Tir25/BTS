@@ -1,4 +1,5 @@
 import { authService } from '../services/authService';
+import { adminAuthService } from '../services/auth/adminAuthService';
 import { environment } from '../config/environment';
 
 import { logger } from '../utils/logger';
@@ -106,13 +107,13 @@ class AdminApiService {
     const requestId = `admin_req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      let token = authService.getAccessToken();
+      let token = adminAuthService.getAccessToken();
       
       // PRODUCTION FIX: Attempt token refresh if authenticated but no token
-      if (!token && authService.isAuthenticated()) {
+      if (!token && adminAuthService.isAuthenticated()) {
         try {
           logger.debug('🔄 No token but authenticated, attempting refresh...', 'admin-api', { endpoint, requestId });
-          const refreshResult = await authService.refreshSession();
+          const refreshResult = await adminAuthService.refreshSession();
           if (refreshResult.success && refreshResult.session) {
             token = refreshResult.session.access_token;
             logger.debug('✅ Token refreshed successfully', 'admin-api', { endpoint, requestId });
@@ -130,14 +131,14 @@ class AdminApiService {
         endpoint, 
         requestId,
         hasToken: !!token,
-        isAuthenticated: authService.isAuthenticated()
+        isAuthenticated: adminAuthService.isAuthenticated()
       });
 
       if (!token) {
         logger.error('❌ No access token available', 'admin-api', { 
           endpoint, 
           requestId,
-          isAuthenticated: authService.isAuthenticated()
+          isAuthenticated: adminAuthService.isAuthenticated()
         });
         throw new Error('No access token available');
       }
@@ -398,7 +399,7 @@ class AdminApiService {
     let timeoutId: NodeJS.Timeout | undefined;
     
     try {
-      const token = authService.getAccessToken();
+      const token = adminAuthService.getAccessToken();
       if (!token) {
         throw new Error('No access token available');
       }
@@ -513,6 +514,7 @@ class AdminApiService {
     estimated_duration_minutes: number;
     is_active: boolean;
     city: string;
+    coordinates?: [number, number][]; // Optional route path coordinates
   }): Promise<ApiResponse<RouteData>> {
     return this.makeRequest<RouteData>('/routes', {
       method: 'POST',
@@ -529,6 +531,7 @@ class AdminApiService {
       estimated_duration_minutes: number;
       is_active: boolean;
       city: string;
+      coordinates?: [number, number][]; // Optional route path coordinates
       custom_destination?: string;
       custom_destination_coordinates?: [number, number];
       custom_origin?: string;

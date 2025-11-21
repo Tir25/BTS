@@ -302,7 +302,7 @@ export class ConnectionManager {
             isAuthError,
             isNetworkError,
             suggestion: isServerDown 
-              ? 'Please check if the backend server is running on ' + wsUrl.replace(/^ws[s]?:\/\//, '').split('/')[0]
+              ? `Please check if the backend server is running on ${  wsUrl.replace(/^ws[s]?:\/\//, '').split('/')[0]}`
               : isAuthError
                 ? 'Please ensure you are logged in and your session is valid. Try logging out and logging in again.'
                 : undefined,

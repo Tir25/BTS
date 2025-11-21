@@ -1079,6 +1079,61 @@ class ApiService implements IApiService {
   }
 
   /**
+   * Get all shifts (student access)
+   * Fetches all active shifts for the student map filter
+   */
+  async getAllShifts(): Promise<{
+    success: boolean;
+    data: Array<{ id: string; name: string; start_time: string | null; end_time: string | null; is_active: boolean }>;
+    error?: string;
+  }> {
+    try {
+      const response = await this.backendRequest<{
+        success: boolean;
+        data: Array<{ id: string; name: string; start_time: string | null; end_time: string | null; is_active: boolean }>;
+        error?: string;
+      }>('/student/shifts');
+
+      if (response && typeof response === 'object') {
+        if ('success' in response && response.success && 'data' in response) {
+          logger.info('✅ Shifts fetched successfully', 'component', {
+            shiftCount: response.data?.length || 0
+          });
+          return {
+            success: true,
+            data: response.data || [],
+          };
+        } else {
+          logger.warn('⚠️ Shifts fetch returned unsuccessful', 'component', { 
+            error: (response as any).error
+          });
+          return {
+            success: false,
+            data: [],
+            error: (response as any).error || 'Failed to fetch shifts',
+          };
+        }
+      }
+
+      logger.warn('⚠️ Unexpected response format from getAllShifts', 'component');
+      return {
+        success: false,
+        data: [],
+        error: 'Unexpected response format',
+      };
+    } catch (error) {
+      logger.error('❌ Error fetching shifts', 'component', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return {
+        success: false,
+        data: [],
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
    * Get routes by shift (student access)
    * PRODUCTION FIX: Added missing method for student map shift filtering
    */

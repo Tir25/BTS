@@ -33,6 +33,7 @@ export interface SupabaseClientOptions {
 /**
  * Role-based Supabase client types
  */
+export type AdminSupabaseClient = SupabaseClient<Database>;
 export type DriverSupabaseClient = SupabaseClient<Database>;
 export type StudentSupabaseClient = SupabaseClient<Database>;
 

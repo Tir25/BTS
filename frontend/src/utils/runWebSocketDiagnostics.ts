@@ -32,7 +32,7 @@ export async function runWebSocketDiagnostics(): Promise<void> {
     console.log('  Has Token:', !!token);
     if (token) {
       console.log('  Token Length:', token.length);
-      console.log('  Token Prefix:', token.substring(0, 20) + '...');
+      console.log('  Token Prefix:', `${token.substring(0, 20)  }...`);
       
       // Try to decode token
       try {
@@ -120,7 +120,7 @@ export async function runWebSocketDiagnostics(): Promise<void> {
     console.log('  Total Connections:', stats.totalConnections);
     console.log('  Failed Connections:', stats.failedConnections);
     
-    console.log('\n' + '='.repeat(60));
+    console.log(`\n${  '='.repeat(60)}`);
     console.log('✅ Diagnostics Complete');
     
     // Return diagnostics for programmatic use

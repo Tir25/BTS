@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { authService } from '../services/authService';
+import { adminAuthService } from '../services/auth/adminAuthService';
 import { useTransition } from './transitions';
 
 import { logger } from '../utils/logger';
@@ -26,12 +26,12 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         logger.info('🔄 Attempting automatic session recovery...', 'component');
 
         // Wait for auth service to be fully initialized
-        while (!authService.isInitialized()) {
+        while (!adminAuthService.isInitialized()) {
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
-        const result = await authService.recoverSession();
-        if (result.success && authService.isAdmin()) {
+        const result = await adminAuthService.recoverSession();
+        if (result.success && adminAuthService.isAdmin()) {
           logger.info('✅ Session recovered, redirecting to admin panel', 'component');
           handleLoginSuccess();
         } else {
@@ -53,9 +53,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     setSuccess(null);
 
     try {
-      // Use the improved authService.signIn method directly
-      // It already handles timeouts and has better error handling
-      const result = await authService.signIn(email, password);
+      // Use the admin-specific auth service
+      const result = await adminAuthService.signIn(email, password);
 
       if (result.success && result.user) {
         // Check if the user has admin role
@@ -79,7 +78,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
           });
           
           // Sign out immediately for security
-          await authService.signOut();
+          await adminAuthService.signOut();
         }
       } else {
         // Display the error returned from authService
@@ -145,8 +144,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await authService.recoverSession();
-      if (result.success && authService.isAdmin()) {
+      const result = await adminAuthService.recoverSession();
+      if (result.success && adminAuthService.isAdmin()) {
         setSuccess('Session recovered! Redirecting...');
         setTimeout(() => {
           handleLoginSuccess();
@@ -165,7 +164,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     setIsLoading(true);
     setError(null);
     try {
-      await authService.forceFreshLogin();
+      await adminAuthService.signOut();
       setSuccess('Session cleared. Please log in again with your credentials.');
     } catch (error) {
       setError('Failed to clear session.');

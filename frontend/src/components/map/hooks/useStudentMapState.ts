@@ -20,8 +20,8 @@ export interface UseStudentMapStateReturn {
   setRoutes: Dispatch<SetStateAction<Route[]>>;
   selectedRoute: string;
   setSelectedRoute: Dispatch<SetStateAction<string>>;
-  selectedShift: 'Day' | 'Afternoon' | '';
-  setSelectedShift: Dispatch<SetStateAction<'Day' | 'Afternoon' | ''>>;
+  selectedShift: string;
+  setSelectedShift: Dispatch<SetStateAction<string>>;
   // Note: routeStatus and routeStops are managed by useRouteStatusManagement hook
   isLoading: boolean;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
@@ -48,7 +48,7 @@ export function useStudentMapState(): UseStudentMapStateReturn {
   const [buses, setBuses] = useState<BusInfo[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>('all');
-  const [selectedShift, setSelectedShift] = useState<'Day' | 'Afternoon' | ''>('');
+  const [selectedShift, setSelectedShift] = useState<string>('');
   // Note: routeStatus and routeStops are managed by useRouteStatusManagement hook
   const [isLoading, setIsLoading] = useState(true);
   const [lastBusLocations, setLastBusLocations] = useState<{ [busId: string]: BusLocation }>({});

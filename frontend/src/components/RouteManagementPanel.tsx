@@ -13,6 +13,7 @@ interface RouteFormData {
   estimated_duration_minutes: number;
   is_active: boolean;
   city: string;
+  coordinates?: [number, number][]; // Route path coordinates
 }
 
 interface RouteManagementPanelProps {
@@ -35,7 +36,8 @@ export default function RouteManagementPanel({ className = '' }: RouteManagement
     distance_km: 0,
     estimated_duration_minutes: 0,
     is_active: true,
-    city: ''
+    city: '',
+    coordinates: []
   });
 
   // Load routes data
@@ -88,7 +90,8 @@ export default function RouteManagementPanel({ className = '' }: RouteManagement
       distance_km: 0,
       estimated_duration_minutes: 0,
       is_active: true,
-      city: ''
+      city: '',
+      coordinates: []
     });
     setEditingRoute(null);
     setShowForm(false);
@@ -96,13 +99,19 @@ export default function RouteManagementPanel({ className = '' }: RouteManagement
 
   const handleEdit = (route: Route) => {
     setEditingRoute(route);
+    // Extract coordinates from route (could be in stops, geom, or coordinates field)
+    const coords = route.coordinates || 
+                   (route.stops as any)?.coordinates || 
+                   (route.geom as any)?.coordinates || 
+                   [];
     setFormData({
       name: route.name || '',
       description: route.description || '',
       distance_km: route.distance_km || 0,
       estimated_duration_minutes: route.estimated_duration_minutes || 0,
       is_active: route.is_active !== false,
-      city: route.city || ''
+      city: route.city || '',
+      coordinates: coords
     });
     setShowForm(true);
   };
@@ -202,6 +211,7 @@ export default function RouteManagementPanel({ className = '' }: RouteManagement
         editing={!!editingRoute}
         formData={formData as any}
         onInputChange={handleInputChange}
+        onCoordinatesChange={(coords) => setFormData(prev => ({ ...prev, coordinates: coords }))}
         onSubmit={handleSubmit}
         onClose={resetForm}
       />

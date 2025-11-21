@@ -1,6 +1,7 @@
-import { User } from '@supabase/supabase-js';
+import { User, SupabaseClient } from '@supabase/supabase-js';
 import { UserProfile } from '../../types';
 import { supabase } from '../../config/supabase';
+import { Database } from '../../config/supabase/database.types';
 import { timeoutConfig } from '../../config/timeoutConfig';
 import { logger } from '../../utils/logger';
 import { resilientQuery } from '../resilience/ResilientSupabaseService';
@@ -60,11 +61,14 @@ export class ProfileHelpers {
   /**
    * Load user profile from database
    * PRODUCTION FIX: Always returns a profile, never null
+   * @param client Optional Supabase client (defaults to legacy client for backward compatibility)
    */
   async loadUserProfile(
     userId: string,
-    currentUser: User | null
+    currentUser: User | null,
+    client?: SupabaseClient<Database>
   ): Promise<UserProfile> {
+    const supabaseClient = client || supabase;
     try {
       // Check if user has dual roles in auth metadata
       const authRoles = currentUser?.user_metadata?.roles;
@@ -83,7 +87,7 @@ export class ProfileHelpers {
           updated_at: string;
         }>(
           async () => {
-            const queryResult = await supabase
+            const queryResult = await supabaseClient
               .from('user_profiles')
               .select('*')
               .eq('id', userId)
@@ -103,7 +107,7 @@ export class ProfileHelpers {
             error: result.error?.message || 'No data returned',
             retries: result.retries || 0,
           });
-          return await this.createTemporaryProfile(userId, currentUser);
+          return await this.createTemporaryProfile(userId, currentUser, supabaseClient);
         }
 
         const profile = result.data;
@@ -142,7 +146,7 @@ export class ProfileHelpers {
         updated_at: string;
       }>(
         async () => {
-          const queryResult = await supabase
+          const queryResult = await supabaseClient
             .from('user_profiles')
             .select('*')
             .eq('id', userId)
@@ -170,7 +174,7 @@ export class ProfileHelpers {
           userId,
           errorCode,
         });
-        return await this.createTemporaryProfile(userId, currentUser);
+        return await this.createTemporaryProfile(userId, currentUser, supabaseClient);
       }
 
       if (result.error || !result.data) {
@@ -179,7 +183,7 @@ export class ProfileHelpers {
           errorCode,
           retries: result.retries || 0,
         });
-        return await this.createTemporaryProfile(userId, currentUser);
+        return await this.createTemporaryProfile(userId, currentUser, supabaseClient);
       }
 
       const profile = result.data;
@@ -236,17 +240,19 @@ export class ProfileHelpers {
         error: error instanceof Error ? error.message : String(error),
         userId,
       });
-      return await this.createTemporaryProfile(userId, currentUser);
+      return await this.createTemporaryProfile(userId, currentUser, supabaseClient);
     }
   }
 
   /**
    * Create temporary profile with role check
    * PRODUCTION FIX: Always returns a profile, never null
+   * @param client Optional Supabase client (defaults to legacy client for backward compatibility)
    */
   private async createTemporaryProfile(
     userId: string,
-    user: User | null
+    user: User | null,
+    client?: SupabaseClient<Database>
   ): Promise<UserProfile> {
     logger.info('🔄 Setting temporary profile with database role lookup', 'auth', {
       userId,
@@ -275,7 +281,7 @@ export class ProfileHelpers {
       
       const roleResult = await resilientQuery<{ role: string }>(
         async () => {
-          const queryResult = await supabase
+          const queryResult = await (client || supabase)
             .from('user_profiles')
             .select('role')
             .eq('id', userId)

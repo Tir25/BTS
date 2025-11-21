@@ -4,7 +4,7 @@ import { Route } from '../types';
 import { logger } from '../utils/logger';
 
 interface UseRouteFilteringOptions {
-  selectedShift: 'Day' | 'Afternoon' | '';
+  selectedShift: string;
   onRoutesLoaded?: (routes: Route[]) => void;
   onError?: (error: string) => void;
 }

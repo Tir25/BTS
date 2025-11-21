@@ -420,8 +420,8 @@ class ResilientApiService {
               if (isClearServerDown) {
                 // Only treat as server down if it's a clear connection refused error
                 const serverDownError: any = new Error(
-                  'Backend server is not running or not accessible. Please ensure the server is running on ' + 
-                  this.baseUrl.replace(/\/+$/, '') + ' and try again.'
+                  `Backend server is not running or not accessible. Please ensure the server is running on ${  
+                  this.baseUrl.replace(/\/+$/, '')  } and try again.`
                 );
                 serverDownError.code = 'SERVER_NOT_RUNNING';
                 serverDownError.url = url;

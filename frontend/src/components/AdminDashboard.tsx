@@ -1,7 +1,7 @@
 import { useState, useEffect, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApiService } from '../api';
-import { authService } from '../services/authService';
+import { adminAuthService } from '../services/auth/adminAuthService';
 import { logger } from '../utils/logger';
 import UnifiedAdminManagementLazy from './lazy/UnifiedAdminManagementLazy';
 import AdminHeader from './admin/AdminHeader';
@@ -130,7 +130,7 @@ const AdminDashboard = memo(function AdminDashboard() {
       logger.info('🔐 Starting sign out process...', 'admin-dashboard');
       
       // Call sign out service
-      const result = await authService.signOut();
+      const result = await adminAuthService.signOut();
       
       // Helper function to ensure navigation happens reliably
       const performNavigation = () => {
@@ -203,7 +203,7 @@ const AdminDashboard = memo(function AdminDashboard() {
     }
   };
 
-  const currentUser = authService.getCurrentProfile();
+  const currentUser = adminAuthService.getCurrentProfile();
 
   if (loading) {
     return (

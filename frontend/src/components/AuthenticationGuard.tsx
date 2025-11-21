@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { authService } from '../services/authService';
+import { adminAuthService } from '../services/auth/adminAuthService';
 import { logger } from '../utils/logger';
 import AdminLogin from './AdminLogin';
 
@@ -33,17 +34,22 @@ export default function AuthenticationGuard({
       setIsLoading(true);
       setError(null);
 
+      // PRODUCTION FIX: Use the correct auth service based on required role
+      // Admin uses adminAuthService (isolated Supabase client)
+      // Driver/Student use authService (shared Supabase client)
+      const authServiceToUse = requiredRole === 'admin' ? adminAuthService : authService;
+
       // Check if user is authenticated
-      const currentUser = authService.getCurrentUser();
+      const currentUser = authServiceToUse.getCurrentUser();
       if (!currentUser) {
-        logger.info('🔒 No authenticated user found', 'auth-guard');
+        logger.info('🔒 No authenticated user found', 'auth-guard', { requiredRole });
         setIsAuthenticated(false);
         setUserRole(null);
         return;
       }
 
       // Get user profile to check role
-      const profile = authService.getCurrentProfile();
+      const profile = authServiceToUse.getCurrentProfile();
       if (!profile) {
         logger.warn('⚠️ User authenticated but no profile found', 'auth-guard');
         setError('User profile not found. Please log in again.');
@@ -66,11 +72,11 @@ export default function AuthenticationGuard({
       }
 
       // User is authenticated and has correct role
-      logger.info('✅ User authenticated with correct role', 'auth-guard', { role });
+      logger.info('✅ User authenticated with correct role', 'auth-guard', { role, requiredRole });
       setIsAuthenticated(true);
 
     } catch (err) {
-      logger.error('❌ Authentication check failed', 'auth-guard', { error: String(err) });
+      logger.error('❌ Authentication check failed', 'auth-guard', { error: String(err), requiredRole });
       setError('Authentication check failed. Please try again.');
       setIsAuthenticated(false);
     } finally {

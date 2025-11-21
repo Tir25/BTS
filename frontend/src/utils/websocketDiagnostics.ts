@@ -70,7 +70,7 @@ export async function diagnoseWebSocketConnection(): Promise<ConnectionDiagnosti
       const errorMessage = error instanceof Error ? error.message : String(error);
       diagnostics.errors.push(`Backend not reachable: ${errorMessage}`);
       diagnostics.networkIssue = true;
-      diagnostics.suggestions.push('Backend server is not running or not accessible. Please ensure the backend is running on ' + apiUrl);
+      diagnostics.suggestions.push(`Backend server is not running or not accessible. Please ensure the backend is running on ${  apiUrl}`);
       diagnostics.suggestions.push('Check if the backend server is running: `cd backend && npm run dev`');
       diagnostics.suggestions.push('Verify the backend URL is correct in your environment configuration');
     }
@@ -82,7 +82,7 @@ export async function diagnoseWebSocketConnection(): Promise<ConnectionDiagnosti
         diagnostics.hasAuthToken = true;
         logger.info('✅ Authentication token found', 'diagnostics', {
           tokenLength: token.length,
-          tokenPrefix: token.substring(0, 20) + '...',
+          tokenPrefix: `${token.substring(0, 20)  }...`,
         });
 
         // Try to decode token to check expiration
@@ -134,7 +134,7 @@ export async function diagnoseWebSocketConnection(): Promise<ConnectionDiagnosti
     if (!diagnostics.backendReachable) {
       diagnostics.corsIssue = true;
       diagnostics.suggestions.push('Possible CORS issue. Check backend CORS configuration allows your origin.');
-      diagnostics.suggestions.push('Backend should allow origin: ' + window.location.origin);
+      diagnostics.suggestions.push(`Backend should allow origin: ${  window.location.origin}`);
     }
 
   } catch (error) {

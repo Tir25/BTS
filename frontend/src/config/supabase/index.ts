@@ -27,6 +27,13 @@ export {
 
 // Export role-specific clients
 import {
+  getAdminSupabaseClient,
+  getAdminSupabaseConfig,
+  resetAdminClient,
+  testAdminConnection,
+} from './adminClient';
+
+import {
   getDriverSupabaseClient,
   getDriverSupabaseConfig,
   resetDriverClient,
@@ -42,6 +49,13 @@ import {
 
 // Backward compatibility: Export legacy client getters
 import { logger } from '../../utils/logger';
+
+export {
+  getAdminSupabaseClient,
+  getAdminSupabaseConfig,
+  resetAdminClient,
+  testAdminConnection,
+};
 
 export {
   getDriverSupabaseClient,
