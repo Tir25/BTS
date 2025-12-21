@@ -1,0 +1,103 @@
+/* Schedule Form Modal Styles */
+.schedule-form-modal {
+    max-width: 450px;
+    width: 90%;
+}
+
+.schedule-form-modal h3 {
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+}
+
+.schedule-form-modal .form-group {
+    margin-bottom: 1rem;
+}
+
+.schedule-form-modal label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* Dark mode dropdown styling */
+.schedule-form-modal select.input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.schedule-form-modal select.input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.schedule-form-modal select.input option {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 0.5rem;
+}
+
+/* Conflict warnings */
+.conflict-warnings {
+    margin: 1rem 0;
+    padding: 0.75rem;
+    background-color: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 0.5rem;
+}
+
+.conflict-item {
+    color: #ffc107;
+    font-size: 0.9rem;
+    padding: 0.25rem 0;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Schedule item actions */
+.schedule-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.schedule-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.edit-btn,
+.delete-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 1rem;
+    opacity: 0.6;
+    transition: opacity 0.2s, background-color 0.2s;
+}
+
+.edit-btn:hover,
+.delete-btn:hover {
+    opacity: 1;
+    background-color: var(--bg-tertiary);
+}
+
+.delete-btn:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+}

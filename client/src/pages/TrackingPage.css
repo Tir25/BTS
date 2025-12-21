@@ -1,0 +1,294 @@
+.tracking-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg-primary);
+}
+
+.tracking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--glass-border);
+    z-index: 100;
+}
+
+.tracking-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.tracking-logo .logo-icon {
+    font-size: 1.5rem;
+}
+
+.tracking-logo .logo-text {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.bus-count {
+    padding: var(--space-xs) var(--space-sm);
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--color-accent-success);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+}
+
+.tracking-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* Map */
+.map-container {
+    flex: 1;
+    position: relative;
+}
+
+.tracking-map {
+    height: 100%;
+    width: 100%;
+    z-index: 1;
+}
+
+/* Bus Marker */
+.bus-marker-icon {
+    background: transparent;
+    border: none;
+}
+
+.bus-marker {
+    font-size: 2rem;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+/* Bus Popup */
+.bus-popup {
+    text-align: center;
+}
+
+.bus-popup strong {
+    color: var(--color-accent-success);
+}
+
+.bus-popup p {
+    margin: var(--space-xs) 0;
+    font-size: var(--font-size-sm);
+}
+
+/* Status Bar */
+.status-bar {
+    position: absolute;
+    bottom: var(--space-md);
+    left: var(--space-md);
+    right: var(--space-md);
+    z-index: 100;
+}
+
+.status-bar .card-body {
+    padding: var(--space-sm) var(--space-md);
+}
+
+.no-buses {
+    text-align: center;
+    color: var(--color-text-muted);
+    margin: 0;
+}
+
+.buses-active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    margin: 0;
+    color: var(--color-accent-success);
+}
+
+.pulse-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-accent-success);
+    animation: pulse-glow 1.5s infinite;
+}
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 5px var(--color-accent-success);
+        opacity: 1;
+    }
+
+    50% {
+        box-shadow: 0 0 15px var(--color-accent-success);
+        opacity: 0.7;
+    }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .status-bar {
+        left: var(--space-sm);
+        right: var(--space-sm);
+        bottom: var(--space-sm);
+    }
+}
+
+/* Filter Bar */
+.filter-bar {
+    display: flex;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--glass-border);
+    z-index: 99;
+}
+
+.route-filter {
+    flex: 1;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+}
+
+.favorites-btn {
+    padding: var(--space-sm) var(--space-md);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: var(--font-size-sm);
+}
+
+.favorites-btn:hover {
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.favorites-btn.active {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.5);
+}
+
+/* Favorite button in popup */
+.favorite-popup-btn {
+    width: 100%;
+    padding: var(--space-xs) var(--space-sm);
+    margin-top: var(--space-sm);
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--radius-sm);
+    color: #f59e0b;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+/* Bus List Card */
+.bus-list-card {
+    position: absolute;
+    top: var(--space-md);
+    right: var(--space-md);
+    width: 280px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.bus-list-card h3 {
+    margin-bottom: var(--space-sm);
+    font-size: var(--font-size-md);
+}
+
+.bus-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.bus-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm);
+    background: var(--glass-bg);
+    border-radius: var(--radius-sm);
+}
+
+.bus-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.bus-icon {
+    font-size: 1.5rem;
+}
+
+.bus-route-name {
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+}
+
+.bus-speed {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.bus-eta {
+    text-align: right;
+}
+
+.eta-label {
+    display: block;
+    font-size: 10px;
+    color: var(--color-text-muted);
+}
+
+.eta-value {
+    font-weight: 600;
+    color: var(--color-accent-primary);
+    font-size: var(--font-size-sm);
+}
+
+@media (max-width: 768px) {
+    .bus-list-card {
+        position: static;
+        width: 100%;
+        max-height: none;
+        margin-bottom: 80px;
+    }
+}

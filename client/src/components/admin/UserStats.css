@@ -1,0 +1,66 @@
+.users-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-md);
+}
+
+@media (min-width: 768px) {
+    .users-stats {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.stat-card .card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-lg);
+    gap: var(--space-xs);
+}
+
+.stat-icon {
+    font-size: var(--font-size-2xl);
+}
+
+.stat-count {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
+.stat-blue .stat-count {
+    color: var(--color-accent-primary);
+}
+
+.stat-purple .stat-count {
+    color: var(--color-accent-secondary);
+}
+
+.stat-green .stat-count {
+    color: var(--color-accent-success);
+}
+
+.stat-orange .stat-count {
+    color: var(--color-accent-warning);
+}
+
+.stat-card.skeleton {
+    opacity: 0.6;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}

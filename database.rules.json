@@ -1,0 +1,16 @@
+{
+    "rules": {
+        "busLocations": {
+            "$driverId": {
+                ".read": true,
+                ".write": "auth != null && auth.uid == $driverId"
+            }
+        },
+        "driverStatus": {
+            "$driverId": {
+                ".read": true,
+                ".write": "auth != null && auth.uid == $driverId"
+            }
+        }
+    }
+}
