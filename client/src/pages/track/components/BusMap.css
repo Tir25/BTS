@@ -1,0 +1,80 @@
+/* BusMap Styles */
+.bus-map-container {
+    flex: 1;
+    position: relative;
+    min-height: 300px;
+    /* Minimum fallback for Leaflet */
+    height: 100%;
+}
+
+.bus-map {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    width: 100%;
+    z-index: 1;
+}
+
+/* Bus Marker */
+.bus-marker-wrapper {
+    background: transparent !important;
+    border: none !important;
+}
+
+.bus-marker-icon {
+    transition: transform 0.3s ease;
+}
+
+/* Bus Popup */
+.bus-popup {
+    text-align: center;
+    min-width: 140px;
+}
+
+.bus-popup strong {
+    display: block;
+    color: var(--color-accent-primary, #4361ee);
+    margin-bottom: 4px;
+}
+
+.bus-popup p {
+    margin: 4px 0;
+    font-size: 12px;
+    color: #666;
+}
+
+.popup-favorite-btn {
+    width: 100%;
+    padding: 6px 10px;
+    margin-top: 8px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 6px;
+    color: #f59e0b;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.popup-favorite-btn:hover {
+    background: rgba(245, 158, 11, 0.2);
+}
+
+/* Override Leaflet popup styles for dark theme */
+.leaflet-popup-content-wrapper {
+    background: #1a1a2e;
+    color: #fff;
+    border-radius: 8px;
+}
+
+.leaflet-popup-tip {
+    background: #1a1a2e;
+}
+
+.leaflet-popup-content {
+    margin: 12px;
+}
+
+.bus-popup p {
+    color: #a0aec0;
+}

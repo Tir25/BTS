@@ -1,0 +1,62 @@
+/* ConnectionStatus Styles */
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+}
+
+.connection-status.connected {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--color-accent-success);
+}
+
+.connection-status.disconnected {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--color-accent-warning);
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.connection-status.connected .status-indicator {
+    background: var(--color-accent-success);
+    animation: pulse-glow 1.5s infinite;
+}
+
+.connection-status.disconnected .status-indicator {
+    background: var(--color-accent-warning);
+    animation: blink 1s infinite;
+}
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 4px var(--color-accent-success);
+        opacity: 1;
+    }
+
+    50% {
+        box-shadow: 0 0 10px var(--color-accent-success);
+        opacity: 0.8;
+    }
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
+}

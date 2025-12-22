@@ -9,7 +9,7 @@ const LandingPage = lazy(() => import('@/pages/LandingPage'));
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const AdminDashboard = lazy(() => import('@/pages/admin/AdminDashboard'));
 const DriverView = lazy(() => import('@/pages/driver/DriverView'));
-const TrackingPage = lazy(() => import('@/pages/TrackingPage'));
+const TrackingPage = lazy(() => import('@/pages/track'));
 
 // Loading fallback
 const LoadingFallback = () => (

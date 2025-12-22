@@ -1,0 +1,81 @@
+/* MapControls Styles - Glassmorphism */
+.map-controls {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1001;
+
+    /* Glassmorphism */
+    background: rgba(20, 20, 20, 0.75);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+    gap: 4px;
+}
+
+.map-controls .control-btn {
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.map-controls .control-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.map-controls .control-btn:active {
+    transform: scale(0.95);
+}
+
+.map-controls .control-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.map-controls .control-btn.recenter {
+    color: var(--color-accent-success);
+    margin-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 8px;
+}
+
+.map-controls .control-btn.recenter:hover {
+    background: rgba(16, 185, 129, 0.15);
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+    .map-controls {
+        right: 12px;
+        padding: 6px;
+    }
+
+    .map-controls .control-btn {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+/* Safe area for iPhone notch */
+@supports (padding-right: env(safe-area-inset-right)) {
+    .map-controls {
+        right: max(16px, env(safe-area-inset-right));
+    }
+}
