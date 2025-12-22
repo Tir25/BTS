@@ -46,6 +46,30 @@ export function createBusIcon({ heading = 0, color = '#4361ee' } = {}) {
 }
 
 /**
+ * Create a stale bus marker icon (amber/warning color)
+ * Used when bus hasn't updated recently
+ * @param {Object} options - Icon options
+ * @param {number} options.heading - Bus heading in degrees
+ * @returns {L.DivIcon} Leaflet DivIcon with warning style
+ */
+export function createStaleBusIcon({ heading = 0 } = {}) {
+    return new L.DivIcon({
+        className: 'bus-marker-wrapper stale',
+        html: `
+            <div class="bus-marker-icon stale" style="transform: rotate(${heading}deg)">
+                <svg viewBox="0 0 40 40" width="40" height="40">
+                    <circle cx="20" cy="20" r="18" fill="#f59e0b" stroke="white" stroke-width="2"/>
+                    <path d="M20 8 L28 28 L20 24 L12 28 Z" fill="white"/>
+                </svg>
+            </div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+        popupAnchor: [0, -20]
+    });
+}
+
+/**
  * Create a stop marker icon
  * @param {string} type - 'normal' | 'current' | 'passed'
  * @returns {L.Icon} Leaflet Icon

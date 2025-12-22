@@ -5,9 +5,13 @@
  */
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import { fixLeafletDefaultIcon, createBusIcon } from '@/utils/leafletIcons';
-import { formatSpeed, formatTimeAgo, DEFAULT_CENTER, DEFAULT_ZOOM } from '../utils/tracking';
+import { fixLeafletDefaultIcon, createBusIcon, createStaleBusIcon } from '@/utils/leafletIcons';
+import { formatSpeed, DEFAULT_CENTER, DEFAULT_ZOOM } from '../utils/tracking';
+import { useUserLocation } from '../hooks/useUserLocation';
+import { isStale } from '../hooks/useTimeAgo';
 import { MapControls } from './MapControls';
+import { TimeAgo } from './TimeAgo';
+import { UserLocationMarker } from './UserLocationMarker';
 import 'leaflet/dist/leaflet.css';
 import './BusMap.css';
 
@@ -80,14 +84,19 @@ export function BusMap({
     isFavorite
 }) {
     const [mapControls, setMapControls] = useState({});
-    const [showRecenter, setShowRecenter] = useState(false);
     const [busIcons, setBusIcons] = useState({});
 
-    // Create/update bus icons when headings change
+    // Get user's location
+    const { location: userLocation } = useUserLocation({ enabled: true });
+
+    // Create/update bus icons when headings or stale status changes
     useEffect(() => {
         const icons = {};
         buses.forEach(bus => {
-            icons[bus.id] = createBusIcon({ heading: bus.heading || 0 });
+            const stale = isStale(bus.lastUpdated, 30000);
+            icons[bus.id] = stale
+                ? createStaleBusIcon({ heading: bus.heading || 0 })
+                : createBusIcon({ heading: bus.heading || 0 });
         });
         setBusIcons(icons);
     }, [buses]);
@@ -120,6 +129,9 @@ export function BusMap({
                     buses={buses}
                 />
 
+                {/* User location marker */}
+                <UserLocationMarker location={userLocation} />
+
                 {/* Route polyline */}
                 {routePath && (
                     <Polyline
@@ -144,7 +156,7 @@ export function BusMap({
                             <div className="bus-popup">
                                 <strong>{bus.routeName || 'Active Bus'}</strong>
                                 <p>{formatSpeed(bus.speed)}</p>
-                                <p>Updated: {formatTimeAgo(bus.lastUpdated)}</p>
+                                <p>Updated: <TimeAgo timestamp={bus.lastUpdated} /></p>
                                 {bus.routeId && (
                                     <button
                                         className="popup-favorite-btn"

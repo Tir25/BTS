@@ -4,7 +4,9 @@
  * Single responsibility: Bus list sidebar/panel UI
  */
 import { Card, CardBody } from '@/components/ui';
-import { formatSpeed, calculateETA, formatTimeAgo } from '../utils/tracking';
+import { formatSpeed, calculateETA } from '../utils/tracking';
+import { isStale } from '../hooks/useTimeAgo';
+import { TimeAgo } from './TimeAgo';
 import './BusListPanel.css';
 
 /**
@@ -50,13 +52,13 @@ export function BusListPanel({
                                 tabIndex={0}
                             >
                                 <div className="bus-info">
-                                    <span className="bus-icon">🚌</span>
+                                    <span className={`bus-icon ${isStale(bus.lastUpdated, 30000) ? 'stale' : ''}`}>🚌</span>
                                     <div className="bus-details">
                                         <div className="bus-route">
                                             {bus.routeName || 'Unknown Route'}
                                         </div>
                                         <div className="bus-meta">
-                                            {formatSpeed(bus.speed)} • {formatTimeAgo(bus.lastUpdated)}
+                                            {formatSpeed(bus.speed)} • <TimeAgo timestamp={bus.lastUpdated} />
                                         </div>
                                     </div>
                                 </div>
