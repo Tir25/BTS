@@ -56,18 +56,7 @@ export default defineConfig({
               }
             }
           },
-          {
-            urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'firestore-cache',
-              networkTimeoutSeconds: 10,
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 // 1 hour
-              }
-            }
-          },
+          // Note: Firestore/Firebase requests are NOT cached as they use streaming
           {
             urlPattern: /\.(png|jpg|jpeg|svg|gif|webp)$/i,
             handler: 'CacheFirst',
