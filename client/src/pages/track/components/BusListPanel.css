@@ -16,6 +16,8 @@
     margin-bottom: var(--space-md);
     font-size: var(--font-size-md);
     font-weight: 600;
+    color: #1a1a2e;
+    /* Dark text for visibility */
 }
 
 .panel-title .count {
@@ -91,11 +93,14 @@
 .bus-route {
     font-weight: 500;
     font-size: var(--font-size-sm);
+    color: #1a1a2e;
+    /* Dark text for light card backgrounds */
 }
 
 .bus-meta {
     font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    color: #64748b;
+    /* Muted but visible gray */
 }
 
 .bus-actions {
@@ -111,7 +116,8 @@
 .eta-label {
     display: block;
     font-size: 10px;
-    color: var(--color-text-muted);
+    color: #64748b;
+    /* Visible gray */
     text-transform: uppercase;
 }
 
