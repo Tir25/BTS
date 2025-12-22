@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt', 'offline.html'],
+      includeAssets: ['favicon.ico', 'robots.txt'],
       manifest: {
         name: 'UniTrack - University Bus Tracker',
         short_name: 'UniTrack',
@@ -37,8 +37,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        navigateFallback: '/offline.html',
-        navigateFallbackDenylist: [/^\/api/],
+        // Use index.html for SPA navigation fallback (not offline.html)
+        navigateFallback: '/index.html',
+        // Only apply fallback to app routes, not static files or APIs
+        navigateFallbackAllowlist: [/^\/(?!(api|.*\.\w+$))/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.tile\.openstreetmap\.org\/.*/i,
@@ -80,7 +82,7 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: true
+        enabled: false // Disable PWA in development to avoid caching issues
       }
     })
   ],
