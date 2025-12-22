@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { shiftsService } from '@/services/database';
 import { Button, Card, CardBody, Input, useConfirm, useToast } from '@/components/ui';
+import { ShiftCard } from '@/components/shift';
 import ShiftForm from './ShiftForm';
-import '../admin/DriversPage.css';
+import './ShiftsPage.css';
 
 /**
  * Shifts Management Page
@@ -127,38 +128,6 @@ export function ShiftsPage() {
                 />
             )}
         </div>
-    );
-}
-
-function ShiftCard({ shift, onEdit, onDelete }) {
-    const getShiftIcon = (name) => {
-        const icons = { morning: '🌅', noon: '☀️', evening: '🌆', night: '🌙' };
-        return icons[name?.toLowerCase()] || '⏰';
-    };
-
-    return (
-        <Card className="driver-card" hoverable>
-            <CardBody>
-                <div className="driver-info">
-                    <div className="driver-avatar" style={{ background: 'var(--color-accent-warning)' }}>
-                        {getShiftIcon(shift.name)}
-                    </div>
-                    <div className="driver-details">
-                        <h4 style={{ textTransform: 'capitalize' }}>{shift.name}</h4>
-                        <p className="text-muted">
-                            {shift.startTime} - {shift.endTime}
-                        </p>
-                        {shift.description && (
-                            <p className="text-muted license">{shift.description}</p>
-                        )}
-                    </div>
-                </div>
-                <div className="driver-actions">
-                    <Button variant="ghost" size="sm" onClick={onEdit}>Edit</Button>
-                    <Button variant="ghost" size="sm" onClick={onDelete}>Delete</Button>
-                </div>
-            </CardBody>
-        </Card>
     );
 }
 

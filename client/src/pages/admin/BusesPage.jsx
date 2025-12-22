@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { busesService } from '@/services/database';
 import { Button, Card, CardBody, Input, useConfirm, useToast } from '@/components/ui';
+import { BusCard } from '@/components/bus';
 import BusForm from './BusForm';
-import '../admin/DriversPage.css'; // Reuse drivers page styles
+import './BusesPage.css';
 
 /**
  * Buses Management Page
@@ -141,36 +142,6 @@ export function BusesPage() {
                 />
             )}
         </div>
-    );
-}
-
-function BusCard({ bus, onEdit, onDelete }) {
-    return (
-        <Card className="driver-card" hoverable>
-            <CardBody>
-                <div className="driver-info">
-                    <div className="driver-avatar" style={{ background: 'var(--gradient-success)' }}>
-                        🚌
-                    </div>
-                    <div className="driver-details">
-                        <h4>{bus.number}</h4>
-                        <p className="text-muted">{bus.licensePlate}</p>
-                        <p className="text-muted license">
-                            Capacity: {bus.capacity} seats
-                        </p>
-                    </div>
-                </div>
-                <div className="driver-status">
-                    <span className={`status-badge ${bus.status || 'inactive'}`}>
-                        {bus.status || 'Inactive'}
-                    </span>
-                </div>
-                <div className="driver-actions">
-                    <Button variant="ghost" size="sm" onClick={onEdit}>Edit</Button>
-                    <Button variant="ghost" size="sm" onClick={onDelete}>Delete</Button>
-                </div>
-            </CardBody>
-        </Card>
     );
 }
 

@@ -1,98 +1,59 @@
 /**
  * Users Management Page
  * Main page for managing all user types with search, filter, and CRUD
+ * Single responsibility: Compose user management UI from modular components
  */
-import { useState, useEffect, useCallback } from 'react';
-import { Button, Input, useConfirm, useToast } from '@/components/ui';
-import { usersService } from '@/services/users';
+import { useState, useMemo } from 'react';
+import { Button, useConfirm, useToast } from '@/components/ui';
+import { useUsersData } from '@/hooks';
 import { createSingleUser, sendUserPasswordReset } from '@/services/userCreation';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserStatsCards } from '@/components/admin/UserStatsCards';
-import { UserCard } from '@/components/admin/UserCard';
+import { UserStatsCards, UsersFilters, UsersGrid } from '@/components/admin';
 import UserForm from './UserForm';
 import BulkImportModal from './BulkImportModal';
 import './UsersPage.css';
-
-
-const ROLE_OPTIONS = [
-    { value: 'all', label: 'All Roles' },
-    { value: 'student', label: 'Students' },
-    { value: 'faculty', label: 'Faculty' },
-    { value: 'driver', label: 'Drivers' }
-];
 
 export function UsersPage() {
     const { user: adminUser } = useAuth();
     const { confirm } = useConfirm();
     const { toast } = useToast();
-    const [users, setUsers] = useState([]);
-    const [stats, setStats] = useState({ total: 0, student: 0, faculty: 0, driver: 0 });
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+
+    // State for filters
+    const [searchQuery, setSearchQuery] = useState('');
+    const [roleFilter, setRoleFilter] = useState('all');
+
+    // Fetch users data with role filter
+    const { users, stats, loading, error, refresh, deleteUser } = useUsersData(roleFilter);
 
     // UI State
     const [showForm, setShowForm] = useState(false);
     const [showBulkImport, setShowBulkImport] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [roleFilter, setRoleFilter] = useState('all');
 
-    // Load data on mount and filter change
-    const loadData = useCallback(async () => {
-        try {
-            setLoading(true);
-            const [usersData, statsData] = await Promise.all([
-                usersService.getAll(roleFilter),
-                usersService.getStats()
-            ]);
-            setUsers(usersData);
-            setStats(statsData);
-            setError(null);
-        } catch (err) {
-            setError('Failed to load users');
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    }, [roleFilter]);
-
-    useEffect(() => {
-        loadData();
-    }, [loadData]);
-
-    // Filter users by search query
-    const filteredUsers = users.filter(user => {
-        if (!searchQuery) return true;
+    // Filter users by search query (client-side)
+    const filteredUsers = useMemo(() => {
+        if (!searchQuery) return users;
         const query = searchQuery.toLowerCase();
-        return (
+        return users.filter(user =>
             user.name?.toLowerCase().includes(query) ||
             user.email?.toLowerCase().includes(query) ||
             user.rollNo?.toLowerCase().includes(query)
         );
-    });
+    }, [users, searchQuery]);
 
     // Handle form submit
     const handleFormSubmit = async (formData) => {
         if (editingUser) {
-            // Update existing user
-            await usersService.update(editingUser.id, formData);
+            await useUsersData.updateUser?.(editingUser.id, formData);
         } else {
-            // Create new user - save admin credentials to re-auth
-            const adminEmail = adminUser?.email;
-            if (!adminEmail) throw new Error('Admin session not found');
-
-            // Note: In production, use Cloud Functions to avoid logout
             await createSingleUser(formData);
-
-            // The user creation logs out admin, need to re-authenticate
-            // This is a workaround - production should use Admin SDK
         }
         setShowForm(false);
         setEditingUser(null);
-        await loadData();
+        await refresh();
     };
 
-    // Handle user deletion with confirm dialog
+    // Handle user deletion
     const handleDelete = async (user) => {
         const confirmed = await confirm({
             title: 'Delete User',
@@ -105,11 +66,9 @@ export function UsersPage() {
         if (!confirmed) return;
 
         try {
-            await usersService.delete(user.id);
+            await deleteUser(user.id);
             toast.success(`User "${user.name}" deleted successfully`);
-            await loadData();
         } catch (err) {
-            setError('Failed to delete user');
             toast.error('Failed to delete user');
         }
     };
@@ -135,6 +94,12 @@ export function UsersPage() {
         }
     };
 
+    // Handle edit
+    const handleEdit = (user) => {
+        setEditingUser(user);
+        setShowForm(true);
+    };
+
     return (
         <div className="users-page">
             {/* Stats Row */}
@@ -154,51 +119,32 @@ export function UsersPage() {
             </div>
 
             {/* Filters */}
-            <div className="filters-row">
-                <Input
-                    placeholder="Search by name, email, or roll number..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="search-input"
-                />
-                <select
-                    value={roleFilter}
-                    onChange={(e) => setRoleFilter(e.target.value)}
-                    className="role-filter input"
-                >
-                    {ROLE_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                </select>
-            </div>
+            <UsersFilters
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                roleFilter={roleFilter}
+                onRoleChange={setRoleFilter}
+            />
 
             {/* Error Banner */}
             {error && (
                 <div className="error-banner">
                     <span>{error}</span>
-                    <button onClick={() => setError(null)}>×</button>
+                    <button onClick={refresh}>Retry</button>
                 </div>
             )}
 
             {/* Users List */}
             {loading ? (
                 <div className="loading-state">Loading users...</div>
-            ) : filteredUsers.length === 0 ? (
-                <div className="empty-state">
-                    {searchQuery ? 'No users match your search' : 'No users found. Add your first user!'}
-                </div>
             ) : (
-                <div className="users-grid">
-                    {filteredUsers.map(user => (
-                        <UserCard
-                            key={user.id}
-                            user={user}
-                            onEdit={(u) => { setEditingUser(u); setShowForm(true); }}
-                            onDelete={handleDelete}
-                            onResetPassword={handleResetPassword}
-                        />
-                    ))}
-                </div>
+                <UsersGrid
+                    users={filteredUsers}
+                    searchQuery={searchQuery}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onResetPassword={handleResetPassword}
+                />
             )}
 
             {/* Modals */}
@@ -213,7 +159,7 @@ export function UsersPage() {
             {showBulkImport && (
                 <BulkImportModal
                     onClose={() => setShowBulkImport(false)}
-                    onComplete={loadData}
+                    onComplete={refresh}
                 />
             )}
         </div>

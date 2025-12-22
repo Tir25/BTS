@@ -28,7 +28,8 @@ export function UserStatsCards({ stats, loading }) {
         { key: 'total', label: 'Total Users', color: 'blue', icon: '👥' },
         { key: 'student', label: 'Students', color: 'purple', icon: '🎓' },
         { key: 'faculty', label: 'Faculty', color: 'green', icon: '👨‍🏫' },
-        { key: 'driver', label: 'Drivers', color: 'orange', icon: '🚌' }
+        { key: 'driver', label: 'Drivers', color: 'orange', icon: '🚌' },
+        { key: 'admin', label: 'Admins', color: 'red', icon: '🛡️' }
     ];
 
     return (

@@ -19,10 +19,13 @@ service cloud.firestore {
       return hasRole('admin');
     }
     
-    // Users collection - admin can read/write, users can read their own
+    // Users collection - users can create their own profile, admin can write any profile
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAdmin();
+      // Allow users to create their own profile (needed for new user creation)
+      // or admin to create/update any profile
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow update, delete: if isAdmin();
     }
     
     // Drivers collection - admin only

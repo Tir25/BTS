@@ -1,0 +1,171 @@
+/* Map Control Bar - Glassmorphism Style */
+
+.map-control-bar {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1001;
+
+    /* Glassmorphism effect */
+    background: rgba(20, 20, 20, 0.75);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+    /* Layout */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+    gap: 4px;
+}
+
+/* Control Buttons */
+.control-btn {
+    width: 48px;
+    height: 48px;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.control-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.control-btn:active {
+    transform: scale(0.95);
+}
+
+.control-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.control-btn svg {
+    width: 22px;
+    height: 22px;
+}
+
+/* Power Button - Special styling */
+.control-btn.power {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    margin: 4px 0;
+}
+
+.control-btn.power.offline {
+    background: linear-gradient(135deg, #00d26a, #00b85c);
+    box-shadow: 0 4px 12px rgba(0, 210, 106, 0.3);
+}
+
+.control-btn.power.offline:hover {
+    box-shadow: 0 6px 16px rgba(0, 210, 106, 0.5);
+}
+
+.control-btn.power.online {
+    background: linear-gradient(135deg, #ff4444, #cc0000);
+    box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);
+}
+
+.control-btn.power.online:hover {
+    box-shadow: 0 6px 16px rgba(255, 68, 68, 0.5);
+}
+
+/* Recenter button highlight */
+.control-btn.recenter {
+    color: #00d26a;
+}
+
+.control-btn.recenter:hover {
+    background: rgba(0, 210, 106, 0.15);
+}
+
+/* Divider line */
+.control-divider {
+    width: 32px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 6px 0;
+}
+
+/* Loading spinner */
+.control-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: control-spin 0.8s linear infinite;
+}
+
+@keyframes control-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Pulse effect for online state */
+.control-btn.power.online::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid #ff4444;
+    animation: power-pulse 2s ease-out infinite;
+    pointer-events: none;
+}
+
+@keyframes power-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.6;
+    }
+
+    100% {
+        transform: scale(1.3);
+        opacity: 0;
+    }
+}
+
+/* Mobile adjustments - larger touch targets */
+@media (max-width: 480px) {
+    .map-control-bar {
+        right: 12px;
+        padding: 6px;
+    }
+
+    .control-btn {
+        width: 52px;
+        height: 52px;
+    }
+
+    .control-btn.power {
+        width: 56px;
+        height: 56px;
+    }
+
+    .control-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+}
+
+/* Safe area support for iPhone notch */
+@supports (padding-right: env(safe-area-inset-right)) {
+    .map-control-bar {
+        right: max(16px, env(safe-area-inset-right));
+    }
+}

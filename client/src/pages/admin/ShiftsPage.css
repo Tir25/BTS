@@ -1,0 +1,33 @@
+/* Shifts Page Styles */
+/* Extends entity card patterns */
+
+.shifts-page {
+    padding: 1.5rem;
+}
+
+.shifts-page .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.shifts-page h2 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.shifts-page .empty-state {
+    text-align: center;
+    padding: 3rem;
+}
+
+.shifts-page .empty-state p {
+    color: var(--text-secondary);
+}
+
+.shifts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}

@@ -6,7 +6,13 @@
 
 @media (min-width: 768px) {
     .users-stats {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .users-stats {
+        grid-template-columns: repeat(5, 1fr);
     }
 }
 
@@ -46,6 +52,10 @@
 
 .stat-orange .stat-count {
     color: var(--color-accent-warning);
+}
+
+.stat-red .stat-count {
+    color: var(--color-accent-danger, #ef4444);
 }
 
 .stat-card.skeleton {

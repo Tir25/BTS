@@ -1,362 +1,234 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+/**
+ * Driver View - Uber-Inspired Full Screen Layout
+ * Production-grade with modular component architecture
+ * 
+ * Components used:
+ * - FullScreenMap: Full viewport map with control bar
+ * - TopStatusBar: Online/offline status, GPS quality
+ * - ConfirmDialog: Go offline confirmation
+ * - BottomSheet: Expandable route info panel
+ * - RouteInfoPanel: Route details, stops, ETA
+ */
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ref, set, onValue } from 'firebase/database';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import { realtimeDb, db } from '@/services/firebase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button, Card, CardBody } from '@/components/ui';
+import { useToast } from '@/components/ui';
+import { useDriverTracking, useDriverSchedule } from './hooks';
+import { calculateETA } from './utils/eta';
+import haptics from './utils/haptics';
+import {
+    FullScreenMap,
+    BottomSheet,
+    DriverSkeleton,
+    ConfirmDialog,
+    TopStatusBar,
+    RouteInfoPanel
+} from './components';
 import './DriverView.css';
 
-/**
- * Driver Mobile View
- * GPS tracking with offline queue, check-in/out, assigned route display
- */
 export function DriverView() {
     const { user, signOut } = useAuth();
     const navigate = useNavigate();
+    const { toast } = useToast();
 
-    const [isOnDuty, setIsOnDuty] = useState(false);
-    const [isTracking, setIsTracking] = useState(false);
-    const [location, setLocation] = useState(null);
-    const [error, setError] = useState(null);
-    const [watchId, setWatchId] = useState(null);
-    const [assignedSchedule, setAssignedSchedule] = useState(null);
     const [currentStopIndex, setCurrentStopIndex] = useState(0);
-    const [isOffline, setIsOffline] = useState(!navigator.onLine);
-    const offlineQueue = useRef([]);
+    const [powerLoading, setPowerLoading] = useState(false);
+    const [breakLoading, setBreakLoading] = useState(false);
+    const [showOfflineConfirm, setShowOfflineConfirm] = useState(false);
+    const autoStartedRef = useRef(false);
 
-    // Monitor online/offline status
+    // Custom hooks
+    const {
+        assignedSchedule,
+        isOnDuty,
+        loading: scheduleLoading,
+        checkIn,
+        checkOut
+    } = useDriverSchedule(user?.uid);
+
+    const {
+        isTracking,
+        isPaused,
+        location,
+        error: gpsError,
+        isOffline,
+        queueCount,
+        startTracking,
+        stopTracking,
+        pauseTracking,
+        resumeTracking
+    } = useDriverTracking(user?.uid, isOnDuty, assignedSchedule);
+
+    // Auto-start tracking if already on duty
     useEffect(() => {
-        const handleOnline = () => {
-            setIsOffline(false);
-            flushOfflineQueue();
-        };
-        const handleOffline = () => setIsOffline(true);
-
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-
-        return () => {
-            window.removeEventListener('online', handleOnline);
-            window.removeEventListener('offline', handleOffline);
-        };
-    }, []);
-
-    // Flush offline queue when back online
-    const flushOfflineQueue = async () => {
-        if (offlineQueue.current.length === 0) return;
-
-        for (const update of offlineQueue.current) {
-            try {
-                const locationRef = ref(realtimeDb, `busLocations/${update.driverId}`);
-                await set(locationRef, update);
-            } catch (err) {
-                console.error('Failed to flush queued update:', err);
-            }
+        if (isOnDuty && !isTracking && !autoStartedRef.current && !scheduleLoading) {
+            autoStartedRef.current = true;
+            startTracking();
         }
-        offlineQueue.current = [];
-    };
+        if (!isOnDuty) autoStartedRef.current = false;
+    }, [isOnDuty, isTracking, scheduleLoading, startTracking]);
 
-    // Fetch today's assigned schedule
-    useEffect(() => {
-        if (!user?.uid) return;
+    // Reset loading when status changes
+    useEffect(() => { setPowerLoading(false); }, [isOnDuty]);
 
-        const fetchSchedule = async () => {
-            try {
-                const today = new Date().toISOString().split('T')[0];
-                const schedulesRef = collection(db, 'schedules');
-                const q = query(schedulesRef, where('driverId', '==', user.uid), where('date', '==', today));
-                const snapshot = await getDocs(q);
-
-                if (!snapshot.empty) {
-                    const scheduleDoc = snapshot.docs[0];
-                    const scheduleData = { id: scheduleDoc.id, ...scheduleDoc.data() };
-
-                    // Fetch route details if routeId exists
-                    if (scheduleData.routeId) {
-                        const routesRef = collection(db, 'routes');
-                        const routesSnapshot = await getDocs(routesRef);
-                        const route = routesSnapshot.docs.find(d => d.id === scheduleData.routeId);
-                        if (route) {
-                            scheduleData.route = { id: route.id, ...route.data() };
-                        }
-                    }
-
-                    setAssignedSchedule(scheduleData);
-                }
-            } catch (err) {
-                console.error('Failed to fetch schedule:', err);
-            }
-        };
-
-        fetchSchedule();
-    }, [user?.uid]);
-
-    // Check driver status on mount
-    useEffect(() => {
-        if (!user?.uid) return;
-
-        const statusRef = ref(realtimeDb, `driverStatus/${user.uid}`);
-        const unsubscribe = onValue(statusRef, (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                setIsOnDuty(data.isOnDuty || false);
-            }
-        });
-
-        return () => unsubscribe();
-    }, [user?.uid]);
-
-    // Start GPS tracking
-    const startTracking = useCallback(() => {
-        if (!navigator.geolocation) {
-            setError('Geolocation not supported');
+    // Power toggle with confirmation for going offline
+    const handlePowerToggle = useCallback(async () => {
+        if (isOnDuty) {
+            setShowOfflineConfirm(true);
             return;
         }
 
-        const id = navigator.geolocation.watchPosition(
-            (position) => {
-                const { latitude, longitude, heading, speed } = position.coords;
-                setLocation({ lat: latitude, lng: longitude, heading, speed });
-
-                const locationUpdate = {
-                    lat: latitude,
-                    lng: longitude,
-                    heading: heading || 0,
-                    speed: speed || 0,
-                    driverId: user.uid,
-                    routeId: assignedSchedule?.routeId || null,
-                    routeName: assignedSchedule?.route?.name || null,
-                    isActive: true,
-                    lastUpdated: Date.now()
-                };
-
-                // Queue or send update
-                if (isOffline) {
-                    offlineQueue.current.push(locationUpdate);
-                } else if (user?.uid && isOnDuty) {
-                    const locationRef = ref(realtimeDb, `busLocations/${user.uid}`);
-                    set(locationRef, locationUpdate);
-                }
-            },
-            (err) => {
-                console.error('GPS Error:', err);
-                setError('Unable to get location');
-            },
-            {
-                enableHighAccuracy: true,
-                maximumAge: 5000,
-                timeout: 10000
+        // Going online
+        setPowerLoading(true);
+        haptics.doublePulse();
+        try {
+            const success = await checkIn();
+            if (success) {
+                startTracking();
+                haptics.success();
+                toast.success('You are now online');
+            } else {
+                haptics.error();
+                toast.error('Failed to go online');
             }
-        );
-
-        setWatchId(id);
-        setIsTracking(true);
-    }, [user?.uid, isOnDuty, isOffline, assignedSchedule]);
-
-    // Stop GPS tracking
-    const stopTracking = useCallback(() => {
-        if (watchId !== null) {
-            navigator.geolocation.clearWatch(watchId);
-            setWatchId(null);
+        } finally {
+            setPowerLoading(false);
         }
-        setIsTracking(false);
+    }, [isOnDuty, checkIn, startTracking, toast]);
 
-        if (user?.uid) {
-            const locationRef = ref(realtimeDb, `busLocations/${user.uid}`);
-            set(locationRef, { isActive: false, lastUpdated: Date.now() });
+    // Confirm going offline
+    const handleConfirmOffline = useCallback(async () => {
+        setShowOfflineConfirm(false);
+        setPowerLoading(true);
+        haptics.medium();
+        try {
+            stopTracking();
+            const success = await checkOut();
+            if (success) {
+                haptics.success();
+                toast.success('You are now offline');
+                setCurrentStopIndex(0);
+            } else {
+                haptics.error();
+                toast.error('Failed to go offline');
+            }
+        } finally {
+            setPowerLoading(false);
         }
-    }, [watchId, user?.uid]);
+    }, [stopTracking, checkOut, toast]);
 
-    // Check in/out
-    const handleCheckIn = async () => {
-        if (!user?.uid) return;
+    // Break toggle
+    const handleBreakToggle = useCallback(() => {
+        setBreakLoading(true);
+        haptics.light();
+        try {
+            if (isPaused) {
+                resumeTracking();
+                toast.success('Tracking resumed');
+            } else {
+                pauseTracking();
+                toast.info('Tracking paused');
+            }
+        } finally {
+            setBreakLoading(false);
+        }
+    }, [isPaused, pauseTracking, resumeTracking, toast]);
 
-        const statusRef = ref(realtimeDb, `driverStatus/${user.uid}`);
-        await set(statusRef, {
-            isOnDuty: true,
-            checkedInAt: Date.now(),
-            driverId: user.uid,
-            scheduleId: assignedSchedule?.id || null
-        });
-        setIsOnDuty(true);
-        startTracking();
-    };
+    // Next stop handler
+    const handleNextStop = useCallback(() => {
+        const stops = assignedSchedule?.route?.stops || [];
+        if (currentStopIndex < stops.length - 1) {
+            setCurrentStopIndex(prev => prev + 1);
+            haptics.arrival();
+            toast.info(`Arrived at ${stops[currentStopIndex + 1]?.name}`);
+        } else if (currentStopIndex === stops.length - 1) {
+            setCurrentStopIndex(stops.length);
+            haptics.celebration();
+            toast.success('🎉 Route completed!');
+        }
+    }, [assignedSchedule, currentStopIndex, toast]);
 
-    const handleCheckOut = async () => {
-        stopTracking();
-
-        if (!user?.uid) return;
-
-        const statusRef = ref(realtimeDb, `driverStatus/${user.uid}`);
-        await set(statusRef, {
-            isOnDuty: false,
-            checkedOutAt: Date.now(),
-            driverId: user.uid
-        });
-        setIsOnDuty(false);
-    };
-
-    const handleSignOut = async () => {
+    // Logout
+    const handleLogout = useCallback(async () => {
         if (isOnDuty) {
-            await handleCheckOut();
+            stopTracking();
+            await checkOut();
         }
         await signOut();
         navigate('/login');
-    };
+    }, [isOnDuty, stopTracking, checkOut, signOut, navigate]);
 
-    // Mark next stop as reached
-    const handleNextStop = () => {
-        if (assignedSchedule?.route?.stops && currentStopIndex < assignedSchedule.route.stops.length - 1) {
-            setCurrentStopIndex(prev => prev + 1);
-        }
-    };
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-            }
-        };
-    }, [watchId]);
+    // Loading state
+    if (scheduleLoading) {
+        return <div className="driver-app"><DriverSkeleton /></div>;
+    }
 
     const route = assignedSchedule?.route;
-    const stops = route?.stops || [];
-    const nextStop = stops[currentStopIndex];
+    const nextStop = route?.stops?.[currentStopIndex + 1];
+
+    // GPS quality for TopStatusBar
+    const getGpsQuality = () => {
+        if (!location?.accuracy) return null;
+        const accuracy = location.accuracy;
+        if (accuracy <= 10) return { level: 'excellent', label: '●●●●', accuracy };
+        if (accuracy <= 25) return { level: 'good', label: '●●●○', accuracy };
+        if (accuracy <= 50) return { level: 'fair', label: '●●○○', accuracy };
+        return { level: 'poor', label: '●○○○', accuracy };
+    };
+
+    // ETA calculation
+    const eta = location && nextStop
+        ? calculateETA(location, nextStop)
+        : null;
 
     return (
-        <div className="driver-view">
-            <header className="driver-header">
-                <div className="header-left">
-                    <span className="logo-icon">🚌</span>
-                    <h1>UniTrack Driver</h1>
-                </div>
-                <div className="header-right">
-                    {isOffline && <span className="offline-badge">Offline</span>}
-                    <Button variant="ghost" size="sm" onClick={handleSignOut}>
-                        Logout
-                    </Button>
-                </div>
-            </header>
+        <div className="driver-app">
+            <FullScreenMap
+                location={location}
+                route={route}
+                currentStopIndex={currentStopIndex}
+                isOnDuty={isOnDuty}
+                isLoading={powerLoading}
+                onToggleDuty={handlePowerToggle}
+            />
 
-            <main className="driver-content">
-                {/* Status Card */}
-                <Card className="status-card">
-                    <CardBody>
-                        <div className="status-indicator">
-                            <span className={`status-dot ${isOnDuty ? 'active' : 'inactive'}`} />
-                            <span>{isOnDuty ? 'On Duty' : 'Off Duty'}</span>
-                        </div>
-                        <h2>Welcome, {user?.name || 'Driver'}</h2>
-                    </CardBody>
-                </Card>
+            <TopStatusBar
+                isOnDuty={isOnDuty}
+                isPaused={isPaused}
+                isOffline={isOffline}
+                gpsQuality={getGpsQuality()}
+                queueCount={queueCount}
+                onLogout={handleLogout}
+            />
 
-                {/* Check In/Out Button */}
-                <div className="action-section">
-                    {!isOnDuty ? (
-                        <Button
-                            fullWidth
-                            className="check-in-btn"
-                            onClick={handleCheckIn}
-                        >
-                            🟢 Check In & Start Shift
-                        </Button>
-                    ) : (
-                        <Button
-                            fullWidth
-                            variant="danger"
-                            className="check-out-btn"
-                            onClick={handleCheckOut}
-                        >
-                            🔴 Check Out & End Shift
-                        </Button>
-                    )}
-                </div>
 
-                {/* Assigned Route */}
-                {assignedSchedule && (
-                    <Card className="route-card">
-                        <CardBody>
-                            <h3>🗺️ Today's Route</h3>
-                            {route ? (
-                                <>
-                                    <div className="route-name">{route.name}</div>
-                                    {route.description && <p className="route-desc">{route.description}</p>}
+            <BottomSheet defaultExpanded={false}>
+                <RouteInfoPanel
+                    route={route}
+                    shift={assignedSchedule?.shift}
+                    bus={assignedSchedule?.bus}
+                    isOnDuty={isOnDuty}
+                    isPaused={isPaused}
+                    currentStopIndex={currentStopIndex}
+                    eta={eta}
+                    gpsError={gpsError}
+                    onBreakToggle={handleBreakToggle}
+                    onNextStop={handleNextStop}
+                    breakLoading={breakLoading}
+                    hasSchedule={!!assignedSchedule}
+                />
+            </BottomSheet>
 
-                                    {/* Next Stop */}
-                                    {isOnDuty && nextStop && (
-                                        <div className="next-stop">
-                                            <div className="next-stop-label">Next Stop:</div>
-                                            <div className="next-stop-name">{nextStop.name}</div>
-                                            <Button size="sm" onClick={handleNextStop}>
-                                                ✓ Arrived at Stop
-                                            </Button>
-                                        </div>
-                                    )}
-
-                                    {/* Stops List */}
-                                    <div className="stops-progress">
-                                        {stops.map((stop, idx) => (
-                                            <div
-                                                key={stop.id || idx}
-                                                className={`stop-item ${idx < currentStopIndex ? 'completed' : ''} ${idx === currentStopIndex ? 'current' : ''}`}
-                                            >
-                                                <span className="stop-marker">{idx < currentStopIndex ? '✓' : idx + 1}</span>
-                                                <span className="stop-name">{stop.name}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
-                            ) : (
-                                <p className="text-muted">No route assigned for this schedule</p>
-                            )}
-                        </CardBody>
-                    </Card>
-                )}
-
-                {/* GPS Status */}
-                {isOnDuty && (
-                    <Card className="gps-card">
-                        <CardBody>
-                            <h3>📍 GPS Tracking</h3>
-                            <div className="gps-status">
-                                <span className={`tracking-indicator ${isTracking ? 'active' : ''}`} />
-                                <span>{isTracking ? 'Sharing Location' : 'Not Tracking'}</span>
-                                {offlineQueue.current.length > 0 && (
-                                    <span className="queue-badge">{offlineQueue.current.length} queued</span>
-                                )}
-                            </div>
-
-                            {location && (
-                                <div className="location-info">
-                                    <p>Lat: {location.lat.toFixed(6)}</p>
-                                    <p>Lng: {location.lng.toFixed(6)}</p>
-                                    {location.speed !== null && (
-                                        <p>Speed: {(location.speed * 3.6).toFixed(1)} km/h</p>
-                                    )}
-                                </div>
-                            )}
-
-                            {error && <p className="error-text">{error}</p>}
-                        </CardBody>
-                    </Card>
-                )}
-
-                {/* Quick Info */}
-                {!assignedSchedule && (
-                    <Card className="info-card">
-                        <CardBody>
-                            <h3>Today's Info</h3>
-                            <p className="text-muted">
-                                {isOnDuty
-                                    ? 'Your location is being shared with students in real-time.'
-                                    : 'No schedule assigned for today. Check in to start tracking.'}
-                            </p>
-                        </CardBody>
-                    </Card>
-                )}
-            </main>
+            <ConfirmDialog
+                isOpen={showOfflineConfirm}
+                title="Go Offline?"
+                message="You will stop tracking and students won't be able to see your location."
+                confirmText="Go Offline"
+                confirmVariant="danger"
+                onConfirm={handleConfirmOffline}
+                onCancel={() => setShowOfflineConfirm(false)}
+                loading={powerLoading}
+            />
         </div>
     );
 }

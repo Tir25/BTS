@@ -1,9 +1,10 @@
-import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui';
 import './AdminDashboard.css';
 
 // Admin sub-pages
+import DashboardHome from './DashboardHome';
 import DriversPage from './DriversPage';
 import BusesPage from './BusesPage';
 import RoutesPage from './RoutesPage';
@@ -13,7 +14,25 @@ import UsersPage from './UsersPage';
 import AnalyticsPage from './AnalyticsPage';
 
 /**
+ * NavItem Component
+ * Sidebar navigation link with active state highlighting
+ */
+function NavItem({ to, icon, label, end = false }) {
+    return (
+        <NavLink
+            to={to}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            end={end}
+        >
+            <span className="nav-icon">{icon}</span>
+            <span className="nav-label">{label}</span>
+        </NavLink>
+    );
+}
+
+/**
  * Admin Dashboard Layout with sidebar navigation
+ * Single responsibility: Layout structure and routing
  */
 export function AdminDashboard() {
     const { user, signOut } = useAuth();
@@ -72,38 +91,5 @@ export function AdminDashboard() {
     );
 }
 
-function NavItem({ to, icon, label, end = false }) {
-    return (
-        <Link to={to} className="nav-item" end={end ? '' : undefined}>
-            <span className="nav-icon">{icon}</span>
-            <span className="nav-label">{label}</span>
-        </Link>
-    );
-}
-
-function DashboardHome() {
-    return (
-        <div className="dashboard-home">
-            <h1>Admin Dashboard</h1>
-            <p className="text-muted">Welcome to UniTrack admin panel</p>
-
-            <div className="stats-grid">
-                <StatCard value="0" label="Active Buses" color="blue" />
-                <StatCard value="0" label="Drivers" color="green" />
-                <StatCard value="0" label="Routes" color="purple" />
-                <StatCard value="0" label="Users" color="orange" />
-            </div>
-        </div>
-    );
-}
-
-function StatCard({ value, label, color }) {
-    return (
-        <div className={`stat-card stat-${color}`}>
-            <span className="stat-value">{value}</span>
-            <span className="stat-label">{label}</span>
-        </div>
-    );
-}
-
 export default AdminDashboard;
+

@@ -1,0 +1,135 @@
+/* Top Status Bar - extracted from DriverView */
+
+.top-status-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1002;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, transparent 100%);
+}
+
+.status-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Online Indicator */
+.online-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 24px;
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.indicator-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #666;
+}
+
+.online-indicator.online .indicator-dot {
+    background: #00d26a;
+    box-shadow: 0 0 8px #00d26a;
+}
+
+.online-indicator.paused .indicator-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 8px #f59e0b;
+}
+
+.online-indicator.offline .indicator-dot {
+    background: #666;
+}
+
+.indicator-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.5px;
+}
+
+.network-badge {
+    font-size: 18px;
+}
+
+/* GPS Quality Indicator */
+.gps-quality {
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: rgba(30, 30, 30, 0.9);
+}
+
+.gps-quality.excellent {
+    color: #00d26a;
+}
+
+.gps-quality.good {
+    color: #4ade80;
+}
+
+.gps-quality.fair {
+    color: #f59e0b;
+}
+
+.gps-quality.poor {
+    color: #ef4444;
+}
+
+.queue-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: #4361ee;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.menu-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 12px;
+    background: rgba(30, 30, 30, 0.9);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s;
+}
+
+.menu-btn:hover {
+    background: rgba(50, 50, 50, 0.95);
+}
+
+.menu-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Safe area for iPhone notch */
+@supports (padding-top: env(safe-area-inset-top)) {
+    .top-status-bar {
+        padding-top: max(12px, env(safe-area-inset-top));
+    }
+}

@@ -1,0 +1,182 @@
+/* RouteInfoPanel - Bottom sheet content */
+
+.route-info-panel {
+    color: #fff;
+}
+
+/* Route Header */
+.route-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.route-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+}
+
+.shift-badge {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #8a8a8a;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* Bus Info */
+.bus-info {
+    color: #8a8a8a;
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+/* Progress Section */
+.progress-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00d26a, #4361ee);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.progress-text {
+    color: #8a8a8a;
+    font-size: 13px;
+    min-width: 60px;
+    text-align: right;
+}
+
+/* Stop Info */
+.stop-info {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+}
+
+.current-stop,
+.next-stop {
+    flex: 1;
+}
+
+.stop-label {
+    display: block;
+    font-size: 12px;
+    color: #8a8a8a;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.current-stop .stop-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #00d26a;
+}
+
+.next-stop .stop-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.stop-eta {
+    display: block;
+    font-size: 12px;
+    color: #4361ee;
+    margin-top: 4px;
+}
+
+/* Route Complete */
+.route-complete {
+    text-align: center;
+    padding: 24px;
+    font-size: 18px;
+    color: #00d26a;
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.break-btn {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+    border-radius: 12px !important;
+    padding: 14px !important;
+    font-weight: 600 !important;
+}
+
+.arrived-btn {
+    flex: 1;
+    background: linear-gradient(135deg, #00d26a, #00b85c) !important;
+    color: #fff !important;
+    border-radius: 12px !important;
+    padding: 14px !important;
+    font-weight: 600 !important;
+}
+
+.arrived-btn:disabled {
+    opacity: 0.5;
+}
+
+/* GPS Error */
+.gps-error {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(255, 68, 68, 0.15);
+    border: 1px solid rgba(255, 68, 68, 0.3);
+    border-radius: 10px;
+    color: #ff6b6b;
+    font-size: 13px;
+}
+
+/* No Schedule */
+.no-schedule-msg {
+    text-align: center;
+    padding: 24px 0;
+    color: #8a8a8a;
+}
+
+.no-schedule-msg .hint {
+    font-size: 13px;
+    margin-top: 8px;
+    opacity: 0.7;
+}
+
+/* Mobile optimizations */
+@media (max-width: 380px) {
+    .route-name {
+        font-size: 18px;
+    }
+
+    .stop-info {
+        flex-direction: column;
+        gap: 12px;
+    }
+}

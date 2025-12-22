@@ -22,10 +22,19 @@ L.Icon.Default.mergeOptions({
     shadowUrl: markerShadow,
 });
 
-// Custom bus icon
+// Custom bus icon (SVG for cross-platform consistency - FIX #8)
 const busIcon = new L.DivIcon({
-    className: 'bus-marker-icon',
-    html: '<div class="bus-marker">🚌</div>',
+    className: 'bus-marker-wrapper',
+    html: `<div class="bus-marker-icon">
+        <svg viewBox="0 0 40 40" width="40" height="40">
+            <circle cx="20" cy="20" r="18" fill="#4361ee" stroke="white" stroke-width="2"/>
+            <rect x="12" y="12" width="16" height="14" rx="2" fill="white"/>
+            <rect x="14" y="14" width="5" height="5" fill="#4361ee"/>
+            <rect x="21" y="14" width="5" height="5" fill="#4361ee"/>
+            <circle cx="14" cy="26" r="2.5" fill="#333"/>
+            <circle cx="26" cy="26" r="2.5" fill="#333"/>
+        </svg>
+    </div>`,
     iconSize: [40, 40],
     iconAnchor: [20, 20]
 });

@@ -1,6 +1,10 @@
 .user-form-modal {
     max-width: 500px;
     width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .user-form {

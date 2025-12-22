@@ -1,0 +1,139 @@
+/* Bottom Sheet - Simple Tap-to-toggle */
+
+.bottom-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+/* Collapsed: only show header + minimal content */
+.bottom-sheet.collapsed {
+    transform: translateY(calc(100% - 180px));
+}
+
+/* Expanded: show full content */
+.bottom-sheet.expanded {
+    transform: translateY(0);
+}
+
+/* Control Area - clickable */
+.sheet-control-area {
+    padding: 10px 20px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    transition: background 0.2s;
+}
+
+.sheet-control-area:hover .sheet-handle {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Arrow Button */
+.arrow-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.arrow-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.arrow-btn:active {
+    transform: scale(0.95);
+}
+
+.arrow-btn svg {
+    width: 20px;
+    height: 20px;
+    transition: transform 0.3s ease;
+}
+
+/* Subtle bounce animation on collapsed state */
+.bottom-sheet.collapsed .arrow-btn svg {
+    animation: bounceArrow 2s ease-in-out infinite;
+}
+
+@keyframes bounceArrow {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+/* Content area */
+.sheet-content {
+    padding: 0 16px 16px;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+/* Scrollbar styling */
+.sheet-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sheet-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sheet-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+/* Mobile safe area support */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .bottom-sheet {
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+}
+
+/* Mobile adjustments - larger touch target */
+@media (max-width: 480px) {
+    .bottom-sheet.collapsed {
+        transform: translateY(calc(100% - 160px));
+    }
+
+    .arrow-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    .arrow-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+}

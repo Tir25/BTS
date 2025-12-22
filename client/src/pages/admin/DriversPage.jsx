@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { driversService } from '@/services/database';
 import { Button, Card, CardBody, Input, useConfirm, useToast } from '@/components/ui';
+import { DriverCard } from '@/components/driver';
 import DriverForm from './DriverForm';
 import './DriversPage.css';
 
@@ -152,40 +153,6 @@ export function DriversPage() {
                 />
             )}
         </div>
-    );
-}
-
-function DriverCard({ driver, onEdit, onDelete }) {
-    return (
-        <Card className="driver-card" hoverable>
-            <CardBody>
-                <div className="driver-info">
-                    <div className="driver-avatar">
-                        {driver.name?.charAt(0) || '?'}
-                    </div>
-                    <div className="driver-details">
-                        <h4>{driver.name}</h4>
-                        <p className="text-muted">{driver.phone}</p>
-                        <p className="text-muted license">
-                            License: {driver.licenseNumber}
-                        </p>
-                    </div>
-                </div>
-                <div className="driver-status">
-                    <span className={`status-badge ${driver.status || 'inactive'}`}>
-                        {driver.status || 'Inactive'}
-                    </span>
-                </div>
-                <div className="driver-actions">
-                    <Button variant="ghost" size="sm" onClick={onEdit}>
-                        Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={onDelete}>
-                        Delete
-                    </Button>
-                </div>
-            </CardBody>
-        </Card>
     );
 }
 

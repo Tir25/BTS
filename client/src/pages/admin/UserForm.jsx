@@ -1,10 +1,11 @@
 /**
  * User Form Modal - Add/Edit individual users
- * Handles role-specific form fields
+ * Single responsibility: Compose user form UI
  */
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button, Input, Card, CardBody, CardHeader } from '@/components/ui';
-import { generateEmail, birthdayToPassword, validateUserData } from '@/services/userCreation';
+import { validateUserData } from '@/services/userCreation';
+import { CredentialsPreview, RoleFields } from '@/components/admin';
 import './UserForm.css';
 
 const ROLES = [
@@ -12,6 +13,15 @@ const ROLES = [
     { value: 'faculty', label: 'Faculty' },
     { value: 'driver', label: 'Driver' }
 ];
+
+/**
+ * Format date for input field
+ */
+function formatDateForInput(date) {
+    if (!date) return '';
+    const d = date instanceof Date ? date : new Date(date);
+    return d.toISOString().split('T')[0];
+}
 
 export function UserForm({ user, onSubmit, onClose }) {
     const isEditing = !!user;
@@ -26,19 +36,8 @@ export function UserForm({ user, onSubmit, onClose }) {
         licenseNumber: user?.licenseNumber || ''
     });
 
-    const [preview, setPreview] = useState({ email: '', password: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-
-    // Update preview when relevant fields change
-    useEffect(() => {
-        if (!isEditing && formData.birthday) {
-            // Pass name for faculty email generation
-            const email = generateEmail(formData.role, formData.rollNo, formData.email, formData.name);
-            const password = birthdayToPassword(new Date(formData.birthday));
-            setPreview({ email: email || '—', password: password || '—' });
-        }
-    }, [formData.role, formData.rollNo, formData.email, formData.name, formData.birthday, isEditing]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -50,7 +49,7 @@ export function UserForm({ user, onSubmit, onClose }) {
         e.preventDefault();
         setError('');
 
-        // Validate
+        // Validate for new users
         if (!isEditing) {
             const errors = validateUserData({
                 ...formData,
@@ -74,9 +73,6 @@ export function UserForm({ user, onSubmit, onClose }) {
             setLoading(false);
         }
     };
-
-    const isDriver = formData.role === 'driver';
-    const isFaculty = formData.role === 'faculty';
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -106,40 +102,14 @@ export function UserForm({ user, onSubmit, onClose }) {
                         </div>
 
                         {/* Role-specific fields */}
-                        {/* Students need Roll Number */}
-                        {formData.role === 'student' && (
-                            <Input
-                                label="Roll Number"
-                                name="rollNo"
-                                value={formData.rollNo}
-                                onChange={handleChange}
-                                placeholder="e.g., 24084231065"
-                                required={!isEditing}
-                                disabled={isEditing}
-                            />
-                        )}
+                        <RoleFields
+                            role={formData.role}
+                            formData={formData}
+                            onChange={handleChange}
+                            isEditing={isEditing}
+                        />
 
-                        {/* Faculty shows info - email is generated from name */}
-                        {isFaculty && !isEditing && (
-                            <div className="info-note">
-                                <small>📧 Email will be generated from name (e.g., sagarshrivastav@gnu.ac.in)</small>
-                            </div>
-                        )}
-
-                        {/* Drivers need email input */}
-                        {isDriver && (
-                            <Input
-                                label="Email (Gmail)"
-                                name="email"
-                                type="email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                placeholder="driver@gmail.com"
-                                required={!isEditing}
-                                disabled={isEditing}
-                            />
-                        )}
-
+                        {/* Common fields */}
                         <Input
                             label="Full Name"
                             name="name"
@@ -169,30 +139,15 @@ export function UserForm({ user, onSubmit, onClose }) {
                             placeholder="9876543210"
                         />
 
-                        {isDriver && (
-                            <Input
-                                label="License Number"
-                                name="licenseNumber"
-                                value={formData.licenseNumber}
-                                onChange={handleChange}
-                                placeholder="GJ01-12345"
-                                required={!isEditing}
-                            />
-                        )}
-
                         {/* Credentials Preview */}
-                        {!isEditing && formData.birthday && (
-                            <div className="credentials-preview">
-                                <h4>Generated Credentials</h4>
-                                <div className="credential-row">
-                                    <span className="credential-label">Email:</span>
-                                    <code>{preview.email}</code>
-                                </div>
-                                <div className="credential-row">
-                                    <span className="credential-label">Password:</span>
-                                    <code>{preview.password}</code>
-                                </div>
-                            </div>
+                        {!isEditing && (
+                            <CredentialsPreview
+                                role={formData.role}
+                                rollNo={formData.rollNo}
+                                email={formData.email}
+                                name={formData.name}
+                                birthday={formData.birthday}
+                            />
                         )}
 
                         <div className="form-actions">
@@ -208,12 +163,6 @@ export function UserForm({ user, onSubmit, onClose }) {
             </Card>
         </div>
     );
-}
-
-function formatDateForInput(date) {
-    if (!date) return '';
-    const d = date instanceof Date ? date : new Date(date);
-    return d.toISOString().split('T')[0];
 }
 
 export default UserForm;
