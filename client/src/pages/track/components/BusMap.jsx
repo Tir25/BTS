@@ -86,8 +86,9 @@ export function BusMap({
     const [mapControls, setMapControls] = useState({});
     const [busIcons, setBusIcons] = useState({});
 
-    // Get user's location
-    const { location: userLocation } = useUserLocation({ enabled: true });
+    // Get user's location (disabled for now to avoid confusion with bus marker)
+    // const { location: userLocation } = useUserLocation({ enabled: true });
+    const userLocation = null; // Disabled - uncomment above to enable
 
     // Create/update bus icons when headings or stale status changes
     useEffect(() => {
