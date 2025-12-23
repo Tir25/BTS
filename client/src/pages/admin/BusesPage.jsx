@@ -86,7 +86,8 @@ export function BusesPage() {
 
     const filteredBuses = buses.filter(bus =>
         bus.number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        bus.licensePlate?.toLowerCase().includes(searchQuery.toLowerCase())
+        bus.licensePlate?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(bus.busNo || '').includes(searchQuery)
     );
 
     if (loading) {

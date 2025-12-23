@@ -8,8 +8,8 @@ const SCREENS = [
         content: (
             <div className="mock-map">
                 <div className="mock-map-bg" />
-                <div className="mock-bus mock-bus-1">🚌</div>
-                <div className="mock-bus mock-bus-2">🚌</div>
+                <div className="mock-bus mock-bus-1"><img src="/icons/icon-192.png" alt="Bus" /></div>
+                <div className="mock-bus mock-bus-2"><img src="/icons/icon-192.png" alt="Bus" /></div>
                 <div className="mock-route" />
             </div>
         )

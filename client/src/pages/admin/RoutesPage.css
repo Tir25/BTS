@@ -48,6 +48,29 @@
     color: var(--color-text-muted);
 }
 
+.route-destination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.direction-badge {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+    background: rgba(67, 97, 238, 0.15);
+    color: var(--color-accent-primary);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+}
+
+.destination-name {
+    font-size: 0.75rem;
+    color: #ef4444;
+    font-weight: 500;
+}
+
 .route-status {
     margin-bottom: var(--space-md);
 }

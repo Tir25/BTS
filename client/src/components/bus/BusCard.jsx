@@ -10,10 +10,10 @@ export function BusCard({ bus, onEdit, onDelete }) {
             <CardBody>
                 <div className="driver-info">
                     <div className="driver-avatar" style={{ background: 'var(--gradient-success)' }}>
-                        🚌
+                        {bus.busNo ? `#${bus.busNo}` : '🚌'}
                     </div>
                     <div className="driver-details">
-                        <h4>{bus.number}</h4>
+                        <h4>{bus.number || `Bus ${bus.busNo}`}</h4>
                         <p className="text-muted">{bus.licensePlate}</p>
                         <p className="text-muted license">
                             Capacity: {bus.capacity} seats

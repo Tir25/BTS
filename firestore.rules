@@ -57,5 +57,24 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
+    
+    // Destinations collection - admin only write, all authenticated can read
+    match /destinations/{destinationId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Schedule Templates collection - admin only
+    match /scheduleTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Trip history collection - drivers can write their trips, admin can read all
+    match /tripHistory/{tripId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && hasRole('driver');
+      allow update, delete: if isAdmin();
+    }
   }
 }

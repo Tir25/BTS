@@ -1,0 +1,150 @@
+/* AddressSearch Component Styles */
+
+.address-search {
+    position: relative;
+    width: 100%;
+}
+
+.address-search-input-wrapper {
+    display: flex;
+    align-items: center;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 0 var(--space-sm);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.address-search-input-wrapper:focus-within {
+    border-color: var(--color-accent-primary);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+}
+
+.address-search-icon {
+    flex-shrink: 0;
+    margin-right: var(--space-xs);
+    font-size: 0.9rem;
+    opacity: 0.6;
+}
+
+.address-search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: var(--space-sm) 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    outline: none;
+}
+
+.address-search-input::placeholder {
+    color: var(--color-text-muted);
+}
+
+.address-search-spinner {
+    animation: spin 1s linear infinite;
+    font-size: 0.9rem;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.address-search-clear {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0 var(--space-xs);
+    line-height: 1;
+}
+
+.address-search-clear:hover {
+    color: var(--color-text-primary);
+}
+
+/* Results Dropdown */
+.address-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    list-style: none;
+    padding: var(--space-xs);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.address-search-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.address-search-item:hover,
+.address-search-item.selected {
+    background: rgba(67, 97, 238, 0.15);
+}
+
+.address-search-item-icon {
+    flex-shrink: 0;
+    font-size: 1rem;
+    margin-top: 2px;
+}
+
+.address-search-item-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.address-search-item-name {
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+}
+
+.address-search-item-address {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Scrollbar styling */
+.address-search-results::-webkit-scrollbar {
+    width: 6px;
+}
+
+.address-search-results::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.address-search-results::-webkit-scrollbar-thumb {
+    background: var(--glass-border);
+    border-radius: 3px;
+}
+
+.address-search-results::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-muted);
+}

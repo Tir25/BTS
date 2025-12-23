@@ -10,7 +10,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui';
+import { Button, LogoIcon } from '@/components/ui';
 
 // Custom hooks for data management
 import { useBusLocations } from './hooks/useBusLocations';
@@ -98,7 +98,7 @@ export function TrackingPage() {
             {/* Header */}
             <header className="tracking-header">
                 <div className="tracking-logo">
-                    <span className="logo-icon">🚌</span>
+                    <LogoIcon size="md" />
                     <span className="logo-text">UniTrack</span>
                 </div>
                 <div className="header-actions">
@@ -143,7 +143,7 @@ export function TrackingPage() {
                 {/* Empty State */}
                 {filteredBuses.length === 0 && (
                     <div className="empty-state">
-                        <span className="empty-icon">🚌</span>
+                        <LogoIcon size="xl" className="empty-icon" />
                         <p>
                             {showFavoritesOnly
                                 ? 'No active buses in your favorites'

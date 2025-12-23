@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRedirectPath } from '@/components/auth';
-import { Button, Input, Card, CardBody } from '@/components/ui';
+import { Button, Input, Card, CardBody, LogoIcon } from '@/components/ui';
 import './LoginPage.css';
 
 /**
@@ -49,7 +49,7 @@ export function LoginPage() {
             <div className="login-container">
                 {/* Logo */}
                 <Link to="/" className="login-logo">
-                    <span className="logo-icon">🚌</span>
+                    <LogoIcon size="lg" />
                     <span className="logo-text">UniTrack</span>
                 </Link>
 

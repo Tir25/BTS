@@ -1,0 +1,61 @@
+/* Features Section Styles */
+
+.features-section {
+    padding: var(--space-3xl) var(--space-lg);
+    position: relative;
+    z-index: 1;
+}
+
+.features-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.features-heading {
+    text-align: center;
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    margin-bottom: var(--space-2xl);
+    color: var(--color-text-primary);
+}
+
+.text-gradient {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-lg);
+}
+
+/* Desktop - 4 columns */
+@media (min-width: 768px) {
+    .features-heading {
+        font-size: var(--font-size-3xl);
+    }
+
+    .features-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Small mobile screens */
+@media (max-width: 480px) {
+    .features-section {
+        padding: var(--space-2xl) var(--space-md);
+    }
+
+    .features-heading {
+        font-size: var(--font-size-lg);
+        margin-bottom: var(--space-lg);
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-md);
+    }
+}

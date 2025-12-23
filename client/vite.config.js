@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt'],
+      includeAssets: ['icons/icon-192.png', 'robots.txt'],
       manifest: {
         name: 'UniTrack - University Bus Tracker',
         short_name: 'UniTrack',

@@ -7,6 +7,7 @@ import './DriverForm.css'; // Reuse driver form styles
  */
 export function BusForm({ bus, onSubmit, onClose }) {
     const [formData, setFormData] = useState({
+        busNo: bus?.busNo || '',
         number: bus?.number || '',
         licensePlate: bus?.licensePlate || '',
         capacity: bus?.capacity || 40,
@@ -23,11 +24,20 @@ export function BusForm({ bus, onSubmit, onClose }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        // Validate bus number
+        const busNoNum = parseInt(formData.busNo);
+        if (!busNoNum || busNoNum < 1 || busNoNum > 100) {
+            setError('Bus No must be between 1 and 100');
+            return;
+        }
+
         setLoading(true);
 
         try {
             await onSubmit({
                 ...formData,
+                busNo: busNoNum,
                 capacity: parseInt(formData.capacity) || 40
             });
         } catch (err) {
@@ -49,12 +59,23 @@ export function BusForm({ bus, onSubmit, onClose }) {
 
                     <form onSubmit={handleSubmit} className="driver-form">
                         <Input
-                            label="Bus Number"
+                            label="Bus No (1-100)"
+                            name="busNo"
+                            type="number"
+                            value={formData.busNo}
+                            onChange={handleChange}
+                            placeholder="e.g., 1, 2, 3..."
+                            min="1"
+                            max="100"
+                            required
+                        />
+
+                        <Input
+                            label="Bus Name/ID"
                             name="number"
                             value={formData.number}
                             onChange={handleChange}
-                            placeholder="e.g., BUS-001"
-                            required
+                            placeholder="e.g., Campus Express"
                         />
 
                         <Input

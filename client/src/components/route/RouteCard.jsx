@@ -1,10 +1,19 @@
 /**
  * RouteCard Component - Displays individual route information
- * Single responsibility: Render route card with actions
+ * Shows destination, direction, and stop count
  */
 import { Button, Card, CardBody } from '@/components/ui';
 
+// Direction labels
+const DIRECTION_LABELS = {
+    to_campus: { icon: '🏫', label: 'To Campus' },
+    from_campus: { icon: '🏠', label: 'From Campus' },
+    round_trip: { icon: '🔄', label: 'Round Trip' }
+};
+
 export function RouteCard({ route, onEdit, onDelete }) {
+    const directionInfo = DIRECTION_LABELS[route.direction] || DIRECTION_LABELS.to_campus;
+
     return (
         <Card className="route-card" hoverable>
             <CardBody>
@@ -19,6 +28,19 @@ export function RouteCard({ route, onEdit, onDelete }) {
                         </div>
                     </div>
                 </div>
+
+                {/* Direction & Destination Info */}
+                <div className="route-destination">
+                    <span className="direction-badge">
+                        {directionInfo.icon} {directionInfo.label}
+                    </span>
+                    {route.destinationName && (
+                        <span className="destination-name">
+                            🔴 {route.destinationName}
+                        </span>
+                    )}
+                </div>
+
                 <div className="route-status">
                     <span className={`status-badge ${route.isActive ? 'active' : 'inactive'}`}>
                         {route.isActive ? 'Active' : 'Inactive'}

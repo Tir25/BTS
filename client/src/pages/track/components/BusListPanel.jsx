@@ -3,7 +3,7 @@
  * Displays list of active buses with ETA information
  * Single responsibility: Bus list sidebar/panel UI
  */
-import { Card, CardBody } from '@/components/ui';
+import { Card, CardBody, LogoIcon } from '@/components/ui';
 import { formatSpeed, calculateETA } from '../utils/tracking';
 import { isStale } from '../hooks/useTimeAgo';
 import { TimeAgo } from './TimeAgo';
@@ -32,7 +32,7 @@ export function BusListPanel({
         <Card className="bus-list-panel">
             <CardBody>
                 <h3 className="panel-title">
-                    🚌 Active Buses
+                    <LogoIcon size="sm" /> Active Buses
                     <span className="count">{buses.length}</span>
                 </h3>
                 <div className="bus-list">
@@ -52,7 +52,7 @@ export function BusListPanel({
                                 tabIndex={0}
                             >
                                 <div className="bus-info">
-                                    <span className={`bus-icon ${isStale(bus.lastUpdated, 30000) ? 'stale' : ''}`}>🚌</span>
+                                    <LogoIcon size="sm" className={`bus-icon ${isStale(bus.lastUpdated, 30000) ? 'stale' : ''}`} />
                                     <div className="bus-details">
                                         <div className="bus-route">
                                             {bus.routeName || 'Unknown Route'}

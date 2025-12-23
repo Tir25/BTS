@@ -66,6 +66,56 @@
     gap: var(--space-md);
 }
 
+/* Direction Options */
+.direction-options {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.direction-option {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--glass-bg);
+    border: 2px solid transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.direction-option:hover {
+    background: var(--color-bg-tertiary);
+}
+
+.direction-option.selected {
+    background: rgba(67, 97, 238, 0.15);
+    border-color: var(--color-accent-primary);
+}
+
+.direction-option input {
+    display: none;
+}
+
+.direction-icon {
+    font-size: 1rem;
+}
+
+.direction-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.stops-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin: 0 0 var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    background: rgba(67, 97, 238, 0.1);
+    border-radius: var(--radius-sm);
+}
+
 .stops-section {
     margin-top: var(--space-md);
 }

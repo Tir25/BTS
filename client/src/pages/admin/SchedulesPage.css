@@ -2,6 +2,69 @@
     padding: var(--space-md);
 }
 
+/* Header Actions */
+.header-actions {
+    display: flex;
+    gap: var(--space-md);
+    align-items: center;
+}
+
+/* Tab Switcher */
+.tab-switcher {
+    display: flex;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 4px;
+}
+
+.tab-btn {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: var(--color-text-primary);
+}
+
+.tab-btn.active {
+    background: var(--color-accent-primary);
+    color: white;
+}
+
+/* Templates Section */
+.templates-section {
+    margin-top: var(--space-lg);
+}
+
+.templates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: var(--space-md);
+}
+
+.empty-state {
+    max-width: 500px;
+    margin: var(--space-xl) auto;
+    text-align: center;
+}
+
+.empty-state h3 {
+    margin-bottom: var(--space-sm);
+}
+
+.empty-state p {
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-lg);
+}
+
 .schedules-layout {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -13,7 +76,12 @@
     .schedules-layout {
         grid-template-columns: 1fr;
     }
+
+    .templates-grid {
+        grid-template-columns: 1fr;
+    }
 }
+
 
 /* Calendar Card */
 .calendar-card {

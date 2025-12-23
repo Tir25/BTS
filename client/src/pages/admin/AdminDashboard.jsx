@@ -1,6 +1,6 @@
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui';
+import { Button, LogoIcon } from '@/components/ui';
 import './AdminDashboard.css';
 
 // Admin sub-pages
@@ -8,6 +8,7 @@ import DashboardHome from './DashboardHome';
 import DriversPage from './DriversPage';
 import BusesPage from './BusesPage';
 import RoutesPage from './RoutesPage';
+import DestinationsPage from './DestinationsPage';
 import ShiftsPage from './ShiftsPage';
 import SchedulesPage from './SchedulesPage';
 import UsersPage from './UsersPage';
@@ -48,7 +49,7 @@ export function AdminDashboard() {
             {/* Sidebar */}
             <aside className="admin-sidebar">
                 <div className="sidebar-header">
-                    <span className="logo-icon">🚌</span>
+                    <LogoIcon size="md" />
                     <span className="logo-text">UniTrack</span>
                 </div>
 
@@ -58,6 +59,7 @@ export function AdminDashboard() {
                     <NavItem to="/admin/drivers" icon="👤" label="Drivers" />
                     <NavItem to="/admin/buses" icon="🚌" label="Buses" />
                     <NavItem to="/admin/routes" icon="🗺️" label="Routes" />
+                    <NavItem to="/admin/destinations" icon="📍" label="Destinations" />
                     <NavItem to="/admin/shifts" icon="⏰" label="Shifts" />
                     <NavItem to="/admin/schedules" icon="📅" label="Schedules" />
                     <NavItem to="/admin/users" icon="👥" label="Users" />
@@ -82,6 +84,7 @@ export function AdminDashboard() {
                     <Route path="drivers/*" element={<DriversPage />} />
                     <Route path="buses/*" element={<BusesPage />} />
                     <Route path="routes/*" element={<RoutesPage />} />
+                    <Route path="destinations/*" element={<DestinationsPage />} />
                     <Route path="shifts/*" element={<ShiftsPage />} />
                     <Route path="schedules/*" element={<SchedulesPage />} />
                     <Route path="users/*" element={<UsersPage />} />

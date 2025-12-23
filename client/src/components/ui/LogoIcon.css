@@ -1,0 +1,27 @@
+/* LogoIcon Styles */
+
+.logo-icon-img {
+    display: inline-block;
+    object-fit: contain;
+}
+
+/* Size variants */
+.logo-icon-sm {
+    width: 20px;
+    height: 20px;
+}
+
+.logo-icon-md {
+    width: 32px;
+    height: 32px;
+}
+
+.logo-icon-lg {
+    width: 48px;
+    height: 48px;
+}
+
+.logo-icon-xl {
+    width: 64px;
+    height: 64px;
+}

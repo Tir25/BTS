@@ -1,0 +1,122 @@
+/* Animated Background - Floating Gradient Blobs */
+
+.animated-bg {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.4;
+    will-change: transform;
+}
+
+/* Primary blob - blue/purple */
+.blob-1 {
+    width: 400px;
+    height: 400px;
+    background: linear-gradient(135deg, #4361ee 0%, #7c3aed 100%);
+    top: -150px;
+    right: -100px;
+    animation: float-1 20s ease-in-out infinite;
+}
+
+/* Secondary blob - cyan/blue */
+.blob-2 {
+    width: 350px;
+    height: 350px;
+    background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+    bottom: 20%;
+    left: -100px;
+    animation: float-2 25s ease-in-out infinite;
+}
+
+/* Accent blob - purple/pink */
+.blob-3 {
+    width: 300px;
+    height: 300px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    bottom: -100px;
+    right: 20%;
+    animation: float-3 18s ease-in-out infinite;
+}
+
+/* Floating animations */
+@keyframes float-1 {
+
+    0%,
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
+
+    33% {
+        transform: translate(-30px, 20px) scale(1.05);
+    }
+
+    66% {
+        transform: translate(20px, -30px) scale(0.95);
+    }
+}
+
+@keyframes float-2 {
+
+    0%,
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
+
+    33% {
+        transform: translate(40px, -20px) scale(1.1);
+    }
+
+    66% {
+        transform: translate(-20px, 40px) scale(0.9);
+    }
+}
+
+@keyframes float-3 {
+
+    0%,
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
+
+    50% {
+        transform: translate(-30px, -30px) scale(1.05);
+    }
+}
+
+/* Mobile - smaller blobs for better performance */
+@media (max-width: 480px) {
+    .blob {
+        filter: blur(60px);
+        opacity: 0.3;
+    }
+
+    .blob-1 {
+        width: 200px;
+        height: 200px;
+    }
+
+    .blob-2 {
+        width: 180px;
+        height: 180px;
+    }
+
+    .blob-3 {
+        width: 150px;
+        height: 150px;
+    }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    .blob {
+        animation: none;
+    }
+}

@@ -143,5 +143,14 @@ export const schedulesService = {
     getById: (id) => getById('schedules', id),
     create: (data) => create('schedules', data),
     update: (id, data) => update('schedules', id, data),
-    delete: (id) => remove('schedules', id)
+    delete: (id) => remove('schedules', id),
+    // Bulk create schedules (for templates)
+    bulkCreate: async (entries) => {
+        const results = [];
+        for (const entry of entries) {
+            const created = await create('schedules', entry);
+            results.push(created);
+        }
+        return results;
+    }
 };

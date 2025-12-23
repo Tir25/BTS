@@ -1,0 +1,69 @@
+/* Landing Header Styles */
+
+.landing-header {
+    position: relative;
+    z-index: 10;
+    padding: var(--space-md) var(--space-lg);
+}
+
+.header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.landing-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    text-decoration: none;
+}
+
+.logo-text {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.header-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.nav-link {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+    color: var(--color-text-primary);
+}
+
+/* Small mobile screens */
+@media (max-width: 480px) {
+    .landing-header {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .logo-text {
+        font-size: var(--font-size-lg);
+    }
+
+    .header-nav {
+        gap: var(--space-sm);
+    }
+
+    .nav-link {
+        display: none;
+        /* Hide on very small screens, show only login */
+    }
+}

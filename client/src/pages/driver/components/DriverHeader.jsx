@@ -3,13 +3,13 @@
  * Header with logo, offline badge, and logout button
  * Single responsibility: Display driver app header
  */
-import { Button } from '@/components/ui';
+import { Button, LogoIcon } from '@/components/ui';
 
 export function DriverHeader({ isOffline, onLogout }) {
     return (
         <header className="driver-header">
             <div className="header-left">
-                <span className="logo-icon">🚌</span>
+                <LogoIcon size="md" />
                 <h1>UniTrack Driver</h1>
             </div>
             <div className="header-right">
