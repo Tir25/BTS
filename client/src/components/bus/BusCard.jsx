@@ -1,39 +1,50 @@
 /**
  * BusCard Component - Displays individual bus information
- * Single responsibility: Render bus card with actions
+ * Enhanced mobile-friendly design with gradient header and styled actions
  */
-import { Button, Card, CardBody } from '@/components/ui';
-import { Bus } from 'lucide-react';
+import { Bus, Users, Edit, Trash2 } from 'lucide-react';
+import './BusCard.css';
 
 export function BusCard({ bus, onEdit, onDelete }) {
+    const statusClass = bus.status?.toLowerCase() || 'inactive';
+
     return (
-        <Card className="driver-card" hoverable>
-            <CardBody>
-                <div className="driver-info">
-                    <div className="driver-avatar" style={{ background: 'var(--gradient-success)' }}>
-                        {bus.busNo ? `#${bus.busNo}` : <Bus size={24} />}
-                    </div>
-                    <div className="driver-details">
-                        <h4>{bus.number || `Bus ${bus.busNo}`}</h4>
-                        <p className="text-muted">{bus.licensePlate}</p>
-                        <p className="text-muted license">
-                            Capacity: {bus.capacity} seats
-                        </p>
-                    </div>
+        <div className="bus-card">
+            {/* Header with gradient based on status */}
+            <div className={`bus-card-header ${statusClass}`}>
+                <span className="bus-number-badge">
+                    {bus.busNo ? `#${bus.busNo}` : <Bus size={16} />}
+                </span>
+                <span className="bus-status-badge">
+                    {bus.status || 'Inactive'}
+                </span>
+            </div>
+
+            {/* Card Body */}
+            <div className="bus-card-body">
+                <h4 className="bus-card-title">
+                    <Bus size={18} />
+                    {bus.number || `Bus ${bus.busNo}`}
+                </h4>
+                <p className="bus-card-plate">{bus.licensePlate}</p>
+
+                <div className="bus-info-row">
+                    <Users size={16} />
+                    <span>Capacity: {bus.capacity} seats</span>
                 </div>
-                <div className="driver-status">
-                    <span className={`status-badge ${bus.status || 'inactive'}`}>
-                        {bus.status || 'Inactive'}
-                    </span>
+
+                {/* Action Buttons */}
+                <div className="bus-card-actions">
+                    <button className="btn btn-edit" onClick={onEdit}>
+                        <Edit size={14} /> Edit
+                    </button>
+                    <button className="btn btn-delete" onClick={onDelete}>
+                        <Trash2 size={14} /> Delete
+                    </button>
                 </div>
-                <div className="driver-actions">
-                    <Button variant="ghost" size="sm" onClick={onEdit}>Edit</Button>
-                    <Button variant="ghost" size="sm" onClick={onDelete}>Delete</Button>
-                </div>
-            </CardBody>
-        </Card>
+            </div>
+        </div>
     );
 }
 
 export default BusCard;
-

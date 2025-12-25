@@ -1,0 +1,30 @@
+{
+    "project_info": {
+        "project_number": "792306737684",
+        "firebase_url": "https://university-bus-tracker-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+        "project_id": "university-bus-tracker-app",
+        "storage_bucket": "university-bus-tracker-app.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:792306737684:android:78a015cd3ad2b8c62bbd01",
+                "android_client_info": {
+                    "package_name": "com.unitrack.app"
+                }
+            },
+            "oauth_client": [],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyClNtEWGlTM3H8nxqlS3s_S5z6UxJRLtsU"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": []
+                }
+            }
+        }
+    ],
+    "configuration_version": "1"
+}

@@ -1,0 +1,129 @@
+/* BusCard Component Styles */
+.bus-card {
+    background: var(--color-bg-secondary);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bus-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Header with gradient and bus number */
+.bus-card-header {
+    background: var(--gradient-primary);
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bus-card-header.active {
+    background: var(--gradient-success);
+}
+
+.bus-card-header.inactive {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+}
+
+.bus-number-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: white;
+}
+
+.bus-status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: capitalize;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+/* Card Body */
+.bus-card-body {
+    padding: 1rem;
+}
+
+.bus-card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 0.25rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.bus-card-title svg {
+    color: var(--color-accent-primary);
+}
+
+.bus-card-plate {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin: 0 0 0.75rem 0;
+    font-family: monospace;
+}
+
+/* Info Row */
+.bus-info-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--color-border);
+}
+
+.bus-info-row svg {
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+.bus-info-row span {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+}
+
+/* Action Buttons */
+.bus-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.bus-card-actions .btn {
+    flex: 1;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 8px;
+}
+
+.bus-card-actions .btn-edit {
+    background: var(--color-accent-primary);
+    color: white;
+    border: none;
+}
+
+.bus-card-actions .btn-edit:hover {
+    background: var(--color-accent-primary-hover);
+}
+
+.bus-card-actions .btn-delete {
+    background: transparent;
+    color: var(--color-accent-danger);
+    border: 1px solid var(--color-accent-danger);
+}
+
+.bus-card-actions .btn-delete:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
