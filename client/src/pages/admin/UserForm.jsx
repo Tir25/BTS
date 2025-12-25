@@ -33,7 +33,8 @@ export function UserForm({ user, onSubmit, onClose }) {
         name: user?.name || '',
         birthday: user?.birthday ? formatDateForInput(user.birthday) : '',
         phone: user?.phone || '',
-        licenseNumber: user?.licenseNumber || ''
+        licenseNumber: user?.licenseNumber || '',
+        status: user?.status || 'active'
     });
 
     const [loading, setLoading] = useState(false);
@@ -148,6 +149,22 @@ export function UserForm({ user, onSubmit, onClose }) {
                                 name={formData.name}
                                 birthday={formData.birthday}
                             />
+                        )}
+
+                        {/* Status toggle for drivers (editing only) */}
+                        {isEditing && formData.role === 'driver' && (
+                            <div className="input-group">
+                                <label className="input-label">Status</label>
+                                <select
+                                    name="status"
+                                    value={formData.status}
+                                    onChange={handleChange}
+                                    className="input"
+                                >
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
                         )}
 
                         <div className="form-actions">

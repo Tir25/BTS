@@ -77,6 +77,11 @@
     font-weight: 500;
 }
 
+/* Hide mobile logout on desktop */
+.mobile-logout {
+    display: none;
+}
+
 .sidebar-footer {
     padding: var(--space-md);
     border-top: 1px solid var(--glass-border);
@@ -223,6 +228,19 @@
     .nav-item.active {
         background: rgba(67, 97, 238, 0.2);
         border-radius: var(--radius-sm);
+    }
+
+    /* Mobile logout button */
+    .mobile-logout {
+        display: flex;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--color-accent-danger);
+    }
+
+    .mobile-logout:hover {
+        background: rgba(239, 68, 68, 0.2);
     }
 
     .sidebar-footer {

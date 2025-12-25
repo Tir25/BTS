@@ -4,20 +4,19 @@ import { Button, LogoIcon } from '@/components/ui';
 import {
     LayoutDashboard,
     TrendingUp,
-    User,
     Bus,
     Map,
     MapPin,
     Clock,
     Calendar,
     Users,
-    LogOut
+    LogOut,
+    User
 } from 'lucide-react';
 import './AdminDashboard.css';
 
 // Admin sub-pages
 import DashboardHome from './DashboardHome';
-import DriversPage from './DriversPage';
 import BusesPage from './BusesPage';
 import RoutesPage from './RoutesPage';
 import DestinationsPage from './DestinationsPage';
@@ -68,13 +67,18 @@ export function AdminDashboard() {
                 <nav className="sidebar-nav">
                     <NavItem to="/admin" icon={LayoutDashboard} label="Dashboard" end />
                     <NavItem to="/admin/analytics" icon={TrendingUp} label="Analytics" />
-                    <NavItem to="/admin/drivers" icon={User} label="Drivers" />
                     <NavItem to="/admin/buses" icon={Bus} label="Buses" />
                     <NavItem to="/admin/routes" icon={Map} label="Routes" />
                     <NavItem to="/admin/destinations" icon={MapPin} label="Stops" />
                     <NavItem to="/admin/shifts" icon={Clock} label="Shifts" />
                     <NavItem to="/admin/schedules" icon={Calendar} label="Schedules" />
                     <NavItem to="/admin/users" icon={Users} label="Users" />
+
+                    {/* Mobile-only logout button */}
+                    <button className="nav-item mobile-logout" onClick={handleSignOut}>
+                        <span className="nav-icon"><LogOut size={20} /></span>
+                        <span className="nav-label">Logout</span>
+                    </button>
                 </nav>
 
                 <div className="sidebar-footer">
@@ -93,7 +97,6 @@ export function AdminDashboard() {
                 <Routes>
                     <Route index element={<DashboardHome />} />
                     <Route path="analytics" element={<AnalyticsPage />} />
-                    <Route path="drivers/*" element={<DriversPage />} />
                     <Route path="buses/*" element={<BusesPage />} />
                     <Route path="routes/*" element={<RoutesPage />} />
                     <Route path="destinations/*" element={<DestinationsPage />} />
@@ -107,4 +110,3 @@ export function AdminDashboard() {
 }
 
 export default AdminDashboard;
-
