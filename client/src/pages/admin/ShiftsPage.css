@@ -31,3 +31,20 @@
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1rem;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+    .shifts-page {
+        padding: 1rem;
+    }
+
+    .shifts-page .page-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    .shifts-grid {
+        grid-template-columns: 1fr;
+    }
+}

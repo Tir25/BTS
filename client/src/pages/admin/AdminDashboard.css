@@ -159,28 +159,102 @@
     color: var(--color-accent-warning);
 }
 
-/* Responsive */
+/* Responsive - Mobile Bottom Navigation */
 @media (max-width: 768px) {
+    .admin-layout {
+        flex-direction: column;
+    }
+
     .admin-sidebar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
         width: 100%;
         height: auto;
-        position: relative;
         border-right: none;
-        border-bottom: 1px solid var(--glass-border);
+        border-top: 1px solid var(--glass-border);
+        z-index: var(--z-sticky);
+        background: var(--color-bg-secondary);
+    }
+
+    .sidebar-header {
+        display: none;
     }
 
     .sidebar-nav {
         flex-direction: row;
+        justify-content: flex-start;
+        padding: var(--space-xs);
+        gap: var(--space-xs);
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .sidebar-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-item {
+        flex-direction: column;
+        align-items: center;
         padding: var(--space-sm);
+        gap: 4px;
+        min-width: 56px;
+        flex-shrink: 0;
+    }
+
+    .nav-icon {
+        font-size: 1.25rem;
     }
 
     .nav-label {
+        display: block;
+        font-size: 0.55rem;
+        text-align: center;
+        white-space: nowrap;
+        max-width: 56px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .nav-item.active {
+        background: rgba(67, 97, 238, 0.2);
+        border-radius: var(--radius-sm);
+    }
+
+    .sidebar-footer {
         display: none;
     }
 
     .admin-content {
         margin-left: 0;
+        margin-bottom: 80px;
+        padding: var(--space-md);
+        padding-bottom: var(--space-xl);
+        min-height: calc(100vh - 80px);
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--space-sm);
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-card {
+        padding: var(--space-md);
+    }
+
+    .stat-value {
+        font-size: var(--font-size-2xl);
     }
 }
 

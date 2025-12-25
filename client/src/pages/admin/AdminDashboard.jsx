@@ -1,6 +1,18 @@
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button, LogoIcon } from '@/components/ui';
+import {
+    LayoutDashboard,
+    TrendingUp,
+    User,
+    Bus,
+    Map,
+    MapPin,
+    Clock,
+    Calendar,
+    Users,
+    LogOut
+} from 'lucide-react';
 import './AdminDashboard.css';
 
 // Admin sub-pages
@@ -18,14 +30,14 @@ import AnalyticsPage from './AnalyticsPage';
  * NavItem Component
  * Sidebar navigation link with active state highlighting
  */
-function NavItem({ to, icon, label, end = false }) {
+function NavItem({ to, icon: Icon, label, end = false }) {
     return (
         <NavLink
             to={to}
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             end={end}
         >
-            <span className="nav-icon">{icon}</span>
+            <span className="nav-icon"><Icon size={20} /></span>
             <span className="nav-label">{label}</span>
         </NavLink>
     );
@@ -54,24 +66,24 @@ export function AdminDashboard() {
                 </div>
 
                 <nav className="sidebar-nav">
-                    <NavItem to="/admin" icon="📊" label="Dashboard" end />
-                    <NavItem to="/admin/analytics" icon="📈" label="Analytics" />
-                    <NavItem to="/admin/drivers" icon="👤" label="Drivers" />
-                    <NavItem to="/admin/buses" icon="🚌" label="Buses" />
-                    <NavItem to="/admin/routes" icon="🗺️" label="Routes" />
-                    <NavItem to="/admin/destinations" icon="📍" label="Destinations" />
-                    <NavItem to="/admin/shifts" icon="⏰" label="Shifts" />
-                    <NavItem to="/admin/schedules" icon="📅" label="Schedules" />
-                    <NavItem to="/admin/users" icon="👥" label="Users" />
+                    <NavItem to="/admin" icon={LayoutDashboard} label="Dashboard" end />
+                    <NavItem to="/admin/analytics" icon={TrendingUp} label="Analytics" />
+                    <NavItem to="/admin/drivers" icon={User} label="Drivers" />
+                    <NavItem to="/admin/buses" icon={Bus} label="Buses" />
+                    <NavItem to="/admin/routes" icon={Map} label="Routes" />
+                    <NavItem to="/admin/destinations" icon={MapPin} label="Stops" />
+                    <NavItem to="/admin/shifts" icon={Clock} label="Shifts" />
+                    <NavItem to="/admin/schedules" icon={Calendar} label="Schedules" />
+                    <NavItem to="/admin/users" icon={Users} label="Users" />
                 </nav>
 
                 <div className="sidebar-footer">
                     <div className="user-info">
-                        <span className="user-avatar">👤</span>
+                        <span className="user-avatar"><User size={18} /></span>
                         <span className="user-name">{user?.name || 'Admin'}</span>
                     </div>
                     <Button variant="ghost" size="sm" onClick={handleSignOut}>
-                        Logout
+                        <LogOut size={16} /> Logout
                     </Button>
                 </div>
             </aside>

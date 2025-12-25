@@ -62,5 +62,26 @@
     justify-content: center;
     align-items: center;
     min-height: 200px;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+    .buses-page {
+        padding: 1rem;
+    }
+
+    .buses-page .page-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    .buses-page .search-bar {
+        max-width: 100%;
+    }
+
+    .buses-page .buses-grid {
+        grid-template-columns: 1fr;
+    }
 }

@@ -127,3 +127,32 @@
     font-size: var(--font-size-lg);
     cursor: pointer;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+    .drivers-page {
+        gap: var(--space-md);
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .search-bar {
+        max-width: 100%;
+    }
+
+    .drivers-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .driver-actions {
+        flex-wrap: wrap;
+    }
+
+    .driver-actions button {
+        flex: 1;
+        min-width: 45%;
+    }
+}
