@@ -6,6 +6,7 @@
 import { Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useEffect } from 'react';
+import { MapPin } from 'lucide-react';
 import './UserLocationMarker.css';
 
 // Create user location icon
@@ -64,7 +65,7 @@ export function UserLocationMarker({
             >
                 <Popup>
                     <div className="user-location-popup">
-                        <strong>📍 Your Location</strong>
+                        <strong><MapPin size={14} /> Your Location</strong>
                         {location.accuracy && (
                             <p>Accuracy: ±{Math.round(location.accuracy)}m</p>
                         )}

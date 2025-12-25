@@ -7,10 +7,12 @@ import { Button, Card, CardBody, useConfirm, useToast } from '@/components/ui';
 import { useScheduleData } from '@/hooks/useScheduleData';
 import {
     Calendar, DaySchedules, ScheduleForm,
-    TemplateCard, TemplateForm, GenerateSchedulesModal
+    TemplateCard, TemplateForm, GenerateSchedulesModal,
+    SetupRequired
 } from '@/components/schedule';
 import { scheduleTemplatesService } from '@/services/scheduleTemplates';
 import { schedulesService } from '@/services/database';
+import { CalendarDays, ClipboardList } from 'lucide-react';
 import './SchedulesPage.css';
 
 export function SchedulesPage() {
@@ -53,9 +55,17 @@ export function SchedulesPage() {
         loadTemplates();
     }, [loadTemplates]);
 
+    // Helper to format date as YYYY-MM-DD in local timezone
+    const formatLocalDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     // Filter schedules for selected date
     const dateSchedules = useMemo(() => {
-        const dateStr = selectedDate.toISOString().split('T')[0];
+        const dateStr = formatLocalDate(selectedDate);
         return schedules.filter(s => s.date === dateStr);
     }, [schedules, selectedDate]);
 
@@ -168,7 +178,7 @@ export function SchedulesPage() {
     return (
         <div className="schedules-page">
             <header className="page-header">
-                <h2>📅 Schedules</h2>
+                <h2><CalendarDays size={24} /> Schedules</h2>
                 <div className="header-actions">
                     <div className="tab-switcher">
                         <button
@@ -221,7 +231,7 @@ export function SchedulesPage() {
                     {templates.length === 0 ? (
                         <Card className="empty-state">
                             <CardBody>
-                                <h3>📋 No Templates Yet</h3>
+                                <h3><ClipboardList size={20} /> No Templates Yet</h3>
                                 <p>Create recurring templates to quickly generate schedules for the week.</p>
                                 <Button onClick={() => setShowTemplateForm(true)}>
                                     Create Your First Template
@@ -292,24 +302,5 @@ export function SchedulesPage() {
     );
 }
 
-// Setup Required Component
-function SetupRequired({ drivers, buses, shifts }) {
-    return (
-        <Card className="setup-required">
-            <CardBody>
-                <h3>📋 Setup Required</h3>
-                <p>Before creating schedules, you need to add:</p>
-                <ul className="setup-list">
-                    {drivers.length === 0 && <li>✗ At least one driver</li>}
-                    {buses.length === 0 && <li>✗ At least one bus</li>}
-                    {shifts.length === 0 && <li>✗ At least one shift</li>}
-                    {drivers.length > 0 && <li className="done">✓ Drivers ({drivers.length})</li>}
-                    {buses.length > 0 && <li className="done">✓ Buses ({buses.length})</li>}
-                    {shifts.length > 0 && <li className="done">✓ Shifts ({shifts.length})</li>}
-                </ul>
-            </CardBody>
-        </Card>
-    );
-}
-
 export default SchedulesPage;
+

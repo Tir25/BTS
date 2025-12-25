@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { Button, Card, CardBody, Input, useConfirm } from '@/components/ui';
+import { AlertTriangle } from 'lucide-react';
 import './ScheduleForm.css';
 
 // Helper to format date as YYYY-MM-DD in local timezone (avoids UTC offset issues)
@@ -167,7 +168,7 @@ export function ScheduleForm({
                         {conflicts.length > 0 && (
                             <div className="conflict-warnings">
                                 {conflicts.map((c, i) => (
-                                    <div key={i} className="conflict-item">⚠️ {c.message}</div>
+                                    <div key={i} className="conflict-item"><AlertTriangle size={14} /> {c.message}</div>
                                 ))}
                             </div>
                         )}

@@ -7,13 +7,14 @@ import { useState, useCallback, useEffect } from 'react';
 import { Button, Input, Card, CardBody, CardHeader } from '@/components/ui';
 import { RouteMap, StopsList, DestinationSelector, AddressSearch } from '@/components/route';
 import { destinationsService } from '@/services/destinations';
+import { School, Home, RefreshCw, GraduationCap } from 'lucide-react';
 import './RouteBuilder.css';
 
 // Route direction types
 const DIRECTIONS = [
-    { value: 'to_campus', label: 'To Campus', icon: '🏫' },
-    { value: 'from_campus', label: 'From Campus', icon: '🏠' },
-    { value: 'round_trip', label: 'Round Trip', icon: '🔄' }
+    { value: 'to_campus', label: 'To Campus', Icon: School },
+    { value: 'from_campus', label: 'From Campus', Icon: Home },
+    { value: 'round_trip', label: 'Round Trip', Icon: RefreshCw }
 ];
 
 export function RouteBuilder({ route, onSave, onCancel }) {
@@ -227,7 +228,7 @@ export function RouteBuilder({ route, onSave, onCancel }) {
                                                 checked={direction === dir.value}
                                                 onChange={(e) => setDirection(e.target.value)}
                                             />
-                                            <span className="direction-icon">{dir.icon}</span>
+                                            <span className="direction-icon"><dir.Icon size={16} /></span>
                                             <span className="direction-label">{dir.label}</span>
                                         </label>
                                     ))}
@@ -262,10 +263,10 @@ export function RouteBuilder({ route, onSave, onCancel }) {
                                 </h4>
                                 <p className="stops-hint">
                                     {direction === 'to_campus'
-                                        ? '🎓 Destination will be added as final stop'
+                                        ? <><GraduationCap size={14} /> Destination will be added as final stop</>
                                         : direction === 'from_campus'
-                                            ? '🎓 Destination will be the starting point'
-                                            : '🔄 Round trip: starts and ends at stops'}
+                                            ? <><GraduationCap size={14} /> Destination will be the starting point</>
+                                            : <><RefreshCw size={14} /> Round trip: starts and ends at stops</>}
                                 </p>
                                 <StopsList
                                     stops={stops}

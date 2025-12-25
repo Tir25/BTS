@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { Button, Input, Card, CardBody, CardHeader } from '@/components/ui';
 import { DESTINATION_TYPES, DEFAULT_DESTINATION } from '@/services/destinations';
+import { MapPin, MousePointer2 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 
 // Fix Leaflet marker icon
@@ -47,7 +48,7 @@ export function DestinationForm({ destination, onSubmit, onClose }) {
         lng: destination?.lng || DEFAULT_DESTINATION.lng,
         type: destination?.type || 'custom',
         color: destination?.color || '#ef4444',
-        icon: destination?.icon || '📍',
+        icon: destination?.icon || 'pin',
         isDefault: destination?.isDefault || false,
         isActive: destination?.isActive ?? true
     });
@@ -76,7 +77,7 @@ export function DestinationForm({ destination, onSubmit, onClose }) {
         setFormData(prev => ({
             ...prev,
             type,
-            icon: typeInfo?.icon || '📍'
+            icon: typeInfo?.icon || 'pin'
         }));
     };
 
@@ -131,7 +132,7 @@ export function DestinationForm({ destination, onSubmit, onClose }) {
                                 <Marker position={[formData.lat, formData.lng]} icon={redIcon} />
                             </MapContainer>
                         </div>
-                        <p className="map-picker-hint">🖱️ Click on the map to set destination location</p>
+                        <p className="map-picker-hint"><MousePointer2 size={14} /> Click on the map to set destination location</p>
 
                         <div className="destination-form-grid">
                             <Input

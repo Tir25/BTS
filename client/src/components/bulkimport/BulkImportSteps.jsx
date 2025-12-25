@@ -3,6 +3,7 @@
  * Modular step components for the bulk import wizard
  */
 import { Button } from '@/components/ui';
+import { FolderOpen, Download, Check, X } from 'lucide-react';
 
 /**
  * Step 1: File Upload
@@ -11,7 +12,7 @@ export function UploadStep({ onFileChange, onDownloadTemplate }) {
     return (
         <div className="upload-step">
             <div className="upload-area">
-                <span className="upload-icon">📁</span>
+                <span className="upload-icon"><FolderOpen size={32} /></span>
                 <p>Drop an Excel or CSV file here, or click to browse</p>
                 <input
                     type="file"
@@ -22,7 +23,7 @@ export function UploadStep({ onFileChange, onDownloadTemplate }) {
             </div>
             <div className="upload-actions">
                 <Button variant="secondary" onClick={onDownloadTemplate}>
-                    📥 Download Template
+                    <Download size={16} /> Download Template
                 </Button>
             </div>
             <div className="upload-info">
@@ -40,8 +41,8 @@ export function PreviewStep({ data, validCount, invalidCount, onBack, onImport }
     return (
         <div className="preview-step">
             <div className="preview-stats">
-                <span className="stat-valid">✓ {validCount} valid</span>
-                <span className="stat-invalid">✗ {invalidCount} errors</span>
+                <span className="stat-valid"><Check size={14} /> {validCount} valid</span>
+                <span className="stat-invalid"><X size={14} /> {invalidCount} errors</span>
             </div>
             <div className="preview-table-container">
                 <table className="preview-table">
@@ -53,7 +54,7 @@ export function PreviewStep({ data, validCount, invalidCount, onBack, onImport }
                     <tbody>
                         {data.slice(0, 10).map((row, i) => (
                             <tr key={i} className={row.isValid ? '' : 'invalid-row'}>
-                                <td>{row.isValid ? '✓' : '✗'}</td>
+                                <td>{row.isValid ? <Check size={14} /> : <X size={14} />}</td>
                                 <td>{row.role}</td>
                                 <td>{row.name}</td>
                                 <td>{row.rollNo || row.email}</td>
@@ -107,7 +108,7 @@ export function ResultsStep({ results, onDownloadErrors, onDone }) {
             </div>
             {results.failed.length > 0 && (
                 <Button variant="secondary" onClick={onDownloadErrors}>
-                    📥 Download Error Report
+                    <Download size={16} /> Download Error Report
                 </Button>
             )}
             <div className="form-actions">
@@ -116,3 +117,4 @@ export function ResultsStep({ results, onDownloadErrors, onDone }) {
         </div>
     );
 }
+

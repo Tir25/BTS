@@ -6,6 +6,7 @@
 import { Button } from '@/components/ui';
 import { useAnalyticsData } from '@/hooks';
 import { StatCard, TodaySummary, WeeklyChart, RecentActivity } from '@/components/admin';
+import { Users, Bus, Map, MapPin, BarChart3, RefreshCw } from 'lucide-react';
 import './AnalyticsPage.css';
 
 export function AnalyticsPage() {
@@ -35,32 +36,32 @@ export function AnalyticsPage() {
     return (
         <div className="analytics-page">
             <header className="page-header">
-                <h2>📊 Analytics & Reports</h2>
-                <Button onClick={refresh}>↻ Refresh</Button>
+                <h2><BarChart3 size={24} /> Analytics & Reports</h2>
+                <Button onClick={refresh}><RefreshCw size={16} /> Refresh</Button>
             </header>
 
             {/* Quick Stats */}
             <div className="stats-grid">
                 <StatCard
-                    icon="👥"
+                    Icon={Users}
                     label="Total Drivers"
                     value={totals.drivers}
                     color="blue"
                 />
                 <StatCard
-                    icon="🚌"
+                    Icon={Bus}
                     label="Total Buses"
                     value={totals.buses}
                     color="green"
                 />
                 <StatCard
-                    icon="🗺️"
+                    Icon={Map}
                     label="Total Routes"
                     value={totals.routes}
                     color="purple"
                 />
                 <StatCard
-                    icon="📍"
+                    Icon={MapPin}
                     label="Trips Today"
                     value={dailyStats?.checkIns || 0}
                     color="orange"
@@ -80,3 +81,4 @@ export function AnalyticsPage() {
 }
 
 export default AnalyticsPage;
+

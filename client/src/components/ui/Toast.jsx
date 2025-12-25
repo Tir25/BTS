@@ -1,7 +1,18 @@
 import { useState, createContext, useContext, useCallback } from 'react';
+import { Check, X, AlertTriangle, Info } from 'lucide-react';
 import './Toast.css';
 
 const ToastContext = createContext();
+
+/**
+ * Toast icon components mapping
+ */
+const TOAST_ICONS = {
+    success: Check,
+    error: X,
+    warning: AlertTriangle,
+    info: Info
+};
 
 /**
  * Toast Provider - Wrap app to enable toast notifications
@@ -36,17 +47,17 @@ export function ToastProvider({ children }) {
         <ToastContext.Provider value={{ toast }}>
             {children}
             <div className="toast-container">
-                {toasts.map(t => (
-                    <div key={t.id} className={`toast toast-${t.type}`}>
-                        <span className="toast-icon">
-                            {t.type === 'success' && '✓'}
-                            {t.type === 'error' && '✕'}
-                            {t.type === 'warning' && '⚠'}
-                            {t.type === 'info' && 'ℹ'}
-                        </span>
-                        <span className="toast-message">{t.message}</span>
-                    </div>
-                ))}
+                {toasts.map(t => {
+                    const IconComponent = TOAST_ICONS[t.type];
+                    return (
+                        <div key={t.id} className={`toast toast-${t.type}`}>
+                            <span className="toast-icon">
+                                <IconComponent size={16} />
+                            </span>
+                            <span className="toast-message">{t.message}</span>
+                        </div>
+                    );
+                })}
             </div>
         </ToastContext.Provider>
     );
@@ -66,3 +77,4 @@ export function useToast() {
 }
 
 export default ToastProvider;
+

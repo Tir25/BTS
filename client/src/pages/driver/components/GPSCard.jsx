@@ -4,12 +4,13 @@
  * Single responsibility: Show GPS/location status
  */
 import { Card, CardBody } from '@/components/ui';
+import { MapPin } from 'lucide-react';
 
 export function GPSCard({ isTracking, location, error, queueCount }) {
     return (
         <Card className="gps-card">
             <CardBody>
-                <h3>📍 GPS Tracking</h3>
+                <h3><MapPin size={18} /> GPS Tracking</h3>
                 <div className="gps-status">
                     <span className={`tracking-indicator ${isTracking ? 'active' : ''}`} />
                     <span>{isTracking ? 'Sharing Location' : 'Not Tracking'}</span>
@@ -35,3 +36,4 @@ export function GPSCard({ isTracking, location, error, queueCount }) {
 }
 
 export default GPSCard;
+

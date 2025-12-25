@@ -5,3 +5,4 @@ export { ScheduleForm } from './ScheduleForm';
 export { TemplateCard } from './TemplateCard';
 export { TemplateForm } from './TemplateForm';
 export { GenerateSchedulesModal } from './GenerateSchedulesModal';
+export { SetupRequired } from './SetupRequired';

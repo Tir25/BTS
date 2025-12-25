@@ -5,6 +5,7 @@
  */
 import { useDashboardStats } from '@/hooks';
 import { StatCard } from '@/components/admin';
+import { Bus, User, Map, Users } from 'lucide-react';
 import './DashboardHome.css';
 
 export function DashboardHome() {
@@ -32,28 +33,28 @@ export function DashboardHome() {
 
             <div className="stats-grid">
                 <StatCard
+                    Icon={Bus}
                     value={stats.buses}
                     label="Active Buses"
                     color="blue"
-                    icon="🚌"
                 />
                 <StatCard
+                    Icon={User}
                     value={stats.drivers}
                     label="Drivers"
                     color="green"
-                    icon="👤"
                 />
                 <StatCard
+                    Icon={Map}
                     value={stats.routes}
                     label="Routes"
                     color="purple"
-                    icon="🗺️"
                 />
                 <StatCard
+                    Icon={Users}
                     value={stats.users}
                     label="Users"
                     color="orange"
-                    icon="👥"
                 />
             </div>
         </div>
@@ -61,3 +62,4 @@ export function DashboardHome() {
 }
 
 export default DashboardHome;
+

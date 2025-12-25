@@ -4,12 +4,13 @@
  * Single responsibility: Render today's stats
  */
 import { Card, CardBody } from '@/components/ui';
+import { CalendarDays } from 'lucide-react';
 
 export function TodaySummary({ dailyStats }) {
     return (
         <Card className="today-card">
             <CardBody>
-                <h3>📅 Today's Activity</h3>
+                <h3><CalendarDays size={20} /> Today's Activity</h3>
                 <div className="activity-stats">
                     <div className="stat-item">
                         <span className="stat-value">{dailyStats?.checkIns || 0}</span>
@@ -34,3 +35,4 @@ export function TodaySummary({ dailyStats }) {
 }
 
 export default TodaySummary;
+

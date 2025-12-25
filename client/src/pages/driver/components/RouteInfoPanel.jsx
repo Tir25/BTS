@@ -3,6 +3,7 @@
  * Bottom sheet content showing route, stops, progress, and actions
  */
 import { Button } from '@/components/ui';
+import { Bus, Play, Coffee, Check, AlertTriangle, PartyPopper } from 'lucide-react';
 import './RouteInfoPanel.css';
 
 export function RouteInfoPanel({
@@ -37,7 +38,7 @@ export function RouteInfoPanel({
             {/* Bus Info */}
             {bus && (
                 <div className="bus-info">
-                    🚌 {bus.number} • {bus.capacity} seats
+                    <Bus size={16} /> {bus.number} • {bus.capacity} seats
                 </div>
             )}
 
@@ -71,7 +72,7 @@ export function RouteInfoPanel({
             {/* Route Complete Message */}
             {isOnDuty && isRouteComplete && (
                 <div className="route-complete">
-                    🎉 Route completed!
+                    <PartyPopper size={18} /> Route completed!
                 </div>
             )}
 
@@ -84,7 +85,7 @@ export function RouteInfoPanel({
                         onClick={onBreakToggle}
                         loading={breakLoading}
                     >
-                        {isPaused ? '▶️ Resume' : '☕ Break'}
+                        {isPaused ? <><Play size={16} /> Resume</> : <><Coffee size={16} /> Break</>}
                     </Button>
                     <Button
                         variant="primary"
@@ -92,14 +93,14 @@ export function RouteInfoPanel({
                         onClick={onNextStop}
                         disabled={isRouteComplete}
                     >
-                        ✓ Arrived
+                        <Check size={16} /> Arrived
                     </Button>
                 </div>
             )}
 
             {/* GPS Error */}
             {gpsError && (
-                <div className="gps-error">⚠️ {gpsError}</div>
+                <div className="gps-error"><AlertTriangle size={16} /> {gpsError}</div>
             )}
 
             {/* No Schedule Message */}
@@ -114,3 +115,4 @@ export function RouteInfoPanel({
 }
 
 export default RouteInfoPanel;
+

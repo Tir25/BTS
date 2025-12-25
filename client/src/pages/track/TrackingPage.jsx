@@ -22,6 +22,7 @@ import { FilterBar } from './components/FilterBar';
 import { BusMap } from './components/BusMap';
 import { BusListPanel } from './components/BusListPanel';
 import { ConnectionStatus } from './components/ConnectionStatus';
+import { AlertTriangle } from 'lucide-react';
 
 import './TrackingPage.css';
 
@@ -82,7 +83,7 @@ export function TrackingPage() {
         return (
             <div className="tracking-page error">
                 <div className="error-content">
-                    <span className="error-icon">⚠️</span>
+                    <span className="error-icon"><AlertTriangle size={32} /></span>
                     <h2>Unable to Load</h2>
                     <p>{error}</p>
                     <Button onClick={() => { refreshBuses(); refreshRoutes(); }}>

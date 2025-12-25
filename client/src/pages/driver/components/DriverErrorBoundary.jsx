@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import { Card, CardBody, Button } from '@/components/ui';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 class DriverErrorBoundary extends React.Component {
     constructor(props) {
@@ -31,12 +32,14 @@ class DriverErrorBoundary extends React.Component {
                     <main className="driver-content" style={{ padding: '2rem' }}>
                         <Card>
                             <CardBody style={{ textAlign: 'center' }}>
-                                <h2 style={{ marginBottom: '1rem' }}>⚠️ Something went wrong</h2>
+                                <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                                    <AlertTriangle size={24} /> Something went wrong
+                                </h2>
                                 <p style={{ marginBottom: '1rem', color: 'var(--color-text-muted)' }}>
                                     The driver dashboard encountered an error.
                                 </p>
                                 <Button onClick={this.handleRetry} variant="primary">
-                                    🔄 Try Again
+                                    <RefreshCw size={16} /> Try Again
                                 </Button>
                             </CardBody>
                         </Card>
@@ -50,3 +53,4 @@ class DriverErrorBoundary extends React.Component {
 }
 
 export default DriverErrorBoundary;
+

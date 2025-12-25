@@ -4,6 +4,7 @@
  */
 import { Card, CardBody, Button } from '@/components/ui';
 import { DAYS_OF_WEEK } from '@/services/scheduleTemplates';
+import { Pencil, Trash2, CalendarPlus } from 'lucide-react';
 import './TemplateCard.css';
 
 export function TemplateCard({
@@ -24,8 +25,12 @@ export function TemplateCard({
                 <div className="template-header">
                     <h4>{template.name}</h4>
                     <div className="template-actions">
-                        <button className="icon-btn" onClick={onEdit} title="Edit">✏️</button>
-                        <button className="icon-btn danger" onClick={onDelete} title="Delete">🗑️</button>
+                        <button className="icon-btn" onClick={onEdit} title="Edit">
+                            <Pencil size={14} />
+                        </button>
+                        <button className="icon-btn danger" onClick={onDelete} title="Delete">
+                            <Trash2 size={14} />
+                        </button>
                     </div>
                 </div>
 
@@ -66,7 +71,7 @@ export function TemplateCard({
                     className="generate-btn"
                     onClick={onGenerate}
                 >
-                    📅 Generate Schedules
+                    <CalendarPlus size={16} /> Generate Schedules
                 </Button>
             </CardBody>
         </Card>
@@ -74,3 +79,4 @@ export function TemplateCard({
 }
 
 export default TemplateCard;
+

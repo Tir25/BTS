@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRedirectPath } from '@/components/auth';
 import { Button, Input, Card, CardBody, LogoIcon } from '@/components/ui';
+import { AlertTriangle } from 'lucide-react';
 import './LoginPage.css';
 
 /**
@@ -61,7 +62,7 @@ export function LoginPage() {
 
                         {error && (
                             <div className="login-error">
-                                <span>⚠️</span> {error}
+                                <AlertTriangle size={16} /> {error}
                             </div>
                         )}
 

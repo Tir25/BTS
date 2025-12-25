@@ -4,6 +4,7 @@
  * Single responsibility: Handle break/resume UI
  */
 import { Button } from '@/components/ui';
+import { Play, Pause } from 'lucide-react';
 
 export function BreakButton({ isPaused, loading, onPause, onResume }) {
     if (isPaused) {
@@ -15,7 +16,7 @@ export function BreakButton({ isPaused, loading, onPause, onResume }) {
                 onClick={onResume}
                 loading={loading}
             >
-                ▶️ Resume Tracking
+                <Play size={16} /> Resume Tracking
             </Button>
         );
     }
@@ -28,9 +29,10 @@ export function BreakButton({ isPaused, loading, onPause, onResume }) {
             onClick={onPause}
             loading={loading}
         >
-            ⏸️ Take a Break
+            <Pause size={16} /> Take a Break
         </Button>
     );
 }
 
 export default BreakButton;
+

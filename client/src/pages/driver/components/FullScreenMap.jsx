@@ -10,6 +10,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import { Icon, DivIcon } from 'leaflet';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import 'leaflet/dist/leaflet.css';
+import { Check, MapPin } from 'lucide-react';
 import './MapControlBar.css';
 
 // Custom stop icon
@@ -290,8 +291,8 @@ export function FullScreenMap({
                         <Popup>
                             <strong>{stop.name}</strong>
                             <br />
-                            {idx < currentStopIndex && <span className="stop-status passed">✓ Passed</span>}
-                            {idx === currentStopIndex && <span className="stop-status current">📍 Current</span>}
+                            {idx < currentStopIndex && <span className="stop-status passed"><Check size={12} /> Passed</span>}
+                            {idx === currentStopIndex && <span className="stop-status current"><MapPin size={12} /> Current</span>}
                             {idx > currentStopIndex && <span className="stop-status upcoming">→ Upcoming</span>}
                         </Popup>
                     </Marker>

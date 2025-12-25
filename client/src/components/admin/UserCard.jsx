@@ -3,7 +3,18 @@
  * Displays individual user with actions
  */
 import { Button, Card, CardBody } from '@/components/ui';
+import { GraduationCap, Briefcase, Bus, Settings, User, Phone } from 'lucide-react';
 import './UserCard.css';
+
+/**
+ * Role icon components mapping
+ */
+const ROLE_ICONS = {
+    student: GraduationCap,
+    faculty: Briefcase,
+    driver: Bus,
+    admin: Settings
+};
 
 /**
  * Get role badge styling class
@@ -19,16 +30,11 @@ function getRoleClass(role) {
 }
 
 /**
- * Get role display icon
+ * Get role icon component
  */
 function getRoleIcon(role) {
-    const icons = {
-        student: '🎓',
-        faculty: '👨‍🏫',
-        driver: '🚌',
-        admin: '⚙️'
-    };
-    return icons[role] || '👤';
+    const IconComponent = ROLE_ICONS[role] || User;
+    return <IconComponent size={14} />;
 }
 
 export function UserCard({ user, onEdit, onDelete, onResetPassword }) {
@@ -59,7 +65,11 @@ export function UserCard({ user, onEdit, onDelete, onResetPassword }) {
                     <span className={`role-badge ${getRoleClass(role)}`}>
                         {getRoleIcon(role)} {role}
                     </span>
-                    {phone && <span className="phone-badge">📱 {phone}</span>}
+                    {phone && (
+                        <span className="phone-badge">
+                            <Phone size={12} /> {phone}
+                        </span>
+                    )}
                 </div>
 
                 <div className="user-footer">
@@ -82,3 +92,4 @@ export function UserCard({ user, onEdit, onDelete, onResetPassword }) {
 }
 
 export default UserCard;
+

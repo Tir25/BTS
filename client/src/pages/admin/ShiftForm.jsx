@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Input, Card, CardBody, CardHeader } from '@/components/ui';
-import './DriverForm.css';
+import './UserForm.css';
 
 /**
  * Shift Form Modal
@@ -53,10 +53,10 @@ export function ShiftForm({ shift, onSubmit, onClose }) {
                                 onChange={handleChange}
                                 className="input"
                             >
-                                <option value="morning">🌅 Morning</option>
-                                <option value="noon">☀️ Noon</option>
-                                <option value="evening">🌆 Evening</option>
-                                <option value="night">🌙 Night</option>
+                                <option value="morning">Morning</option>
+                                <option value="noon">Noon</option>
+                                <option value="evening">Evening</option>
+                                <option value="night">Night</option>
                             </select>
                         </div>
 

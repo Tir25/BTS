@@ -1,4 +1,13 @@
 import { Card, CardBody } from '@/components/ui';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+// Helper to format date as YYYY-MM-DD in local timezone (avoids UTC offset issues)
+function formatLocalDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
 /**
  * Calendar Component - Monthly calendar grid with schedule indicators
@@ -14,7 +23,7 @@ export function Calendar({ currentMonth, selectedDate, schedules, onSelectDate, 
 
     for (let day = 1; day <= daysInMonth; day++) {
         const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = formatLocalDate(date);
         const daySchedules = schedules.filter(s => s.date === dateStr);
         const isSelected = selectedDate.toDateString() === date.toDateString();
         const isToday = new Date().toDateString() === date.toDateString();
@@ -47,9 +56,9 @@ export function Calendar({ currentMonth, selectedDate, schedules, onSelectDate, 
         <Card className="calendar-card">
             <CardBody>
                 <div className="calendar-header">
-                    <button className="nav-btn" onClick={prevMonth}>◀</button>
+                    <button className="nav-btn" onClick={prevMonth}><ChevronLeft size={18} /></button>
                     <h3>{monthName}</h3>
-                    <button className="nav-btn" onClick={nextMonth}>▶</button>
+                    <button className="nav-btn" onClick={nextMonth}><ChevronRight size={18} /></button>
                 </div>
                 <div className="calendar-weekdays">
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (

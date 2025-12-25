@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { destinationsService } from '@/services/destinations';
+import { MapPin } from 'lucide-react';
 
 export function DestinationSelector({
     value,
@@ -59,7 +60,7 @@ export function DestinationSelector({
                 </option>
                 {destinations.map(dest => (
                     <option key={dest.id} value={dest.id}>
-                        {dest.icon || '📍'} {dest.name}
+                        {dest.name}
                         {dest.isDefault ? ' (Default)' : ''}
                         {dest.type !== 'campus' ? ` - ${dest.type}` : ''}
                     </option>
@@ -67,7 +68,7 @@ export function DestinationSelector({
             </select>
             {selectedDestination && (
                 <p className="input-hint">
-                    📍 {selectedDestination.address || 'No address'}
+                    <MapPin size={14} /> {selectedDestination.address || 'No address'}
                 </p>
             )}
         </div>

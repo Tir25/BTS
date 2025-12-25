@@ -4,6 +4,7 @@
  * Single responsibility: Render trip activity list
  */
 import { Card, CardBody } from '@/components/ui';
+import { Clock, CircleCheck, CircleX } from 'lucide-react';
 
 /**
  * Format timestamp to relative time
@@ -26,7 +27,7 @@ export function RecentActivity({ trips }) {
     return (
         <Card className="history-card">
             <CardBody>
-                <h3>🕐 Recent Trip Activity</h3>
+                <h3><Clock size={20} /> Recent Trip Activity</h3>
                 {trips.length === 0 ? (
                     <p className="no-data">
                         No trip history yet. Trip events will appear here when drivers check in/out.
@@ -36,7 +37,10 @@ export function RecentActivity({ trips }) {
                         {trips.map(trip => (
                             <div key={trip.id} className="history-item">
                                 <span className={`event-icon ${trip.eventType}`}>
-                                    {trip.eventType === 'check_in' ? '🟢' : '🔴'}
+                                    {trip.eventType === 'check_in'
+                                        ? <CircleCheck size={20} className="check-in-icon" />
+                                        : <CircleX size={20} className="check-out-icon" />
+                                    }
                                 </span>
                                 <div className="event-info">
                                     <div className="event-driver">{trip.driverName}</div>
@@ -58,3 +62,4 @@ export function RecentActivity({ trips }) {
 }
 
 export default RecentActivity;
+

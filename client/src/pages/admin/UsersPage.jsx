@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { UserStatsCards, UsersFilters, UsersGrid } from '@/components/admin';
 import UserForm from './UserForm';
 import BulkImportModal from './BulkImportModal';
+import { Upload } from 'lucide-react';
 import './UsersPage.css';
 
 export function UsersPage() {
@@ -110,7 +111,7 @@ export function UsersPage() {
                 <h2>Users Management</h2>
                 <div className="header-actions">
                     <Button variant="secondary" onClick={() => setShowBulkImport(true)}>
-                        📥 Bulk Import
+                        <Upload size={16} /> Bulk Import
                     </Button>
                     <Button onClick={() => { setEditingUser(null); setShowForm(true); }}>
                         + Add User

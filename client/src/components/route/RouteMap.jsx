@@ -9,6 +9,7 @@ import 'leaflet/dist/leaflet.css';
 
 // Fix Leaflet default marker icon issue
 import L from 'leaflet';
+import { CircleDot, GraduationCap, MousePointer, MapPin, Circle } from 'lucide-react';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -79,7 +80,7 @@ function DraggableMarker({ stop, index, onDragEnd, isFirst }) {
         >
             <Popup>
                 <strong>#{index + 1} {stop.name}</strong>
-                {isFirst && <div>🟢 Starting Point</div>}
+                {isFirst && <div><CircleDot size={14} className="text-green" /> Starting Point</div>}
                 {onDragEnd && (
                     <div style={{ fontSize: '0.8em', color: '#666', marginTop: '4px' }}>
                         Drag to reposition
@@ -145,7 +146,7 @@ export function RouteMap({
                         icon={redIcon}
                     >
                         <Popup>
-                            <strong>🎓 {destination.name}</strong>
+                            <strong><GraduationCap size={14} /> {destination.name}</strong>
                             <div style={{ color: '#ef4444' }}>Final Destination</div>
                             {destination.address && (
                                 <div style={{ fontSize: '0.8em', marginTop: '4px' }}>
@@ -168,12 +169,12 @@ export function RouteMap({
 
             <div className="map-instructions">
                 {onMapClick
-                    ? '🖱️ Click map to add stops • Drag markers to reposition'
-                    : '📍 Route preview'
+                    ? <><MousePointer size={14} /> Click map to add stops • Drag markers to reposition</>
+                    : <><MapPin size={14} /> Route preview</>
                 }
                 {destination && (
                     <span style={{ marginLeft: '1rem', color: '#ef4444' }}>
-                        🔴 {destination.name}
+                        <Circle size={14} /> {destination.name}
                     </span>
                 )}
             </div>

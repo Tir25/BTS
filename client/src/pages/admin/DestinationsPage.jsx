@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { destinationsService, DESTINATION_TYPES } from '@/services/destinations';
 import { Button, Card, CardBody, Input, useConfirm, useToast } from '@/components/ui';
 import DestinationForm from './DestinationForm';
+import { MapPin } from 'lucide-react';
 import './DestinationsPage.css';
 
 /**
@@ -164,7 +165,7 @@ export function DestinationsPage() {
                                             {typeInfo.label}
                                         </span>
                                         <span className="coordinates">
-                                            📍 {dest.lat?.toFixed(4)}, {dest.lng?.toFixed(4)}
+                                            <MapPin size={14} /> {dest.lat?.toFixed(4)}, {dest.lng?.toFixed(4)}
                                         </span>
                                     </div>
                                     <div className="destination-actions">

@@ -3,6 +3,7 @@
  * Single responsibility: Display and actions for a day's schedules
  */
 import { Button, Card, CardBody } from '@/components/ui';
+import { User, Bus, Map, Pencil, X } from 'lucide-react';
 
 export function DaySchedules({ date, schedules, drivers, buses, routes, shifts, onEdit, onDelete, onAdd }) {
     const dateStr = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -32,9 +33,9 @@ export function DaySchedules({ date, schedules, drivers, buses, routes, shifts, 
                                 <div className="schedule-info">
                                     <div className="schedule-shift">{getShift(schedule.shiftId)}</div>
                                     <div className="schedule-details">
-                                        <span>👤 {getDriver(schedule.driverId)}</span>
-                                        <span>🚌 {getBus(schedule.busId)}</span>
-                                        <span>🗺️ {getRoute(schedule.routeId)}</span>
+                                        <span><User size={14} /> {getDriver(schedule.driverId)}</span>
+                                        <span><Bus size={14} /> {getBus(schedule.busId)}</span>
+                                        <span><Map size={14} /> {getRoute(schedule.routeId)}</span>
                                     </div>
                                 </div>
                                 <div className="schedule-actions">
@@ -43,14 +44,14 @@ export function DaySchedules({ date, schedules, drivers, buses, routes, shifts, 
                                         onClick={() => onEdit(schedule)}
                                         title="Edit"
                                     >
-                                        ✏️
+                                        <Pencil size={14} />
                                     </button>
                                     <button
                                         className="delete-btn"
                                         onClick={() => onDelete(schedule.id)}
                                         title="Delete"
                                     >
-                                        ✕
+                                        <X size={14} />
                                     </button>
                                 </div>
                             </div>
@@ -63,3 +64,4 @@ export function DaySchedules({ date, schedules, drivers, buses, routes, shifts, 
 }
 
 export default DaySchedules;
+

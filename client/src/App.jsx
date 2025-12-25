@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/auth';
 import { ConfirmProvider, ToastProvider } from '@/components/ui';
+import { Bus } from 'lucide-react';
 
 // Lazy loaded pages for code splitting
 const LandingPage = lazy(() => import('@/pages/LandingPage'));
@@ -22,7 +23,7 @@ const LoadingFallback = () => (
     color: 'var(--color-text-primary)'
   }}>
     <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🚌</div>
+      <div style={{ fontSize: '2rem', marginBottom: '1rem' }}><Bus size={40} /></div>
       <div>Loading...</div>
     </div>
   </div>

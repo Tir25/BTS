@@ -144,7 +144,7 @@ export function DriverView() {
         } else if (currentStopIndex === stops.length - 1) {
             setCurrentStopIndex(stops.length);
             haptics.celebration();
-            toast.success('🎉 Route completed!');
+            toast.success('Route completed!');
         }
     }, [assignedSchedule, currentStopIndex, toast]);
 

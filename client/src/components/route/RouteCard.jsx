@@ -3,28 +3,37 @@
  * Shows destination, direction, and stop count
  */
 import { Button, Card, CardBody } from '@/components/ui';
+import { School, Home, RefreshCw, Map, MapPin, Clock, Circle } from 'lucide-react';
+
+// Direction icons mapping
+const DIRECTION_ICONS = {
+    to_campus: School,
+    from_campus: Home,
+    round_trip: RefreshCw
+};
 
 // Direction labels
 const DIRECTION_LABELS = {
-    to_campus: { icon: '🏫', label: 'To Campus' },
-    from_campus: { icon: '🏠', label: 'From Campus' },
-    round_trip: { icon: '🔄', label: 'Round Trip' }
+    to_campus: 'To Campus',
+    from_campus: 'From Campus',
+    round_trip: 'Round Trip'
 };
 
 export function RouteCard({ route, onEdit, onDelete }) {
-    const directionInfo = DIRECTION_LABELS[route.direction] || DIRECTION_LABELS.to_campus;
+    const DirectionIcon = DIRECTION_ICONS[route.direction] || School;
+    const directionLabel = DIRECTION_LABELS[route.direction] || 'To Campus';
 
     return (
         <Card className="route-card" hoverable>
             <CardBody>
                 <div className="route-info">
-                    <div className="route-icon">🗺️</div>
+                    <div className="route-icon"><Map size={24} /></div>
                     <div className="route-details">
                         <h4>{route.name}</h4>
                         <p className="text-muted">{route.description || 'No description'}</p>
                         <div className="route-meta">
-                            <span>📍 {route.stops?.length || 0} stops</span>
-                            {route.estimatedTime && <span>⏱️ {route.estimatedTime} min</span>}
+                            <span><MapPin size={14} /> {route.stops?.length || 0} stops</span>
+                            {route.estimatedTime && <span><Clock size={14} /> {route.estimatedTime} min</span>}
                         </div>
                     </div>
                 </div>
@@ -32,11 +41,11 @@ export function RouteCard({ route, onEdit, onDelete }) {
                 {/* Direction & Destination Info */}
                 <div className="route-destination">
                     <span className="direction-badge">
-                        {directionInfo.icon} {directionInfo.label}
+                        <DirectionIcon size={14} /> {directionLabel}
                     </span>
                     {route.destinationName && (
                         <span className="destination-name">
-                            🔴 {route.destinationName}
+                            <Circle size={14} style={{ color: '#ef4444' }} /> {route.destinationName}
                         </span>
                     )}
                 </div>
@@ -56,3 +65,4 @@ export function RouteCard({ route, onEdit, onDelete }) {
 }
 
 export default RouteCard;
+

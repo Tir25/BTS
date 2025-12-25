@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Input, Card, CardBody, CardHeader } from '@/components/ui';
-import './DriverForm.css'; // Reuse driver form styles
+import './UserForm.css'; // Reuse modal/form styles
 
 /**
  * Bus Form Modal - Add/Edit bus

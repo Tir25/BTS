@@ -3,6 +3,7 @@
  * Single responsibility: Render bus card with actions
  */
 import { Button, Card, CardBody } from '@/components/ui';
+import { Bus } from 'lucide-react';
 
 export function BusCard({ bus, onEdit, onDelete }) {
     return (
@@ -10,7 +11,7 @@ export function BusCard({ bus, onEdit, onDelete }) {
             <CardBody>
                 <div className="driver-info">
                     <div className="driver-avatar" style={{ background: 'var(--gradient-success)' }}>
-                        {bus.busNo ? `#${bus.busNo}` : '🚌'}
+                        {bus.busNo ? `#${bus.busNo}` : <Bus size={24} />}
                     </div>
                     <div className="driver-details">
                         <h4>{bus.number || `Bus ${bus.busNo}`}</h4>
@@ -35,3 +36,4 @@ export function BusCard({ bus, onEdit, onDelete }) {
 }
 
 export default BusCard;
+

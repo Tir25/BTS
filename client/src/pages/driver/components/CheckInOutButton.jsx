@@ -4,6 +4,7 @@
  * Single responsibility: Handle duty check-in/out UI
  */
 import { Button } from '@/components/ui';
+import { CircleCheck, CircleX } from 'lucide-react';
 
 export function CheckInOutButton({ isOnDuty, checkInLoading, checkOutLoading, onCheckIn, onCheckOut }) {
     if (!isOnDuty) {
@@ -15,7 +16,7 @@ export function CheckInOutButton({ isOnDuty, checkInLoading, checkOutLoading, on
                     onClick={onCheckIn}
                     loading={checkInLoading}
                 >
-                    🟢 Check In & Start Shift
+                    <CircleCheck size={18} /> Check In & Start Shift
                 </Button>
             </div>
         );
@@ -30,10 +31,11 @@ export function CheckInOutButton({ isOnDuty, checkInLoading, checkOutLoading, on
                 onClick={onCheckOut}
                 loading={checkOutLoading}
             >
-                🔴 Check Out & End Shift
+                <CircleX size={18} /> Check Out & End Shift
             </Button>
         </div>
     );
 }
 
 export default CheckInOutButton;
+

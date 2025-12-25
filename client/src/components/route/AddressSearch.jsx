@@ -5,6 +5,7 @@
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { searchAddress, debounce } from '@/services/geocoding';
+import { Search, Loader2, MapPin } from 'lucide-react';
 import './AddressSearch.css';
 
 export function AddressSearch({
@@ -114,7 +115,7 @@ export function AddressSearch({
     return (
         <div className={`address-search ${className}`} ref={inputRef}>
             <div className="address-search-input-wrapper">
-                <span className="address-search-icon">🔍</span>
+                <span className="address-search-icon"><Search size={16} /></span>
                 <input
                     type="text"
                     value={query}
@@ -125,7 +126,7 @@ export function AddressSearch({
                     className="address-search-input"
                     autoComplete="off"
                 />
-                {isLoading && <span className="address-search-spinner">⏳</span>}
+                {isLoading && <span className="address-search-spinner"><Loader2 size={16} className="animate-spin" /></span>}
                 {query && !isLoading && (
                     <button
                         type="button"
@@ -147,7 +148,7 @@ export function AddressSearch({
                             onClick={() => handleSelect(result)}
                             onMouseEnter={() => setSelectedIndex(index)}
                         >
-                            <span className="address-search-item-icon">📍</span>
+                            <span className="address-search-item-icon"><MapPin size={16} /></span>
                             <div className="address-search-item-content">
                                 <span className="address-search-item-name">
                                     {result.name}
