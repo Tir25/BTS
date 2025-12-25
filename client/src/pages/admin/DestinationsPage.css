@@ -81,7 +81,7 @@
     align-items: center;
     margin-bottom: 0.75rem;
     padding-top: 0.5rem;
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--glass-border);
 }
 
 .type-badge {
